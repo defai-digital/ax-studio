@@ -41,7 +41,7 @@ const cask = `cask "ax-studio" do
   version "${version}"
   sha256 "${sha256}"
 
-  url "https://github.com/defai-digital/ax-studio/releases/download/v#{version}/Ax-Studio_#{version}_aarch64.dmg"
+  url "https://github.com/defai-digital/ax-studio/releases/download/v#{version}/AX%20Studio_#{version}_aarch64.dmg"
   name "AX Studio"
   desc "AI workspace for cloud models, local inference, tools, and research"
   homepage "https://github.com/defai-digital/ax-studio"
@@ -51,16 +51,18 @@ const cask = `cask "ax-studio" do
   depends_on formula: "mlx"
   depends_on formula: "mlx-c"
 
-  app "Ax-Studio.app"
+  app "AX Studio.app"
 
   postflight do
     system_command "/usr/bin/xattr",
-                   args: ["-cr", "#{appdir}/Ax-Studio.app"]
+                   args: ["-cr", "#{appdir}/AX Studio.app"]
   end
 
   zap trash: [
+    "~/Library/Application Support/AX Studio",
     "~/Library/Application Support/Ax-Studio",
     "~/Library/Caches/ai.axstudio.app",
+    "~/Library/Logs/AX Studio",
     "~/Library/Logs/Ax-Studio",
     "~/Library/Preferences/ai.axstudio.app.plist",
     "~/Library/Saved Application State/ai.axstudio.app.savedState",

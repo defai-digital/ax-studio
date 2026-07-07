@@ -187,7 +187,7 @@ jobs:
         shell: powershell
         continue-on-error: true
         run: |
-          $path = "$Env:APPDATA\Ax-Studio"
+          $path = "$Env:APPDATA\AX Studio"
           if (Test-Path $path) {
               Remove-Item "\\?\$path" -Recurse -Force
           } else {
@@ -318,7 +318,7 @@ jobs:
         shell: powershell
         continue-on-error: true
         run: |
-          $path = "$Env:APPDATA\Ax-Studio"
+          $path = "$Env:APPDATA\AX Studio"
           if (Test-Path $path) {
               Remove-Item "\\?\$path" -Recurse -Force
           } else {

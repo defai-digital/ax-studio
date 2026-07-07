@@ -1,4 +1,4 @@
-//! CORS and security helpers for the Ax-Studio proxy server.
+//! CORS and security helpers for the AX Studio proxy server.
 
 use super::cors;
 use ax_studio_utils::is_valid_host;

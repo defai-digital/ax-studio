@@ -146,13 +146,21 @@ pub fn get_configuration_file_path<R: Runtime>(app_handle: tauri::AppHandle<R>) 
     });
 
     let package_name = env!("CARGO_PKG_NAME");
-    let old_data_dir = app_path.parent().unwrap_or(&app_path).join(package_name);
+    let app_parent = app_path.parent().unwrap_or(&app_path);
+    let legacy_candidates = [
+        app_parent.join(package_name),
+        app_parent.join("Ax-Studio"),
+        app_parent.join("Ax Studio"),
+    ];
 
-    if old_data_dir.exists() {
-        old_data_dir.join(CONFIGURATION_FILE_NAME)
-    } else {
-        app_path.join(CONFIGURATION_FILE_NAME)
+    for legacy_dir in legacy_candidates {
+        let legacy_config = legacy_dir.join(CONFIGURATION_FILE_NAME);
+        if legacy_config.exists() {
+            return legacy_config;
+        }
     }
+
+    app_path.join(CONFIGURATION_FILE_NAME)
 }
 
 #[tauri::command]
@@ -165,6 +173,17 @@ pub fn default_data_folder_path<R: Runtime>(app_handle: tauri::AppHandle<R>) -> 
         .unwrap_or_else(|_| app_handle.config().product_name.clone().unwrap_or_default());
     path.push(app_name);
     path.push("data");
+
+    if !path.exists() {
+        if let Some(parent) = path.parent().and_then(|p| p.parent()) {
+            for legacy_name in ["Ax-Studio", "Ax Studio"] {
+                let legacy_path = parent.join(legacy_name).join("data");
+                if legacy_path.exists() {
+                    return legacy_path.to_string_lossy().to_string();
+                }
+            }
+        }
+    }
 
     let mut path_str = path.to_string_lossy().to_string();
 

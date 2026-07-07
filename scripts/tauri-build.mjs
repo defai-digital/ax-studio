@@ -73,7 +73,7 @@ if (process.platform === 'darwin') {
     'release',
     'bundle',
     'macos',
-    'Ax-Studio.app'
+    'AX Studio.app'
   )
 
   if (existsSync(appPath)) {

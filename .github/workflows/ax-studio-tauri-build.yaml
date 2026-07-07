@@ -316,12 +316,12 @@ jobs:
         run: |
           set -euo pipefail
 
-          APP_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Ax-Studio.app"
+          APP_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/AX Studio.app"
           BUNDLE_MACOS="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos"
           BUNDLE_DMG="./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg"
           ENTITLEMENTS="./src-tauri/Entitlements.plist"
-          TAR_PATH="${BUNDLE_MACOS}/Ax-Studio.app.tar.gz"
-          DMG_PATH="${BUNDLE_DMG}/Ax-Studio_${VERSION}_aarch64.dmg"
+          TAR_PATH="${BUNDLE_MACOS}/AX Studio.app.tar.gz"
+          DMG_PATH="${BUNDLE_DMG}/AX Studio_${VERSION}_aarch64.dmg"
 
           test -d "$APP_PATH"
           test -n "${APPLE_SIGNING_IDENTITY:-}"
@@ -410,7 +410,7 @@ jobs:
           verify_release_entitlements "$APP_PATH"
 
           rm -f "$TAR_PATH" "$TAR_PATH.sig"
-          (cd "$BUNDLE_MACOS" && tar -czf "Ax-Studio.app.tar.gz" "Ax-Studio.app")
+          (cd "$BUNDLE_MACOS" && tar -czf "AX Studio.app.tar.gz" "AX Studio.app")
           TAURI_PRIVATE_KEY="$TAURI_SIGNING_PRIVATE_KEY" \
             TAURI_PRIVATE_KEY_PASSWORD="${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" \
             node src-tauri/tauri signer sign "$TAR_PATH"
@@ -419,10 +419,10 @@ jobs:
           rm -f "$DMG_PATH"
           DMG_ROOT="$(mktemp -d)"
           trap 'rm -rf "$DMG_ROOT"' EXIT
-          ditto "$APP_PATH" "$DMG_ROOT/Ax-Studio.app"
+          ditto "$APP_PATH" "$DMG_ROOT/AX Studio.app"
           ln -s /Applications "$DMG_ROOT/Applications"
           hdiutil create \
-            -volname "Ax-Studio" \
+            -volname "AX Studio" \
             -srcfolder "$DMG_ROOT" \
             -ov \
             -format UDZO \
@@ -469,8 +469,8 @@ jobs:
           trap cleanup EXIT
 
           hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT_DIR" "$DMG_PATH"
-          codesign --verify --deep --strict --verbose=4 "$MOUNT_DIR/Ax-Studio.app"
-          codesign -d --entitlements - --xml "$MOUNT_DIR/Ax-Studio.app" > /tmp/ax-studio-dmg-entitlements.plist
+          codesign --verify --deep --strict --verbose=4 "$MOUNT_DIR/AX Studio.app"
+          codesign -d --entitlements - --xml "$MOUNT_DIR/AX Studio.app" > /tmp/ax-studio-dmg-entitlements.plist
           plutil -lint /tmp/ax-studio-dmg-entitlements.plist
           for entitlement in \
             'com\.apple\.security\.cs\.allow-jit' \
@@ -489,14 +489,14 @@ jobs:
           VERSION: ${{ needs.get-update-version.outputs.new_version }}
         run: |
           cd ./src-tauri/target/aarch64-apple-darwin/release/bundle/macos
-          zip -r "ax-studio-mac-arm64-${VERSION}.zip" Ax-Studio.app
-          SIG_FILE="Ax-Studio.app.tar.gz.sig"
+          zip -r "ax-studio-mac-arm64-${VERSION}.zip" "AX Studio.app"
+          SIG_FILE="AX Studio.app.tar.gz.sig"
           MAC_UNIVERSAL_SIG=$( [ -f "$SIG_FILE" ] && cat "$SIG_FILE" || echo "" )
           {
             echo "MAC_UNIVERSAL_SIG=${MAC_UNIVERSAL_SIG}"
             echo "FILE_NAME=ax-studio-mac-arm64-${VERSION}.zip"
-            echo "DMG_NAME=Ax-Studio_${VERSION}_aarch64.dmg"
-            echo "TAR_NAME=Ax-Studio.app.tar.gz"
+            echo "DMG_NAME=AX Studio_${VERSION}_aarch64.dmg"
+            echo "TAR_NAME=AX Studio.app.tar.gz"
           } >> "$GITHUB_OUTPUT"
 
       - name: Upload release artifacts to GitHub release
@@ -618,14 +618,14 @@ jobs:
         env:
           VERSION: ${{ needs.get-update-version.outputs.new_version }}
         run: |
-          FILE_NAME=Ax-Studio_${VERSION}_x64-setup.exe
+          FILE_NAME="AX Studio_${VERSION}_x64-setup.exe"
           WIN_SIG=""
-          if [ -f "./src-tauri/target/release/bundle/nsis/Ax-Studio_${VERSION}_x64-setup.exe.sig" ]; then
-            WIN_SIG=$(cat "./src-tauri/target/release/bundle/nsis/Ax-Studio_${VERSION}_x64-setup.exe.sig")
+          if [ -f "./src-tauri/target/release/bundle/nsis/AX Studio_${VERSION}_x64-setup.exe.sig" ]; then
+            WIN_SIG=$(cat "./src-tauri/target/release/bundle/nsis/AX Studio_${VERSION}_x64-setup.exe.sig")
           fi
-          PORTABLE_FILE_NAME="Ax-Studio_${VERSION}_x64-portable.exe"
+          PORTABLE_FILE_NAME="AX Studio_${VERSION}_x64-portable.exe"
           # Copy portable exe to deterministic name
-          PORTABLE_SRC=$(find ./src-tauri/target/release -maxdepth 1 -type f \( -name "Ax-Studio*.exe" -o -name "ax-studio.exe" \) -print -quit || true)
+          PORTABLE_SRC=$(find ./src-tauri/target/release -maxdepth 1 -type f \( -name "AX Studio*.exe" -o -name "ax-studio.exe" \) -print -quit || true)
           if [ -n "$PORTABLE_SRC" ] && [ -f "$PORTABLE_SRC" ]; then
             cp "$PORTABLE_SRC" "./src-tauri/target/release/${PORTABLE_FILE_NAME}"
           else
@@ -757,13 +757,13 @@ jobs:
           VERSION: ${{ needs.get-update-version.outputs.new_version }}
         run: |
           TARGET_DIR="./src-tauri/target/aarch64-pc-windows-msvc/release"
-          FILE_NAME=Ax-Studio_${VERSION}_arm64-setup.exe
+          FILE_NAME="AX Studio_${VERSION}_arm64-setup.exe"
           WIN_ARM64_SIG=""
           if [ -f "${TARGET_DIR}/bundle/nsis/${FILE_NAME}.sig" ]; then
             WIN_ARM64_SIG=$(cat "${TARGET_DIR}/bundle/nsis/${FILE_NAME}.sig")
           fi
-          PORTABLE_FILE_NAME="Ax-Studio_${VERSION}_arm64-portable.exe"
-          PORTABLE_SRC=$(find "$TARGET_DIR" -maxdepth 1 -type f \( -name "Ax-Studio*.exe" -o -name "ax-studio.exe" \) -print -quit || true)
+          PORTABLE_FILE_NAME="AX Studio_${VERSION}_arm64-portable.exe"
+          PORTABLE_SRC=$(find "$TARGET_DIR" -maxdepth 1 -type f \( -name "AX Studio*.exe" -o -name "ax-studio.exe" \) -print -quit || true)
           if [ -n "$PORTABLE_SRC" ] && [ -f "$PORTABLE_SRC" ]; then
             cp "$PORTABLE_SRC" "${TARGET_DIR}/${PORTABLE_FILE_NAME}"
           else
@@ -800,27 +800,33 @@ jobs:
       - name: create latest.json file
         run: |
           VERSION=${{ needs.get-update-version.outputs.new_version }}
+          asset_url() {
+            local asset_name="$1"
+            printf 'https://github.com/defai-digital/ax-studio/releases/download/v%s/%s' \
+              "$VERSION" "${asset_name// /%20}"
+          }
+
           DARWIN_SIGNATURE="${{ needs.build-macos.outputs.MAC_UNIVERSAL_SIG }}"
           TAR_NAME="${{ needs.build-macos.outputs.TAR_NAME }}"
           DMG_NAME="${{ needs.build-macos.outputs.DMG_NAME }}"
           # Use tar URL when signature is present (updater), DMG URL otherwise
           if [ -n "$DARWIN_SIGNATURE" ]; then
-            DARWIN_URL="https://github.com/defai-digital/ax-studio/releases/download/v${VERSION}/${TAR_NAME}"
+            DARWIN_URL="$(asset_url "$TAR_NAME")"
           else
-            DARWIN_URL="https://github.com/defai-digital/ax-studio/releases/download/v${VERSION}/${DMG_NAME}"
+            DARWIN_URL="$(asset_url "$DMG_NAME")"
           fi
 
           WIN_SIGNATURE="${{ needs.build-windows.outputs.WIN_SIG }}"
           WIN_NSIS="${{ needs.build-windows.outputs.FILE_NAME }}"
           WINDOWS_URL=""
           if [ -n "$WIN_NSIS" ]; then
-            WINDOWS_URL="https://github.com/defai-digital/ax-studio/releases/download/v${VERSION}/${WIN_NSIS}"
+            WINDOWS_URL="$(asset_url "$WIN_NSIS")"
           fi
           WIN_ARM64_SIGNATURE="${{ needs.build-windows-arm64.outputs.WIN_ARM64_SIG }}"
           WIN_ARM64_NSIS="${{ needs.build-windows-arm64.outputs.FILE_NAME }}"
           WINDOWS_ARM64_URL=""
           if [ -n "$WIN_ARM64_NSIS" ]; then
-            WINDOWS_ARM64_URL="https://github.com/defai-digital/ax-studio/releases/download/v${VERSION}/${WIN_ARM64_NSIS}"
+            WINDOWS_ARM64_URL="$(asset_url "$WIN_ARM64_NSIS")"
           fi
 
           node scripts/release/create-latest-json.mjs \
@@ -872,13 +878,13 @@ jobs:
           gh release download "v${{ needs.get-update-version.outputs.new_version }}" \
             --dir artifacts \
             --repo "$GITHUB_REPOSITORY" \
-            --pattern "Ax-Studio_${{ needs.get-update-version.outputs.new_version }}_aarch64.dmg" \
-            --pattern "Ax-Studio.app.tar.gz" \
+            --pattern "AX Studio_${{ needs.get-update-version.outputs.new_version }}_aarch64.dmg" \
+            --pattern "AX Studio.app.tar.gz" \
             --pattern "ax-studio-mac-arm64-${{ needs.get-update-version.outputs.new_version }}.zip" \
-            --pattern "Ax-Studio_${{ needs.get-update-version.outputs.new_version }}_x64-setup.exe" \
-            --pattern "Ax-Studio_${{ needs.get-update-version.outputs.new_version }}_x64-portable.exe" \
-            --pattern "Ax-Studio_${{ needs.get-update-version.outputs.new_version }}_arm64-setup.exe" \
-            --pattern "Ax-Studio_${{ needs.get-update-version.outputs.new_version }}_arm64-portable.exe" \
+            --pattern "AX Studio_${{ needs.get-update-version.outputs.new_version }}_x64-setup.exe" \
+            --pattern "AX Studio_${{ needs.get-update-version.outputs.new_version }}_x64-portable.exe" \
+            --pattern "AX Studio_${{ needs.get-update-version.outputs.new_version }}_arm64-setup.exe" \
+            --pattern "AX Studio_${{ needs.get-update-version.outputs.new_version }}_arm64-portable.exe" \
             --pattern "latest.json"
 
       - name: Sign release assets with minisign
@@ -891,7 +897,7 @@ jobs:
           printf '%s' "$AX_STUDIO_MINISIGN_SECRET_KEY_B64" | base64 --decode > signkey/ax-studio.minisign.key
           printf '%s\n' "$AX_STUDIO_MINISIGN_PUBLIC_KEY" > signkey/ax-studio.minisign.pub
           # Sign whatever the download step actually fetched: optional assets
-          # (e.g. Ax-Studio.app.tar.gz without an updater key) may be absent,
+          # (e.g. AX Studio.app.tar.gz without an updater key) may be absent,
           # and a hard-coded list would fail the whole release on them.
           files=()
           for f in artifacts/*; do
@@ -973,7 +979,7 @@ jobs:
           # Assets can take a moment to propagate right after publish; retry
           # instead of stranding Homebrew users on the previous version.
           curl -fSL --retry 6 --retry-all-errors --retry-delay 10 -o release.dmg \
-            "https://github.com/defai-digital/ax-studio/releases/download/v${VERSION}/Ax-Studio_${VERSION}_aarch64.dmg"
+            "https://github.com/defai-digital/ax-studio/releases/download/v${VERSION}/AX%20Studio_${VERSION}_aarch64.dmg"
           echo "DMG_SHA256=$(sha256sum release.dmg | awk '{print $1}')" >> "$GITHUB_ENV"
 
       - name: Push updated cask to homebrew tap

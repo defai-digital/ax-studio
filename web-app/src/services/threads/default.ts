@@ -169,7 +169,7 @@ export class DefaultThreadsService implements ThreadsService {
             engine: thread.model?.provider ?? 'ax-studio',
           },
           id: 'ax-studio',
-          name: 'Ax-Studio',
+          name: 'AX Studio',
           instructions: '',
           tools: [],
         },

@@ -332,7 +332,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
                 .custom_headers(build_mcp_headers(&config_params.headers)?),
         );
 
-        let client_info = mcp_client_info("Ax-Studio Streamable Client");
+        let client_info = mcp_client_info("AX Studio Streamable Client");
         let client = client_info.serve(transport).await.inspect_err(|e| {
             log::error!("client error: {e:?}");
         });
@@ -373,7 +373,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
             format!("Failed to start SSE transport: {e}")
         })?;
 
-        let client_info = mcp_client_info("Ax-Studio SSE Client");
+        let client_info = mcp_client_info("AX Studio SSE Client");
         let client = client_info.serve(transport).await.map_err(|e| {
             log::error!("client error: {e:?}");
             e.to_string()

@@ -62,7 +62,7 @@ when they need AX workflows outside the supported desktop release targets.
 brew tap defai-digital/ax-studio
 brew trust defai-digital/ax-studio
 brew install --cask defai-digital/ax-studio/ax-studio
-open -a Ax-Studio
+open -a "AX Studio"
 ```
 
 Already have Homebrew? Start from step 2. The `brew trust` command supports
@@ -75,13 +75,13 @@ downloads are available from GitHub Releases if you prefer not to use Homebrew.
 
 **Windows**
 
-Download the latest `Ax-Studio_*_x64-setup.exe` from
+Download the latest `AX Studio_*_x64-setup.exe` from
 [GitHub Releases](https://github.com/defai-digital/ax-studio/releases/latest)
 and run the installer.
 
 Windows ARM64 is a supported release target, but not every release includes a
 native ARM64 installer. If the latest release does not include
-`Ax-Studio_*_arm64-setup.exe`, install the x64 build.
+`AX Studio_*_arm64-setup.exe`, install the x64 build.
 
 **Manual download**
 
@@ -90,7 +90,7 @@ All release assets are published on the
 
 ### First Launch
 
-1. Open **Ax-Studio**.
+1. Open **AX Studio**.
 2. Go to **Settings -> Providers**.
 3. Add an API key for one provider, or configure a local provider.
 4. Start a new thread from **Chat** or choose a Smart Start workflow.
@@ -149,7 +149,7 @@ Tool calls and results are shown in the workspace so you can inspect what ran.
 
 - macOS Apple Silicon: use Homebrew unless you specifically need the release
   asset.
-- Windows x64: use `Ax-Studio_*_x64-setup.exe`.
+- Windows x64: use `AX Studio_*_x64-setup.exe`.
 - Windows ARM64: use the native ARM64 setup only when it exists on the latest
   release page; otherwise use the x64 setup.
 - Linux: there is no active desktop release target. Use source builds, AX

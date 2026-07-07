@@ -508,7 +508,7 @@ describe('DefaultThreadsService', () => {
             {
               model: { id: 'gpt-4', engine: 'openai' },
               id: 'ax-studio',
-              name: 'Ax-Studio',
+              name: 'AX Studio',
               instructions: '',
               tools: [],
             },

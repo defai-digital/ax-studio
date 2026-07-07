@@ -51,7 +51,7 @@ export class TauriAppService implements AppService {
 
       return appConfiguration?.data_folder
     } catch (error) {
-      console.error('Failed to get Ax-Studio data folder:', error)
+      console.error('Failed to get AX Studio data folder:', error)
       return undefined
     }
   }

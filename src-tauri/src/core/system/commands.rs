@@ -368,7 +368,7 @@ mod tests {
     fn allows_verbatim_canonical_path_under_home_dir() {
         assert!(is_path_in_allowed_user_dirs(
             std::path::Path::new(
-                r"\\?\C:\Users\devop\AppData\Roaming\Ax-Studio\data\llamacpp\models",
+                r"\\?\C:\Users\devop\AppData\Roaming\AX Studio\data\llamacpp\models",
             ),
             std::path::Path::new(r"C:\Users\devop"),
             std::path::Path::new(r"C:\Users\devop\AppData\Local\Temp"),

@@ -1,5 +1,5 @@
 /**
- * Custom Updater for Ax-Studio with HMAC request signing
+ * Custom Updater for AX Studio with HMAC request signing
  *
  * This module provides a custom update checker that:
  * 1. Reads endpoints from tauri.conf.json (plugins.updater.endpoints)
@@ -92,11 +92,11 @@ impl CustomUpdater {
         Ok(Self { client, secret_key })
     }
 
-    /// Build User-Agent header: Ax-Studio/{version} ({os}; {arch})
+    /// Build User-Agent header: AX Studio/{version} ({os}; {arch})
     fn build_user_agent(app_version: &str) -> String {
         let os = std::env::consts::OS;
         let arch = std::env::consts::ARCH;
-        format!("Ax-Studio/{} ({}; {})", app_version, os, arch)
+        format!("AX Studio/{} ({}; {})", app_version, os, arch)
     }
 
     /// Check for updates using endpoints list.

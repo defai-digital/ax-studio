@@ -641,7 +641,7 @@ pub async fn get_mcp_configs<R: Runtime>(app: AppHandle<R>) -> Result<String, St
         .ok_or("mcpServers is not an object")?;
 
     // Remove deprecated MCP servers if present (features removed)
-    for key in &["Ax-Studio Browser MCP", "browsermcp", "fetch", "serper"] {
+    for key in &["AX Studio Browser MCP", "browsermcp", "fetch", "serper"] {
         if mcp_servers.remove(*key).is_some() {
             mutated = true;
         }

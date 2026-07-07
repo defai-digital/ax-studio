@@ -126,15 +126,15 @@ mod tests {
     #[test]
     fn test_normalize_path_strips_verbatim_disk_prefix() {
         let base = super::normalize_path(std::path::Path::new(
-            r"\\?\C:\Users\devop\AppData\Roaming\Ax-Studio\data",
+            r"\\?\C:\Users\devop\AppData\Roaming\AX Studio\data",
         ));
         let candidate = super::normalize_path(std::path::Path::new(
-            r"\\?\C:\Users\devop\AppData\Roaming\Ax-Studio\data\llamacpp\models",
+            r"\\?\C:\Users\devop\AppData\Roaming\AX Studio\data\llamacpp\models",
         ));
 
         assert_eq!(
             base,
-            std::path::PathBuf::from(r"C:\Users\devop\AppData\Roaming\Ax-Studio\data")
+            std::path::PathBuf::from(r"C:\Users\devop\AppData\Roaming\AX Studio\data")
         );
         assert!(candidate.starts_with(&base));
     }

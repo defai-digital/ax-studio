@@ -259,7 +259,7 @@ pub fn resolve_download_save_path<R: Runtime>(
         }
 
         return Err(format!(
-            "Path {} is outside allowed download roots: Ax-Studio data folder {} or Hugging Face cache {}",
+            "Path {} is outside allowed download roots: AX Studio data folder {} or Hugging Face cache {}",
             normalized.display(),
             app_data_folder.display(),
             hf_cache::cache_root()
@@ -272,7 +272,7 @@ pub fn resolve_download_save_path<R: Runtime>(
     let save_path = hf_cache::normalize_existing_or_parent(&save_path_raw);
     if !save_path.starts_with(&app_data_folder) {
         return Err(format!(
-            "Path {} is outside of Ax-Studio data folder {}",
+            "Path {} is outside of AX Studio data folder {}",
             save_path.display(),
             app_data_folder.display()
         ));

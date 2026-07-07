@@ -43,7 +43,7 @@ describe('ServiceHubProvider', () => {
       </ServiceHubProvider>
     )
 
-    expect(container).toHaveTextContent('Initializing Ax-Studio')
+    expect(container).toHaveTextContent('Initializing AX Studio')
     expect(screen.queryByTestId('child')).not.toBeInTheDocument()
   })
 

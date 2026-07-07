@@ -230,7 +230,7 @@ export const ModelDownloadAction = ({
       removeLocalDownloadingModel(variant.model_id)
       toast.error('Download did not start', {
         description:
-          'This model is not available for Ax Studio in-app download yet. Open it on Hugging Face or choose a GGUF/Ax-ready model.',
+          'This model is not available for AX Studio in-app download yet. Open it on Hugging Face or choose a GGUF/Ax-ready model.',
       })
       serviceHub
         .models()

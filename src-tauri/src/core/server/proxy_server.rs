@@ -1,4 +1,4 @@
-//! HTTP server lifecycle for the Ax-Studio API proxy.
+//! HTTP server lifecycle for the AX Studio API proxy.
 use crate::core::state::ServerHandle;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Server;
@@ -72,7 +72,7 @@ pub async fn start_server<R: tauri::Runtime>(
             return Err(Box::new(e));
         }
     };
-    log::info!("Ax-Studio API server started on http://{addr}");
+    log::info!("AX Studio API server started on http://{addr}");
 
     let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
     let graceful = server.with_graceful_shutdown(async move {
@@ -92,7 +92,7 @@ pub async fn start_server<R: tauri::Runtime>(
         shutdown_tx,
     });
     let actual_port = addr.port();
-    log::info!("Ax-Studio API server started successfully on port {actual_port}");
+    log::info!("AX Studio API server started successfully on port {actual_port}");
     Ok(actual_port)
 }
 
@@ -106,14 +106,14 @@ pub async fn stop_server(
         match tokio::time::timeout(std::time::Duration::from_secs(2), handle.task).await {
             Ok(join_result) => {
                 if let Err(e) = join_result {
-                    log::warn!("Ax-Studio API server join failed during shutdown: {e}");
+                    log::warn!("AX Studio API server join failed during shutdown: {e}");
                 }
             }
             Err(_) => {
                 log::warn!("Graceful server shutdown timed out, aborting task");
             }
         }
-        log::info!("Ax-Studio API server stopped");
+        log::info!("AX Studio API server stopped");
     } else {
         log::debug!("Server was not running");
     }

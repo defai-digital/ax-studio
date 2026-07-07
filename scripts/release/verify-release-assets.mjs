@@ -39,16 +39,16 @@ const assets = output
   .filter(Boolean)
 
 const requiredAssets = [
-  `Ax-Studio_${version}_aarch64.dmg`,
+  `AX Studio_${version}_aarch64.dmg`,
   `ax-studio-mac-arm64-${version}.zip`,
-  `Ax-Studio_${version}_x64-setup.exe`,
-  `Ax-Studio_${version}_arm64-setup.exe`,
+  `AX Studio_${version}_x64-setup.exe`,
+  `AX Studio_${version}_arm64-setup.exe`,
   'latest.json',
 ]
 const optionalAssets = [
-  'Ax-Studio.app.tar.gz',
-  `Ax-Studio_${version}_x64-portable.exe`,
-  `Ax-Studio_${version}_arm64-portable.exe`,
+  'AX Studio.app.tar.gz',
+  `AX Studio_${version}_x64-portable.exe`,
+  `AX Studio_${version}_arm64-portable.exe`,
 ]
 
 function fail(message) {

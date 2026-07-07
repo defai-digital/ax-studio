@@ -187,7 +187,7 @@ jobs:
             mv /tmp/tauri.conf.json ./src-tauri/tauri.conf.json
             
             # Update product name
-            jq --arg name "Ax-Studio-${{ inputs.channel }}" '.productName = $name' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
+            jq --arg name "AX Studio-${{ inputs.channel }}" '.productName = $name' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
             mv /tmp/tauri.conf.json ./src-tauri/tauri.conf.json
 
             chmod +x .github/scripts/rename-tauri-app.sh
@@ -197,7 +197,7 @@ jobs:
             cat ./src-tauri/tauri.conf.json
 
             # Update Cargo.toml
-            ctoml ./src-tauri/Cargo.toml package.name "Ax-Studio-${{ inputs.channel }}"
+            ctoml ./src-tauri/Cargo.toml package.name "ax-studio-${{ inputs.channel }}"
             ctoml ./src-tauri/Cargo.toml dependencies.tauri.features[] "devtools"
             echo "------------------"
             cat ./src-tauri/Cargo.toml
@@ -205,10 +205,10 @@ jobs:
             chmod +x .github/scripts/rename-workspace.sh
             .github/scripts/rename-workspace.sh ./package.json ${{ inputs.channel }}
             cat ./package.json
-            sed -i "s/ax_studio_productname/Ax-Studio-${{ inputs.channel }}/g" ./src-tauri/tauri.bundle.windows.nsis.template
+            sed -i "s/ax_studio_productname/AX Studio-${{ inputs.channel }}/g" ./src-tauri/tauri.bundle.windows.nsis.template
             sed -i "s/ax_studio_mainbinaryname/ax-studio-${{ inputs.channel }}/g" ./src-tauri/tauri.bundle.windows.nsis.template
           else
-            sed -i "s/ax_studio_productname/Ax-Studio/g" ./src-tauri/tauri.bundle.windows.nsis.template
+            sed -i "s/ax_studio_productname/AX Studio/g" ./src-tauri/tauri.bundle.windows.nsis.template
             sed -i "s/ax_studio_mainbinaryname/ax-studio/g" ./src-tauri/tauri.bundle.windows.nsis.template
           fi
           echo "---------nsis.template---------"
@@ -262,7 +262,7 @@ jobs:
         with:
           name: ax-studio-windows-portable-${{ inputs.new_version }}
           path: |
-            ./src-tauri/target/release/Ax-Studio*.exe
+            ./src-tauri/target/release/AX Studio*.exe
 
       ## Set output filename for windows
       - name: Set output filename for windows
@@ -270,25 +270,25 @@ jobs:
         run: |
           cd ./src-tauri/target/release/bundle/nsis
           if [ "${{ inputs.channel }}" != "stable" ]; then
-            FILE_NAME=Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}_x64-setup.exe
-            WIN_SIG=$(cat Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}_x64-setup.exe.sig)
+            FILE_NAME="AX Studio-${{ inputs.channel }}_${{ inputs.new_version }}_x64-setup.exe"
+            WIN_SIG=$(cat "AX Studio-${{ inputs.channel }}_${{ inputs.new_version }}_x64-setup.exe.sig")
 
-            MSI_FILE="Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}_x64_en-US.msi"
-            PORTABLE_FILE_NAME="Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}_x64-portable.exe"
+            MSI_FILE="AX Studio-${{ inputs.channel }}_${{ inputs.new_version }}_x64_en-US.msi"
+            PORTABLE_FILE_NAME="AX Studio-${{ inputs.channel }}_${{ inputs.new_version }}_x64-portable.exe"
           else
-            FILE_NAME=Ax-Studio_${{ inputs.new_version }}_x64-setup.exe
-            WIN_SIG=$(cat Ax-Studio_${{ inputs.new_version }}_x64-setup.exe.sig)
+            FILE_NAME="AX Studio_${{ inputs.new_version }}_x64-setup.exe"
+            WIN_SIG=$(cat "AX Studio_${{ inputs.new_version }}_x64-setup.exe.sig")
             
-            MSI_FILE="Ax-Studio_${{ inputs.new_version }}_x64_en-US.msi"
-            PORTABLE_FILE_NAME="Ax-Studio_${{ inputs.new_version }}_x64-portable.exe"
+            MSI_FILE="AX Studio_${{ inputs.new_version }}_x64_en-US.msi"
+            PORTABLE_FILE_NAME="AX Studio_${{ inputs.new_version }}_x64-portable.exe"
           fi
           # go to ./src-tauri/target/release
           cd ../..
 
           # find the actual portable exe produced by the build
-          PORTABLE_SRC=$(find . -maxdepth 1 -type f -name 'Ax-Studio*.exe' -print -quit)
+          PORTABLE_SRC=$(find . -maxdepth 1 -type f -name 'AX Studio*.exe' -print -quit)
           if [ -z "$PORTABLE_SRC" ] || [ ! -f "$PORTABLE_SRC" ]; then
-            echo "Error: portable exe matching 'Ax-Studio*.exe' not found in $(pwd)" >&2
+            echo "Error: portable exe matching 'AX Studio*.exe' not found in $(pwd)" >&2
             exit 1
           fi
           PORTABLE_SRC=${PORTABLE_SRC#./}

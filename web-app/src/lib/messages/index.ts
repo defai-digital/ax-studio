@@ -117,7 +117,7 @@ const splitThinkTaggedText = (
 }
 
 /**
- * Convert Ax-Studio's ThreadMessage format to AI SDK UIMessage format.
+ * Convert AX Studio's ThreadMessage format to AI SDK UIMessage format.
  * This is used to load existing messages into the AI SDK chat.
  * Tool calls are now part of the content array and will be converted to tool parts.
  */
@@ -284,7 +284,7 @@ export function convertThreadMessageToUIMessage(
 }
 
 /**
- * Convert an array of Ax-Studio's ThreadMessages to AI SDK UIMessage format.
+ * Convert an array of AX Studio's ThreadMessages to AI SDK UIMessage format.
  * Tool calls are now part of the content array, so no special merging is needed.
  */
 export function convertThreadMessagesToUIMessages(

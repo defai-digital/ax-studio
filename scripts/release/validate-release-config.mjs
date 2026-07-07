@@ -27,8 +27,8 @@ function assertArrayEqual(name, actual, expected) {
 const tauriConfig = readJson('src-tauri/tauri.conf.json')
 const latestTemplate = readJson('src-tauri/latest.json.template')
 
-if (tauriConfig.productName !== 'Ax-Studio') {
-  fail(`src-tauri/tauri.conf.json productName must be Ax-Studio, got ${tauriConfig.productName}`)
+if (tauriConfig.productName !== 'AX Studio') {
+  fail(`src-tauri/tauri.conf.json productName must be AX Studio, got ${tauriConfig.productName}`)
 }
 
 if (tauriConfig.identifier !== 'ai.axstudio.app') {

@@ -258,7 +258,7 @@ async function preflightLocalModelThroughProxy(
   }
 
   throw new Error(
-    `Local model "${modelId}" is not ready through Ax Studio proxy: ${lastError}`
+    `Local model "${modelId}" is not ready through AX Studio proxy: ${lastError}`
   )
 }
 

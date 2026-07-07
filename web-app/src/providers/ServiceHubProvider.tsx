@@ -68,7 +68,7 @@ export function ServiceHubProvider({ children }: ServiceHubProviderProps) {
       ? 'Still preparing local services...'
       : loadingPhase === 'working'
         ? 'Preparing local services...'
-        : 'Initializing Ax-Studio...'
+        : 'Initializing AX Studio...'
 
   if (!isReady) {
     return (
@@ -77,7 +77,7 @@ export function ServiceHubProvider({ children }: ServiceHubProviderProps) {
           <div className="absolute inset-0 animate-spin rounded-full border-2 border-dashed border-primary/60 border-t-transparent" />
           <img
             src="/images/ax-studio-logo.png"
-            alt="Ax-Studio"
+            alt="AX Studio"
             className="h-12 w-12 animate-pulse rounded-xl object-contain"
           />
         </div>

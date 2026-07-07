@@ -51,7 +51,7 @@ export function LeftSidebar() {
                 <Zap className="size-3 text-white" strokeWidth={2.5} />
               </div>
               <span className="text-sidebar-foreground font-semibold tracking-tight whitespace-nowrap text-[13px]">
-                Ax Studio
+                AX Studio
               </span>
               <span className="text-[9px] px-1 py-0.5 rounded bg-sidebar-primary/20 text-sidebar-primary shrink-0">
                 v{VERSION}

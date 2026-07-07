@@ -98,7 +98,7 @@ describe('SetupScreen — Manual Test Protocol', () => {
   // Protocol #1: First-run onboarding renders
   it('renders the onboarding wizard', () => {
     renderSetup()
-    expect(screen.getByText('Welcome to Ax-Studio')).toBeInTheDocument()
+    expect(screen.getByText('Welcome to AX Studio')).toBeInTheDocument()
   })
 
   // Protocol #2: Navigate through all 6 steps
@@ -106,7 +106,7 @@ describe('SetupScreen — Manual Test Protocol', () => {
     renderSetup()
 
     // Step 0: Welcome
-    expect(screen.getByText('Welcome to Ax-Studio')).toBeInTheDocument()
+    expect(screen.getByText('Welcome to AX Studio')).toBeInTheDocument()
     expect(screen.getByText('Local AI Models')).toBeInTheDocument()
     expect(screen.getByText('Lightning Fast')).toBeInTheDocument()
     expect(screen.getByText('Private & Secure')).toBeInTheDocument()
@@ -260,7 +260,7 @@ describe('SetupScreen — Manual Test Protocol', () => {
     expect(screen.getByText('Choose your workspace mode')).toBeInTheDocument()
 
     clickButton('Back') // Back to Welcome
-    expect(screen.getByText('Welcome to Ax-Studio')).toBeInTheDocument()
+    expect(screen.getByText('Welcome to AX Studio')).toBeInTheDocument()
   })
 
   // Progress dots: 6 dots rendered

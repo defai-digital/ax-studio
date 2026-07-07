@@ -2483,7 +2483,7 @@ async function callAxBiTool({
   }
 
   throw new Error(
-    `AX-BI MCP is connected, but neither "${toolName}" nor the "call_tool" proxy is available. Please restart the AX-BI MCP service and reconnect it in Ax Studio.`
+    `AX-BI MCP is connected, but neither "${toolName}" nor the "call_tool" proxy is available. Please restart the AX-BI MCP service and reconnect it in AX Studio.`
   )
 }
 
@@ -2721,7 +2721,7 @@ export async function runAxBiExistingDatasetChartWorkflow({
   for (const required of requiredTools) {
     if (!canCallAxBiTool(toolNames, required)) {
       throw new Error(
-        `AX-BI MCP is connected, but the required tool "${required}" is not available directly or through the "call_tool" proxy. Please restart the AX-BI MCP service and reconnect it in Ax Studio.`
+        `AX-BI MCP is connected, but the required tool "${required}" is not available directly or through the "call_tool" proxy. Please restart the AX-BI MCP service and reconnect it in AX Studio.`
       )
     }
   }
@@ -3171,7 +3171,7 @@ export async function runAxBiDashboardWorkflow({
     if (!toolNames.has(required)) {
       return {
         handled: true,
-        message: `AX-BI MCP is connected, but the required tool "${required}" is not available. Please restart the AX-BI MCP service and reconnect it in Ax Studio.`,
+        message: `AX-BI MCP is connected, but the required tool "${required}" is not available. Please restart the AX-BI MCP service and reconnect it in AX Studio.`,
       }
     }
   }
@@ -3266,7 +3266,7 @@ export async function runAxBiDashboardWorkflow({
       request: {
         chart_ids: chartIds,
         dashboard_title: dashboardTitle,
-        description: `Generated from ${attachment.name} via Ax Studio.`,
+        description: `Generated from ${attachment.name} via AX Studio.`,
         published: true,
       },
     },

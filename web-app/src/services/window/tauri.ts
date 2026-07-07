@@ -131,7 +131,7 @@ export class TauriWindowService implements WindowService {
       await this.openWindow({
         url: '/logs',
         label: 'logs-app-window',
-        title: 'App Logs - Ax-Studio',
+        title: 'App Logs - AX Studio',
         width: 800,
         height: 600,
         resizable: true,
@@ -148,7 +148,7 @@ export class TauriWindowService implements WindowService {
       await this.openWindow({
         url: '/system-monitor',
         label: 'system-monitor-window',
-        title: 'System Monitor - Ax-Studio',
+        title: 'System Monitor - AX Studio',
         width: 1000,
         height: 700,
         resizable: true,
@@ -165,7 +165,7 @@ export class TauriWindowService implements WindowService {
       await this.openWindow({
         url: '/local-api-server/logs',
         label: 'logs-window-local-api-server',
-        title: 'Local API Server Logs - Ax-Studio',
+        title: 'Local API Server Logs - AX Studio',
         width: 800,
         height: 600,
         resizable: true,

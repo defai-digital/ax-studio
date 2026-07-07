@@ -34,7 +34,7 @@ describe('window drag helpers', () => {
 
   it('starts dragging from non-interactive chrome elements', () => {
     const chrome = document.createElement('div')
-    chrome.innerHTML = '<div><span>Ax Studio</span></div>'
+    chrome.innerHTML = '<div><span>AX Studio</span></div>'
 
     startWindowDragFromMouseEvent(
       createMouseEvent(chrome.querySelector('span'))

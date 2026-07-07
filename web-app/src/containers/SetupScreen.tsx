@@ -1,5 +1,5 @@
 /**
- * Ax-Studio Setup / Onboarding Screen
+ * AX Studio Setup / Onboarding Screen
  *
  * 6-step onboarding wizard shown on first launch.
  */
@@ -261,7 +261,7 @@ function StepWelcome() {
         <Zap className="size-7 text-white" strokeWidth={2} />
       </motion.div>
       <h2 className="text-xl font-bold mb-2">
-        {t('setup:welcome', { defaultValue: 'Welcome to Ax-Studio' })}
+        {t('setup:welcome', { defaultValue: 'Welcome to AX Studio' })}
       </h2>
       <p className="text-sm text-muted-foreground mb-6">
         {t('setup:getStartedDescription', {
@@ -516,7 +516,7 @@ function StepPrivacy() {
       </motion.div>
       <h2 className="text-xl font-bold mb-2">Your privacy matters</h2>
       <p className="text-sm text-muted-foreground mb-6">
-        Ax-Studio is built with privacy at its core.
+        AX Studio is built with privacy at its core.
       </p>
       <div className="space-y-3">
         {privacyPoints.map((point) => (
