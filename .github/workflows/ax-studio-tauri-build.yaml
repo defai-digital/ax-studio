@@ -1006,7 +1006,7 @@ jobs:
           # Assets can take a moment to propagate right after publish; retry
           # instead of stranding Homebrew users on the previous version.
           curl -fSL --retry 6 --retry-all-errors --retry-delay 10 -o release.dmg \
-            "https://github.com/defai-digital/ax-studio/releases/download/v${VERSION}/AX%20Studio_${VERSION}_aarch64.dmg"
+            "https://github.com/defai-digital/ax-studio/releases/download/v${VERSION}/AX.Studio_${VERSION}_aarch64.dmg"
           echo "DMG_SHA256=$(sha256sum release.dmg | awk '{print $1}')" >> "$GITHUB_ENV"
 
       - name: Push updated cask to homebrew tap
