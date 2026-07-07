@@ -88,6 +88,8 @@ agent-teams/
 report/
 outputs/
 /.scannerwork/
+/app-stability-cleanliness-test-report.html
+/manager-quality-summary.html
 
 # Local planning docs
 /.internal/
