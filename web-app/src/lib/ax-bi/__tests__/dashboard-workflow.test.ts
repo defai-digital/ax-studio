@@ -784,6 +784,85 @@ describe('AX-BI dashboard workflow', () => {
     })
   })
 
+  it('creates a saved mixed time-series chart when the time column is named Date', async () => {
+    const calls: Array<{ toolName: string; arguments: object }> = []
+    const serviceHub = {
+      mcp: () => ({
+        getTools: async () => [
+          { server: 'ax-bi', name: 'list_datasets', description: '', inputSchema: {} },
+          { server: 'ax-bi', name: 'get_dataset_info', description: '', inputSchema: {} },
+          { server: 'ax-bi', name: 'generate_chart', description: '', inputSchema: {} },
+        ],
+        callTool: async (args: { toolName: string; arguments: object }) => {
+          calls.push(args)
+          if (args.toolName === 'list_datasets') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    datasets: [{ id: 301, table_name: 'upload_supermarket_sales' }],
+                  }),
+                },
+              ],
+            }
+          }
+          if (args.toolName === 'get_dataset_info') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    columns: [
+                      { name: 'Date', type: 'TIMESTAMP', is_dttm: true },
+                      { name: 'Total', type: 'FLOAT' },
+                      { name: 'Rating', type: 'FLOAT' },
+                    ],
+                  }),
+                },
+              ],
+            }
+          }
+          return {
+            error: '',
+            content: [
+              {
+                text: JSON.stringify({
+                  chart_id: 193,
+                  chart_url: 'http://127.0.0.1:8080/explore/?slice_id=193',
+                }),
+              },
+            ],
+          }
+        },
+      }),
+    }
+
+    const result = await runAxBiExistingDatasetChartWorkflow({
+      prompt:
+        'Create a saved mixed time series chart from supermarket_sales showing SUM(Total) and AVG(Rating) by Date. Name it Sales - Total and Rating by Date.',
+      serviceHub: serviceHub as never,
+    })
+
+    expect(result).toMatchObject({ handled: true })
+    expect(calls[2]).toMatchObject({
+      toolName: 'generate_chart',
+      arguments: {
+        request: {
+          chart_name: 'Sales - Total and Rating by Date',
+          config: {
+            chart_type: 'mixed_timeseries',
+            x: { name: 'Date' },
+            y: [{ name: 'Total', aggregate: 'SUM', label: 'SUM(Total)' }],
+            y_secondary: [
+              { name: 'Rating', aggregate: 'AVG', label: 'AVG(Rating)' },
+            ],
+          },
+        },
+      },
+    })
+  })
+
   it('creates a saved handlebars chart from an aggregate prompt', async () => {
     const calls: Array<{ toolName: string; arguments: object }> = []
     const serviceHub = {
@@ -1885,6 +1964,81 @@ describe('AX-BI dashboard workflow', () => {
         request: {
           chart_ids: [311, 312],
           dashboard_title: 'Housing Custom Dashboard',
+          published: true,
+        },
+      },
+    })
+  })
+
+  it('creates a dashboard from explicitly named saved charts without requiring a dataset name', async () => {
+    const calls: Array<{ toolName: string; arguments: object }> = []
+    const serviceHub = {
+      mcp: () => ({
+        getTools: async () => [
+          { server: 'ax-bi', name: 'list_charts', description: '', inputSchema: {} },
+          { server: 'ax-bi', name: 'generate_dashboard', description: '', inputSchema: {} },
+        ],
+        callTool: async (args: { toolName: string; arguments: object }) => {
+          calls.push(args)
+          if (args.toolName === 'list_charts') {
+            const search =
+              ((args.arguments as { request?: { search?: string } }).request
+                ?.search as string | undefined) ?? ''
+            const charts = [
+              {
+                id: 400,
+                slice_name: 'Housing - Detail Table',
+                datasource_name: 'upload_california_housing_b074e1',
+              },
+              {
+                id: 401,
+                slice_name: 'Housing - Detail Table',
+                datasource_name: 'upload_california_housing_b074e1',
+              },
+              {
+                id: 402,
+                slice_name: 'Housing - Income vs Value',
+                datasource_name: 'upload_california_housing_b074e1',
+              },
+            ].filter((chart) =>
+              chart.slice_name.toLowerCase().includes(search.toLowerCase())
+            )
+            return {
+              error: '',
+              content: [{ text: JSON.stringify({ charts }) }],
+            }
+          }
+          return {
+            error: '',
+            content: [
+              {
+                text: JSON.stringify({
+                  dashboard_url: 'http://127.0.0.1:8080/ax-bi/dashboard/75/',
+                }),
+              },
+            ],
+          }
+        },
+      }),
+    }
+
+    const result = await runAxBiExistingDatasetChartWorkflow({
+      prompt:
+        'Create dashboard named house dash using these charts Housing - Detail Table Housing - Income vs Value',
+      serviceHub: serviceHub as never,
+    })
+
+    expect(result).toMatchObject({
+      handled: true,
+      chartUrl: 'http://127.0.0.1:8080/ax-bi/dashboard/75/',
+    })
+    expect(calls.map((call) => call.toolName)).not.toContain('list_datasets')
+    expect(calls.at(-1)).toMatchObject({
+      toolName: 'generate_dashboard',
+      arguments: {
+        request: {
+          chart_ids: [400, 402],
+          dashboard_title: 'house dash',
           published: true,
         },
       },

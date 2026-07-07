@@ -184,7 +184,7 @@ type ExistingDatasetChartIntent = AxBiChartIntentDraft & {
 }
 
 type ExistingDatasetDashboardIntent = {
-  datasetName: string
+  datasetName?: string
   dashboardTitle: string
 }
 
@@ -801,7 +801,7 @@ function parseExistingDatasetChartIntent(
     const primaryMetric = aggregateMetricFromMatch(aggregateMatches[0])
     const secondaryMetric = aggregateMetricFromMatch(aggregateMatches[1])
     const timeMatch =
-      prompt.match(/\bby\s+([A-Za-z0-9_][A-Za-z0-9_.-]*(?:date|time|year|month)[A-Za-z0-9_.-]*)\b/i) ??
+      prompt.match(/\bby\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\b/i) ??
       prompt.match(/\bover\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\b/i) ??
       prompt.match(/\bwith\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\s+on\s+(?:the\s+)?x-?axis\b/i)
     if (!primaryMetric || !secondaryMetric || !timeMatch?.[1]) return null
@@ -1008,13 +1008,17 @@ function parseExistingDatasetDashboardIntent(
   const datasetMatch =
     prompt.match(/\bwith\s+dataset\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\b/i) ??
     prompt.match(/\bfrom\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\b/i)
-  if (!datasetMatch?.[1]) return null
+  const explicitNames = explicitChartNameCandidates(prompt)
+  if (!datasetMatch?.[1] && explicitNames.length === 0) return null
 
-  const datasetName = stripTrailingPunctuation(datasetMatch[1])
+  const datasetName = datasetMatch?.[1]
+    ? stripTrailingPunctuation(datasetMatch[1])
+    : undefined
   return {
     datasetName,
     dashboardTitle:
-      extractRequestedChartName(prompt) ?? `${humanize(datasetName)} Dashboard`,
+      extractRequestedChartName(prompt) ??
+      (datasetName ? `${humanize(datasetName)} Dashboard` : 'AX-BI Dashboard'),
   }
 }
 
@@ -1085,7 +1089,10 @@ function explicitChartNameCandidates(prompt: string): string[] {
     /\b([A-Z][A-Za-z0-9]+)\s*-\s*([\s\S]+?)(?=\s+[A-Z][A-Za-z0-9]+\s*-\s*|[.!?](?:\s|$)|$)/g
   )) {
     if (match[1] && match[2]) {
-      names.push(cleanChartNameCandidate(`${match[1]} - ${match[2]}`))
+      const candidate = `${match[1]} - ${match[2]}`
+      if (!/["'`]/.test(candidate)) {
+        names.push(cleanChartNameCandidate(candidate))
+      }
     }
   }
 
@@ -1122,14 +1129,16 @@ function dashboardChartSearchTerms(
     )
   }
 
-  terms.push(intent.datasetName)
-  terms.push(humanize(intent.datasetName))
+  if (intent.datasetName) {
+    terms.push(intent.datasetName)
+    terms.push(humanize(intent.datasetName))
 
-  const compactDataset = intent.datasetName
-    .replace(/^upload[_-]/i, '')
-    .replace(/[_-][a-f0-9]{5,}$/i, '')
-  if (compactDataset && compactDataset !== intent.datasetName) {
-    terms.push(compactDataset, humanize(compactDataset))
+    const compactDataset = intent.datasetName
+      .replace(/^upload[_-]/i, '')
+      .replace(/[_-][a-f0-9]{5,}$/i, '')
+    if (compactDataset && compactDataset !== intent.datasetName) {
+      terms.push(compactDataset, humanize(compactDataset))
+    }
   }
 
   return Array.from(
@@ -1154,13 +1163,18 @@ function chartMatchesDashboardPrompt(
   const normalizedPrompt = normalizeSearchText(prompt)
   const normalizedDatasource = normalizeSearchText(chart.datasource_name || '')
   const normalizedDataset = normalizeSearchText(datasetTableName)
-  const normalizedIntentDataset = normalizeSearchText(intent.datasetName)
+  const normalizedIntentDataset = intent.datasetName
+    ? normalizeSearchText(intent.datasetName)
+    : ''
   const chartBelongsToDataset =
+    !intent.datasetName ||
     !normalizedDatasource ||
     normalizedDatasource.includes(normalizedDataset) ||
-    normalizedDatasource.includes(normalizedIntentDataset) ||
+    (normalizedIntentDataset.length > 0 &&
+      normalizedDatasource.includes(normalizedIntentDataset)) ||
     normalizedDataset.includes(normalizedDatasource) ||
-    normalizedIntentDataset.includes(normalizedDatasource)
+    (normalizedIntentDataset.length > 0 &&
+      normalizedIntentDataset.includes(normalizedDatasource))
 
   const exactNameMentioned = normalizedPrompt.includes(normalizedChartName)
   const explicitNames = explicitChartNameCandidates(prompt).map(normalizeSearchText)
@@ -2186,6 +2200,7 @@ async function findSavedDashboardChartIds({
 }): Promise<SavedDashboardChartLookup> {
   const explicitNames = explicitChartNameCandidates(prompt)
   const matchedExplicitNames = new Set<string>()
+  const explicitChartIds = new Map<string, number>()
   if (!canCallAxBiTool(toolNames, 'list_charts')) {
     return {
       chartIds: [],
@@ -2209,7 +2224,7 @@ async function findSavedDashboardChartIds({
           request: {
             search,
             page: 1,
-            page_size: 250,
+            page_size: 100,
             select_columns: [
               'id',
               'slice_name',
@@ -2230,19 +2245,31 @@ async function findSavedDashboardChartIds({
         parseJsonToolResult<Record<string, unknown>>(chartList)
       for (const chart of chartRecordsFromResult(parsedChartList)) {
         const chartId = savedChartId(chart)
+        if (chartId == null || seenChartIds.has(chartId)) {
+          continue
+        }
+
+        if (explicitNames.length > 0) {
+          const explicitName = explicitNames.find(
+            (name) =>
+              !matchedExplicitNames.has(name) &&
+              chartMatchesDashboardPrompt(chart, prompt, intent, datasetTableName) &&
+              chartMatchesExplicitName(chart, name)
+          )
+          if (explicitName) {
+            matchedExplicitNames.add(explicitName)
+            explicitChartIds.set(explicitName, chartId)
+            seenChartIds.add(chartId)
+          }
+          continue
+        }
+
         if (
-          chartId == null ||
-          seenChartIds.has(chartId) ||
           !chartMatchesDashboardPrompt(chart, prompt, intent, datasetTableName)
         ) {
           continue
         }
 
-        for (const explicitName of explicitNames) {
-          if (chartMatchesExplicitName(chart, explicitName)) {
-            matchedExplicitNames.add(explicitName)
-          }
-        }
         seenChartIds.add(chartId)
         chartIds.push(chartId)
       }
@@ -2252,7 +2279,12 @@ async function findSavedDashboardChartIds({
   }
 
   return {
-    chartIds,
+    chartIds:
+      explicitNames.length > 0
+        ? explicitNames
+            .map((name) => explicitChartIds.get(name))
+            .filter((id): id is number => typeof id === 'number')
+        : chartIds,
     missingExplicitNames: explicitNames.filter(
       (name) => !matchedExplicitNames.has(name)
     ),
@@ -2299,17 +2331,74 @@ export async function runAxBiExistingDatasetChartWorkflow({
 
   const tools = await serviceHub.mcp().getTools()
   const toolNames = axBiToolNames(tools)
-  const requiredTools = [
-    'list_datasets',
-    'get_dataset_info',
-    'generate_chart',
-    ...(dashboardIntent ? ['generate_dashboard'] : []),
-  ]
+  const dashboardHasDataset = Boolean(dashboardIntent?.datasetName)
+  const requiredTools = dashboardIntent
+    ? dashboardHasDataset
+      ? ['list_datasets', 'get_dataset_info', 'generate_chart', 'generate_dashboard']
+      : ['list_charts', 'generate_dashboard']
+    : ['list_datasets', 'get_dataset_info', 'generate_chart']
   for (const required of requiredTools) {
     if (!canCallAxBiTool(toolNames, required)) {
       throw new Error(
         `AX-BI MCP is connected, but the required tool "${required}" is not available directly or through the "call_tool" proxy. Please restart the AX-BI MCP service and reconnect it in Ax Studio.`
       )
+    }
+  }
+
+  if (dashboardIntent && !dashboardIntent.datasetName) {
+    const existingChartLookup = await findSavedDashboardChartIds({
+      serviceHub,
+      toolNames,
+      prompt,
+      intent: dashboardIntent,
+      datasetTableName: '',
+    })
+    const existingChartIds = existingChartLookup.chartIds
+
+    if (existingChartLookup.missingExplicitNames.length > 0) {
+      return {
+        handled: true,
+        message: `AX-BI could not find these saved chart(s): ${existingChartLookup.missingExplicitNames.join(', ')}. Please confirm the chart names or open the AX-BI Charts page and retry.`,
+      }
+    }
+
+    if (existingChartIds.length === 0) {
+      return {
+        handled: true,
+        message:
+          'AX-BI could not find any saved charts matching this dashboard request. Please include exact chart names or specify a dataset.',
+      }
+    }
+
+    const dashboard = await callAxBiTool({
+      serviceHub,
+      toolNames,
+      toolName: 'generate_dashboard',
+      arguments: {
+        request: {
+          chart_ids: existingChartIds,
+          dashboard_title: dashboardIntent.dashboardTitle,
+          description: 'Composed from explicitly named saved charts via Ax Studio.',
+          published: true,
+        },
+      },
+    })
+    const dashboardResult = parseJsonToolResult<DashboardResult>(dashboard)
+    if (dashboardResult.error) {
+      throw new Error(
+        typeof dashboardResult.error === 'string'
+          ? dashboardResult.error
+          : 'AX-BI dashboard creation failed'
+      )
+    }
+
+    const dashboardUrl = dashboardUrlFromResult(dashboardResult)
+    return {
+      handled: true,
+      chartUrl: dashboardUrl,
+      message: dashboardUrl
+        ? `Created AX-BI dashboard "${dashboardIntent.dashboardTitle}" with ${existingChartIds.length} existing saved chart${existingChartIds.length === 1 ? '' : 's'}.\n\nDashboard URL: ${dashboardUrl}`
+        : `Created AX-BI dashboard "${dashboardIntent.dashboardTitle}" with ${existingChartIds.length} existing saved chart${existingChartIds.length === 1 ? '' : 's'}, but AX-BI did not return a dashboard URL.`,
     }
   }
 
@@ -2362,7 +2451,7 @@ export async function runAxBiExistingDatasetChartWorkflow({
     const datasetTableName =
       typeof dataset?.table_name === 'string'
         ? dataset.table_name
-        : dashboardIntent.datasetName
+        : datasetName
     const existingChartLookup = await findSavedDashboardChartIds({
       serviceHub,
       toolNames,
