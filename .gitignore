@@ -26,6 +26,7 @@ src-tauri/resources/bin
 src-tauri/tauri.bundle.windows.nsis.template
 
 # Helper tools
+.gitleaks.toml
 .opencode
 AGENTS.md
 CLAUDE.md
