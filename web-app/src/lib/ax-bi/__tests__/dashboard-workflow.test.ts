@@ -1280,6 +1280,371 @@ describe('AX-BI dashboard workflow', () => {
     })
   })
 
+  it('creates an existing-dataset dashboard from matching saved charts', async () => {
+    const calls: Array<{ toolName: string; arguments: object }> = []
+    const serviceHub = {
+      mcp: () => ({
+        getTools: async () => [
+          { server: 'ax-bi', name: 'list_datasets', description: '', inputSchema: {} },
+          { server: 'ax-bi', name: 'get_dataset_info', description: '', inputSchema: {} },
+          { server: 'ax-bi', name: 'list_charts', description: '', inputSchema: {} },
+          { server: 'ax-bi', name: 'generate_chart', description: '', inputSchema: {} },
+          { server: 'ax-bi', name: 'generate_dashboard', description: '', inputSchema: {} },
+        ],
+        callTool: async (args: { toolName: string; arguments: object }) => {
+          calls.push(args)
+          if (args.toolName === 'list_datasets') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    datasets: [
+                      { id: 205, table_name: 'upload_california_housing_b074e1' },
+                    ],
+                  }),
+                },
+              ],
+            }
+          }
+          if (args.toolName === 'get_dataset_info') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    columns: [
+                      { name: 'longitude', type: 'FLOAT' },
+                      { name: 'latitude', type: 'FLOAT' },
+                      { name: 'housing_median_age', type: 'FLOAT' },
+                      { name: 'median_income', type: 'FLOAT' },
+                      { name: 'median_house_value', type: 'FLOAT' },
+                    ],
+                  }),
+                },
+              ],
+            }
+          }
+          if (args.toolName === 'list_charts') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    charts: [
+                      {
+                        id: 301,
+                        slice_name: 'Housing - Record Count KPI',
+                        datasource_name: 'upload_california_housing_b074e1',
+                      },
+                      {
+                        id: 302,
+                        slice_name: 'Housing - Avg Income by Age',
+                        datasource_name: 'upload_california_housing_b074e1',
+                      },
+                      {
+                        id: 303,
+                        slice_name: 'Housing - Location by Value',
+                        datasource_name: 'upload_california_housing_b074e1',
+                      },
+                      {
+                        id: 304,
+                        slice_name: 'Housing - Income vs Value',
+                        datasource_name: 'upload_california_housing_b074e1',
+                      },
+                      {
+                        id: 305,
+                        slice_name: 'Housing - Detail Table',
+                        datasource_name: 'upload_california_housing_b074e1',
+                      },
+                    ],
+                  }),
+                },
+              ],
+            }
+          }
+          if (args.toolName === 'generate_dashboard') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    dashboard_url: 'http://127.0.0.1:8080/ax-bi/dashboard/70/',
+                  }),
+                },
+              ],
+            }
+          }
+          return {
+            error: '',
+            content: [{ text: JSON.stringify({ chart_id: 999 }) }],
+          }
+        },
+      }),
+    }
+
+    const result = await runAxBiExistingDatasetChartWorkflow({
+      prompt:
+        'Create an AX-BI dashboard from california_housing. Name it Housing Overview Dashboard. which includes all the charts regarding housing which we created',
+      serviceHub: serviceHub as never,
+    })
+
+    expect(result).toMatchObject({
+      handled: true,
+      chartUrl: 'http://127.0.0.1:8080/ax-bi/dashboard/70/',
+    })
+    expect(
+      calls.filter((call) => call.toolName === 'generate_chart')
+    ).toHaveLength(0)
+    expect(calls.at(-1)).toMatchObject({
+      toolName: 'generate_dashboard',
+      arguments: {
+        request: {
+          chart_ids: [301, 302, 303, 304, 305],
+          dashboard_title: 'Housing Overview Dashboard',
+          published: true,
+        },
+      },
+    })
+  })
+
+  it('creates an existing-dataset dashboard from an unquoted pasted chart list', async () => {
+    const calls: Array<{ toolName: string; arguments: object }> = []
+    const serviceHub = {
+      mcp: () => ({
+        getTools: async () => [
+          { server: 'ax-bi', name: 'list_datasets', description: '', inputSchema: {} },
+          { server: 'ax-bi', name: 'get_dataset_info', description: '', inputSchema: {} },
+          { server: 'ax-bi', name: 'list_charts', description: '', inputSchema: {} },
+          { server: 'ax-bi', name: 'generate_chart', description: '', inputSchema: {} },
+          { server: 'ax-bi', name: 'generate_dashboard', description: '', inputSchema: {} },
+        ],
+        callTool: async (args: { toolName: string; arguments: object }) => {
+          calls.push(args)
+          if (args.toolName === 'list_datasets') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    datasets: [
+                      { id: 205, table_name: 'upload_california_housing_b074e1' },
+                    ],
+                  }),
+                },
+              ],
+            }
+          }
+          if (args.toolName === 'get_dataset_info') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    columns: [
+                      { name: 'longitude', type: 'FLOAT' },
+                      { name: 'latitude', type: 'FLOAT' },
+                      { name: 'median_income', type: 'FLOAT' },
+                    ],
+                  }),
+                },
+              ],
+            }
+          }
+          if (args.toolName === 'list_charts') {
+            const search =
+              ((args.arguments as { request?: { search?: string } }).request
+                ?.search as string | undefined) ?? ''
+            const charts = [
+              {
+                id: 321,
+                slice_name: 'Housing - Record Count KPI',
+                datasource_name: 'upload_california_housing_b074e1',
+              },
+              {
+                id: 322,
+                slice_name: 'Housing - Avg Income by Age',
+                datasource_name: 'upload_california_housing_b074e1',
+              },
+              {
+                id: 323,
+                slice_name: 'Housing - Location by Value',
+                datasource_name: 'upload_california_housing_b074e1',
+              },
+              {
+                id: 324,
+                slice_name: 'Housing - Income vs Value',
+                datasource_name: 'upload_california_housing_b074e1',
+              },
+              {
+                id: 325,
+                slice_name: 'Housing - Detail Table',
+                datasource_name: 'upload_california_housing_b074e1',
+              },
+            ].filter((chart) =>
+              chart.slice_name.toLowerCase().includes(search.toLowerCase())
+            )
+            return {
+              error: '',
+              content: [{ text: JSON.stringify({ charts }) }],
+            }
+          }
+          if (args.toolName === 'generate_dashboard') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    dashboard_url: 'http://127.0.0.1:8080/ax-bi/dashboard/72/',
+                  }),
+                },
+              ],
+            }
+          }
+          return {
+            error: '',
+            content: [{ text: JSON.stringify({ chart_id: 999 }) }],
+          }
+        },
+      }),
+    }
+
+    const result = await runAxBiExistingDatasetChartWorkflow({
+      prompt:
+        'Use AX-BI MCP with dataset upload_california_housing_b074e1. Create dashboard named house dash using these charts Housing - Record Count KPI Housing - Avg Income by Age Housing - Location by Value Housing - Income vs Value Housing - Detail Table',
+      serviceHub: serviceHub as never,
+    })
+
+    expect(result).toMatchObject({
+      handled: true,
+      chartUrl: 'http://127.0.0.1:8080/ax-bi/dashboard/72/',
+    })
+    expect(
+      calls.filter((call) => call.toolName === 'generate_chart')
+    ).toHaveLength(0)
+    expect(calls.at(-1)).toMatchObject({
+      toolName: 'generate_dashboard',
+      arguments: {
+        request: {
+          chart_ids: [321, 322, 323, 324, 325],
+          dashboard_title: 'house dash',
+          published: true,
+        },
+      },
+    })
+  })
+
+  it('creates an existing-dataset dashboard from explicitly named saved charts', async () => {
+    const calls: Array<{ toolName: string; arguments: object }> = []
+    const serviceHub = {
+      mcp: () => ({
+        getTools: async () => [
+          { server: 'ax-bi', name: 'list_datasets', description: '', inputSchema: {} },
+          { server: 'ax-bi', name: 'get_dataset_info', description: '', inputSchema: {} },
+          { server: 'ax-bi', name: 'list_charts', description: '', inputSchema: {} },
+          { server: 'ax-bi', name: 'generate_chart', description: '', inputSchema: {} },
+          { server: 'ax-bi', name: 'generate_dashboard', description: '', inputSchema: {} },
+        ],
+        callTool: async (args: { toolName: string; arguments: object }) => {
+          calls.push(args)
+          if (args.toolName === 'list_datasets') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    datasets: [
+                      { id: 205, table_name: 'upload_california_housing_b074e1' },
+                    ],
+                  }),
+                },
+              ],
+            }
+          }
+          if (args.toolName === 'get_dataset_info') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    columns: [
+                      { name: 'longitude', type: 'FLOAT' },
+                      { name: 'latitude', type: 'FLOAT' },
+                      { name: 'median_income', type: 'FLOAT' },
+                    ],
+                  }),
+                },
+              ],
+            }
+          }
+          if (args.toolName === 'list_charts') {
+            const search =
+              ((args.arguments as { request?: { search?: string } }).request
+                ?.search as string | undefined) ?? ''
+            const charts = [
+              {
+                id: 311,
+                slice_name: 'Housing - Detail Table',
+                datasource_name: 'upload_california_housing_b074e1',
+              },
+              {
+                id: 312,
+                slice_name: 'Housing - Income vs Value',
+                datasource_name: 'upload_california_housing_b074e1',
+              },
+            ].filter((chart) =>
+              chart.slice_name.toLowerCase().includes(search.toLowerCase())
+            )
+            return {
+              error: '',
+              content: [{ text: JSON.stringify({ charts }) }],
+            }
+          }
+          if (args.toolName === 'generate_dashboard') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    dashboard_url: 'http://127.0.0.1:8080/ax-bi/dashboard/71/',
+                  }),
+                },
+              ],
+            }
+          }
+          return {
+            error: '',
+            content: [{ text: JSON.stringify({ chart_id: 999 }) }],
+          }
+        },
+      }),
+    }
+
+    const result = await runAxBiExistingDatasetChartWorkflow({
+      prompt:
+        'Create an AX-BI dashboard from california_housing. Name it Housing Custom Dashboard. Include "Housing - Detail Table" and "Housing - Income vs Value".',
+      serviceHub: serviceHub as never,
+    })
+
+    expect(result).toMatchObject({
+      handled: true,
+      chartUrl: 'http://127.0.0.1:8080/ax-bi/dashboard/71/',
+    })
+    expect(
+      calls.filter((call) => call.toolName === 'generate_chart')
+    ).toHaveLength(0)
+    expect(calls.at(-1)).toMatchObject({
+      toolName: 'generate_dashboard',
+      arguments: {
+        request: {
+          chart_ids: [311, 312],
+          dashboard_title: 'Housing Custom Dashboard',
+          published: true,
+        },
+      },
+    })
+  })
+
   it('creates an existing-dataset chart from model-extracted intent', async () => {
     const calls: Array<{ toolName: string; arguments: object }> = []
     const intentExtractor = vi.fn(async () => ({

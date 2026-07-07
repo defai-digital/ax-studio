@@ -38,6 +38,12 @@ type DatasetInfo = {
 type ChartInfo = {
   id?: number | string | null
   slice_id?: number | string | null
+  chart_id?: number | string | null
+  slice_name?: string | null
+  chart_name?: string | null
+  name?: string | null
+  datasource_name?: string | null
+  url?: string | null
 }
 
 type ChartResult = {
@@ -149,6 +155,17 @@ type ExistingDatasetDashboardIntent = {
   dashboardTitle: string
 }
 
+type SavedChartRecord = {
+  id?: number | string | null
+  slice_id?: number | string | null
+  chart_id?: number | string | null
+  slice_name?: string | null
+  chart_name?: string | null
+  name?: string | null
+  datasource_name?: string | null
+  url?: string | null
+}
+
 type ResolvedExistingDatasetChartIntent = ExistingDatasetChartIntent
 
 export type AxBiChartIntentExtractor = (
@@ -207,7 +224,7 @@ function inferChartKindFromPrompt(prompt: string): AxBiGroupedChartKind {
 
 function extractRequestedChartName(prompt: string): string | undefined {
   const nameMatch = prompt.match(
-    /\b(?:name\s+it|call\s+it|title\s+it|named|called|titled)\s+(.+?)(?:[.!?]\s*$|$)/i
+    /\b(?:name\s+it|call\s+it|title\s+it|named|called|titled|dashboard\s+named|dashboard\s+called|dashboard\s+titled)\s+(.+?)(?=\s+(?:using|with|include|including|from|which|that)\b|[.!?](?:\s|$)|$)/i
   )
   return typeof nameMatch?.[1] === 'string'
     ? stripTrailingPunctuation(nameMatch[1])
@@ -665,6 +682,163 @@ function parseExistingDatasetDashboardIntent(
     dashboardTitle:
       extractRequestedChartName(prompt) ?? `${humanize(datasetName)} Dashboard`,
   }
+}
+
+function normalizeSearchText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function savedChartName(chart: SavedChartRecord): string | undefined {
+  return (
+    (typeof chart.slice_name === 'string' && chart.slice_name) ||
+    (typeof chart.chart_name === 'string' && chart.chart_name) ||
+    (typeof chart.name === 'string' && chart.name) ||
+    undefined
+  )
+}
+
+function savedChartId(chart: SavedChartRecord): number | undefined {
+  return (
+    extractId(chart.id) ??
+    extractId(chart.slice_id) ??
+    extractId(chart.chart_id)
+  )
+}
+
+function chartRecordsFromResult(value: unknown): SavedChartRecord[] {
+  if (Array.isArray(value)) {
+    return value.filter(isRecord) as SavedChartRecord[]
+  }
+  if (!isRecord(value)) return []
+
+  for (const key of ['charts', 'result', 'data', 'items']) {
+    const nested = value[key]
+    if (Array.isArray(nested)) {
+      return nested.filter(isRecord) as SavedChartRecord[]
+    }
+    if (isRecord(nested)) {
+      const records = chartRecordsFromResult(nested)
+      if (records.length > 0) return records
+    }
+  }
+
+  return []
+}
+
+function cleanChartNameCandidate(value: string): string {
+  let cleaned = stripTrailingPunctuation(value)
+    .replace(/\s+upload_[A-Za-z0-9_]+.*$/i, '')
+    .replace(/\s+\b[A-Z]{1,4}\b\s+\d+\s+(?:seconds?|minutes?|hours?|days?)\s+ago.*$/i, '')
+    .replace(/\s+(?:Big\s+Number|Line\s+Chart|Scatter\s+Plot|Bar\s+Chart|Pie\s+Chart|Area\s+Chart|Donut\s+Chart)\b.*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  cleaned = cleaned.replace(/\b(Table)\s+\1$/i, '$1').trim()
+  return stripTrailingPunctuation(cleaned)
+}
+
+function explicitChartNameCandidates(prompt: string): string[] {
+  const names: string[] = []
+  for (const match of prompt.matchAll(/["'`](.+?)["'`]/g)) {
+    if (match[1]) names.push(cleanChartNameCandidate(match[1]))
+  }
+  for (const match of prompt.matchAll(
+    /\b([A-Z][A-Za-z0-9]+)\s*-\s*([\s\S]+?)(?=\s+[A-Z][A-Za-z0-9]+\s*-\s*|[.!?](?:\s|$)|$)/g
+  )) {
+    if (match[1] && match[2]) {
+      names.push(cleanChartNameCandidate(`${match[1]} - ${match[2]}`))
+    }
+  }
+
+  return Array.from(
+    new Set(
+      names
+        .map((name) => name.trim())
+        .filter((name) => name.length >= 4 && name.includes(' - '))
+    )
+  )
+}
+
+function dashboardChartSearchTerms(
+  prompt: string,
+  intent: ExistingDatasetDashboardIntent
+): string[] {
+  const terms = explicitChartNameCandidates(prompt)
+  const regardingMatch = prompt.match(
+    /\b(?:regarding|related\s+to|about)\s+([A-Za-z0-9][A-Za-z0-9 _-]{2,40})\b/i
+  )
+  if (regardingMatch?.[1]) {
+    terms.push(
+      stripTrailingPunctuation(
+        regardingMatch[1].split(/\b(?:which|that|and|with|from|created)\b/i)[0]
+      )
+    )
+  }
+
+  terms.push(intent.datasetName)
+  terms.push(humanize(intent.datasetName))
+
+  const compactDataset = intent.datasetName
+    .replace(/^upload[_-]/i, '')
+    .replace(/[_-][a-f0-9]{5,}$/i, '')
+  if (compactDataset && compactDataset !== intent.datasetName) {
+    terms.push(compactDataset, humanize(compactDataset))
+  }
+
+  return Array.from(
+    new Set(
+      terms
+        .map((term) => stripTrailingPunctuation(term).trim())
+        .filter((term) => term.length >= 3)
+    )
+  )
+}
+
+function chartMatchesDashboardPrompt(
+  chart: SavedChartRecord,
+  prompt: string,
+  intent: ExistingDatasetDashboardIntent,
+  datasetTableName: string
+): boolean {
+  const chartName = savedChartName(chart)
+  if (!chartName) return false
+
+  const normalizedChartName = normalizeSearchText(chartName)
+  const normalizedPrompt = normalizeSearchText(prompt)
+  const normalizedDatasource = normalizeSearchText(chart.datasource_name || '')
+  const normalizedDataset = normalizeSearchText(datasetTableName)
+  const normalizedIntentDataset = normalizeSearchText(intent.datasetName)
+  const chartBelongsToDataset =
+    !normalizedDatasource ||
+    normalizedDatasource.includes(normalizedDataset) ||
+    normalizedDatasource.includes(normalizedIntentDataset) ||
+    normalizedDataset.includes(normalizedDatasource) ||
+    normalizedIntentDataset.includes(normalizedDatasource)
+
+  const exactNameMentioned = normalizedPrompt.includes(normalizedChartName)
+  const explicitNames = explicitChartNameCandidates(prompt).map(normalizeSearchText)
+  const explicitNameMatched = explicitNames.some(
+    (name) =>
+      name.includes(normalizedChartName) || normalizedChartName.includes(name)
+  )
+  const broadChartRequest =
+    /\b(?:all|these|created|existing|saved)\s+(?:the\s+)?charts\b/i.test(
+      prompt
+    ) ||
+    /\bcharts?\s+(?:regarding|related\s+to|about)\b/i.test(prompt)
+  const keywordMatched = dashboardChartSearchTerms(prompt, intent)
+    .map(normalizeSearchText)
+    .some((term) => normalizedChartName.includes(term))
+
+  return (
+    chartBelongsToDataset &&
+    (exactNameMentioned || explicitNameMatched || (broadChartRequest && keywordMatched))
+  )
 }
 
 function isAxBiChartCandidate(prompt: string): boolean {
@@ -1407,6 +1581,76 @@ async function callAxBiTool({
   )
 }
 
+async function findSavedDashboardChartIds({
+  serviceHub,
+  toolNames,
+  prompt,
+  intent,
+  datasetTableName,
+}: {
+  serviceHub: ServiceHub
+  toolNames: Set<string>
+  prompt: string
+  intent: ExistingDatasetDashboardIntent
+  datasetTableName: string
+}): Promise<number[]> {
+  if (!canCallAxBiTool(toolNames, 'list_charts')) return []
+
+  const chartIds: number[] = []
+  const seenChartIds = new Set<number>()
+  const terms = dashboardChartSearchTerms(prompt, intent)
+
+  for (const search of terms) {
+    let chartList: MCPToolCallResult
+    try {
+      chartList = await callAxBiTool({
+        serviceHub,
+        toolNames,
+        toolName: 'list_charts',
+        arguments: {
+          request: {
+            search,
+            page: 1,
+            page_size: 50,
+            select_columns: [
+              'id',
+              'slice_name',
+              'viz_type',
+              'datasource_name',
+              'url',
+            ],
+          },
+        },
+      })
+    } catch (error) {
+      console.warn('[AX-BI] list_charts failed for dashboard search', error)
+      continue
+    }
+
+    try {
+      const parsedChartList =
+        parseJsonToolResult<Record<string, unknown>>(chartList)
+      for (const chart of chartRecordsFromResult(parsedChartList)) {
+        const chartId = savedChartId(chart)
+        if (
+          chartId == null ||
+          seenChartIds.has(chartId) ||
+          !chartMatchesDashboardPrompt(chart, prompt, intent, datasetTableName)
+        ) {
+          continue
+        }
+
+        seenChartIds.add(chartId)
+        chartIds.push(chartId)
+      }
+    } catch (error) {
+      console.warn('[AX-BI] Could not parse list_charts response', error)
+    }
+  }
+
+  return chartIds
+}
+
 function chartUrlFromResult(result: ChartResult): string | undefined {
   const chart = result.chart ?? undefined
   if (result.chart_url) return result.chart_url
@@ -1507,12 +1751,54 @@ export async function runAxBiExistingDatasetChartWorkflow({
   }
 
   if (dashboardIntent) {
+    const datasetTableName =
+      typeof dataset?.table_name === 'string'
+        ? dataset.table_name
+        : dashboardIntent.datasetName
+    const existingChartIds = await findSavedDashboardChartIds({
+      serviceHub,
+      toolNames,
+      prompt,
+      intent: dashboardIntent,
+      datasetTableName,
+    })
+
+    if (existingChartIds.length > 0) {
+      const dashboard = await callAxBiTool({
+        serviceHub,
+        toolNames,
+        toolName: 'generate_dashboard',
+        arguments: {
+          request: {
+            chart_ids: existingChartIds,
+            dashboard_title: dashboardIntent.dashboardTitle,
+            description: `Composed from existing saved charts for ${dashboardIntent.datasetName} via Ax Studio.`,
+            published: true,
+          },
+        },
+      })
+      const dashboardResult = parseJsonToolResult<DashboardResult>(dashboard)
+      if (dashboardResult.error) {
+        throw new Error(
+          typeof dashboardResult.error === 'string'
+            ? dashboardResult.error
+            : 'AX-BI dashboard creation failed'
+        )
+      }
+
+      const dashboardUrl = dashboardUrlFromResult(dashboardResult)
+      return {
+        handled: true,
+        chartUrl: dashboardUrl,
+        message: dashboardUrl
+          ? `Created AX-BI dashboard "${dashboardIntent.dashboardTitle}" with ${existingChartIds.length} existing saved chart${existingChartIds.length === 1 ? '' : 's'}.\n\nDashboard URL: ${dashboardUrl}`
+          : `Created AX-BI dashboard "${dashboardIntent.dashboardTitle}" with ${existingChartIds.length} existing saved chart${existingChartIds.length === 1 ? '' : 's'}, but AX-BI did not return a dashboard URL.`,
+      }
+    }
+
     const chartPlans = buildChartPlans({
       id: datasetId,
-      table_name:
-        typeof dataset?.table_name === 'string'
-          ? dataset.table_name
-          : dashboardIntent.datasetName,
+      table_name: datasetTableName,
       columns,
     })
     if (chartPlans.length === 0) {
