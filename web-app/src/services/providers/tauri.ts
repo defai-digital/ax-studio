@@ -16,6 +16,7 @@ import { withTimeout } from '@/lib/utils/async'
 import { extractErrorMessage } from '@/lib/utils/error'
 import {
   buildRuntimeModelSettings,
+  cloneProviderSettings,
   toSettingComponentPropsList,
 } from './settings-mapper'
 
@@ -253,6 +254,9 @@ export class TauriProvidersService implements ProvidersService {
     const runtimeProviderPromises = Array.from(
       EngineManager.instance().engines.entries()
     ).map(async ([providerName, value]) => {
+      const runtimeDefaultSettings = buildRuntimeModelSettings(
+        Object.values(modelSettings)
+      )
       const models = await withProviderTimeout(
         providerName,
         'listing models',
@@ -307,7 +311,7 @@ export class TauriProvidersService implements ProvidersService {
             capabilities,
             embedding: model.embedding,
             runtimeProviderName,
-            settings: buildRuntimeModelSettings(Object.values(modelSettings)),
+            settings: cloneProviderSettings(runtimeDefaultSettings),
           } as RuntimeModel
         })
       ).catch((error: unknown) => {

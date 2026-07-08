@@ -47,6 +47,23 @@ export function buildRuntimeModelSettings(
   }, {})
 }
 
+export function cloneProviderSettings(
+  settings: Record<string, ProviderSetting>
+): Record<string, ProviderSetting> {
+  return Object.entries(settings).reduce<Record<string, ProviderSetting>>(
+    (acc, [key, setting]) => {
+      acc[key] = {
+        ...setting,
+        controller_props: {
+          ...(setting.controller_props ?? {}),
+        },
+      }
+      return acc
+    },
+    {}
+  )
+}
+
 export function toSettingComponentProps(
   setting: ProviderSetting
 ): SettingComponentProps {
