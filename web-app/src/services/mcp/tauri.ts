@@ -10,6 +10,19 @@ import type { MCPConfig, MCPService, ToolCallWithCancellationResult } from './ty
 import { mcpServersSchema, mcpSettingsSchema } from '@/schemas/mcp.schema'
 import { extractErrorMessage, toError } from '@/lib/utils/error'
 
+const DEFAULT_UNAVAILABLE_TOOL_ERROR = 'MCP service unavailable'
+const DEFAULT_UNAVAILABLE_TOOL_ERROR_AFTER_RESTART =
+  'MCP service unavailable after restart'
+
+type MCPToolCallResult = Awaited<ReturnType<MCPService['callTool']>>
+
+function createUnavailableToolResult(errorMessage: string): MCPToolCallResult {
+  return {
+    error: errorMessage,
+    content: [],
+  }
+}
+
 const getCoreApi = () => {
   if (!window.core?.api) {
     throw new Error('MCP API is unavailable')
@@ -32,10 +45,24 @@ function isRecoverableMCPError(error: unknown): boolean {
   )
 }
 
-const unavailableToolResult = (error: unknown) => ({
+const fallbackToolCallResult = (error: unknown): MCPToolCallResult => ({
   error: getErrorMessage(error),
   content: [],
 })
+
+function createToolCall(
+  api: ReturnType<typeof getCoreApi>,
+  args: {
+    toolName: string
+    serverName?: string
+    arguments: object
+    cancellationToken?: string
+  },
+  unavailableMessage: string
+): () => Promise<MCPToolCallResult> {
+  return () =>
+    api.callTool(args).then((result) => result ?? createUnavailableToolResult(unavailableMessage))
+}
 
 async function executeToolCallWithRetry<T>(
   call: () => Promise<T>,
@@ -133,28 +160,11 @@ export class TauriMCPService implements MCPService {
     arguments: object
   }): Promise<{ error: string; content: { text: string }[] }> {
     const api = getCoreApi()
-    const unavailable = {
-      error: 'MCP service unavailable',
-      content: [],
-    }
-    const unavailableAfterRestart = {
-      error: 'MCP service unavailable after restart',
-      content: [],
-    }
-    const invokeTool = (fallback: typeof unavailable) =>
-      api.callTool(args).then((result) => result ?? fallback)
+
     return executeToolCallWithRetry(
-      () =>
-        invokeTool(unavailable) as Promise<{
-          error: string
-          content: { text: string }[]
-        }>,
-      () =>
-        invokeTool(unavailableAfterRestart) as Promise<{
-          error: string
-          content: { text: string }[]
-        }>,
-      unavailableToolResult
+      () => createToolCall(api, args, DEFAULT_UNAVAILABLE_TOOL_ERROR)(),
+      () => createToolCall(api, args, DEFAULT_UNAVAILABLE_TOOL_ERROR_AFTER_RESTART)(),
+      fallbackToolCallResult
     )
   }
 
@@ -169,24 +179,20 @@ export class TauriMCPService implements MCPService {
     // IIFE so any synchronous throw from getCoreApi() becomes a rejected promise,
     // and transport errors are recovered with the same restart+retry as callTool().
     const promise = (async () => {
-      const invokeTool = () =>
-        getCoreApi().callTool({ ...args, cancellationToken: token }) as Promise<{
-          error: string
-          content: { text: string }[]
-        }>
-      const unavailable = {
-        error: 'MCP service unavailable',
-        content: [],
-      }
-      const unavailableAfterRestart = {
-        error: 'MCP service unavailable after restart',
-        content: [],
-      }
-
       return executeToolCallWithRetry(
-        () => invokeTool().then((result) => result ?? unavailable),
-        () => invokeTool().then((result) => result ?? unavailableAfterRestart),
-        unavailableToolResult
+        () =>
+          createToolCall(
+            getCoreApi(),
+            { ...args, cancellationToken: token },
+            DEFAULT_UNAVAILABLE_TOOL_ERROR
+          )(),
+        () =>
+          createToolCall(
+            getCoreApi(),
+            { ...args, cancellationToken: token },
+            DEFAULT_UNAVAILABLE_TOOL_ERROR_AFTER_RESTART
+          )(),
+        fallbackToolCallResult
       )
     })()
 

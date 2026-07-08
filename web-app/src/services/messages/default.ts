@@ -4,9 +4,7 @@
 
 import { ThreadMessage } from '@ax-studio/core'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
-import {
-  runConversationalStorage,
-} from '../conversation-storage'
+import { runConversationalStorageMethod } from '../conversation-storage'
 import type { MessagesService } from './types'
 
 export class DefaultMessagesService implements MessagesService {
@@ -17,7 +15,7 @@ export class DefaultMessagesService implements MessagesService {
     }
 
     try {
-      const messages = await runConversationalStorage(
+      const messages = await runConversationalStorageMethod(
         'listMessages',
         [threadId],
         [{ threadId }],
@@ -35,7 +33,7 @@ export class DefaultMessagesService implements MessagesService {
       return message
     }
 
-    return runConversationalStorage(
+    return runConversationalStorageMethod(
       'createMessage',
       [message],
       [{ message }],
@@ -49,7 +47,7 @@ export class DefaultMessagesService implements MessagesService {
       return message
     }
 
-    return runConversationalStorage(
+    return runConversationalStorageMethod(
       'modifyMessage',
       [message],
       [{ message }],
@@ -63,7 +61,7 @@ export class DefaultMessagesService implements MessagesService {
       return
     }
 
-    await runConversationalStorage(
+    await runConversationalStorageMethod(
       'deleteMessage',
       [threadId, messageId],
       [{ threadId, messageId }],

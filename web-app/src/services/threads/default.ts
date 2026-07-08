@@ -7,7 +7,7 @@ import type { ThreadsService } from './types'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 import {
   hasConversationalStorage,
-  runConversationalStorage,
+  runConversationalStorageMethod,
 } from '../conversation-storage'
 
 export class DefaultThreadsService implements ThreadsService {
@@ -70,7 +70,7 @@ export class DefaultThreadsService implements ThreadsService {
       },
     } as Partial<CoreThread>
 
-    const e = await runConversationalStorage(
+    const e = await runConversationalStorageMethod(
       'createThread',
       [payload],
       [{ thread: payload }],
@@ -122,7 +122,7 @@ export class DefaultThreadsService implements ThreadsService {
       updated: Math.floor(Date.now() / 1000),
     } as CoreThread
 
-    await runConversationalStorage(
+    await runConversationalStorageMethod(
       'modifyThread',
       [payload],
       [{ thread: payload }],
@@ -136,7 +136,7 @@ export class DefaultThreadsService implements ThreadsService {
       return
     }
 
-    await runConversationalStorage(
+    await runConversationalStorageMethod(
       'deleteThread',
       [threadId],
       [{ threadId }],
@@ -190,7 +190,7 @@ function getListThreads(): (() => Promise<CoreThread[]>) | undefined {
   }
 
   return () =>
-    runConversationalStorage(
+    runConversationalStorageMethod(
       'listThreads',
       [],
       [],
