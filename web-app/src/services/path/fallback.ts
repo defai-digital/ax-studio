@@ -26,11 +26,10 @@ export function basenameFallback(
   preserveTrailingDirectory: boolean = false
 ): string {
   const normalized = normalizePath(path)
-  const parts = normalized.split('/').filter(Boolean)
-
   if (!preserveTrailingDirectory && normalized.endsWith('/')) {
     return ''
   }
+  const parts = normalized.split('/').filter(Boolean)
 
   return parts.pop() || ''
 }
@@ -41,4 +40,3 @@ export function extnameFallback(path: string): string {
   const lastDot = normalized.lastIndexOf('.')
   return lastDot > lastSlash ? normalized.slice(lastDot) : ''
 }
-
