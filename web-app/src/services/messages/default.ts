@@ -5,12 +5,35 @@
 import { ThreadMessage } from '@ax-studio/core'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 import {
+  type ConversationalStorageMethod,
   CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE,
   runConversationalStorageMethod,
+  type ConversationalNativeMethodArgs,
+  type ConversationalStorageMethodArgs,
 } from '../conversation-storage'
 import type { MessagesService } from './types'
 
+type MessageStorageMethod = Extract<
+  ConversationalStorageMethod,
+  'listMessages' | 'createMessage' | 'modifyMessage' | 'deleteMessage'
+>
+
 export class DefaultMessagesService implements MessagesService {
+  private runMessageStorage<TMethod extends MessageStorageMethod>(
+    method: TMethod,
+    extensionArgs: ConversationalStorageMethodArgs<TMethod>,
+    nativeArgs: ConversationalNativeMethodArgs<TMethod>,
+    onFailure: (error: unknown) => void
+  ) {
+    return runConversationalStorageMethod(
+      method,
+      extensionArgs,
+      nativeArgs,
+      onFailure,
+      CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
+    )
+  }
+
   async fetchMessages(threadId: string): Promise<ThreadMessage[]> {
     // Don't fetch messages from server for temporary chat - it's local only
     if (threadId === TEMPORARY_CHAT_ID) {
@@ -18,12 +41,11 @@ export class DefaultMessagesService implements MessagesService {
     }
 
     try {
-      const messages = await runConversationalStorageMethod(
+      const messages = await this.runMessageStorage(
         'listMessages',
         [threadId],
         [{ threadId }],
         (error) => console.warn(`Failed to list messages for thread ${threadId}:`, error),
-        CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
       )
       return Array.isArray(messages) ? messages : []
     } catch {
@@ -37,13 +59,11 @@ export class DefaultMessagesService implements MessagesService {
       return message
     }
 
-    return runConversationalStorageMethod(
+    return this.runMessageStorage(
       'createMessage',
       [message],
       [{ message }],
-      (error) =>
-        console.warn(`Failed to create message for thread ${message.thread_id}:`, error),
-      CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
+      (error) => console.warn(`Failed to create message for thread ${message.thread_id}:`, error)
     )
   }
 
@@ -53,12 +73,11 @@ export class DefaultMessagesService implements MessagesService {
       return message
     }
 
-    return runConversationalStorageMethod(
+    return this.runMessageStorage(
       'modifyMessage',
       [message],
       [{ message }],
-      (error) => console.warn(`Failed to modify message ${message.id}:`, error),
-      CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
+      (error) => console.warn(`Failed to modify message ${message.id}:`, error)
     )
   }
 
@@ -68,12 +87,11 @@ export class DefaultMessagesService implements MessagesService {
       return
     }
 
-    await runConversationalStorageMethod(
+    await this.runMessageStorage(
       'deleteMessage',
       [threadId, messageId],
       [{ threadId, messageId }],
-      (error) => console.warn(`Failed to delete message ${messageId}:`, error),
-      CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
+      (error) => console.warn(`Failed to delete message ${messageId}:`, error)
     )
   }
 }

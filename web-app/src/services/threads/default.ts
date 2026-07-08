@@ -9,6 +9,9 @@ import {
   CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE,
   hasConversationalStorage,
   runConversationalStorageMethod,
+  type ConversationalNativeMethodArgs,
+  type ConversationalStorageMethod,
+  type ConversationalStorageMethodArgs,
 } from '../conversation-storage'
 
 export class DefaultThreadsService implements ThreadsService {
@@ -71,12 +74,11 @@ export class DefaultThreadsService implements ThreadsService {
       },
     } as Partial<CoreThread>
 
-    const e = await runConversationalStorageMethod(
+    const e = await this.runThreadStorage(
       'createThread',
       [payload],
       [{ thread: payload }],
-      (error) => console.warn(`Failed to create thread ${thread.id}:`, error),
-      CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
+      (error) => console.warn(`Failed to create thread ${thread.id}:`, error)
     )
 
     const model = normalizeThreadModelFromStorage(e, thread.model)
@@ -124,12 +126,11 @@ export class DefaultThreadsService implements ThreadsService {
       updated: Math.floor(Date.now() / 1000),
     } as CoreThread
 
-    await runConversationalStorageMethod(
+    await this.runThreadStorage(
       'modifyThread',
       [payload],
       [{ thread: payload }],
-      (error) => console.warn(`Failed to update thread ${thread.id}:`, error),
-      CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
+      (error) => console.warn(`Failed to update thread ${thread.id}:`, error)
     )
   }
 
@@ -139,11 +140,25 @@ export class DefaultThreadsService implements ThreadsService {
       return
     }
 
-    await runConversationalStorageMethod(
+    await this.runThreadStorage(
       'deleteThread',
       [threadId],
       [{ threadId }],
-      (error) => console.warn(`Failed to delete thread ${threadId}:`, error),
+      (error) => console.warn(`Failed to delete thread ${threadId}:`, error)
+    )
+  }
+
+  private runThreadStorage<TMethod extends ConversationalStorageMethod>(
+    method: TMethod,
+    extensionArgs: ConversationalStorageMethodArgs<TMethod>,
+    nativeArgs: ConversationalNativeMethodArgs<TMethod>,
+    onFailure: (error: unknown) => void
+  ) {
+    return runConversationalStorageMethod(
+      method,
+      extensionArgs,
+      nativeArgs,
+      onFailure,
       CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
     )
   }

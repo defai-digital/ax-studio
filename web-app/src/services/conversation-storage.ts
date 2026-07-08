@@ -6,7 +6,7 @@ import {
   ThreadMessage,
 } from '@ax-studio/core'
 
-type ConversationalNativeApi = {
+export type ConversationalNativeApi = {
   listThreads: () => Promise<Thread[]>
   createThread: (payload: { thread: Partial<Thread> }) => Promise<Thread>
   modifyThread: (payload: { thread: Thread }) => Promise<void>
@@ -17,7 +17,7 @@ type ConversationalNativeApi = {
   deleteMessage: (payload: { threadId: string; messageId: string }) => Promise<void>
 }
 
-type ConversationalStorageMethods = Pick<
+export type ConversationalStorageMethods = Pick<
   ConversationalExtension,
   | 'listThreads'
   | 'createThread'
@@ -31,6 +31,14 @@ type ConversationalStorageMethods = Pick<
 
 export type ConversationalStorageMethod = keyof ConversationalStorageMethods &
   keyof ConversationalNativeApi
+
+export type ConversationalStorageMethodArgs<
+  TMethod extends ConversationalStorageMethod
+> = Parameters<ConversationalStorageMethods[TMethod]>
+
+export type ConversationalNativeMethodArgs<
+  TMethod extends ConversationalStorageMethod
+> = Parameters<ConversationalNativeApi[TMethod]>
 
 type ResolveStorageOperation<T> = Array<(() => Promise<T>) | undefined>
 
