@@ -5,9 +5,8 @@
 import { ThreadMessage } from '@ax-studio/core'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 import {
-  getConversationalExtension,
-  getNativeApi,
-  runConversationalStorage,
+  CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE,
+  runConversationalStorageMethod,
 } from '../conversation-storage'
 import type { MessagesService } from './types'
 
@@ -19,18 +18,12 @@ export class DefaultMessagesService implements MessagesService {
     }
 
     try {
-      const messages = await runConversationalStorage<ThreadMessage[]>(
-        {
-          extension: getConversationalExtension()?.listMessages
-            ? (extension) => extension.listMessages(threadId)
-            : undefined,
-          native: getNativeApi()?.listMessages
-            ? (nativeApi) =>
-                nativeApi.listMessages!({ threadId }) as Promise<ThreadMessage[]>
-            : undefined,
-        },
-        'Conversational storage is not available',
-        (error) => console.warn(`Failed to list messages for thread ${threadId}:`, error)
+      const messages = await runConversationalStorageMethod(
+        'listMessages',
+        [threadId],
+        [{ threadId }],
+        (error) => console.warn(`Failed to list messages for thread ${threadId}:`, error),
+        CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
       )
       return Array.isArray(messages) ? messages : []
     } catch {
@@ -44,18 +37,13 @@ export class DefaultMessagesService implements MessagesService {
       return message
     }
 
-    return runConversationalStorage(
-      {
-        extension: getConversationalExtension()?.createMessage
-          ? (extension) => extension.createMessage(message)
-          : undefined,
-        native: getNativeApi()?.createMessage
-          ? (nativeApi) =>
-              nativeApi.createMessage!({ message }) as Promise<ThreadMessage>
-          : undefined,
-      },
-      'Conversational storage is not available',
-      (error) => console.warn(`Failed to create message for thread ${message.thread_id}:`, error)
+    return runConversationalStorageMethod(
+      'createMessage',
+      [message],
+      [{ message }],
+      (error) =>
+        console.warn(`Failed to create message for thread ${message.thread_id}:`, error),
+      CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
     )
   }
 
@@ -65,18 +53,12 @@ export class DefaultMessagesService implements MessagesService {
       return message
     }
 
-    return runConversationalStorage(
-      {
-        extension: getConversationalExtension()?.modifyMessage
-          ? (extension) => extension.modifyMessage(message)
-          : undefined,
-        native: getNativeApi()?.modifyMessage
-          ? (nativeApi) =>
-              nativeApi.modifyMessage!({ message }) as Promise<ThreadMessage>
-          : undefined,
-      },
-      'Conversational storage is not available',
-      (error) => console.warn(`Failed to modify message ${message.id}:`, error)
+    return runConversationalStorageMethod(
+      'modifyMessage',
+      [message],
+      [{ message }],
+      (error) => console.warn(`Failed to modify message ${message.id}:`, error),
+      CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
     )
   }
 
@@ -86,18 +68,12 @@ export class DefaultMessagesService implements MessagesService {
       return
     }
 
-    await runConversationalStorage(
-      {
-        extension: getConversationalExtension()?.deleteMessage
-          ? (extension) => extension.deleteMessage(threadId, messageId)
-          : undefined,
-        native: getNativeApi()?.deleteMessage
-          ? (nativeApi) =>
-              nativeApi.deleteMessage!({ threadId, messageId }) as Promise<void>
-          : undefined,
-      },
-      'Conversational storage is not available',
-      (error) => console.warn(`Failed to delete message ${messageId}:`, error)
+    await runConversationalStorageMethod(
+      'deleteMessage',
+      [threadId, messageId],
+      [{ threadId, messageId }],
+      (error) => console.warn(`Failed to delete message ${messageId}:`, error),
+      CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
     )
   }
 }

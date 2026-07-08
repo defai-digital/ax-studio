@@ -6,9 +6,9 @@ import { type Thread as CoreThread } from '@ax-studio/core'
 import type { ThreadsService } from './types'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 import {
-  getConversationalExtension,
-  getNativeApi,
-  runConversationalStorage,
+  CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE,
+  hasConversationalStorage,
+  runConversationalStorageMethod,
 } from '../conversation-storage'
 
 export class DefaultThreadsService implements ThreadsService {
@@ -112,18 +112,12 @@ export class DefaultThreadsService implements ThreadsService {
       },
     } as Partial<CoreThread>
 
-    const e = await runConversationalStorage(
-      {
-        extension: getConversationalExtension()?.createThread
-          ? (extension) => extension.createThread(payload)
-          : undefined,
-        native: getNativeApi()?.createThread
-          ? (nativeApi) =>
-              nativeApi.createThread!({ thread: payload }) as Promise<CoreThread>
-          : undefined,
-      },
-      'Conversational storage is not available',
-      (error) => console.warn(`Failed to create thread ${thread.id}:`, error)
+    const e = await runConversationalStorageMethod(
+      'createThread',
+      [payload],
+      [{ thread: payload }],
+      (error) => console.warn(`Failed to create thread ${thread.id}:`, error),
+      CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
     )
 
     const model = e.assistants?.[0]?.model
@@ -182,18 +176,12 @@ export class DefaultThreadsService implements ThreadsService {
       updated: Math.floor(Date.now() / 1000),
     } as CoreThread
 
-    await runConversationalStorage(
-      {
-        extension: getConversationalExtension()?.modifyThread
-          ? (extension) => extension.modifyThread(payload)
-          : undefined,
-        native: getNativeApi()?.modifyThread
-          ? (nativeApi) =>
-              nativeApi.modifyThread!({ thread: payload }) as Promise<void>
-          : undefined,
-      },
-      'Conversational storage is not available',
-      (error) => console.warn(`Failed to update thread ${thread.id}:`, error)
+    await runConversationalStorageMethod(
+      'modifyThread',
+      [payload],
+      [{ thread: payload }],
+      (error) => console.warn(`Failed to update thread ${thread.id}:`, error),
+      CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
     )
   }
 
@@ -203,41 +191,27 @@ export class DefaultThreadsService implements ThreadsService {
       return
     }
 
-    await runConversationalStorage(
-      {
-        extension: getConversationalExtension()?.deleteThread
-          ? (extension) => extension.deleteThread(threadId)
-          : undefined,
-        native: getNativeApi()?.deleteThread
-          ? (nativeApi) =>
-              nativeApi.deleteThread!({ threadId }) as Promise<void>
-          : undefined,
-      },
-      'Conversational storage is not available',
-      (error) => console.warn(`Failed to delete thread ${threadId}:`, error)
+    await runConversationalStorageMethod(
+      'deleteThread',
+      [threadId],
+      [{ threadId }],
+      (error) => console.warn(`Failed to delete thread ${threadId}:`, error),
+      CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
     )
   }
 }
 
 function getListThreads(): (() => Promise<CoreThread[]>) | undefined {
-  const extension = getConversationalExtension()
-  const nativeApi = getNativeApi()
-
-  if (!extension && !nativeApi) {
+  if (!hasConversationalStorage()) {
     return undefined
   }
 
-  const listThreads = () =>
-    runConversationalStorage(
-      {
-        extension: extension?.listThreads ? (extension) => extension.listThreads() : undefined,
-        native: nativeApi?.listThreads
-          ? (nativeApi) => nativeApi.listThreads!() as Promise<CoreThread[]>
-          : undefined,
-      },
-      'Conversational storage is not available',
-      (error) => console.warn('Failed to list threads:', error)
+  return () =>
+    runConversationalStorageMethod(
+      'listThreads',
+      [],
+      [],
+      (error) => console.warn('Failed to list threads:', error),
+      CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
     )
-
-  return listThreads
 }
