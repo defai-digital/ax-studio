@@ -68,8 +68,8 @@ export async function runConversationalStorageMethod<
   TMethod extends ConversationalStorageMethod,
 >(
   method: TMethod,
-  extensionArgs: Parameters<ConversationalStorageMethods[TMethod]>,
-  nativeArgs: Parameters<ConversationalNativeApi[TMethod]>,
+  extensionArgs: ConversationalStorageMethodArgs<TMethod>,
+  nativeArgs: ConversationalNativeMethodArgs<TMethod>,
   onFailure: (error: unknown) => void,
   unavailableMessage: string = CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
 ): Promise<Awaited<ReturnType<ConversationalStorageMethods[TMethod]>>> {
