@@ -37,7 +37,7 @@ type ResolveStorageOperation<T> = Array<(() => Promise<T>) | undefined>
 export const CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE =
   'Conversational storage is not available'
 
-export function getConversationalExtension(): ConversationalExtension | undefined {
+function getConversationalExtension(): ConversationalExtension | undefined {
   try {
     return ExtensionManager.getInstance().get<ConversationalExtension>(
       ExtensionTypeEnum.Conversational
@@ -48,7 +48,7 @@ export function getConversationalExtension(): ConversationalExtension | undefine
   }
 }
 
-export function getNativeApi() {
+function getNativeApi() {
   return window.core?.api
 }
 
