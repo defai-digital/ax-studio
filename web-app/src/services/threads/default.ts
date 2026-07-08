@@ -22,52 +22,17 @@ export class DefaultThreadsService implements ThreadsService {
 
     if (!listThreads) return []
 
-    return (
-      listThreads()
-        .then((threads) => {
-          if (!Array.isArray(threads)) return []
+    try {
+      const threads = await listThreads()
+      if (!Array.isArray(threads)) return []
 
-          // Filter out temporary threads from the list
-          const filteredThreads = threads.filter(
-            (e) => e.id !== TEMPORARY_CHAT_ID
-          )
-
-          return filteredThreads.map((e) => {
-            // Model is always stored in assistants[0].model
-            const model = e.assistants?.[0]?.model
-              ? {
-                  id: e.assistants[0].model.id,
-                  provider: e.assistants[0].model.engine,
-                }
-              : undefined
-
-            // Check if this is a "real" assistant (has instructions) or just model storage
-            const assistants = e.assistants
-
-            return {
-              ...e,
-              updated:
-                typeof e.updated === 'number' && e.updated > 1e12
-                  ? Math.floor(e.updated / 1000)
-                  : (e.updated ?? 0),
-              order: e.metadata?.order,
-              isFavorite: e.metadata?.is_favorite,
-              model,
-              assistants,
-              metadata: {
-                ...e.metadata,
-                // Override extracted fields to avoid duplication
-                order: e.metadata?.order,
-                is_favorite: e.metadata?.is_favorite,
-              },
-            } as Thread
-          })
-        })
-        ?.catch((e) => {
-          console.error('Error fetching threads:', e)
-          return [] // Fallback: empty thread list allows app to load
-        })
-    )
+      return threads
+        .filter((thread) => thread.id !== TEMPORARY_CHAT_ID)
+        .map(normalizeStoredThread)
+    } catch (e) {
+      console.error('Error fetching threads:', e)
+      return [] // Fallback: empty thread list allows app to load
+    }
   }
 
   async createThread(thread: Thread): Promise<Thread> {
@@ -85,10 +50,7 @@ export class DefaultThreadsService implements ThreadsService {
       ? [
           {
             ...firstAssistant,
-            model: {
-              id: thread.model?.id ?? '*',
-              engine: thread.model?.provider ?? 'ax-studio',
-            },
+            model: buildStoredModelRef(thread),
           },
         ]
       : [
@@ -96,10 +58,7 @@ export class DefaultThreadsService implements ThreadsService {
             // Minimal entry just to store model info
             id: 'model-only',
             name: 'Model',
-            model: {
-              id: thread.model?.id ?? '*',
-              engine: thread.model?.provider ?? 'ax-studio',
-            },
+            model: buildStoredModelRef(thread),
           },
         ]
 
@@ -120,12 +79,7 @@ export class DefaultThreadsService implements ThreadsService {
       CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
     )
 
-    const model = e.assistants?.[0]?.model
-      ? {
-          id: e.assistants[0].model.id,
-          provider: e.assistants[0].model.engine,
-        }
-      : thread.model
+    const model = normalizeThreadModelFromStorage(e)
 
     return {
       ...e,
@@ -146,10 +100,7 @@ export class DefaultThreadsService implements ThreadsService {
       ...thread,
       assistants: thread.assistants?.map((e) => {
         return {
-          model: {
-            id: thread.model?.id ?? '*',
-            engine: thread.model?.provider ?? 'ax-studio',
-          },
+          model: buildStoredModelRef(thread),
           id: e.id,
           name: e.name,
           instructions: e.instructions,
@@ -157,10 +108,7 @@ export class DefaultThreadsService implements ThreadsService {
         }
       }) ?? [
         {
-          model: {
-            id: thread.model?.id ?? '*',
-            engine: thread.model?.provider ?? 'ax-studio',
-          },
+          model: buildStoredModelRef(thread),
           id: 'ax-studio',
           name: 'AX Studio',
           instructions: '',
@@ -198,6 +146,46 @@ export class DefaultThreadsService implements ThreadsService {
       (error) => console.warn(`Failed to delete thread ${threadId}:`, error),
       CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
     )
+  }
+}
+
+function normalizeStoredThread(thread: CoreThread): Thread {
+  const model = normalizeThreadModelFromStorage(thread)
+  return {
+    ...thread,
+    updated:
+      typeof thread.updated === 'number' && thread.updated > 1e12
+        ? Math.floor(thread.updated / 1000)
+        : (thread.updated ?? 0),
+    order: thread.metadata?.order,
+    isFavorite: thread.metadata?.is_favorite,
+    model,
+    metadata: {
+      ...thread.metadata,
+      order: thread.metadata?.order,
+      is_favorite: thread.metadata?.is_favorite,
+    },
+  }
+}
+
+function normalizeThreadModelFromStorage(
+  thread: Pick<CoreThread, 'assistants' | 'model'> & { model?: Thread['model'] }
+): Thread['model'] {
+  const storedModel = thread.assistants?.[0]?.model
+  if (!storedModel) {
+    return thread.model
+  }
+
+  return {
+    id: storedModel.id,
+    provider: storedModel.engine,
+  }
+}
+
+function buildStoredModelRef(thread: Thread): { id: string; engine: string } {
+  return {
+    id: thread.model?.id ?? '*',
+    engine: thread.model?.provider ?? 'ax-studio',
   }
 }
 
