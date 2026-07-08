@@ -79,7 +79,7 @@ export class DefaultThreadsService implements ThreadsService {
       CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
     )
 
-    const model = normalizeThreadModelFromStorage(e)
+    const model = normalizeThreadModelFromStorage(e, thread.model)
 
     return {
       ...e,
@@ -169,17 +169,16 @@ function normalizeStoredThread(thread: CoreThread): Thread {
 }
 
 function normalizeThreadModelFromStorage(
-  thread: Pick<CoreThread, 'assistants' | 'model'> & { model?: Thread['model'] }
+  thread: Pick<CoreThread, 'assistants'>,
+  fallbackModel?: Thread['model']
 ): Thread['model'] {
   const storedModel = thread.assistants?.[0]?.model
-  if (!storedModel) {
-    return thread.model
-  }
-
-  return {
-    id: storedModel.id,
-    provider: storedModel.engine,
-  }
+  return storedModel
+    ? {
+      id: storedModel.id,
+      provider: storedModel.engine,
+    }
+    : fallbackModel
 }
 
 function buildStoredModelRef(thread: Thread): { id: string; engine: string } {
