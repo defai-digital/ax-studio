@@ -16,6 +16,13 @@ import type { RAGService } from './rag/types'
 import { DefaultUploadsService } from './uploads/default'
 import type { UploadsService } from './uploads/types'
 import { DefaultThreadsService } from './threads/default'
+import { parseLogLine as parseStructuredLogLine } from './app/log-parser'
+import {
+  joinPathSegments,
+  dirnameFallback,
+  basenameFallback,
+  extnameFallback,
+} from './path/fallback'
 
 import type { ThemeService } from './theme/types'
 import type { WindowService } from './window/types'
@@ -116,6 +123,11 @@ class PlatformServiceHub implements ServiceHub {
     const eventTarget = new EventTarget()
     const unsupported = (service: string) =>
       new Error(`${service} is not available in web mode`)
+    const openInNewTab = (url: string) => {
+      if (typeof window !== 'undefined') {
+        window.open(url, '_blank', 'noopener,noreferrer')
+      }
+    }
 
     this.themeService = {
       setTheme: async (theme) => {
@@ -134,9 +146,7 @@ class PlatformServiceHub implements ServiceHub {
       },
       getWebviewWindowByLabel: async () => null,
       openWindow: async ({ url }) => {
-        if (typeof window !== 'undefined') {
-          window.open(url, '_blank', 'noopener,noreferrer')
-        }
+        openInNewTab(url)
       },
       openLogsWindow: async () => {},
       openSystemMonitorWindow: async () => {},
@@ -167,12 +177,10 @@ class PlatformServiceHub implements ServiceHub {
         window.localStorage.clear()
       },
       readLogs: async () => [],
-      parseLogLine: (line) => ({
-        timestamp: Date.now(),
-        level: 'info',
-        target: 'web',
-        message: line ?? '',
-      }),
+      parseLogLine: (line) =>
+        parseStructuredLogLine(line, {
+          fallbackTarget: 'web',
+        }),
       getAppDataFolder: async () => undefined,
       relocateAppDataFolder: async () => {
         throw unsupported('App data relocation')
@@ -220,7 +228,7 @@ class PlatformServiceHub implements ServiceHub {
     this.openerService = {
       revealItemInDir: async () => {},
       openUrl: async (url) => {
-        if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer')
+        openInNewTab(url)
       },
     }
 
@@ -231,18 +239,10 @@ class PlatformServiceHub implements ServiceHub {
 
     this.pathService = {
       sep: () => '/',
-      join: async (...segments) => segments.filter(Boolean).join('/').replace(/\/+/g, '/'),
-      dirname: async (path) => {
-        const normalized = path.replace(/\/+$/, '')
-        const index = normalized.lastIndexOf('/')
-        return index > 0 ? normalized.slice(0, index) : '/'
-      },
-      basename: async (path) => path.split('/').filter(Boolean).pop() ?? '',
-      extname: async (path) => {
-        const name = path.split('/').pop() ?? ''
-        const index = name.lastIndexOf('.')
-        return index > 0 ? name.slice(index) : ''
-      },
+      join: async (...segments) => joinPathSegments(...segments),
+      dirname: async (path) => dirnameFallback(path, '/'),
+      basename: async (path) => basenameFallback(path, true),
+      extname: async (path) => extnameFallback(path),
     }
 
     this.coreService = {

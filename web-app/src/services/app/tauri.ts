@@ -5,6 +5,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import type { AppConfiguration } from '@ax-studio/core'
 import type { LogEntry, AppService } from './types'
+import { parseLogLine as parseStructuredLogLine } from './log-parser'
 
 export class TauriAppService implements AppService {
   private resetInProgress = false
@@ -68,27 +69,7 @@ export class TauriAppService implements AppService {
   }
 
   parseLogLine(line: string): LogEntry {
-    const regex = /^\[(.*?)\]\[(.*?)\]\[(.*?)\]\[(.*?)\]\s(.*)$/
-    const match = line.match(regex)
-
-    if (!match)
-      return {
-        timestamp: Date.now(),
-        level: 'info' as 'info' | 'warn' | 'error' | 'debug',
-        target: 'info',
-        message: line ?? '',
-      } as LogEntry
-
-    const [, date, time, target, levelRaw, message] = match
-
-    const level = levelRaw.toLowerCase() as 'info' | 'warn' | 'error' | 'debug'
-
-    return {
-      timestamp: new Date(`${date} ${time}`).getTime(),
-      level,
-      target,
-      message,
-    }
+    return parseStructuredLogLine(line)
   }
 
   async getServerStatus(): Promise<boolean> {

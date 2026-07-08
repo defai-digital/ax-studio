@@ -4,6 +4,12 @@
 
 import { sep as getSep, join, dirname, basename, extname } from '@tauri-apps/api/path'
 import type { PathService } from './types'
+import {
+  joinPathSegments,
+  dirnameFallback,
+  basenameFallback,
+  extnameFallback,
+} from './fallback'
 
 export class TauriPathService implements PathService {
   sep(): string {
@@ -21,7 +27,7 @@ export class TauriPathService implements PathService {
       return await join(...segments)
     } catch (error) {
       console.error('Error joining paths in Tauri:', error)
-      return segments.join('/')
+      return joinPathSegments(...segments)
     }
   }
 
@@ -30,8 +36,7 @@ export class TauriPathService implements PathService {
       return await dirname(path)
     } catch (error) {
       console.error('Error getting dirname in Tauri:', error)
-      const lastSlash = path.lastIndexOf('/')
-      return lastSlash > 0 ? path.substring(0, lastSlash) : '.'
+      return dirnameFallback(path, '.')
     }
   }
 
@@ -40,8 +45,7 @@ export class TauriPathService implements PathService {
       return await basename(path)
     } catch (error) {
       console.error('Error getting basename in Tauri:', error)
-      const normalizedPath = path.replace(/\\/g, '/')
-      return normalizedPath.split('/').pop() || ''
+      return basenameFallback(path)
     }
   }
 
@@ -50,9 +54,7 @@ export class TauriPathService implements PathService {
       return await extname(path)
     } catch (error) {
       console.error('Error getting extname in Tauri:', error)
-      const lastDot = path.lastIndexOf('.')
-      const lastSlash = path.lastIndexOf('/')
-      return lastDot > lastSlash ? path.substring(lastDot) : ''
+      return extnameFallback(path)
     }
   }
 }
