@@ -4,6 +4,13 @@ import {
   ExtensionTypeEnum,
 } from '@ax-studio/core'
 
+type ConversationalApi = Record<string, (...args: unknown[]) => unknown>
+
+export type ConversationalStorageOptions<T> = {
+  extension?: (extension: ConversationalExtension) => Promise<T>
+  native?: (nativeApi: ConversationalApi) => Promise<T>
+}
+
 export function getConversationalExtension(): ConversationalExtension | undefined {
   try {
     return ExtensionManager.getInstance().get<ConversationalExtension>(
@@ -17,6 +24,28 @@ export function getConversationalExtension(): ConversationalExtension | undefine
 
 export function getNativeApi() {
   return window.core?.api
+}
+
+export async function runConversationalStorage<T>(
+  operations: ConversationalStorageOptions<T>,
+  unavailableMessage: string,
+  onFailure: (error: unknown) => void
+): Promise<T> {
+  const extension = getConversationalExtension()
+  const nativeApi = getNativeApi()
+
+  return runFirstSuccessful(
+    [
+      operations.extension && extension
+        ? () => operations.extension!(extension)
+        : undefined,
+      operations.native && nativeApi
+        ? () => operations.native!(nativeApi)
+        : undefined,
+    ],
+    unavailableMessage,
+    onFailure
+  )
 }
 
 export async function runFirstSuccessful<T>(
