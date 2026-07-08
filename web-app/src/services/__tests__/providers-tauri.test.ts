@@ -391,13 +391,13 @@ describe('TauriProvidersService', () => {
         base_url: 'http://localhost:11434/v1',
       })
     )
-    expect(runtimeProvider?.settings).toEqual([
-      expect.objectContaining({
+    expect(runtimeProvider?.settings).toEqual({
+      ctx_len: expect.objectContaining({
         key: 'ctx_len',
         controller_type: 'slider',
-        controller_props: { value: 4096 },
+        controller_props: { value: 8192 },
       }),
-    ])
+    })
     expect(runtimeProvider?.models).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

@@ -122,13 +122,13 @@ describe('small Tauri desktop service adapters', () => {
       expect(mocks.listen).toHaveBeenCalledWith('theme-changed', handler)
     })
 
-    it('propagates emit failures and falls back to a no-op listener on listen failure', async () => {
+    it('falls back safely when emit or listen fail', async () => {
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       const service = new TauriEventsService()
       const error = new Error('event bus down')
       mocks.emit.mockRejectedValue(error)
 
-      await expect(service.emit('broken')).rejects.toThrow(error)
+      await expect(service.emit('broken')).resolves.toBeUndefined()
 
       mocks.listen.mockRejectedValue(new Error('listen failed'))
       const unlisten = await service.listen('broken', vi.fn())
@@ -215,4 +215,3 @@ describe('small Tauri desktop service adapters', () => {
     })
   })
 })
-

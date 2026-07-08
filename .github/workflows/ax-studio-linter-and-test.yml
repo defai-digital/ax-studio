@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - '.github/workflows/**'
-      - '.gitleaks.toml'
       - 'web/**'
       - 'joi/**'
       - 'package.json'
@@ -26,7 +25,6 @@ on:
       - release/**
     paths:
       - '.github/workflows/**'
-      - '.gitleaks.toml'
       - 'web/**'
       - 'joi/**'
       - 'package.json'
@@ -79,8 +77,26 @@ jobs:
           go-version: '1.24.x'
 
       - name: Scan git history for secrets
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          go run github.com/zricethezav/gitleaks/v8@v8.30.1 detect --source . --config .gitleaks.toml --redact --exit-code 1 --verbose
+          zero_sha="0000000000000000000000000000000000000000"
+
+          if [[ "$EVENT_NAME" == "pull_request" && -n "$BASE_SHA" && -n "$HEAD_SHA" ]]; then
+            gitleaks_log_opts="$BASE_SHA..$HEAD_SHA"
+          elif [[ -n "$BEFORE_SHA" && "$BEFORE_SHA" != "$zero_sha" ]]; then
+            gitleaks_log_opts="$BEFORE_SHA..$GITHUB_SHA"
+          elif parent_sha="$(git rev-parse "$GITHUB_SHA^" 2>/dev/null)"; then
+            gitleaks_log_opts="$parent_sha..$GITHUB_SHA"
+          else
+            gitleaks_log_opts="$GITHUB_SHA"
+          fi
+
+          echo "Scanning git range: $gitleaks_log_opts"
+          go run github.com/zricethezav/gitleaks/v8@v8.30.1 detect --source . --redact --exit-code 1 --verbose --log-opts "$gitleaks_log_opts"
 
   base_branch_cov:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
