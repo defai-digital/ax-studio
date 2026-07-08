@@ -44,8 +44,14 @@ export class EventEmitter {
     const handlers = this.handlers.get(eventName)
     const index = handlers?.indexOf(handler)
 
-    if (index !== undefined && index !== -1) {
-      handlers?.splice(index, 1)
+    if (index === undefined || index === -1) {
+      return
+    }
+
+    handlers.splice(index, 1)
+
+    if (handlers.length === 0) {
+      this.handlers.delete(eventName)
     }
   }
 
