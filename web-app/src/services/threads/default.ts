@@ -6,12 +6,8 @@ import { type Thread as CoreThread } from '@ax-studio/core'
 import type { ThreadsService } from './types'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 import {
-  CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE,
   hasConversationalStorage,
-  runConversationalStorageMethod,
-  type ConversationalNativeMethodArgs,
-  type ConversationalStorageMethod,
-  type ConversationalStorageMethodArgs,
+  runConversationalStorage,
 } from '../conversation-storage'
 
 export class DefaultThreadsService implements ThreadsService {
@@ -74,7 +70,7 @@ export class DefaultThreadsService implements ThreadsService {
       },
     } as Partial<CoreThread>
 
-    const e = await this.runThreadStorage(
+    const e = await runConversationalStorage(
       'createThread',
       [payload],
       [{ thread: payload }],
@@ -126,7 +122,7 @@ export class DefaultThreadsService implements ThreadsService {
       updated: Math.floor(Date.now() / 1000),
     } as CoreThread
 
-    await this.runThreadStorage(
+    await runConversationalStorage(
       'modifyThread',
       [payload],
       [{ thread: payload }],
@@ -140,26 +136,11 @@ export class DefaultThreadsService implements ThreadsService {
       return
     }
 
-    await this.runThreadStorage(
+    await runConversationalStorage(
       'deleteThread',
       [threadId],
       [{ threadId }],
       (error) => console.warn(`Failed to delete thread ${threadId}:`, error)
-    )
-  }
-
-  private runThreadStorage<TMethod extends ConversationalStorageMethod>(
-    method: TMethod,
-    extensionArgs: ConversationalStorageMethodArgs<TMethod>,
-    nativeArgs: ConversationalNativeMethodArgs<TMethod>,
-    onFailure: (error: unknown) => void
-  ) {
-    return runConversationalStorageMethod(
-      method,
-      extensionArgs,
-      nativeArgs,
-      onFailure,
-      CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
     )
   }
 }
@@ -209,11 +190,10 @@ function getListThreads(): (() => Promise<CoreThread[]>) | undefined {
   }
 
   return () =>
-    runConversationalStorageMethod(
+    runConversationalStorage(
       'listThreads',
       [],
       [],
       (error) => console.warn('Failed to list threads:', error),
-      CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
     )
 }

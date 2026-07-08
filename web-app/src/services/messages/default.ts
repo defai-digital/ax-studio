@@ -5,35 +5,11 @@
 import { ThreadMessage } from '@ax-studio/core'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 import {
-  type ConversationalStorageMethod,
-  CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE,
-  runConversationalStorageMethod,
-  type ConversationalNativeMethodArgs,
-  type ConversationalStorageMethodArgs,
+  runConversationalStorage,
 } from '../conversation-storage'
 import type { MessagesService } from './types'
 
-type MessageStorageMethod = Extract<
-  ConversationalStorageMethod,
-  'listMessages' | 'createMessage' | 'modifyMessage' | 'deleteMessage'
->
-
 export class DefaultMessagesService implements MessagesService {
-  private runMessageStorage<TMethod extends MessageStorageMethod>(
-    method: TMethod,
-    extensionArgs: ConversationalStorageMethodArgs<TMethod>,
-    nativeArgs: ConversationalNativeMethodArgs<TMethod>,
-    onFailure: (error: unknown) => void
-  ) {
-    return runConversationalStorageMethod(
-      method,
-      extensionArgs,
-      nativeArgs,
-      onFailure,
-      CONVERSATIONAL_STORAGE_UNAVAILABLE_MESSAGE
-    )
-  }
-
   async fetchMessages(threadId: string): Promise<ThreadMessage[]> {
     // Don't fetch messages from server for temporary chat - it's local only
     if (threadId === TEMPORARY_CHAT_ID) {
@@ -41,11 +17,11 @@ export class DefaultMessagesService implements MessagesService {
     }
 
     try {
-      const messages = await this.runMessageStorage(
+      const messages = await runConversationalStorage(
         'listMessages',
         [threadId],
         [{ threadId }],
-        (error) => console.warn(`Failed to list messages for thread ${threadId}:`, error),
+        (error) => console.warn(`Failed to list messages for thread ${threadId}:`, error)
       )
       return Array.isArray(messages) ? messages : []
     } catch {
@@ -59,7 +35,7 @@ export class DefaultMessagesService implements MessagesService {
       return message
     }
 
-    return this.runMessageStorage(
+    return runConversationalStorage(
       'createMessage',
       [message],
       [{ message }],
@@ -73,7 +49,7 @@ export class DefaultMessagesService implements MessagesService {
       return message
     }
 
-    return this.runMessageStorage(
+    return runConversationalStorage(
       'modifyMessage',
       [message],
       [{ message }],
@@ -87,7 +63,7 @@ export class DefaultMessagesService implements MessagesService {
       return
     }
 
-    await this.runMessageStorage(
+    await runConversationalStorage(
       'deleteMessage',
       [threadId, messageId],
       [{ threadId, messageId }],

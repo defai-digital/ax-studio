@@ -86,6 +86,22 @@ export async function runConversationalStorageMethod<
   return runFirstSuccessful(operations, unavailableMessage, onFailure)
 }
 
+export async function runConversationalStorage<
+  TMethod extends ConversationalStorageMethod,
+>(
+  method: TMethod,
+  extensionArgs: Parameters<ConversationalStorageMethods[TMethod]>,
+  nativeArgs: Parameters<ConversationalNativeApi[TMethod]>,
+  onFailure: (error: unknown) => void
+): Promise<Awaited<ReturnType<ConversationalStorageMethods[TMethod]>>> {
+  return runConversationalStorageMethod(
+    method,
+    extensionArgs,
+    nativeArgs,
+    onFailure
+  )
+}
+
 async function runFirstSuccessful<T>(
   operations: Array<(() => Promise<T>) | undefined>,
   unavailableMessage: string,
