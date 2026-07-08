@@ -10,16 +10,16 @@ import {
   basenameFallback,
   extnameFallback,
 } from './fallback'
+import { withTauriFallbackSync } from '../tauri-guard'
 
 export class TauriPathService implements PathService {
   sep(): string {
-    try {
-      // Note: sep() is synchronous in Tauri v2 (unlike other path functions)
-      return getSep() as unknown as string
-    } catch (error) {
-      console.error('Error getting path separator in Tauri:', error)
-      return '/'
-    }
+    // Note: sep() is synchronous in Tauri v2 (unlike other path functions)
+    return withTauriFallbackSync(
+      () => getSep() as unknown as string,
+      'Error getting path separator in Tauri:',
+      '/'
+    )
   }
 
   async join(...segments: string[]): Promise<string> {

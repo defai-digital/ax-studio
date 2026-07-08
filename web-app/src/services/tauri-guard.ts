@@ -11,3 +11,15 @@ export async function withTauriFallback<T>(
   }
 }
 
+export function withTauriFallbackSync<T>(
+  operation: () => T,
+  failureMessage: string,
+  fallback: T
+): T {
+  try {
+    return operation()
+  } catch (error) {
+    console.error(failureMessage, error)
+    return fallback
+  }
+}

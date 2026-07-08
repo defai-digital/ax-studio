@@ -5,6 +5,7 @@
 import { invoke, convertFileSrc } from '@tauri-apps/api/core'
 import type { ExtensionManifest } from '@/lib/extension'
 import type { InvokeArgs, CoreService } from './types'
+import { withTauriFallbackSync } from '../tauri-guard'
 
 export class TauriCoreService implements CoreService {
   async invoke<T = unknown>(command: string, args?: InvokeArgs): Promise<T> {
@@ -17,12 +18,11 @@ export class TauriCoreService implements CoreService {
   }
 
   convertFileSrc(filePath: string, protocol?: string): string {
-    try {
-      return convertFileSrc(filePath, protocol)
-    } catch (error) {
-      console.error('Error converting file src in Tauri:', error)
-      return filePath
-    }
+    return withTauriFallbackSync(
+      () => convertFileSrc(filePath, protocol),
+      'Error converting file src in Tauri:',
+      filePath
+    )
   }
 
   // Extension management - using invoke

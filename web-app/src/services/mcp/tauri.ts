@@ -37,6 +37,29 @@ const unavailableToolResult = (error: unknown) => ({
   content: [],
 })
 
+async function executeToolCallWithRetry<T>(
+  call: () => Promise<T>,
+  retry: () => Promise<T>,
+  fallback: (error: unknown) => T
+): Promise<T> {
+  try {
+    return await call()
+  } catch (error) {
+    if (!isRecoverableMCPError(error)) {
+      return fallback(error)
+    }
+
+    console.warn('MCP tool call failed, restarting MCP servers and retrying once:', error)
+    try {
+      const api = getCoreApi()
+      await api.restartMcpServers()
+      return await retry()
+    } catch (retryError) {
+      return fallback(retryError)
+    }
+  }
+}
+
 export class TauriMCPService implements MCPService {
   async updateMCPConfig(configs: string): Promise<void> {
     await getCoreApi().saveMcpConfigs({ configs })
@@ -110,27 +133,29 @@ export class TauriMCPService implements MCPService {
     arguments: object
   }): Promise<{ error: string; content: { text: string }[] }> {
     const api = getCoreApi()
-    try {
-      return ((await api.callTool(args)) as { error: string; content: { text: string }[] }) ?? {
-        error: 'MCP service unavailable',
-        content: [],
-      }
-    } catch (error) {
-      if (!isRecoverableMCPError(error)) {
-        return unavailableToolResult(error)
-      }
-
-      console.warn('MCP tool call failed, restarting MCP servers and retrying once:', error)
-      try {
-        await api.restartMcpServers()
-        return ((await api.callTool(args)) as { error: string; content: { text: string }[] }) ?? {
-          error: 'MCP service unavailable after restart',
-          content: [],
-        }
-      } catch (retryError) {
-        return unavailableToolResult(retryError)
-      }
+    const unavailable = {
+      error: 'MCP service unavailable',
+      content: [],
     }
+    const unavailableAfterRestart = {
+      error: 'MCP service unavailable after restart',
+      content: [],
+    }
+    const invokeTool = (fallback: typeof unavailable) =>
+      api.callTool(args).then((result) => result ?? fallback)
+    return executeToolCallWithRetry(
+      () =>
+        invokeTool(unavailable) as Promise<{
+          error: string
+          content: { text: string }[]
+        }>,
+      () =>
+        invokeTool(unavailableAfterRestart) as Promise<{
+          error: string
+          content: { text: string }[]
+        }>,
+      unavailableToolResult
+    )
   }
 
   callToolWithCancellation(args: {
@@ -144,28 +169,25 @@ export class TauriMCPService implements MCPService {
     // IIFE so any synchronous throw from getCoreApi() becomes a rejected promise,
     // and transport errors are recovered with the same restart+retry as callTool().
     const promise = (async () => {
-      try {
-        const api = getCoreApi()
-        return ((await api.callTool({ ...args, cancellationToken: token })) as { error: string; content: { text: string }[] }) ?? {
-          error: 'MCP service unavailable',
-          content: [],
-        }
-      } catch (error) {
-        if (!isRecoverableMCPError(error)) {
-          return unavailableToolResult(error)
-        }
-        console.warn('MCP tool call failed, restarting MCP servers and retrying once:', error)
-        try {
-          const api = getCoreApi()
-          await api.restartMcpServers()
-          return ((await api.callTool({ ...args, cancellationToken: token })) as { error: string; content: { text: string }[] }) ?? {
-            error: 'MCP service unavailable after restart',
-            content: [],
-          }
-        } catch (retryError) {
-          return unavailableToolResult(retryError)
-        }
+      const invokeTool = () =>
+        getCoreApi().callTool({ ...args, cancellationToken: token }) as Promise<{
+          error: string
+          content: { text: string }[]
+        }>
+      const unavailable = {
+        error: 'MCP service unavailable',
+        content: [],
       }
+      const unavailableAfterRestart = {
+        error: 'MCP service unavailable after restart',
+        content: [],
+      }
+
+      return executeToolCallWithRetry(
+        () => invokeTool().then((result) => result ?? unavailable),
+        () => invokeTool().then((result) => result ?? unavailableAfterRestart),
+        unavailableToolResult
+      )
     })()
 
     const cancel = async () => {
