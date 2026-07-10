@@ -428,6 +428,9 @@ fn resolve_ax_fabric_mcp_config() -> serde_json::Value {
     })
 }
 
+// Migration tests are colocated with the migration definitions; setup/runtime
+// wiring follows below and intentionally remains separate from migration logic.
+#[allow(clippy::items_after_test_module)]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -889,6 +892,12 @@ fn should_prevent_exit_for_tray(code: Option<i32>, tray_enabled: bool) -> bool {
 
 /// Tauri `.setup()` callback — runs once after the app is built.
 pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
+    // Extension modules are the only application-managed files loaded through
+    // the asset protocol. User-selected files are granted individually by the
+    // native dialog command.
+    app.asset_protocol_scope()
+        .allow_directory(get_app_extensions_path(app.handle().clone()), true)?;
+
     app.handle().plugin(
         tauri_plugin_log::Builder::default()
             .level(log::LevelFilter::Debug)

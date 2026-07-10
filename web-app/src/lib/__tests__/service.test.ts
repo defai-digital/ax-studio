@@ -64,6 +64,7 @@ describe('legacy API bridge', () => {
       apiKey: 'secret',
       trustedHosts: ['localhost'],
       isCorsEnabled: true,
+      isVerboseEnabled: false,
       proxyTimeout: 30,
     }
 
@@ -77,6 +78,7 @@ describe('legacy API bridge', () => {
         api_key: 'secret',
         trusted_hosts: ['localhost'],
         cors_enabled: true,
+        verbose_logs: false,
         proxy_timeout: 30,
       },
     })

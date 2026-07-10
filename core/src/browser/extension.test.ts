@@ -276,6 +276,13 @@ describe('BaseExtension', () => {
         description: 'URL',
         controllerType: 'input',
       },
+      {
+        key: 'context',
+        title: 'Context',
+        description: 'Context size',
+        controllerType: 'slider',
+        controllerProps: { min: 1024 },
+      },
     ] as Partial<SettingComponentProps>[])
 
     const [, payload] = setItemSpy.mock.calls[setItemSpy.mock.calls.length - 1]
@@ -289,6 +296,10 @@ describe('BaseExtension', () => {
       expect.objectContaining({
         key: 'endpoint',
         controllerProps: { placeholder: '', value: '' },
+      }),
+      expect.objectContaining({
+        key: 'context',
+        controllerProps: { min: 1024, max: 1024, step: 1, value: 1024 },
       }),
     ])
   })

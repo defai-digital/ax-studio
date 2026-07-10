@@ -238,6 +238,11 @@ pub fn change_app_data_folder<R: Runtime>(
     let mut configuration = get_app_configurations(app_handle.clone());
     configuration.data_folder = new_data_folder;
 
+    app_handle
+        .asset_protocol_scope()
+        .allow_directory(new_data_folder_path.join("extensions"), true)
+        .map_err(|error| format!("Failed to grant access to extension files: {error}"))?;
+
     // Save the updated configuration
     update_app_configuration(app_handle, configuration)
 }

@@ -785,6 +785,41 @@ pub(super) async fn transform_and_forward_stream<S>(
     log::debug!("Streaming complete (Anthropic format)");
 }
 
+/// Forward non-streaming OpenAI response as Anthropic /messages response
+pub(super) async fn forward_non_streaming(
+    response_body: Result<Bytes, reqwest::Error>,
+    mut sender: hyper::body::Sender,
+    destination_path: &str,
+) {
+    let bytes = match response_body {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            log::error!("Failed to get response body: {e}");
+            return;
+        }
+    };
+
+    if let Ok(json_response) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+        if destination_path == "/messages" {
+            // Transform to Anthropic format
+            let anthropic_response = transform_openai_response_to_anthropic(&json_response);
+            if sender
+                .send_data(Bytes::from(anthropic_response.to_string()))
+                .await
+                .is_err()
+            {
+                log::debug!("Client disconnected");
+            }
+        } else if sender.send_data(bytes).await.is_err() {
+            // Pass through as-is
+            log::debug!("Client disconnected");
+        }
+    } else if sender.send_data(bytes).await.is_err() {
+        // Pass through raw response
+        log::debug!("Client disconnected");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1098,44 +1133,5 @@ mod tests {
         assert_eq!(parts.len(), 1);
         assert_eq!(parts[0]["type"], "text");
         assert_eq!(parts[0]["text"], "some text");
-    }
-}
-
-/// Forward non-streaming OpenAI response as Anthropic /messages response
-pub(super) async fn forward_non_streaming(
-    response_body: Result<Bytes, reqwest::Error>,
-    mut sender: hyper::body::Sender,
-    destination_path: &str,
-) {
-    let bytes = match response_body {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            log::error!("Failed to get response body: {e}");
-            return;
-        }
-    };
-
-    if let Ok(json_response) = serde_json::from_slice::<serde_json::Value>(&bytes) {
-        if destination_path == "/messages" {
-            // Transform to Anthropic format
-            let anthropic_response = transform_openai_response_to_anthropic(&json_response);
-            if sender
-                .send_data(Bytes::from(anthropic_response.to_string()))
-                .await
-                .is_err()
-            {
-                log::debug!("Client disconnected");
-            }
-        } else {
-            // Pass through as-is
-            if sender.send_data(bytes).await.is_err() {
-                log::debug!("Client disconnected");
-            }
-        }
-    } else {
-        // Pass through raw response
-        if sender.send_data(bytes).await.is_err() {
-            log::debug!("Client disconnected");
-        }
     }
 }

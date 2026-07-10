@@ -57,7 +57,7 @@ function getConversationalExtension(): ConversationalExtension | undefined {
 }
 
 function getNativeApi() {
-  return window.core?.api
+  return window.core?.api as ConversationalNativeApi | undefined
 }
 
 export function hasConversationalStorage(): boolean {
@@ -115,7 +115,7 @@ async function runFirstSuccessful<T>(
 }
 
 function resolveOperation<T>(
-  provider: Record<string, unknown> | undefined,
+  provider: object | undefined,
   method: string,
   args: unknown[]
 ): (() => Promise<T>) | undefined {
@@ -123,11 +123,10 @@ function resolveOperation<T>(
     return undefined
   }
 
-  const operation = provider[method]
+  const operation = Reflect.get(provider, method) as unknown
   if (typeof operation !== 'function') {
     return undefined
   }
 
-  return () =>
-    Promise.resolve(operation.apply(provider, args) as Promise<T>)
+  return () => Promise.resolve(Reflect.apply(operation, provider, args) as T)
 }

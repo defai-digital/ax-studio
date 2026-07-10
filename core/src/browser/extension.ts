@@ -45,6 +45,45 @@ function buildDefaultControllerProps(
   }
 }
 
+function mergeControllerProps(
+  controllerType: ControllerType,
+  overrides: Partial<ControllerProps> | undefined
+): ControllerProps {
+  const merged = {
+    ...buildDefaultControllerProps(controllerType),
+    ...(overrides ?? {}),
+  }
+
+  if (controllerType !== 'slider') return merged as ControllerProps
+
+  const slider = merged as Record<string, unknown>
+  const min =
+    typeof slider.min === 'number' && Number.isFinite(slider.min)
+      ? slider.min
+      : 0
+  const requestedValue =
+    typeof slider.value === 'number' && Number.isFinite(slider.value)
+      ? slider.value
+      : min
+  const value = Math.max(min, requestedValue)
+  const requestedMax =
+    typeof slider.max === 'number' && Number.isFinite(slider.max)
+      ? slider.max
+      : 100
+
+  return {
+    min,
+    max: Math.max(min, value, requestedMax),
+    step:
+      typeof slider.step === 'number' &&
+      Number.isFinite(slider.step) &&
+      slider.step > 0
+        ? slider.step
+        : 1,
+    value,
+  }
+}
+
 function isAsciiDigit(value: string, index: number): boolean {
   const code = value.charCodeAt(index)
   return code >= 48 && code <= 57
@@ -380,9 +419,10 @@ export abstract class BaseExtension implements ExtensionType {
         title: cp.title ?? '',
         description: cp.description ?? '',
         controllerType: cp.controllerType ?? 'input',
-        controllerProps:
-          cp.controllerProps ??
-          buildDefaultControllerProps(cp.controllerType ?? 'input'),
+        controllerProps: mergeControllerProps(
+          cp.controllerType ?? 'input',
+          cp.controllerProps
+        ),
       })) as SettingComponentProps[]
     }
 

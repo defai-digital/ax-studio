@@ -106,7 +106,6 @@ tauri-plugin-http = { version = "2", features = ["unsafe-headers"] }
 tauri-plugin-log = "2.0.0-rc"
 tauri-plugin-opener = "2.2.7"
 tauri-plugin-os = "2.2.1"
-tauri-plugin-shell = "2.2.0"
 tauri-plugin-store = "2"
 thiserror = { workspace = true }
 tokio = { workspace = true }
@@ -138,9 +137,13 @@ tempfile = "3.20.0"
 [target.'cfg(unix)'.dependencies]
 nix = { workspace = true }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6.3", default-features = false, features = ["linux-native-sync-persistent", "crypto-rust"] }
+
 [target.'cfg(windows)'.dependencies]
 libc = { workspace = true }
 windows-sys = { version = "0.60.2", features = ["Win32_Storage_FileSystem"] }
+keyring = { version = "3.6.3", default-features = false, features = ["windows-native"] }
 
 # ── In-process AX Engine SDK (macOS-only native MLX runtime) ─────────────────
 # Linking ax-engine-sdk with the `mlx-native` feature pulls in ax-engine-mlx
@@ -154,6 +157,7 @@ windows-sys = { version = "0.60.2", features = ["Win32_Storage_FileSystem"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 ax-engine-core = { git = "https://github.com/defai-digital/ax-engine", rev = "a55ac03df228d4b0343d4dfbf6f1ccef4fba419b" }
 ax-engine-sdk = { git = "https://github.com/defai-digital/ax-engine", rev = "a55ac03df228d4b0343d4dfbf6f1ccef4fba419b", features = ["mlx-native", "tokenizer"] }
+keyring = { version = "3.6.3", default-features = false, features = ["apple-native"] }
 objc2-app-kit = { version = "0.3.2", features = ["NSWindow"] }
 # Direct `tokenizers` dep so we can decode generated token ids back to text —
 # EngineTokenizer (from ax-engine-sdk) only exposes `encode`. The SDK already

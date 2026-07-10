@@ -12,6 +12,8 @@ pub struct StartServerConfig {
     pub trusted_hosts: Vec<String>,
     #[serde(default)]
     pub cors_enabled: bool,
+    #[serde(default)]
+    pub verbose_logs: bool,
     pub proxy_timeout: u64,
 }
 
@@ -38,6 +40,7 @@ pub async fn start_server<R: Runtime>(
         api_key,
         trusted_hosts,
         cors_enabled,
+        verbose_logs,
         proxy_timeout,
     } = config;
 
@@ -65,6 +68,7 @@ pub async fn start_server<R: Runtime>(
         api_key,
         vec![trusted_hosts],
         cors_enabled,
+        verbose_logs,
         proxy_timeout,
         app_handle,
     )
@@ -116,6 +120,7 @@ mod tests {
             api_key: "test-key".to_string(),
             trusted_hosts: vec!["localhost".to_string()],
             cors_enabled: false,
+            verbose_logs: false,
             proxy_timeout: 30,
         };
 
@@ -161,6 +166,7 @@ mod tests {
                 api_key: "   ".to_string(),
                 trusted_hosts: vec!["localhost".to_string()],
                 cors_enabled: true,
+                verbose_logs: false,
                 proxy_timeout: 30,
             },
         )

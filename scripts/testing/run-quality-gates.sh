@@ -30,7 +30,7 @@ node scripts/testing/module-coverage-audit.mjs --out-dir report/testing
 # 3. Enforce thresholds
 echo ""
 echo "--- Step 3: Coverage gate ---"
-MODE="${COVERAGE_GATE_MODE:-advisory}"
+MODE="${COVERAGE_GATE_MODE:-blocking}"
 node scripts/testing/module-coverage-gate.mjs \
   --audit report/testing/module-coverage-audit.json \
   --thresholds scripts/testing/module-thresholds.json \

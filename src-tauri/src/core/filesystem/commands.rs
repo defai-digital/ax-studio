@@ -9,8 +9,7 @@ use std::ffi::OsString;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
-use tauri::Runtime;
-use tauri::State;
+use tauri::{AppHandle, Manager, Runtime, State};
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(untagged)]
@@ -901,9 +900,28 @@ pub fn decompress<R: Runtime>(
 }
 
 // rfd native file dialog
+fn allow_selected_file<R: Runtime>(
+    app: &AppHandle<R>,
+    path: &std::path::Path,
+) -> Result<(), String> {
+    app.asset_protocol_scope()
+        .allow_file(path)
+        .map_err(|error| format!("Failed to grant access to selected file: {error}"))
+}
+
+fn allow_selected_directory<R: Runtime>(
+    app: &AppHandle<R>,
+    path: &std::path::Path,
+) -> Result<(), String> {
+    app.asset_protocol_scope()
+        .allow_directory(path, true)
+        .map_err(|error| format!("Failed to grant access to selected directory: {error}"))
+}
+
 #[tauri::command]
 /// Open the native file or directory picker and return the selected path values.
-pub async fn open_dialog(
+pub async fn open_dialog<R: Runtime>(
+    app: AppHandle<R>,
     options: Option<DialogOpenOptions>,
 ) -> Result<Option<serde_json::Value>, String> {
     let mut dialog = AsyncFileDialog::new();
@@ -925,30 +943,49 @@ pub async fn open_dialog(
         // Handle directory vs file selection
         if opts.directory == Some(true) {
             let result = dialog.pick_folder().await;
-            return Ok(result.map(|folder| {
-                serde_json::Value::String(folder.path().to_string_lossy().to_string())
-            }));
+            return match result {
+                Some(folder) => {
+                    allow_selected_directory(&app, folder.path())?;
+                    Ok(Some(serde_json::Value::String(
+                        folder.path().to_string_lossy().to_string(),
+                    )))
+                }
+                None => Ok(None),
+            };
         }
 
         // Handle multiple file selection
         if opts.multiple == Some(true) {
             let result = dialog.pick_files().await;
-            return Ok(result.map(|files| {
-                let paths: Vec<String> = files
-                    .iter()
-                    .map(|f| f.path().to_string_lossy().to_string())
-                    .collect();
-                serde_json::to_value(paths).unwrap_or_else(|e| {
-                    log::error!("Failed to serialize selected dialog paths: {e}");
-                    serde_json::Value::Array(vec![])
-                })
-            }));
+            return match result {
+                Some(files) => {
+                    let paths = files
+                        .iter()
+                        .map(|file| {
+                            allow_selected_file(&app, file.path())?;
+                            Ok(file.path().to_string_lossy().to_string())
+                        })
+                        .collect::<Result<Vec<_>, String>>()?;
+                    Ok(Some(serde_json::Value::Array(
+                        paths.into_iter().map(serde_json::Value::String).collect(),
+                    )))
+                }
+                None => Ok(None),
+            };
         }
     }
 
     // Default: single file selection
     let result = dialog.pick_file().await;
-    Ok(result.map(|file| serde_json::Value::String(file.path().to_string_lossy().to_string())))
+    match result {
+        Some(file) => {
+            allow_selected_file(&app, file.path())?;
+            Ok(Some(serde_json::Value::String(
+                file.path().to_string_lossy().to_string(),
+            )))
+        }
+        None => Ok(None),
+    }
 }
 
 #[tauri::command]

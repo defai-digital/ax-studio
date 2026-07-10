@@ -146,6 +146,13 @@ export class DefaultThreadsService implements ThreadsService {
 }
 
 function normalizeStoredThread(thread: CoreThread): Thread {
+  const metadata = thread.metadata ?? {}
+  const order =
+    typeof metadata.order === 'number' ? metadata.order : undefined
+  const isFavorite =
+    typeof metadata.is_favorite === 'boolean'
+      ? metadata.is_favorite
+      : undefined
   const model = normalizeThreadModelFromStorage(thread)
   return {
     ...thread,
@@ -153,13 +160,13 @@ function normalizeStoredThread(thread: CoreThread): Thread {
       typeof thread.updated === 'number' && thread.updated > 1e12
         ? Math.floor(thread.updated / 1000)
         : (thread.updated ?? 0),
-    order: thread.metadata?.order,
-    isFavorite: thread.metadata?.is_favorite,
+    order,
+    isFavorite,
     model,
     metadata: {
-      ...thread.metadata,
-      order: thread.metadata?.order,
-      is_favorite: thread.metadata?.is_favorite,
+      ...metadata,
+      order,
+      is_favorite: isFavorite,
     },
   }
 }
@@ -169,12 +176,15 @@ function normalizeThreadModelFromStorage(
   fallbackModel?: Thread['model']
 ): Thread['model'] {
   const storedModel = thread.assistants?.[0]?.model
-  return storedModel
-    ? {
-      id: storedModel.id,
-      provider: storedModel.engine,
-    }
-    : fallbackModel
+  if (!storedModel) return fallbackModel
+
+  const provider = storedModel.engine?.trim() || fallbackModel?.provider
+  if (!provider) return fallbackModel
+
+  return {
+    id: storedModel.id,
+    provider,
+  }
 }
 
 function buildStoredModelRef(thread: Thread): { id: string; engine: string } {

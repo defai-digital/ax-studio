@@ -6,6 +6,7 @@ pub mod hf_cache;
 pub mod mcp;
 pub mod mlx;
 pub mod research;
+pub mod secrets;
 pub mod server;
 pub mod setup;
 pub mod state;

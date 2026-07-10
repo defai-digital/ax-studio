@@ -15,15 +15,12 @@
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
-    "shell:allow-spawn",
-    "shell:allow-open",
     "core:app:allow-set-app-theme",
     "core:window:allow-set-focus",
     "os:default",
-    "opener:default",
     "log:default",
     "core:webview:allow-create-webview-window",
-    "opener:allow-open-url",
+    "opener:allow-reveal-item-in-dir",
     "store:default",
     "hardware:default",
     "llamacpp:default",
@@ -63,10 +60,6 @@
         }
       ],
       "deny": []
-    },
-    {
-      "identifier": "shell:allow-execute",
-      "allow": []
     },
     {
       "identifier": "opener:allow-open-url",

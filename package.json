@@ -26,7 +26,7 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "test:module:audit": "node scripts/testing/module-coverage-audit.mjs --out-dir report/testing",
-    "test:module:gate": "node scripts/testing/module-coverage-gate.mjs --audit report/testing/module-coverage-audit.json --thresholds scripts/testing/module-thresholds.json --mode advisory",
+    "test:module:gate": "node scripts/testing/module-coverage-gate.mjs --audit report/testing/module-coverage-audit.json --thresholds scripts/testing/module-thresholds.json --mode blocking",
     "test:module:gate:blocking": "node scripts/testing/module-coverage-gate.mjs --audit report/testing/module-coverage-audit.json --thresholds scripts/testing/module-thresholds.json --mode blocking",
     "test:quality:gates": "bash scripts/testing/run-quality-gates.sh",
     "test:quality:gates:blocking": "COVERAGE_GATE_MODE=blocking bash scripts/testing/run-quality-gates.sh",

@@ -1,6 +1,20 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { useProxyConfig } from '../useProxyConfig'
+import { AES } from 'crypto-js'
+import { proxyConfigStorage, useProxyConfig } from '../useProxyConfig'
+
+const secureSecretMocks = vi.hoisted(() => ({
+  get: vi.fn<() => Promise<string | null>>(),
+  set: vi.fn<() => Promise<void>>(),
+  delete: vi.fn<() => Promise<void>>(),
+}))
+
+vi.mock('@/lib/storage/secure-secret', () => ({
+  PROXY_PASSWORD_SECRET: 'proxy-password',
+  getSecureSecret: secureSecretMocks.get,
+  setSecureSecret: secureSecretMocks.set,
+  deleteSecureSecret: secureSecretMocks.delete,
+}))
 
 // Mock constants
 vi.mock('@/constants/localStorage', () => ({
@@ -22,6 +36,10 @@ vi.mock('zustand/middleware', () => ({
 describe('useProxyConfig', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
+    secureSecretMocks.get.mockResolvedValue(null)
+    secureSecretMocks.set.mockResolvedValue(undefined)
+    secureSecretMocks.delete.mockResolvedValue(undefined)
     // Reset store state to defaults
     const store = useProxyConfig.getState()
     store.setProxyEnabled(false)
@@ -300,6 +318,81 @@ describe('useProxyConfig', () => {
       expect(result2.current.proxyUrl).toBe('http://test-proxy.com:8080')
       expect(result2.current.proxyUsername).toBe('testuser')
       expect(result2.current.proxyIgnoreSSL).toBe(true)
+    })
+
+    it('stores passwords in the secure credential store only', async () => {
+      const state = {
+        ...useProxyConfig.getState(),
+        proxyPassword: 'vault-only-password',
+      }
+
+      await proxyConfigStorage.setItem('proxy-config-settings', {
+        state,
+        version: 0,
+      })
+
+      expect(secureSecretMocks.set).toHaveBeenCalledWith(
+        'proxy-password',
+        'vault-only-password'
+      )
+      const persisted = JSON.parse(
+        localStorage.getItem('proxy-config-settings') ?? '{}'
+      )
+      expect(persisted.state.proxyPassword).toBe('')
+      expect(JSON.stringify(persisted)).not.toContain('vault-only-password')
+    })
+
+    it('restores the password from the secure credential store', async () => {
+      secureSecretMocks.get.mockResolvedValue('restored-password')
+      localStorage.setItem(
+        'proxy-config-settings',
+        JSON.stringify({
+          state: { proxyEnabled: true, proxyPassword: '' },
+          version: 0,
+        })
+      )
+
+      const persisted = await proxyConfigStorage.getItem(
+        'proxy-config-settings'
+      )
+
+      expect(persisted?.state.proxyPassword).toBe('restored-password')
+    })
+
+    it('migrates the legacy encrypted password and scrubs local storage', async () => {
+      const legacyPassword = AES.encrypt(
+        'legacy-password',
+        'ax-studio-secure-proxy-key'
+      ).toString()
+      localStorage.setItem(
+        'proxy-config-settings',
+        JSON.stringify({
+          state: { proxyEnabled: true, proxyPassword: legacyPassword },
+          version: 0,
+        })
+      )
+
+      const persisted = await proxyConfigStorage.getItem(
+        'proxy-config-settings'
+      )
+
+      expect(persisted?.state.proxyPassword).toBe('legacy-password')
+      expect(secureSecretMocks.set).toHaveBeenCalledWith(
+        'proxy-password',
+        'legacy-password'
+      )
+      expect(localStorage.getItem('proxy-config-settings')).not.toContain(
+        legacyPassword
+      )
+    })
+
+    it('deletes the secure password when persistence is cleared', async () => {
+      localStorage.setItem('proxy-config-settings', '{}')
+
+      await proxyConfigStorage.removeItem('proxy-config-settings')
+
+      expect(localStorage.getItem('proxy-config-settings')).toBeNull()
+      expect(secureSecretMocks.delete).toHaveBeenCalledWith('proxy-password')
     })
   })
 

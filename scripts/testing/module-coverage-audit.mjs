@@ -38,7 +38,7 @@ const MODULE_PATTERNS = {
   'hooks':         'src/hooks',
   'services':      'src/services',
   'lib':           'src/lib',
-  'utils':         'src/utils',
+  'utils':         'src/lib/utils',
   'components/ui': 'src/components/ui',
   'containers':    'src/containers',
   'providers':     'src/providers',
@@ -94,7 +94,7 @@ for (const [filePath, data] of Object.entries(summary)) {
 /**
  * Build final audit output.
  */
-const pct = (covered, total) => (total === 0 ? 100 : Math.round((covered / total) * 1000) / 10)
+const pct = (covered, total) => (total === 0 ? 0 : Math.round((covered / total) * 1000) / 10)
 
 const audit = {
   generatedAt: new Date().toISOString(),

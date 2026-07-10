@@ -16,6 +16,21 @@ const DEFAULT_UNAVAILABLE_TOOL_ERROR_AFTER_RESTART =
 
 type MCPToolCallResult = Awaited<ReturnType<MCPService['callTool']>>
 
+type MCPNativeApi = {
+  callTool(args: {
+    toolName: string
+    serverName?: string
+    arguments: object
+    cancellationToken?: string
+  }): Promise<MCPToolCallResult | null | undefined>
+  cancelToolCall(args: { cancellationToken: string }): Promise<void>
+  getConnectedServers(): Promise<string[] | null | undefined>
+  getMcpConfigs(): Promise<string | null | undefined>
+  getTools(): Promise<MCPTool[] | null | undefined>
+  restartMcpServers(): Promise<void>
+  saveMcpConfigs(args: { configs: string }): Promise<void>
+}
+
 function createUnavailableToolResult(errorMessage: string): MCPToolCallResult {
   return {
     error: errorMessage,
@@ -23,12 +38,12 @@ function createUnavailableToolResult(errorMessage: string): MCPToolCallResult {
   }
 }
 
-const getCoreApi = () => {
+const getCoreApi = (): MCPNativeApi => {
   if (!window.core?.api) {
     throw new Error('MCP API is unavailable')
   }
 
-  return window.core.api
+  return window.core.api as unknown as MCPNativeApi
 }
 
 function getErrorMessage(error: unknown): string {

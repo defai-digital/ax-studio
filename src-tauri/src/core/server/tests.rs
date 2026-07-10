@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod tests {
+mod cases {
     use crate::core::server::{cors, proxy};
 
     #[test]
@@ -59,6 +59,7 @@ mod tests {
             proxy_api_key: "test-key".to_string(),
             trusted_hosts: vec![vec!["localhost".to_string()]],
             cors_enabled: false,
+            verbose_logs: false,
             host: "localhost".to_string(),
         };
         assert_eq!(config.prefix, "/v1");
@@ -74,6 +75,7 @@ mod tests {
             proxy_api_key: "".to_string(),
             trusted_hosts: vec![],
             cors_enabled: false,
+            verbose_logs: false,
             host: "127.0.0.1".to_string(),
         };
         assert_eq!(config.prefix, "");

@@ -14,15 +14,12 @@
     "core:window:allow-set-theme",
     "core:window:allow-get-all-windows",
     "core:event:allow-listen",
-    "shell:allow-spawn",
-    "shell:allow-open",
     "core:app:allow-set-app-theme",
     "core:window:allow-set-focus",
     "os:default",
-    "opener:default",
     "log:default",
     "core:webview:allow-create-webview-window",
-    "opener:allow-open-url",
+    "opener:allow-reveal-item-in-dir",
     "store:default",
     "deep-link:default",
     "hardware:default",
@@ -61,10 +58,6 @@
         }
       ],
       "deny": []
-    },
-    {
-      "identifier": "shell:allow-execute",
-      "allow": []
     },
     {
       "identifier": "opener:allow-open-url",

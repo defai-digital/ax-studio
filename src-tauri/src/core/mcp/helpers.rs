@@ -653,6 +653,9 @@ pub fn extract_active_status(config: &Value) -> Option<bool> {
     Some(active)
 }
 
+// These focused parser tests stay beside the parsing helpers; the remainder of
+// this file contains lifecycle orchestration that is easier to audit separately.
+#[allow(clippy::items_after_test_module)]
 #[cfg(test)]
 mod tests {
     use super::*;

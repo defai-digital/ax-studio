@@ -72,4 +72,21 @@ describe('module coverage gate', () => {
       /Unsupported coverage gate mode/
     )
   })
+
+  it('fails configured modules that match no covered source files', () => {
+    const audit = {
+      modules: {
+        services: {
+          fileCount: 0,
+          lines: { pct: 0 },
+          functions: { pct: 0 },
+        },
+      },
+    }
+
+    const result = evaluateCoverageGate(audit, thresholds)
+
+    expect(result.failures).toHaveLength(2)
+    expect(result.warnings[0]).toContain('no covered source files')
+  })
 })

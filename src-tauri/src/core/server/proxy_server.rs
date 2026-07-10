@@ -24,6 +24,7 @@ pub async fn start_server<R: tauri::Runtime>(
     proxy_api_key: String,
     trusted_hosts: Vec<Vec<String>>,
     cors_enabled: bool,
+    verbose_logs: bool,
     proxy_timeout: u64,
     app_handle: tauri::AppHandle<R>,
 ) -> Result<u16, Box<dyn std::error::Error + Send + Sync>> {
@@ -41,6 +42,7 @@ pub async fn start_server<R: tauri::Runtime>(
         proxy_api_key,
         trusted_hosts,
         cors_enabled,
+        verbose_logs,
         host: host.clone(),
     };
 
@@ -53,14 +55,21 @@ pub async fn start_server<R: tauri::Runtime>(
         .pool_idle_timeout(std::time::Duration::from_secs(30))
         .build()?;
 
-    let make_svc = make_service_fn(move |_conn| {
+    let make_svc = make_service_fn(move |conn: &hyper::server::conn::AddrStream| {
         let client = client.clone();
         let config = config.clone();
         let app_handle = app_handle.clone();
+        let client_id = conn.remote_addr().ip().to_string();
 
         async move {
             Ok::<_, Infallible>(service_fn(move |req| {
-                proxy_request(req, client.clone(), config.clone(), app_handle.clone())
+                proxy_request(
+                    req,
+                    client.clone(),
+                    config.clone(),
+                    client_id.clone(),
+                    app_handle.clone(),
+                )
             }))
         }
     });
