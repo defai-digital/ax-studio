@@ -251,19 +251,17 @@ describe('ChatInputToolbar — Phase 3 Manual Test Protocol', () => {
   // Keyboard hints
   it('renders keyboard hints (⏎ Send, ⇧⏎ Newline)', () => {
     render(<ChatInputToolbar {...createProps()} />)
-    expect(screen.getByText('⏎ Send')).toBeInTheDocument()
-    expect(screen.getByText('⇧⏎ Newline')).toBeInTheDocument()
+    expect(screen.getByText('common:sendHint')).toBeInTheDocument()
+    expect(screen.getByText('common:newlineHint')).toBeInTheDocument()
   })
 
-  // Send button has gradient styling
-  it('send button has gradient classes', () => {
+  // Send button has tokenized brand gradient
+  it('send button has brand gradient class', () => {
     render(<ChatInputToolbar {...createProps({ prompt: 'hello' })} />)
     const sendButton = screen.getByText(
       (_, el) => el?.getAttribute('data-test-id') === 'send-message-button'
     )
-    expect(sendButton.className).toContain('bg-gradient-to-r')
-    expect(sendButton.className).toContain('from-indigo-500')
-    expect(sendButton.className).toContain('to-violet-600')
+    expect(sendButton.className).toContain('bg-brand-gradient')
   })
 
   it('renders attach image action when handler is provided', () => {

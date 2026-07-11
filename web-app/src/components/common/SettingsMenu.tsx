@@ -1,8 +1,15 @@
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useMatches } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
+import { localStorageKey } from '@/constants/localStorage'
+import {
+  isStorageFlagEnabled,
+  safeStorageGetItem,
+  safeStorageSetItem,
+} from '@/lib/storage/storage'
 
 import { isPlatformTauri } from '@/lib/platform/utils'
 import {
@@ -22,6 +29,8 @@ import {
   ShieldCheck,
   Puzzle,
   Database,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react'
 
 type SettingsMenuItem = {
@@ -30,11 +39,58 @@ type SettingsMenuItem = {
   isEnabled: boolean
   icon: React.ReactNode
   group: 'App' | 'AI' | 'Advanced' | 'Other'
+  /** When true, item is hidden in simplified workspace modes unless advanced is expanded */
+  advanced?: boolean
+}
+
+type WorkspaceModeId =
+  | 'simple-chat'
+  | 'local-private-ai'
+  | 'developer-agent'
+  | 'knowledge-workspace'
+  | 'controlled-workspace'
+
+const ADVANCED_STORAGE_KEY = 'settings-show-advanced'
+
+/** Modes that start with advanced settings collapsed */
+const SIMPLIFIED_MODES = new Set<WorkspaceModeId>([
+  'simple-chat',
+  'knowledge-workspace',
+])
+
+function readWorkspaceMode(): WorkspaceModeId {
+  const stored = safeStorageGetItem(
+    localStorage,
+    localStorageKey.workspaceMode,
+    'SettingsMenu'
+  )
+  if (
+    stored === 'simple-chat' ||
+    stored === 'local-private-ai' ||
+    stored === 'developer-agent' ||
+    stored === 'knowledge-workspace' ||
+    stored === 'controlled-workspace'
+  ) {
+    return stored
+  }
+  // Default matches onboarding default — full settings for power users
+  return 'developer-agent'
 }
 
 export function SettingsMenu() {
   const { t } = useTranslation()
   const matches = useMatches()
+  const workspaceMode = useMemo(() => readWorkspaceMode(), [])
+  const startsSimplified = SIMPLIFIED_MODES.has(workspaceMode)
+
+  const [showAdvanced, setShowAdvanced] = useState(() => {
+    if (!startsSimplified) return true
+    return isStorageFlagEnabled(
+      localStorage,
+      ADVANCED_STORAGE_KEY,
+      'SettingsMenu'
+    )
+  })
 
   const menuSettings: SettingsMenuItem[] = [
     // App group
@@ -65,6 +121,7 @@ export function SettingsMenu() {
       isEnabled: true,
       icon: <ShieldCheck className="size-3.5" />,
       group: 'App',
+      advanced: true,
     },
     {
       title: 'common:keyboardShortcuts',
@@ -108,6 +165,7 @@ export function SettingsMenu() {
       isEnabled: true,
       icon: <Wrench className="size-3.5" />,
       group: 'AI',
+      advanced: true,
     },
     {
       title: 'common:llmRouter',
@@ -115,6 +173,7 @@ export function SettingsMenu() {
       isEnabled: true,
       icon: <Route className="size-3.5" />,
       group: 'AI',
+      advanced: true,
     },
     // Advanced group
     {
@@ -123,6 +182,7 @@ export function SettingsMenu() {
       isEnabled: true,
       icon: <Cpu className="size-3.5" />,
       group: 'Advanced',
+      advanced: true,
     },
     {
       title: 'common:engineSettings',
@@ -130,6 +190,7 @@ export function SettingsMenu() {
       isEnabled: isPlatformTauri(),
       icon: <Cog className="size-3.5" />,
       group: 'Advanced',
+      advanced: true,
     },
     {
       title: 'common:local_api_server',
@@ -137,6 +198,7 @@ export function SettingsMenu() {
       isEnabled: true,
       icon: <Server className="size-3.5" />,
       group: 'Advanced',
+      advanced: true,
     },
     {
       title: 'common:https_proxy',
@@ -144,6 +206,7 @@ export function SettingsMenu() {
       isEnabled: true,
       icon: <Globe className="size-3.5" />,
       group: 'Advanced',
+      advanced: true,
     },
     // Other group
     {
@@ -152,14 +215,56 @@ export function SettingsMenu() {
       isEnabled: true,
       icon: <Puzzle className="size-3.5" />,
       group: 'Other',
+      advanced: true,
     },
   ]
 
-  const groups: { key: string; label: string }[] = [
-    { key: 'App', label: 'App' },
-    { key: 'AI', label: 'AI' },
-    { key: 'Advanced', label: 'Advanced' },
-    { key: 'Other', label: 'Other' },
+  // If the user is already on an advanced route, expand so they don't get stuck
+  useEffect(() => {
+    if (showAdvanced || !startsSimplified) return
+    const onAdvancedRoute = menuSettings.some(
+      (item) =>
+        item.advanced &&
+        item.isEnabled &&
+        matches.some(
+          (match) =>
+            match.pathname === item.route ||
+            (item.route === route.settings.model_providers &&
+              (match.routeId === '/settings/providers/' ||
+                match.routeId === '/settings/providers/$providerName'))
+        )
+    )
+    if (onAdvancedRoute) {
+      setShowAdvanced(true)
+      safeStorageSetItem(localStorage, ADVANCED_STORAGE_KEY, 'true', 'SettingsMenu')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-check when route matches change
+  }, [matches, showAdvanced, startsSimplified])
+
+  const toggleAdvanced = () => {
+    setShowAdvanced((prev) => {
+      const next = !prev
+      safeStorageSetItem(
+        localStorage,
+        ADVANCED_STORAGE_KEY,
+        next ? 'true' : 'false',
+        'SettingsMenu'
+      )
+      return next
+    })
+  }
+
+  const visibleItems = menuSettings.filter((m) => {
+    if (!m.isEnabled) return false
+    if (!startsSimplified || showAdvanced) return true
+    return !m.advanced
+  })
+
+  const groups: { key: string; labelKey: string }[] = [
+    { key: 'App', labelKey: 'common:settingsGroupApp' },
+    { key: 'AI', labelKey: 'common:settingsGroupAi' },
+    { key: 'Advanced', labelKey: 'common:settingsGroupAdvanced' },
+    { key: 'Other', labelKey: 'common:settingsGroupOther' },
   ]
 
   return (
@@ -168,16 +273,14 @@ export function SettingsMenu() {
       style={{ scrollbarWidth: 'thin' }}
     >
       {groups.map((group, groupIndex) => {
-        const groupItems = menuSettings.filter(
-          (m) => m.group === group.key && m.isEnabled
-        )
+        const groupItems = visibleItems.filter((m) => m.group === group.key)
         if (groupItems.length === 0) return null
 
         return (
           <div key={group.key} className="w-full flex flex-col">
             {groupIndex > 0 && <div className="h-px bg-border/40 my-3" />}
-            <span className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground/40 px-3 mb-2">
-              {group.label}
+            <span className="text-xs font-semibold tracking-widest uppercase text-muted-foreground/60 px-3 mb-2">
+              {t(group.labelKey, { defaultValue: group.key })}
             </span>
             <div className="flex flex-col gap-0.5">
               {groupItems.map((menu) => {
@@ -217,6 +320,28 @@ export function SettingsMenu() {
           </div>
         )
       })}
+
+      {startsSimplified && (
+        <div className="mt-3 pt-3 border-t border-border/40">
+          <button
+            type="button"
+            onClick={toggleAdvanced}
+            className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+            aria-expanded={showAdvanced}
+          >
+            {showAdvanced ? (
+              <ChevronUp className="size-3.5 shrink-0" />
+            ) : (
+              <ChevronDown className="size-3.5 shrink-0" />
+            )}
+            <span>
+              {showAdvanced
+                ? t('common:hideAdvancedSettings')
+                : t('common:showAdvancedSettings')}
+            </span>
+          </button>
+        </div>
+      )}
     </div>
   )
 }

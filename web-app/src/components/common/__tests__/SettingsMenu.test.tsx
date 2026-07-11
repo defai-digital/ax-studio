@@ -81,10 +81,10 @@ describe('SettingsMenu', () => {
   it('renders group headers', () => {
     render(<SettingsMenu />)
 
-    expect(screen.getByText('App')).toBeInTheDocument()
-    expect(screen.getByText('AI')).toBeInTheDocument()
-    expect(screen.getByText('Advanced')).toBeInTheDocument()
-    expect(screen.getByText('Other')).toBeInTheDocument()
+    expect(screen.getByText('common:settingsGroupApp')).toBeInTheDocument()
+    expect(screen.getByText('common:settingsGroupAi')).toBeInTheDocument()
+    expect(screen.getByText('common:settingsGroupAdvanced')).toBeInTheDocument()
+    expect(screen.getByText('common:settingsGroupOther')).toBeInTheDocument()
   })
 
   it('highlights active menu item', () => {

@@ -32,6 +32,11 @@ import { TokenSpeedIndicator } from '@/containers/TokenSpeedIndicator'
 import { extractFilesFromPrompt, FileMetadata } from '@/lib/fileMetadata'
 import { Button } from '@/components/ui/button'
 import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   ChevronLeft,
   ChevronRight,
   Database,
@@ -46,6 +51,7 @@ import { MessageRatingActions } from '@/components/chat/MessageRatingActions'
 import type { VersionInfo } from '@/lib/messages/versions'
 import { RoutingBadge } from '@/components/RoutingBadge'
 import type { CitationData } from '@/types/citation-types'
+import { useTranslation } from '@/i18n/react-i18next-compat'
 
 const CHAT_STATUS = {
   STREAMING: 'streaming',
@@ -102,6 +108,7 @@ export const MessageItem = memo(
     versionInfo,
     onSwitchVersion,
   }: MessageItemProps) => {
+    const { t } = useTranslation()
     const selectedModel = useModelProvider((state) => state.selectedModel)
     const updateMessage = useMessages((state) => state.updateMessage)
     const storedThreadMessage = useMessages((state) =>
@@ -339,9 +346,8 @@ export const MessageItem = memo(
                 )}
                 {displayText && (
                   <div
-                    className="px-4 py-3 rounded-2xl rounded-tr-sm text-white shadow-sm select-text whitespace-pre-wrap break-words overflow-hidden"
+                    className="px-4 py-3 rounded-2xl rounded-tr-sm text-primary-foreground shadow-sm select-text whitespace-pre-wrap break-words overflow-hidden bg-brand-gradient"
                     style={{
-                      background: 'linear-gradient(135deg, #6366f1, #7c3aed)',
                       fontSize: '14px',
                       lineHeight: '1.6',
                     }}
@@ -558,8 +564,8 @@ export const MessageItem = memo(
             }
           })}
 
-          {/* Message actions for user messages */}
-          <div className="flex items-center justify-end gap-0.5 mt-1 opacity-0 group-hover/message:opacity-100 transition-opacity">
+          {/* Message actions — visible on hover OR keyboard focus (not hover-only) */}
+          <div className="flex items-center justify-end gap-0.5 mt-1 opacity-0 group-hover/message:opacity-100 focus-within:opacity-100 transition-opacity">
             <CopyButton text={getFullTextContent()} />
 
             {onEdit && status !== CHAT_STATUS.STREAMING && (
@@ -575,19 +581,29 @@ export const MessageItem = memo(
             )}
           </div>
 
-          {/* Image Preview Dialog */}
+          {/* Image preview — focus-trapped dialog for keyboard/Esc support */}
           {previewImage && (
-            <div
-              className="fixed inset-0 z-100 bg-black/70 backdrop-blur-md flex items-center justify-center cursor-pointer"
-              onClick={() => setPreviewImage(null)}
+            <Dialog
+              open={Boolean(previewImage)}
+              onOpenChange={(open) => {
+                if (!open) setPreviewImage(null)
+              }}
             >
-              <img
-                src={previewImage.url}
-                alt={previewImage.filename || 'Preview'}
-                className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg"
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
+              <DialogContent
+                className="max-w-[min(90vw,56rem)] border-none bg-transparent p-2 shadow-none sm:max-w-[min(90vw,56rem)]"
+                showCloseButton
+                aria-describedby={undefined}
+              >
+                <DialogTitle className="sr-only">
+                  {previewImage.filename || t('common:preview')}
+                </DialogTitle>
+                <img
+                  src={previewImage.url}
+                  alt={previewImage.filename || t('common:preview')}
+                  className="max-h-[85vh] max-w-full object-contain rounded-lg mx-auto"
+                />
+              </DialogContent>
+            </Dialog>
           )}
         </div>
       )
@@ -598,11 +614,8 @@ export const MessageItem = memo(
       <div className="w-full mb-2 group/message">
         <div className="flex w-full gap-3">
           {/* Avatar */}
-          <div
-            className="size-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 shadow-md"
-            style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
-          >
-            <Zap className="size-4 text-white" strokeWidth={2.5} />
+          <div className="size-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 shadow-md bg-brand-gradient">
+            <Zap className="size-4 text-primary-foreground" strokeWidth={2.5} />
           </div>
 
           <div className="flex flex-col min-w-0 flex-1">
@@ -652,8 +665,8 @@ export const MessageItem = memo(
               />
             )}
 
-            {/* Action Bar */}
-            <div className="flex items-center justify-between mt-2 opacity-0 group-hover/message:opacity-100 transition-opacity">
+            {/* Action bar — hover or focus-within so keyboard users can reach actions */}
+            <div className="flex items-center justify-between mt-2 opacity-0 group-hover/message:opacity-100 focus-within:opacity-100 transition-opacity">
               <div
                 className={cn(
                   'flex items-center gap-0.5',
@@ -674,8 +687,8 @@ export const MessageItem = memo(
                       variant="ghost"
                       size="icon-xs"
                       onClick={handleRegenerate}
-                      title="Regenerate response"
-                      aria-label="Regenerate response"
+                      title={t('common:regenerate')}
+                      aria-label={t('common:regenerate')}
                       className="text-muted-foreground/50 hover:text-foreground"
                     >
                       <RefreshCw size={14} />
@@ -690,13 +703,13 @@ export const MessageItem = memo(
                       size="icon-xs"
                       onClick={() => handleSwitchVersion('prev')}
                       disabled={versionInfo.position <= 1}
-                      title="Previous version"
-                      aria-label="Previous version"
+                      title={t('common:previousVersion')}
+                      aria-label={t('common:previousVersion')}
                       className="hover:text-foreground disabled:opacity-30"
                     >
                       <ChevronLeft size={14} />
                     </Button>
-                    <span className="text-[11px] tabular-nums select-none">
+                    <span className="text-xs tabular-nums select-none">
                       {versionInfo.position}/{versionInfo.total}
                     </span>
                     <Button
@@ -704,8 +717,8 @@ export const MessageItem = memo(
                       size="icon-xs"
                       onClick={() => handleSwitchVersion('next')}
                       disabled={versionInfo.position >= versionInfo.total}
-                      title="Next version"
-                      aria-label="Next version"
+                      title={t('common:nextVersion')}
+                      aria-label={t('common:nextVersion')}
                       className="hover:text-foreground disabled:opacity-30"
                     >
                       <ChevronRight size={14} />
@@ -720,9 +733,9 @@ export const MessageItem = memo(
                     size="icon-xs"
                     onClick={handleFork}
                     disabled={isForking}
-                    title="Branch conversation from here"
-                    aria-label="Branch conversation from here"
-                    className="text-muted-foreground/50 hover:text-violet-500 disabled:opacity-30"
+                    title={t('common:branchConversation')}
+                    aria-label={t('common:branchConversation')}
+                    className="text-muted-foreground/50 hover:text-primary disabled:opacity-30"
                   >
                     <GitBranch className="size-3.5" />
                   </Button>

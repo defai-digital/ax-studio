@@ -98,7 +98,7 @@ describe('SetupScreen — Manual Test Protocol', () => {
   // Protocol #1: First-run onboarding renders
   it('renders the onboarding wizard', () => {
     renderSetup()
-    expect(screen.getByText('Welcome to AX Studio')).toBeInTheDocument()
+    expect(screen.getByText('setup:welcome')).toBeInTheDocument()
   })
 
   // Protocol #2: Navigate through all 6 steps
@@ -106,11 +106,11 @@ describe('SetupScreen — Manual Test Protocol', () => {
     renderSetup()
 
     // Step 0: Welcome
-    expect(screen.getByText('Welcome to AX Studio')).toBeInTheDocument()
-    expect(screen.getByText('Local AI Models')).toBeInTheDocument()
-    expect(screen.getByText('Lightning Fast')).toBeInTheDocument()
-    expect(screen.getByText('Private & Secure')).toBeInTheDocument()
-    expect(screen.getByText('Tool Use & MCP')).toBeInTheDocument()
+    expect(screen.getByText('setup:welcome')).toBeInTheDocument()
+    expect(screen.getByText('setup:featureLocalModels')).toBeInTheDocument()
+    expect(screen.getByText('setup:featureLightningFast')).toBeInTheDocument()
+    expect(screen.getByText('setup:featurePrivateSecure')).toBeInTheDocument()
+    expect(screen.getByText('setup:featureToolUse')).toBeInTheDocument()
 
     // Step 0 has Skip button (not Back)
     expect(screen.getByText('Skip')).toBeInTheDocument()
@@ -118,13 +118,13 @@ describe('SetupScreen — Manual Test Protocol', () => {
 
     // Navigate to Step 1: Workspace mode
     clickButton('Continue')
-    expect(screen.getByText('Choose your workspace mode')).toBeInTheDocument()
-    expect(screen.getByText('Simple Chat')).toBeInTheDocument()
-    expect(screen.getByText('Local Private AI')).toBeInTheDocument()
-    expect(screen.getByText('Developer Agent')).toBeInTheDocument()
-    expect(screen.getByText('Knowledge Workspace')).toBeInTheDocument()
-    expect(screen.getByText('Controlled Workspace')).toBeInTheDocument()
-    expect(screen.getByText('Recommended')).toBeInTheDocument()
+    expect(screen.getByText('setup:workspaceModeTitle')).toBeInTheDocument()
+    expect(screen.getByText('setup:modeSimpleChat')).toBeInTheDocument()
+    expect(screen.getByText('setup:modeLocalPrivate')).toBeInTheDocument()
+    expect(screen.getByText('setup:modeDeveloperAgent')).toBeInTheDocument()
+    expect(screen.getByText('setup:modeKnowledge')).toBeInTheDocument()
+    expect(screen.getByText('setup:modeControlled')).toBeInTheDocument()
+    expect(screen.getByText('setup:recommended')).toBeInTheDocument()
 
     // Now has Back button instead of Skip
     expect(screen.getByText('Back')).toBeInTheDocument()
@@ -157,16 +157,18 @@ describe('SetupScreen — Manual Test Protocol', () => {
     // Navigate to Step 5: Ready
     clickButton('Continue')
     expect(screen.getByText("You're all set!")).toBeInTheDocument()
-    expect(screen.getByText('Developer Agent')).toBeInTheDocument()
-    expect(screen.getByText('New chat')).toBeInTheDocument()
-    expect(screen.getByText('Search')).toBeInTheDocument()
-    expect(screen.getByText('New project')).toBeInTheDocument()
-    expect(screen.getByText('Toggle sidebar')).toBeInTheDocument()
+    expect(screen.getByText('setup:modeDeveloperAgent')).toBeInTheDocument()
+    expect(screen.getByText('common:newChat')).toBeInTheDocument()
+    expect(screen.getByText('common:search')).toBeInTheDocument()
+    expect(screen.getByText('settings:shortcuts.newProject')).toBeInTheDocument()
+    expect(
+      screen.getByText('settings:shortcuts.toggleSidebar')
+    ).toBeInTheDocument()
     expect(screen.getByText('⌘ N')).toBeInTheDocument()
     expect(screen.getByText('⌘ K')).toBeInTheDocument()
 
     // Final step shows "Get Started" instead of "Continue"
-    expect(screen.getByText('Get Started')).toBeInTheDocument()
+    expect(screen.getByText('setup:getStarted')).toBeInTheDocument()
     expect(screen.queryByText('Continue')).not.toBeInTheDocument()
   })
 
@@ -215,7 +217,7 @@ describe('SetupScreen — Manual Test Protocol', () => {
     clickButton('Continue') // 4
     clickButton('Continue') // 5
 
-    clickButton('Get Started')
+    clickButton('setup:getStarted')
 
     expect(localStorage.getItem('setup-completed')).toBe('true')
     expect(localStorage.getItem('workspace-mode')).toBe('developer-agent')
@@ -226,15 +228,15 @@ describe('SetupScreen — Manual Test Protocol', () => {
     const { onComplete } = renderSetup()
 
     clickButton('Continue') // Mode
-    fireEvent.click(screen.getByText('Local Private AI'))
+    fireEvent.click(screen.getByText('setup:modeLocalPrivate'))
     clickButton('Continue') // Theme
     clickButton('Continue') // Providers
     clickButton('Continue') // Privacy
     clickButton('Continue') // Ready
 
-    expect(screen.getByText('Local Private AI')).toBeInTheDocument()
+    expect(screen.getByText('setup:modeLocalPrivate')).toBeInTheDocument()
 
-    clickButton('Get Started')
+    clickButton('setup:getStarted')
 
     expect(localStorage.getItem('setup-completed')).toBe('true')
     expect(localStorage.getItem('workspace-mode')).toBe('local-private-ai')
@@ -257,10 +259,10 @@ describe('SetupScreen — Manual Test Protocol', () => {
     renderSetup()
 
     clickButton('Continue') // Go to Mode
-    expect(screen.getByText('Choose your workspace mode')).toBeInTheDocument()
+    expect(screen.getByText('setup:workspaceModeTitle')).toBeInTheDocument()
 
     clickButton('Back') // Back to Welcome
-    expect(screen.getByText('Welcome to AX Studio')).toBeInTheDocument()
+    expect(screen.getByText('setup:welcome')).toBeInTheDocument()
   })
 
   // Progress dots: 6 dots rendered

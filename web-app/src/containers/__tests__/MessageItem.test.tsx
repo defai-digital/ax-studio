@@ -385,7 +385,7 @@ describe('MessageItem', () => {
           onRegenerate={onRegenerate}
         />
       )
-      const regenButton = screen.getByLabelText('Regenerate response')
+      const regenButton = screen.getByLabelText('common:regenerate')
       expect(regenButton).toBeInTheDocument()
       fireEvent.click(regenButton)
       expect(onRegenerate).toHaveBeenCalledWith('regen-msg')
@@ -494,8 +494,8 @@ describe('MessageItem', () => {
       })
       render(<MessageItem message={msg} isLastMessage={false} status="ready" />)
       fireEvent.click(screen.getByAltText('Uploaded attachment'))
-      // Preview overlay should appear
-      const previewImg = screen.getByAltText('Preview')
+      // Preview dialog should appear
+      const previewImg = screen.getByAltText('common:preview')
       expect(previewImg.getAttribute('src')).toBe(
         'https://example.com/photo.jpg'
       )

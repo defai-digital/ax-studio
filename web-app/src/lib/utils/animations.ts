@@ -11,3 +11,14 @@ export const pageTransition: Transition = {
   duration: 0.25,
   ease: [0.4, 0, 0.2, 1],
 }
+
+/** Instant transition for prefers-reduced-motion users */
+export const reducedMotionTransition: Transition = {
+  duration: 0,
+}
+
+export const reducedMotionVariants: Variants = {
+  initial: { opacity: 1, y: 0 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 1, y: 0 },
+}

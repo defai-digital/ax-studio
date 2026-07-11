@@ -98,6 +98,7 @@ describe('ToolApproval', () => {
     expect(mockOnDeny).toHaveBeenCalledOnce()
   })
 
+
   it('renders security notice', () => {
     render(<ToolApproval />)
     expect(

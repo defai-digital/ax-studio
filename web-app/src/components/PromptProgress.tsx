@@ -19,11 +19,8 @@ export function PromptProgress() {
   ) {
     return (
       <div className="flex gap-3 py-2">
-        <div
-          className="size-8 rounded-full flex items-center justify-center shrink-0 shadow-sm"
-          style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
-        >
-          <Zap className="size-4 text-white" strokeWidth={2.5} />
+        <div className="size-8 rounded-full flex items-center justify-center shrink-0 shadow-sm bg-brand-gradient">
+          <Zap className="size-4 text-primary-foreground" strokeWidth={2.5} />
         </div>
         <div className="flex flex-col gap-2 pt-2">
           <div className="flex gap-1.5 items-center">
@@ -32,14 +29,11 @@ export function PromptProgress() {
                 key={i}
                 animate={{ scale: [0.6, 1.1, 0.6], opacity: [0.3, 1, 0.3] }}
                 transition={{ duration: 1.2, repeat: Infinity, delay }}
-                className="size-2 rounded-full"
-                style={{ backgroundColor: 'rgba(129, 140, 248, 0.6)' }}
+                className="size-2 rounded-full bg-primary/60"
               />
             ))}
           </div>
-          <span className="text-[12px] text-muted-foreground/50">
-            Thinking...
-          </span>
+          <span className="text-xs text-muted-foreground">Thinking...</span>
         </div>
       </div>
     )
@@ -47,11 +41,8 @@ export function PromptProgress() {
 
   return (
     <div className="flex gap-3 py-2">
-      <div
-        className="size-8 rounded-full flex items-center justify-center shrink-0 shadow-sm"
-        style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
-      >
-        <Zap className="size-4 text-white" strokeWidth={2.5} />
+      <div className="size-8 rounded-full flex items-center justify-center shrink-0 shadow-sm bg-brand-gradient">
+        <Zap className="size-4 text-primary-foreground" strokeWidth={2.5} />
       </div>
       <div className="flex items-center gap-3 pt-1">
         <div className="flex gap-1.5 items-center">

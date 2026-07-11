@@ -1,7 +1,7 @@
 import { createRootRoute, Outlet, useLocation } from '@tanstack/react-router'
 import { Fragment } from 'react/jsx-runtime'
 import { useCallback, useEffect, type MouseEvent, type ReactNode } from 'react'
-import { motion } from 'motion/react'
+import { motion, useReducedMotion } from 'motion/react'
 
 import { DialogAppUpdater } from '@/containers/dialogs/AppUpdater'
 import { ThemeProvider } from '@/providers/ThemeProvider'
@@ -22,7 +22,12 @@ import { ServiceHubProvider } from '@/providers/ServiceHubProvider'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { LeftSidebar } from '@/components/left-sidebar'
 import { WindowControls } from '@/components/WindowControls'
-import { pageVariants, pageTransition } from '@/lib/utils/animations'
+import {
+  pageVariants,
+  pageTransition,
+  reducedMotionTransition,
+  reducedMotionVariants,
+} from '@/lib/utils/animations'
 import { hideInitialLoader } from '@/lib/bootstrap/app-startup'
 import { startWindowDragFromMouseEvent } from '@/lib/window-drag'
 
@@ -35,6 +40,7 @@ export const Route = createRootRoute({
 
 const PageTransition = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation()
+  const prefersReducedMotion = useReducedMotion()
   // Group all /settings/* routes under one key so the sidebar doesn't
   // unmount/remount (flicker) when switching between settings tabs.
   const animationKey = location.pathname.startsWith('/settings')
@@ -45,8 +51,10 @@ const PageTransition = ({ children }: { children: React.ReactNode }) => {
       key={animationKey}
       initial="initial"
       animate="animate"
-      variants={pageVariants}
-      transition={pageTransition}
+      variants={prefersReducedMotion ? reducedMotionVariants : pageVariants}
+      transition={
+        prefersReducedMotion ? reducedMotionTransition : pageTransition
+      }
       className="size-full"
     >
       {children}
