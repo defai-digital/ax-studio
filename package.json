@@ -51,6 +51,7 @@
     "@vitest/coverage-v8": "3.2.6",
     "husky": "^9.1.5",
     "jsdom": "^29.1.1",
+    "lint-staged": "^15.4.3",
     "rimraf": "^6.0.1",
     "tar": "^7.5.16",
     "unzipper": "^0.12.3",
@@ -89,5 +90,13 @@
     "vite@npm:^5.0.0 || ^6.0.0 || ^7.0.0-0": "7.3.5",
     "ws@npm:^8.18.0": "8.21.0"
   },
-  "packageManager": "yarn@4.5.3"
+  "packageManager": "yarn@4.5.3",
+  "lint-staged": {
+    "core/**/*.{ts,tsx}": [
+      "yarn workspace @ax-studio/core lint --fix"
+    ],
+    "web-app/**/*.{ts,tsx,js,jsx}": [
+      "yarn workspace @ax-studio/web-app lint --fix"
+    ]
+  }
 }

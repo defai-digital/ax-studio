@@ -48,6 +48,7 @@ concurrency:
 jobs:
   workflow-lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Getting the repo
@@ -64,6 +65,7 @@ jobs:
 
   secret-scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Getting the repo
@@ -101,15 +103,16 @@ jobs:
   base_branch_cov:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.base_ref }}
-      - name: Use Node.js 24.x
+      - name: Use Node.js 20.19
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: '20.19'
 
       - name: 'Cleanup cache'
         continue-on-error: true
@@ -137,10 +140,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ref-lcov.info
+          retention-days: 14
           path: coverage/lcov.info
 
   test-on-macos:
     runs-on: 'macos-latest'
+    timeout-minutes: 30
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Getting the repo
@@ -151,7 +156,7 @@ jobs:
       - name: Installing node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: '20.19'
 
       - name: 'Cleanup cache'
         continue-on-error: true
@@ -167,7 +172,9 @@ jobs:
           yarn config set -H enableImmutableInstalls true
 
       - name: Set up Xcode version
-        run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.2'
 
       - name: Install MLX native dependencies
         run: |
@@ -181,8 +188,9 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
   test-on-windows:
-    if: github.event_name == 'push'
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: 'windows-latest'
+    timeout-minutes: 45
     steps:
       - name: Getting the repo
         uses: actions/checkout@v4
@@ -196,7 +204,7 @@ jobs:
       - name: Installing node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: '20.19'
 
       # Clean cache, continue on error
       - name: 'Cleanup cache'
@@ -210,143 +218,6 @@ jobs:
               Write-Output "Folder does not exist."
           }
           make clean
-
-      - name: Config Yarn
-        run: |
-          corepack enable
-          corepack prepare yarn@4.5.3 --activate
-          yarn --version
-          yarn config set -H enableImmutableInstalls true
-
-      - name: Install WebView2 Runtime (Bootstrapper)
-        shell: powershell
-        run: |
-          Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile 'setup.exe'
-          Start-Process -FilePath setup.exe -Verb RunAs -Wait
-
-      - name: Configure Cargo for Windows paths
-        shell: powershell
-        run: |
-          git config --global core.longpaths true
-          New-Item -ItemType Directory -Force C:\cargo | Out-Null
-          New-Item -ItemType Directory -Force C:\cargo-target | Out-Null
-
-      - name: Lint
-        shell: powershell
-        timeout-minutes: 20
-        run: |
-          make lint
-        env:
-          NODE_OPTIONS: '--max-old-space-size=2048'
-          CARGO_HOME: C:\cargo
-          CARGO_TARGET_DIR: C:\cargo-target
-          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
-
-      - name: Download binaries
-        shell: powershell
-        timeout-minutes: 15
-        run: |
-          npx -y @yarnpkg/cli-dist@4.5.3 download:bin
-        env:
-          NODE_OPTIONS: '--max-old-space-size=2048'
-          CARGO_HOME: C:\cargo
-          CARGO_TARGET_DIR: C:\cargo-target
-          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
-
-      - name: Vitest
-        shell: powershell
-        timeout-minutes: 20
-        run: |
-          # Node 24 on Windows can fail during child-process pool teardown after
-          # all Vitest tests pass. Thread workers keep the same test coverage
-          # while avoiding that platform-specific cleanup path.
-          npx -y @yarnpkg/cli-dist@4.5.3 vitest run --pool=threads
-        env:
-          NODE_OPTIONS: '--max-old-space-size=2048'
-          CARGO_HOME: C:\cargo
-          CARGO_TARGET_DIR: C:\cargo-target
-          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
-
-      - name: Prepare Tauri test assets
-        shell: powershell
-        timeout-minutes: 10
-        run: |
-          npx -y @yarnpkg/cli-dist@4.5.3 copy:assets:tauri
-          npx -y @yarnpkg/cli-dist@4.5.3 build:icon
-        env:
-          NODE_OPTIONS: '--max-old-space-size=2048'
-          CARGO_HOME: C:\cargo
-          CARGO_TARGET_DIR: C:\cargo-target
-          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
-
-      - name: Cargo test src-tauri
-        shell: powershell
-        timeout-minutes: 30
-        run: |
-          cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --features test-tauri -- --test-threads=1
-        env:
-          NODE_OPTIONS: '--max-old-space-size=2048'
-          CARGO_HOME: C:\cargo
-          CARGO_TARGET_DIR: C:\cargo-target
-          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
-
-      - name: Cargo test hardware plugin
-        shell: powershell
-        timeout-minutes: 15
-        run: |
-          cargo test --manifest-path src-tauri/plugins/tauri-plugin-hardware/Cargo.toml
-        env:
-          NODE_OPTIONS: '--max-old-space-size=2048'
-          CARGO_HOME: C:\cargo
-          CARGO_TARGET_DIR: C:\cargo-target
-          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
-
-      - name: Cargo test utils
-        shell: powershell
-        timeout-minutes: 10
-        run: |
-          cargo test --manifest-path src-tauri/utils/Cargo.toml
-        env:
-          NODE_OPTIONS: '--max-old-space-size=2048'
-          CARGO_HOME: C:\cargo
-          CARGO_TARGET_DIR: C:\cargo-target
-          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
-
-  test-on-windows-pr:
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-    runs-on: 'windows-latest'
-    steps:
-      - name: Getting the repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: install dependencies
-        run: |
-          choco install --yes --no-progress make
-
-      - name: Installing node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
-      - name: 'Cleanup cache'
-        shell: powershell
-        continue-on-error: true
-        run: |
-          $path = "$Env:APPDATA\AX Studio"
-          if (Test-Path $path) {
-              Remove-Item "\\?\$path" -Recurse -Force
-          } else {
-              Write-Output "Folder does not exist."
-          }
-          make clean
-
-      - name: Install WebView2 Runtime (Bootstrapper)
-        shell: powershell
-        run: |
-          Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile 'setup.exe'
-          Start-Process -FilePath setup.exe -Verb RunAs -Wait
 
       - name: Config Yarn
         run: |
@@ -444,7 +315,8 @@ jobs:
           CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
 
   test-on-ubuntu:
-    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-latest' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Getting the repo
@@ -466,7 +338,7 @@ jobs:
       - name: Installing node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: '20.19'
 
       - name: Install Tauri dependencies
         run: |
@@ -503,6 +375,7 @@ jobs:
   coverage-check:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: base_branch_cov
     permissions:
       contents: read
@@ -517,7 +390,7 @@ jobs:
       - name: Installing node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: '20.19'
       - name: 'Cleanup cache'
         continue-on-error: true
         run: |
@@ -564,4 +437,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: module-coverage-audit
+          retention-days: 14
           path: report/testing/

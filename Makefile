@@ -130,18 +130,18 @@ ifeq ($(OS),Windows_NT)
 	-powershell -Command "Remove-Item -Recurse -Force ./src-tauri/target"
 	-powershell -Command "if (Test-Path \"$($env:USERPROFILE)\ax-studio\extensions\") { Remove-Item -Path \"$($env:USERPROFILE)\ax-studio\extensions\" -Recurse -Force }"
 else
-	find . -name "node_modules" -type d -prune -exec rm -rfv '{}' +
-	find . -name ".next" -type d -exec rm -rfv '{}' +
-	find . -name "dist" -type d -exec rm -rfv '{}' +
-	find . -name "build" -type d -exec rm -rfv '{}' +
-	find . -name "out" -type d -exec rm -rfv '{}' +
-	find . -name ".turbo" -type d -exec rm -rfv '{}' +
-	find . -name ".yarn" -type d -exec rm -rfv '{}' +
-	find . -name "package-lock.json" -type f -exec rm -rfv '{}' +
-	rm -rfv ./pre-install/*.tgz
-	rm -rfv ./extensions/*/*.tgz
-	rm -rfv ./src-tauri/resources
-	rm -rfv ./src-tauri/target
-	rm -rfv ~/ax-studio/extensions
-	rm -rfv ~/Library/Caches/ax-studio*
+	find . -name "node_modules" -type d -prune -exec rm -rf '{}' +
+	find . -name ".next" -type d -exec rm -rf '{}' +
+	find . -name "dist" -type d -exec rm -rf '{}' +
+	find . -name "build" -type d -exec rm -rf '{}' +
+	find . -name "out" -type d -exec rm -rf '{}' +
+	find . -name ".turbo" -type d -exec rm -rf '{}' +
+	find . -name ".yarn" -type d -exec rm -rf '{}' +
+	find . -name "package-lock.json" -type f -exec rm -rf '{}' +
+	rm -rf ./pre-install/*.tgz
+	rm -rf ./extensions/*/*.tgz
+	rm -rf ./src-tauri/resources
+	rm -rf ./src-tauri/target
+	rm -rf ~/ax-studio/extensions
+	rm -rf ~/Library/Caches/ax-studio*
 endif

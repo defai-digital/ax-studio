@@ -23,6 +23,7 @@ permissions:
 jobs:
   preflight:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Getting the repo
         uses: actions/checkout@v4
@@ -39,6 +40,7 @@ jobs:
   get-update-version:
     needs: preflight
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       new_version: ${{ steps.version.outputs.new_version }}
     steps:
@@ -67,6 +69,7 @@ jobs:
 
   validate-release-tag:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: get-update-version
     steps:
       - name: Getting the repo
@@ -84,6 +87,7 @@ jobs:
 
   create-draft-release:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: [get-update-version, validate-release-tag]
     outputs:
       version: ${{ needs.get-update-version.outputs.new_version }}
@@ -110,713 +114,39 @@ jobs:
           fi
 
   build-macos:
-    runs-on: macos-latest
     needs: [get-update-version, validate-release-tag, create-draft-release]
-    env:
-      HAS_SIGN_CERTS: ${{ (secrets.APPLE_CERTIFICATE != '' || secrets.CODE_SIGN_P12_BASE64 != '') && (secrets.APPLE_CERTIFICATE_PASSWORD != '' || secrets.CODE_SIGN_P12_PASSWORD != '') && (secrets.APPLE_API_KEY_B64 != '' || secrets.NOTARIZE_P8_BASE64 != '') && (secrets.APPLE_API_ISSUER != '' || secrets.NOTARY_ISSUER != '') && (secrets.APPLE_API_KEY_ID != '' || secrets.NOTARY_KEY_ID != '') }}
-      HAS_UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && secrets.TAURI_UPDATER_PUBKEY != '' }}
-    outputs:
-      MAC_UNIVERSAL_SIG: ${{ steps.metadata.outputs.MAC_UNIVERSAL_SIG }}
-      FILE_NAME: ${{ steps.metadata.outputs.FILE_NAME }}
-      DMG_NAME: ${{ steps.metadata.outputs.DMG_NAME }}
-      TAR_NAME: ${{ steps.metadata.outputs.TAR_NAME }}
-    permissions:
-      contents: write
-    steps:
-      - name: Getting the repo
-        uses: actions/checkout@v4
-        with:
-          ref: refs/tags/v${{ needs.get-update-version.outputs.new_version }}
-
-      - name: Installing node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20.19'
-
-      - name: Install jq
-        uses: dcarbone/install-jq-action@v2.0.1
-
-      - name: Install ctoml
-        run: cargo install ctoml
-
-      - name: Set up Xcode version
-        run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
-
-      - name: Install MLX native dependencies
-        run: |
-          brew list mlx >/dev/null 2>&1 || brew install mlx
-          brew list mlx-c >/dev/null 2>&1 || brew install mlx-c
-
-      - name: Check signing configuration
-        run: |
-          if [ "$HAS_SIGN_CERTS" = "true" ]; then
-            echo "::notice::Code signing and notarization enabled."
-          else
-            echo "::warning::Apple Developer ID signing secrets are not configured."
-          fi
-          if [ "$HAS_UPDATER_KEY" = "true" ]; then
-            echo "::notice::Updater signing enabled."
-          else
-            echo "::warning::TAURI_SIGNING_PRIVATE_KEY not configured — updater artifacts will be skipped."
-          fi
-
-      - name: Validate stable macOS signing secrets
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE || secrets.CODE_SIGN_P12_BASE64 }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD || secrets.CODE_SIGN_P12_PASSWORD }}
-          APPLE_API_KEY_B64: ${{ secrets.APPLE_API_KEY_B64 || secrets.NOTARIZE_P8_BASE64 }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID || secrets.NOTARY_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER || secrets.NOTARY_ISSUER }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
-        run: |
-          missing=0
-          for name in \
-            APPLE_CERTIFICATE \
-            APPLE_CERTIFICATE_PASSWORD \
-            APPLE_API_KEY_B64 \
-            APPLE_API_KEY_ID \
-            APPLE_API_ISSUER \
-            TAURI_SIGNING_PRIVATE_KEY \
-            TAURI_UPDATER_PUBKEY
-          do
-            if [ -z "${!name}" ]; then
-              echo "::error::$name is required for stable macOS release"
-              missing=1
-            fi
-          done
-          exit "$missing"
-
-      - name: Update app version from release tag
-        env:
-          VERSION: ${{ needs.get-update-version.outputs.new_version }}
-          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
-        run: |
-          # Enable updater artifacts only when the signing key is available
-          if [ "$HAS_UPDATER_KEY" = "true" ] && [ -n "$TAURI_UPDATER_PUBKEY" ]; then
-            jq --arg version "$VERSION" --arg pubkey "$TAURI_UPDATER_PUBKEY" \
-              '.version = $version | .bundle.createUpdaterArtifacts = true | .plugins.updater.pubkey = $pubkey' \
-              ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
-          else
-            jq --arg version "$VERSION" \
-              '.version = $version | .bundle.createUpdaterArtifacts = false' \
-              ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
-          fi
-          mv /tmp/tauri.conf.json ./src-tauri/tauri.conf.json
-
-          jq --arg version "$VERSION" '.version = $version' web-app/package.json > /tmp/package.json
-          mv /tmp/package.json web-app/package.json
-
-          jq --arg version "$VERSION" '.version = $version' ./src-tauri/plugins/tauri-plugin-hardware/package.json > /tmp/package.json
-          mv /tmp/package.json ./src-tauri/plugins/tauri-plugin-hardware/package.json
-
-          jq --arg version "$VERSION" '.version = $version' ./src-tauri/plugins/tauri-plugin-llamacpp/package.json > /tmp/package.json
-          mv /tmp/package.json ./src-tauri/plugins/tauri-plugin-llamacpp/package.json
-
-          ctoml ./src-tauri/plugins/tauri-plugin-hardware/Cargo.toml package.version "$VERSION"
-          ctoml ./src-tauri/plugins/tauri-plugin-llamacpp/Cargo.toml package.version "$VERSION"
-          ctoml ./src-tauri/Cargo.toml package.version "$VERSION"
-          ctoml ./src-tauri/Cargo.toml dependencies.tauri.features[] "devtools"
-
-      - name: Get key for notarize
-        if: ${{ env.HAS_SIGN_CERTS == 'true' }}
-        run: printf '%s' "$APPLE_API_KEY_B64" | base64 --decode > /tmp/notary-key.p8
-        shell: bash
-        env:
-          APPLE_API_KEY_B64: ${{ secrets.APPLE_API_KEY_B64 || secrets.NOTARIZE_P8_BASE64 }}
-
-      - uses: apple-actions/import-codesign-certs@v2
-        if: ${{ env.HAS_SIGN_CERTS == 'true' }}
-        with:
-          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE || secrets.CODE_SIGN_P12_BASE64 }}
-          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD || secrets.CODE_SIGN_P12_PASSWORD }}
-
-      - name: Install Apple Developer ID certificate chain
-        if: ${{ env.HAS_SIGN_CERTS == 'true' }}
-        run: |
-          set -euo pipefail
-
-          CERT_DIR="$(mktemp -d)"
-          trap 'rm -rf "$CERT_DIR"' EXIT
-
-          curl -fsSLo "$CERT_DIR/AppleRootCA.cer" \
-            https://www.apple.com/appleca/AppleIncRootCertificate.cer
-          curl -fsSLo "$CERT_DIR/DeveloperIDCA.cer" \
-            https://www.apple.com/certificateauthority/DeveloperIDCA.cer
-          curl -fsSLo "$CERT_DIR/DeveloperIDG2CA.cer" \
-            https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
-
-          security list-keychains -d user | sed 's/[ "]//g' > "$CERT_DIR/keychains.txt"
-          if [ ! -s "$CERT_DIR/keychains.txt" ]; then
-            echo "$HOME/Library/Keychains/login.keychain-db" > "$CERT_DIR/keychains.txt"
-          fi
-
-          while IFS= read -r keychain; do
-            [ -n "$keychain" ] || continue
-            for cert in "$CERT_DIR"/*.cer; do
-              security add-certificates -k "$keychain" "$cert" 2>/dev/null || true
-            done
-          done < "$CERT_DIR/keychains.txt"
-
-          security find-certificate -a -c "Apple Root CA" -Z >/dev/null
-          security find-certificate -a -c "Developer ID Certification Authority" -Z >/dev/null
-
-      - name: Resolve Apple signing identity
-        if: ${{ env.HAS_SIGN_CERTS == 'true' }}
-        env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          set -euo pipefail
-          IDENTITY="$(security find-identity -v -p codesigning | awk -F '"' '/Developer ID Application/ { print $2; exit }')"
-          if [ -z "$IDENTITY" ]; then
-            echo "::error::No Developer ID Application identity found in imported Apple certificate."
-            security find-identity -v -p codesigning || true
-            exit 1
-          fi
-          if [ -n "${APPLE_TEAM_ID:-}" ] && [[ "$IDENTITY" != *"($APPLE_TEAM_ID)"* ]]; then
-            echo "::error::Developer ID identity does not match APPLE_TEAM_ID."
-            echo "identity: $IDENTITY"
-            exit 1
-          fi
-          echo "APPLE_SIGNING_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
-          echo "AX_STUDIO_APPLE_CODESIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
-
-      - name: Config Yarn
-        run: |
-          corepack enable
-          corepack prepare yarn@4.5.3 --activate
-          yarn --version
-          yarn config set -H enableImmutableInstalls false
-
-      - name: Build app
-        run: |
-          test "$HAS_SIGN_CERTS" = "true"
-          make build
-        env:
-          NODE_OPTIONS: "--max-old-space-size=4196"
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APP_PATH: '.'
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE || secrets.CODE_SIGN_P12_BASE64 }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD || secrets.CODE_SIGN_P12_PASSWORD }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER || secrets.NOTARY_ISSUER }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID || secrets.NOTARY_KEY_ID }}
-          APPLE_API_KEY_PATH: /tmp/notary-key.p8
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          TAURI_SIGNING_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
-          AX_STUDIO_SIGNING_KEY: ${{ secrets.AX_STUDIO_SIGNING_KEY }}
-
-      - name: Re-sign and verify macOS app bundle
-        if: ${{ env.HAS_SIGN_CERTS == 'true' }}
-        env:
-          VERSION: ${{ needs.get-update-version.outputs.new_version }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-
-          APP_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/AX Studio.app"
-          BUNDLE_MACOS="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos"
-          BUNDLE_DMG="./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg"
-          ENTITLEMENTS="./src-tauri/Entitlements.plist"
-          TAR_PATH="${BUNDLE_MACOS}/AX Studio.app.tar.gz"
-          DMG_PATH="${BUNDLE_DMG}/AX Studio_${VERSION}_aarch64.dmg"
-
-          test -d "$APP_PATH"
-          test -n "${APPLE_SIGNING_IDENTITY:-}"
-          plutil -lint "$ENTITLEMENTS"
-
-          # Tauri currently produces a notarized-looking app whose embedded
-          # entitlement blob is not readable by codesign on macOS 26. Re-sign
-          # the exact app payload with the imported Developer ID identity, then
-          # rebuild all derived macOS artifacts from that verified bundle.
-          rm -f "$APP_PATH/Contents/CodeResources"
-          xattr -cr "$APP_PATH"
-
-          verify_embedded_cert_chain() {
-            local path="$1"
-            local cert_dir
-            local cert_count
-
-            cert_dir="$(mktemp -d)"
-            codesign -d --extract-certificates="$cert_dir/cert-" "$path"
-            cert_count="$(find "$cert_dir" -maxdepth 1 -type f -name 'cert-*' | wc -l | tr -d ' ')"
-            if [ "$cert_count" -lt 2 ]; then
-              echo "::error::Code signature for $path embeds $cert_count certificate(s); expected at least leaf + intermediate."
-              rm -rf "$cert_dir"
-              exit 1
-            fi
-
-            for cert in "$cert_dir"/cert-*; do
-              openssl x509 -inform DER -in "$cert" -noout -subject -issuer
-            done
-            rm -rf "$cert_dir"
-          }
-
-          verify_release_entitlements() {
-            local path="$1"
-            local entitlements_file
-            local value
-
-            entitlements_file="$(mktemp)"
-            codesign -d --entitlements - --xml "$path" > "$entitlements_file"
-            plutil -lint "$entitlements_file"
-
-            for entitlement in \
-              'com\.apple\.security\.cs\.allow-jit' \
-              'com\.apple\.security\.cs\.disable-library-validation'
-            do
-              if ! value="$(plutil -extract "$entitlement" raw "$entitlements_file" 2>/dev/null)" || [ "$value" != "true" ]; then
-                echo "::error::Code signature for $path is missing required entitlement: $entitlement"
-                rm -f "$entitlements_file"
-                exit 1
-              fi
-            done
-
-            rm -f "$entitlements_file"
-          }
-
-          for binary in \
-            "$APP_PATH/Contents/MacOS/bun" \
-            "$APP_PATH/Contents/MacOS/uv" \
-            "$APP_PATH/Contents/MacOS/ax-studio"
-          do
-            test -f "$binary"
-            codesign \
-              --force \
-              --timestamp \
-              --options runtime \
-              --generate-entitlement-der \
-              --force-library-entitlements \
-              --entitlements "$ENTITLEMENTS" \
-              --sign "$APPLE_SIGNING_IDENTITY" \
-              "$binary"
-            codesign --verify --strict --verbose=4 "$binary"
-            verify_embedded_cert_chain "$binary"
-            verify_release_entitlements "$binary"
-          done
-
-          codesign \
-            --force \
-            --timestamp \
-            --options runtime \
-            --generate-entitlement-der \
-            --entitlements "$ENTITLEMENTS" \
-            --sign "$APPLE_SIGNING_IDENTITY" \
-            "$APP_PATH"
-          codesign --verify --deep --strict --verbose=4 "$APP_PATH"
-          verify_embedded_cert_chain "$APP_PATH"
-          verify_release_entitlements "$APP_PATH"
-
-          rm -f "$TAR_PATH" "$TAR_PATH.sig"
-          (cd "$BUNDLE_MACOS" && tar -czf "AX Studio.app.tar.gz" "AX Studio.app")
-          TAURI_PRIVATE_KEY="$TAURI_SIGNING_PRIVATE_KEY" \
-            TAURI_PRIVATE_KEY_PASSWORD="${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" \
-            node src-tauri/tauri signer sign "$TAR_PATH"
-          test -s "$TAR_PATH.sig"
-
-          rm -f "$DMG_PATH"
-          DMG_ROOT="$(mktemp -d)"
-          trap 'rm -rf "$DMG_ROOT"' EXIT
-          ditto "$APP_PATH" "$DMG_ROOT/AX Studio.app"
-          ln -s /Applications "$DMG_ROOT/Applications"
-          hdiutil create \
-            -volname "AX Studio" \
-            -srcfolder "$DMG_ROOT" \
-            -ov \
-            -format UDZO \
-            "$DMG_PATH"
-          codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$DMG_PATH"
-
-      - name: Notarize and staple DMG
-        if: ${{ env.HAS_SIGN_CERTS == 'true' }}
-        env:
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID || secrets.NOTARY_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER || secrets.NOTARY_ISSUER }}
-        run: |
-          set -euo pipefail
-          DMG_PATH="$(find ./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg -maxdepth 1 -name '*.dmg' -print -quit)"
-          if [ -z "$DMG_PATH" ]; then
-            echo "::error::No DMG found to notarize."
-            exit 1
-          fi
-
-          xcrun notarytool submit "$DMG_PATH" \
-            --key /tmp/notary-key.p8 \
-            --key-id "$APPLE_API_KEY_ID" \
-            --issuer "$APPLE_API_ISSUER" \
-            --wait
-          xcrun stapler staple "$DMG_PATH"
-          xcrun stapler validate "$DMG_PATH"
-          spctl -a -vv -t install "$DMG_PATH"
-
-      - name: Verify notarized DMG app bundle
-        if: ${{ env.HAS_SIGN_CERTS == 'true' }}
-        run: |
-          set -euo pipefail
-          DMG_PATH="$(find ./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg -maxdepth 1 -name '*.dmg' -print -quit)"
-          if [ -z "$DMG_PATH" ]; then
-            echo "::error::No DMG found to verify."
-            exit 1
-          fi
-
-          MOUNT_DIR="$(mktemp -d)"
-          cleanup() {
-            hdiutil detach "$MOUNT_DIR" >/dev/null 2>&1 || true
-            rm -rf "$MOUNT_DIR"
-          }
-          trap cleanup EXIT
-
-          hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT_DIR" "$DMG_PATH"
-          codesign --verify --deep --strict --verbose=4 "$MOUNT_DIR/AX Studio.app"
-          codesign -d --entitlements - --xml "$MOUNT_DIR/AX Studio.app" > /tmp/ax-studio-dmg-entitlements.plist
-          plutil -lint /tmp/ax-studio-dmg-entitlements.plist
-          for entitlement in \
-            'com\.apple\.security\.cs\.allow-jit' \
-            'com\.apple\.security\.cs\.disable-library-validation'
-          do
-            value="$(plutil -extract "$entitlement" raw /tmp/ax-studio-dmg-entitlements.plist 2>/dev/null || true)"
-            if [ "$value" != "true" ]; then
-              echo "::error::DMG app bundle is missing required entitlement: $entitlement"
-              exit 1
-            fi
-          done
-
-      - name: Set output filename for mac
-        id: metadata
-        env:
-          VERSION: ${{ needs.get-update-version.outputs.new_version }}
-        run: |
-          cd ./src-tauri/target/aarch64-apple-darwin/release/bundle/macos
-          zip -r "ax-studio-mac-arm64-${VERSION}.zip" "AX Studio.app"
-          BUNDLE_DMG="../dmg"
-          if [ -f "AX Studio.app.tar.gz" ]; then
-            mv "AX Studio.app.tar.gz" "AX.Studio.app.tar.gz"
-          fi
-          if [ -f "AX Studio.app.tar.gz.sig" ]; then
-            mv "AX Studio.app.tar.gz.sig" "AX.Studio.app.tar.gz.sig"
-          fi
-          if [ -f "${BUNDLE_DMG}/AX Studio_${VERSION}_aarch64.dmg" ]; then
-            mv "${BUNDLE_DMG}/AX Studio_${VERSION}_aarch64.dmg" "${BUNDLE_DMG}/AX.Studio_${VERSION}_aarch64.dmg"
-          fi
-          SIG_FILE="AX.Studio.app.tar.gz.sig"
-          MAC_UNIVERSAL_SIG=$( [ -f "$SIG_FILE" ] && cat "$SIG_FILE" || echo "" )
-          {
-            echo "MAC_UNIVERSAL_SIG=${MAC_UNIVERSAL_SIG}"
-            echo "FILE_NAME=ax-studio-mac-arm64-${VERSION}.zip"
-            echo "DMG_NAME=AX.Studio_${VERSION}_aarch64.dmg"
-            echo "TAR_NAME=AX.Studio.app.tar.gz"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Upload release artifacts to GitHub release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ needs.get-update-version.outputs.new_version }}
-        run: |
-          BUNDLE_MACOS="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos"
-          BUNDLE_DMG="./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg"
-          FILES=(
-            "$BUNDLE_MACOS/${{ steps.metadata.outputs.FILE_NAME }}"
-            "$BUNDLE_DMG/${{ steps.metadata.outputs.DMG_NAME }}"
-          )
-          TAR="$BUNDLE_MACOS/${{ steps.metadata.outputs.TAR_NAME }}"
-          [ -f "$TAR" ] && FILES+=("$TAR")
-          gh release upload "v${VERSION}" "${FILES[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/template-tauri-build-macos.yml
+    with:
+      ref: refs/tags/v${{ needs.get-update-version.outputs.new_version }}
+      public_provider: github
+      new_version: ${{ needs.get-update-version.outputs.new_version }}
+      channel: stable
+    secrets: inherit
 
   build-windows:
-    runs-on: windows-latest
     needs: [get-update-version, validate-release-tag, create-draft-release]
-    env:
-      HAS_UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && secrets.TAURI_UPDATER_PUBKEY != '' }}
-      HAS_WINDOWS_SIGN_CERTS: ${{ secrets.AZURE_KEY_VAULT_URI != '' && secrets.AZURE_CLIENT_ID != '' && secrets.AZURE_TENANT_ID != '' && secrets.AZURE_CLIENT_SECRET != '' && secrets.AZURE_CERT_NAME != '' }}
-      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-    outputs:
-      WIN_SIG: ${{ steps.metadata.outputs.WIN_SIG }}
-      FILE_NAME: ${{ steps.metadata.outputs.FILE_NAME }}
-      PORTABLE_FILE_NAME: ${{ steps.metadata.outputs.PORTABLE_FILE_NAME }}
-    permissions:
-      contents: write
-    steps:
-      - name: Getting the repo
-        uses: actions/checkout@v4
-        with:
-          ref: refs/tags/v${{ needs.get-update-version.outputs.new_version }}
-
-      - name: Installing node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20.19'
-
-      - name: Enable long paths
-        run: git config --global core.longpaths true
-
-      - name: Install jq
-        uses: dcarbone/install-jq-action@v2.0.1
-
-      - name: Install ctoml
-        run: cargo install ctoml
-
-      - name: Install AzureSignTool
-        if: ${{ env.HAS_WINDOWS_SIGN_CERTS == 'true' }}
-        run: dotnet tool install --global --version 6.0.0 AzureSignTool
-
-      - name: Update app version from release tag
-        shell: bash
-        env:
-          VERSION: ${{ needs.get-update-version.outputs.new_version }}
-          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
-        run: |
-          if [ "$HAS_UPDATER_KEY" = "true" ] && [ -n "$TAURI_UPDATER_PUBKEY" ]; then
-            jq --arg version "$VERSION" --arg pubkey "$TAURI_UPDATER_PUBKEY" \
-              '.version = $version | .bundle.createUpdaterArtifacts = true | .plugins.updater.pubkey = $pubkey' \
-              ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
-          else
-            jq --arg version "$VERSION" \
-              '.version = $version | .bundle.createUpdaterArtifacts = false' \
-              ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
-          fi
-          mv /tmp/tauri.conf.json ./src-tauri/tauri.conf.json
-
-          jq --arg version "$VERSION" '.version = $version' web-app/package.json > /tmp/package.json
-          mv /tmp/package.json web-app/package.json
-
-          # Add Windows code-signing only when Azure signing secrets are present.
-          if [ "$HAS_WINDOWS_SIGN_CERTS" = "true" ]; then
-            jq '.bundle.windows.signCommand = "powershell -ExecutionPolicy Bypass -File ./src-tauri/sign.ps1 %1"' ./src-tauri/tauri.windows.conf.json > /tmp/tauri.windows.conf.json
-            mv /tmp/tauri.windows.conf.json ./src-tauri/tauri.windows.conf.json
-          else
-            echo "::warning::Azure code-signing secrets not configured — building unsigned Windows artifacts."
-          fi
-
-          # Update tauri plugin versions
-          jq --arg version "$VERSION" '.version = $version' ./src-tauri/plugins/tauri-plugin-hardware/package.json > /tmp/package.json
-          mv /tmp/package.json ./src-tauri/plugins/tauri-plugin-hardware/package.json
-
-          jq --arg version "$VERSION" '.version = $version' ./src-tauri/plugins/tauri-plugin-llamacpp/package.json > /tmp/package.json
-          mv /tmp/package.json ./src-tauri/plugins/tauri-plugin-llamacpp/package.json
-
-          ctoml ./src-tauri/plugins/tauri-plugin-hardware/Cargo.toml package.version "$VERSION"
-          ctoml ./src-tauri/plugins/tauri-plugin-llamacpp/Cargo.toml package.version "$VERSION"
-          ctoml ./src-tauri/Cargo.toml package.version "$VERSION"
-          ctoml ./src-tauri/Cargo.toml dependencies.tauri.features[] "devtools"
-
-      - name: Config Yarn
-        run: |
-          corepack enable
-          corepack prepare yarn@4.5.3 --activate
-          yarn --version
-          yarn config set -H enableImmutableInstalls false
-
-      - name: Build app
-        shell: bash
-        run: make build
-        env:
-          AZURE_KEY_VAULT_URI: ${{ secrets.AZURE_KEY_VAULT_URI }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_CERT_NAME: ${{ secrets.AZURE_CERT_NAME }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          TAURI_SIGNING_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
-          AX_STUDIO_SIGNING_KEY: ${{ secrets.AX_STUDIO_SIGNING_KEY }}
-
-      - name: Set output filename for windows
-        id: metadata
-        shell: bash
-        env:
-          VERSION: ${{ needs.get-update-version.outputs.new_version }}
-        run: |
-          NSIS_DIR="./src-tauri/target/release/bundle/nsis"
-          RAW_FILE_NAME="AX Studio_${VERSION}_x64-setup.exe"
-          FILE_NAME="AX.Studio_${VERSION}_x64-setup.exe"
-          if [ -f "${NSIS_DIR}/${RAW_FILE_NAME}" ]; then
-            mv "${NSIS_DIR}/${RAW_FILE_NAME}" "${NSIS_DIR}/${FILE_NAME}"
-          fi
-          if [ -f "${NSIS_DIR}/${RAW_FILE_NAME}.sig" ]; then
-            mv "${NSIS_DIR}/${RAW_FILE_NAME}.sig" "${NSIS_DIR}/${FILE_NAME}.sig"
-          fi
-          WIN_SIG=""
-          if [ -f "${NSIS_DIR}/${FILE_NAME}.sig" ]; then
-            WIN_SIG=$(cat "${NSIS_DIR}/${FILE_NAME}.sig")
-          fi
-          PORTABLE_FILE_NAME="AX.Studio_${VERSION}_x64-portable.exe"
-          # Copy portable exe to deterministic name
-          PORTABLE_SRC=$(find ./src-tauri/target/release -maxdepth 1 -type f \( -name "AX Studio*.exe" -o -name "ax-studio.exe" \) -print -quit || true)
-          if [ -n "$PORTABLE_SRC" ] && [ -f "$PORTABLE_SRC" ]; then
-            cp "$PORTABLE_SRC" "./src-tauri/target/release/${PORTABLE_FILE_NAME}"
-          else
-            echo "::notice::Portable Windows exe not found; continuing with NSIS installer only."
-          fi
-          {
-            echo "WIN_SIG=${WIN_SIG}"
-            echo "FILE_NAME=${FILE_NAME}"
-            echo "PORTABLE_FILE_NAME=${PORTABLE_FILE_NAME}"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Upload release artifacts to GitHub release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ needs.get-update-version.outputs.new_version }}
-        shell: bash
-        run: |
-          NSIS_DIR="./src-tauri/target/release/bundle/nsis"
-          FILES=("$NSIS_DIR/${{ steps.metadata.outputs.FILE_NAME }}")
-          PORTABLE="./src-tauri/target/release/${{ steps.metadata.outputs.PORTABLE_FILE_NAME }}"
-          [ -f "$PORTABLE" ] && FILES+=("$PORTABLE")
-          gh release upload "v${VERSION}" "${FILES[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/template-tauri-build-windows-x64.yml
+    with:
+      ref: refs/tags/v${{ needs.get-update-version.outputs.new_version }}
+      public_provider: github
+      new_version: ${{ needs.get-update-version.outputs.new_version }}
+      channel: stable
+    secrets: inherit
 
   build-windows-arm64:
-    runs-on: windows-latest
     needs: [get-update-version, validate-release-tag, create-draft-release]
-    env:
-      HAS_UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && secrets.TAURI_UPDATER_PUBKEY != '' }}
-      HAS_WINDOWS_SIGN_CERTS: ${{ secrets.AZURE_KEY_VAULT_URI != '' && secrets.AZURE_CLIENT_ID != '' && secrets.AZURE_TENANT_ID != '' && secrets.AZURE_CLIENT_SECRET != '' && secrets.AZURE_CERT_NAME != '' }}
-      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-    outputs:
-      WIN_ARM64_SIG: ${{ steps.metadata.outputs.WIN_ARM64_SIG }}
-      FILE_NAME: ${{ steps.metadata.outputs.FILE_NAME }}
-      PORTABLE_FILE_NAME: ${{ steps.metadata.outputs.PORTABLE_FILE_NAME }}
-    permissions:
-      contents: write
-    steps:
-      - name: Getting the repo
-        uses: actions/checkout@v4
-        with:
-          ref: refs/tags/v${{ needs.get-update-version.outputs.new_version }}
-
-      - name: Installing node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20.19'
-
-      - name: Enable long paths
-        run: git config --global core.longpaths true
-
-      - name: Install jq
-        uses: dcarbone/install-jq-action@v2.0.1
-
-      - name: Install ctoml
-        run: cargo install ctoml
-
-      - name: Add Windows ARM64 Rust target
-        run: rustup target add aarch64-pc-windows-msvc
-
-      - name: Install AzureSignTool
-        if: ${{ env.HAS_WINDOWS_SIGN_CERTS == 'true' }}
-        run: dotnet tool install --global --version 6.0.0 AzureSignTool
-
-      - name: Update app version from release tag
-        shell: bash
-        env:
-          VERSION: ${{ needs.get-update-version.outputs.new_version }}
-          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
-        run: |
-          if [ "$HAS_UPDATER_KEY" = "true" ] && [ -n "$TAURI_UPDATER_PUBKEY" ]; then
-            jq --arg version "$VERSION" --arg pubkey "$TAURI_UPDATER_PUBKEY" \
-              '.version = $version | .bundle.createUpdaterArtifacts = true | .plugins.updater.pubkey = $pubkey' \
-              ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
-          else
-            jq --arg version "$VERSION" \
-              '.version = $version | .bundle.createUpdaterArtifacts = false' \
-              ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
-          fi
-          mv /tmp/tauri.conf.json ./src-tauri/tauri.conf.json
-
-          jq --arg version "$VERSION" '.version = $version' web-app/package.json > /tmp/package.json
-          mv /tmp/package.json web-app/package.json
-
-          if [ "$HAS_WINDOWS_SIGN_CERTS" = "true" ]; then
-            jq '.bundle.windows.signCommand = "powershell -ExecutionPolicy Bypass -File ./src-tauri/sign.ps1 %1"' ./src-tauri/tauri.windows.conf.json > /tmp/tauri.windows.conf.json
-            mv /tmp/tauri.windows.conf.json ./src-tauri/tauri.windows.conf.json
-          else
-            echo "::warning::Azure code-signing secrets not configured — building unsigned Windows ARM64 artifacts."
-          fi
-
-          jq --arg version "$VERSION" '.version = $version' ./src-tauri/plugins/tauri-plugin-hardware/package.json > /tmp/package.json
-          mv /tmp/package.json ./src-tauri/plugins/tauri-plugin-hardware/package.json
-
-          jq --arg version "$VERSION" '.version = $version' ./src-tauri/plugins/tauri-plugin-llamacpp/package.json > /tmp/package.json
-          mv /tmp/package.json ./src-tauri/plugins/tauri-plugin-llamacpp/package.json
-
-          ctoml ./src-tauri/plugins/tauri-plugin-hardware/Cargo.toml package.version "$VERSION"
-          ctoml ./src-tauri/plugins/tauri-plugin-llamacpp/Cargo.toml package.version "$VERSION"
-          ctoml ./src-tauri/Cargo.toml package.version "$VERSION"
-          ctoml ./src-tauri/Cargo.toml dependencies.tauri.features[] "devtools"
-
-      - name: Config Yarn
-        run: |
-          corepack enable
-          corepack prepare yarn@4.5.3 --activate
-          yarn --version
-          yarn config set -H enableImmutableInstalls false
-
-      - name: Build app
-        shell: bash
-        run: make build
-        env:
-          AX_STUDIO_WINDOWS_TARGET: aarch64-pc-windows-msvc
-          TAURI_BUILD_TARGET: aarch64-pc-windows-msvc
-          AZURE_KEY_VAULT_URI: ${{ secrets.AZURE_KEY_VAULT_URI }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_CERT_NAME: ${{ secrets.AZURE_CERT_NAME }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          TAURI_SIGNING_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
-          AX_STUDIO_SIGNING_KEY: ${{ secrets.AX_STUDIO_SIGNING_KEY }}
-
-      - name: Set output filename for windows arm64
-        id: metadata
-        shell: bash
-        env:
-          VERSION: ${{ needs.get-update-version.outputs.new_version }}
-        run: |
-          TARGET_DIR="./src-tauri/target/aarch64-pc-windows-msvc/release"
-          NSIS_DIR="${TARGET_DIR}/bundle/nsis"
-          RAW_FILE_NAME="AX Studio_${VERSION}_arm64-setup.exe"
-          FILE_NAME="AX.Studio_${VERSION}_arm64-setup.exe"
-          if [ -f "${NSIS_DIR}/${RAW_FILE_NAME}" ]; then
-            mv "${NSIS_DIR}/${RAW_FILE_NAME}" "${NSIS_DIR}/${FILE_NAME}"
-          fi
-          if [ -f "${NSIS_DIR}/${RAW_FILE_NAME}.sig" ]; then
-            mv "${NSIS_DIR}/${RAW_FILE_NAME}.sig" "${NSIS_DIR}/${FILE_NAME}.sig"
-          fi
-          WIN_ARM64_SIG=""
-          if [ -f "${NSIS_DIR}/${FILE_NAME}.sig" ]; then
-            WIN_ARM64_SIG=$(cat "${NSIS_DIR}/${FILE_NAME}.sig")
-          fi
-          PORTABLE_FILE_NAME="AX.Studio_${VERSION}_arm64-portable.exe"
-          PORTABLE_SRC=$(find "$TARGET_DIR" -maxdepth 1 -type f \( -name "AX Studio*.exe" -o -name "ax-studio.exe" \) -print -quit || true)
-          if [ -n "$PORTABLE_SRC" ] && [ -f "$PORTABLE_SRC" ]; then
-            cp "$PORTABLE_SRC" "${TARGET_DIR}/${PORTABLE_FILE_NAME}"
-          else
-            echo "::notice::Portable Windows ARM64 exe not found; continuing with NSIS installer only."
-          fi
-          {
-            echo "WIN_ARM64_SIG=${WIN_ARM64_SIG}"
-            echo "FILE_NAME=${FILE_NAME}"
-            echo "PORTABLE_FILE_NAME=${PORTABLE_FILE_NAME}"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Upload release artifacts to GitHub release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ needs.get-update-version.outputs.new_version }}
-        shell: bash
-        run: |
-          TARGET_DIR="./src-tauri/target/aarch64-pc-windows-msvc/release"
-          NSIS_DIR="${TARGET_DIR}/bundle/nsis"
-          FILES=("$NSIS_DIR/${{ steps.metadata.outputs.FILE_NAME }}")
-          PORTABLE="${TARGET_DIR}/${{ steps.metadata.outputs.PORTABLE_FILE_NAME }}"
-          [ -f "$PORTABLE" ] && FILES+=("$PORTABLE")
-          gh release upload "v${VERSION}" "${FILES[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/template-tauri-build-windows-arm64.yml
+    with:
+      ref: refs/tags/v${{ needs.get-update-version.outputs.new_version }}
+      public_provider: github
+      new_version: ${{ needs.get-update-version.outputs.new_version }}
+      channel: stable
+    secrets: inherit
 
   sync-temp-to-latest:
     needs: [create-draft-release, get-update-version, build-macos, build-windows, build-windows-arm64]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
@@ -879,6 +209,7 @@ jobs:
   sign-release-assets:
     needs: [get-update-version, sync-temp-to-latest, build-windows, build-windows-arm64]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       HAS_MINISIGN_KEY: ${{ secrets.AX_STUDIO_MINISIGN_SECRET_KEY_B64 != '' && secrets.AX_STUDIO_MINISIGN_PUBLIC_KEY != '' }}
     permissions:
@@ -945,6 +276,7 @@ jobs:
   verify-release-assets:
     needs: [get-update-version, sign-release-assets]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       # The release is still a draft at this point, and draft releases are
       # only visible to tokens with write access — a read-only GITHUB_TOKEN
@@ -973,6 +305,7 @@ jobs:
   publish-release:
     needs: [create-draft-release, get-update-version, verify-release-assets]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
@@ -985,6 +318,7 @@ jobs:
   update-homebrew-tap:
     needs: [get-update-version, publish-release]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read # pushes via HOMEBREW_TAP_TOKEN, never GITHUB_TOKEN
     env:
