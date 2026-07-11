@@ -124,9 +124,15 @@ describe('NavMain', () => {
 
   it('shows keyboard shortcut hints', () => {
     render(<NavMain />)
-    // New chat shortcut
-    expect(screen.getByText('⌘N')).toBeInTheDocument()
-    // Search shortcut
-    expect(screen.getByText('⌘K')).toBeInTheDocument()
+
+    const modifier = navigator.userAgent.toUpperCase().includes('MAC')
+      ? '⌘'
+      : 'Ctrl'
+    expect(
+      screen.getByText((_, element) => element?.textContent === `${modifier}N`)
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText((_, element) => element?.textContent === `${modifier}K`)
+    ).toBeInTheDocument()
   })
 })
