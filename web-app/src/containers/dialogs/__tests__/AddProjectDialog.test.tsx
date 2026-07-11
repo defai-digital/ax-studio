@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+import { toast } from 'sonner'
 import { AddProjectDialog } from '../AddProjectDialog'
 
 vi.mock('@/i18n/react-i18next-compat', () => ({
@@ -201,7 +202,7 @@ describe('AddProjectDialog', () => {
     )
   })
 
-  it('does not preview or save scriptable logo data URIs', () => {
+  it('rejects scriptable logo data URIs instead of silently dropping them', () => {
     render(
       <AddProjectDialog
         open={true}
@@ -229,12 +230,8 @@ describe('AddProjectDialog', () => {
 
     fireEvent.click(screen.getByText('projects.addProjectDialog.createButton'))
 
-    expect(mockOnSave).toHaveBeenCalledWith(
-      'New Project',
-      undefined,
-      undefined,
-      null
-    )
+    expect(mockOnSave).not.toHaveBeenCalled()
+    expect(toast.error).toHaveBeenCalledWith('Invalid image URL.')
   })
 
   it('does not call onSave with empty name', () => {
