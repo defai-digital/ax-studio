@@ -94,6 +94,8 @@ export function EditMessageDialog({
       role="button"
       tabIndex={0}
       disabled={!selectedModel}
+      aria-label={t('common:editMessage')}
+      title={t('common:editMessage')}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
@@ -126,10 +128,13 @@ export function EditMessageDialog({
                   {file.name}
                 </span>
                 <button
+                  type="button"
                   onClick={() =>
                     setKeptFiles((prev) => prev.filter((f) => f.id !== file.id))
                   }
-                  className="p-0.5 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                  aria-label={t('common:delete')}
+                  title={t('common:delete')}
+                  className="p-0.5 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <X className="size-3" />
                 </button>
@@ -152,10 +157,13 @@ export function EditMessageDialog({
                   alt={`Attached image ${index + 1}`}
                 />
                 <button
+                  type="button"
                   onClick={() =>
                     setKeptImages((prev) => prev.filter((_, i) => i !== index))
                   }
-                  className="absolute -top-1 -right-1 p-0.5 rounded-full bg-destructive text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label={t('common:delete')}
+                  title={t('common:delete')}
+                  className="absolute -top-1 -right-1 p-0.5 rounded-full bg-destructive text-white opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <X className="size-3" />
                 </button>

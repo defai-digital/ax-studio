@@ -9,6 +9,8 @@ export const CopyButton = ({ text }: { text: string }) => {
     <Button
       variant="ghost"
       size="icon-xs"
+      aria-label={isCopied ? 'Copied' : 'Copy'}
+      title={isCopied ? 'Copied' : 'Copy'}
       onClick={() => void copyToClipboard(text)}
     >
       {isCopied ? (

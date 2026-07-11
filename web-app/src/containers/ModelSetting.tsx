@@ -125,7 +125,16 @@ export function ModelSetting({
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon-xs">
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={t('common:modelSettings.title', {
+            modelId: getModelDisplayName(model),
+          })}
+          title={t('common:modelSettings.title', {
+            modelId: getModelDisplayName(model),
+          })}
+        >
           <Settings size={18} className="text-muted-foreground" />
         </Button>
       </SheetTrigger>

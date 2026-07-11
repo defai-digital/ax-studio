@@ -119,6 +119,7 @@ export function MainThreadPane({
                 variant={showThreadPromptEditor ? 'secondary' : 'ghost'}
                 size="icon-xs"
                 title="Thread Prompt"
+                aria-label="Thread Prompt"
                 onClick={() => setShowThreadPromptEditor((v) => !v)}
               >
                 <MessageSquareText className="size-3.5" />
@@ -127,9 +128,13 @@ export function MainThreadPane({
                 variant="ghost"
                 size="icon-xs"
                 className="shrink-0"
+                aria-label="Close split view"
+                title="Close split view"
                 onClick={onSplitClose}
               >
-                <span className="size-4">✕</span>
+                <span className="size-4" aria-hidden="true">
+                  ✕
+                </span>
               </Button>
             </div>
           </div>

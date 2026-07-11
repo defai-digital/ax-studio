@@ -190,6 +190,8 @@ function ModelProviders() {
                             variant="ghost"
                             size="icon"
                             className="rounded-lg size-8 hover:bg-muted"
+                            aria-label={`Configure ${getProviderTitle(provider.provider)}`}
+                            title={`Configure ${getProviderTitle(provider.provider)}`}
                             onClick={() => {
                               navigate({
                                 to: route.settings.providers,

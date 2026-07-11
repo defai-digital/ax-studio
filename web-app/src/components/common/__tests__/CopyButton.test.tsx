@@ -40,6 +40,11 @@ describe('CopyButton', () => {
     expect(screen.queryByTestId('icon-copy-check')).not.toBeInTheDocument()
   })
 
+  it('exposes an accessible name on the icon-only control', () => {
+    render(<CopyButton text="hello" />)
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument()
+  })
+
   it('copies text to clipboard and shows check icon', async () => {
     render(<CopyButton text="hello world" />)
     await act(async () => {

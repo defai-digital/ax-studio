@@ -33,9 +33,11 @@ export function DeleteMCPServerConfirm({
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
+          {/* Safer default: focus Cancel so Enter does not confirm deletion. */}
           <Button
             size="sm"
             variant="outline"
+            autoFocus
             onClick={() => onOpenChange(false)}
           >
             {t('common:cancel')}
@@ -43,7 +45,6 @@ export function DeleteMCPServerConfirm({
           <Button
             size="sm"
             variant="destructive"
-            autoFocus
             onClick={() => {
               onConfirm()
               onOpenChange(false)

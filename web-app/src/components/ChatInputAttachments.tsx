@@ -105,12 +105,15 @@ export function ChatInputAttachments({ attachments, onRemove }: Props) {
                     </Tooltip>
 
                     {!att.processing && (
-                      <div
-                        className="absolute -top-1 -right-2.5 bg-destructive size-5 flex rounded-full items-center justify-center cursor-pointer hover:scale-110 transition-transform"
+                      <button
+                        type="button"
+                        className="absolute -top-1 -right-2.5 bg-destructive size-5 flex rounded-full items-center justify-center cursor-pointer hover:scale-110 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                        aria-label={`Remove ${att.name}`}
+                        title={`Remove ${att.name}`}
                         onClick={() => onRemove(idx)}
                       >
                         <X className="text-neutral-200" size={14} />
-                      </div>
+                      </button>
                     )}
                   </motion.div>
                 )

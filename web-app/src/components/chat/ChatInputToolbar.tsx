@@ -163,6 +163,8 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                   variant="secondary"
                   size="icon-sm"
                   className="rounded-full mr-2 mb-1"
+                  aria-label={t('common:attach')}
+                  title={t('common:attach')}
                 >
                   <PlusIcon size={18} className="text-muted-foreground" />
                 </Button>
@@ -302,6 +304,8 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                     <Button
                       variant="ghost"
                       size="icon-xs"
+                      aria-label={t('tools')}
+                      title={t('tools')}
                       onClick={(e) => {
                         setDropdownToolsAvailable(false)
                         e.stopPropagation()
@@ -341,6 +345,17 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                 <Button
                   variant="ghost"
                   size="icon-xs"
+                  aria-label={
+                    isLocalKnowledgeEnabled
+                      ? t('common:localKnowledgeActive')
+                      : t('common:localKnowledge')
+                  }
+                  aria-pressed={isLocalKnowledgeEnabled}
+                  title={
+                    isLocalKnowledgeEnabled
+                      ? t('common:localKnowledgeActive')
+                      : t('common:localKnowledge')
+                  }
                   onClick={toggleLocalKnowledge}
                 >
                   <Database
@@ -355,7 +370,9 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
               </TooltipTrigger>
               <TooltipContent>
                 <p>
-                  Local Knowledge{isLocalKnowledgeEnabled ? ' (active)' : ''}
+                  {isLocalKnowledgeEnabled
+                    ? t('common:localKnowledgeActive')
+                    : t('common:localKnowledge')}
                 </p>
               </TooltipContent>
             </Tooltip>

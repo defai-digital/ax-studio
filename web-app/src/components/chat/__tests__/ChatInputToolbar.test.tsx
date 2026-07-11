@@ -96,6 +96,8 @@ const createProps = (
   stopStreaming: vi.fn(),
   handleSendMessage: vi.fn(),
   onAttachImages: undefined,
+  isLocalKnowledgeEnabled: false,
+  toggleLocalKnowledge: vi.fn(),
   ...overrides,
 })
 
@@ -267,5 +269,26 @@ describe('ChatInputToolbar — Phase 3 Manual Test Protocol', () => {
   it('renders attach image action when handler is provided', () => {
     render(<ChatInputToolbar {...createProps({ onAttachImages: vi.fn() })} />)
     expect(screen.getByText('Attach Image')).toBeInTheDocument()
+  })
+
+  it('exposes accessible names on primary icon controls', () => {
+    render(
+      <ChatInputToolbar
+        {...createProps({
+          onAttachImages: vi.fn(),
+          isLocalKnowledgeEnabled: true,
+        })}
+      />
+    )
+    expect(screen.getByLabelText('common:attach')).toBeInTheDocument()
+    expect(screen.getByLabelText('common:sendMessage')).toBeInTheDocument()
+    expect(
+      screen.getByLabelText('common:localKnowledgeActive')
+    ).toBeInTheDocument()
+  })
+
+  it('stop button has accessible name while streaming', () => {
+    render(<ChatInputToolbar {...createProps({ isStreaming: true })} />)
+    expect(screen.getByLabelText('common:stop')).toBeInTheDocument()
   })
 })
