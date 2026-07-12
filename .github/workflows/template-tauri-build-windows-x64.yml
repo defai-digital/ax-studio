@@ -81,7 +81,7 @@ jobs:
       contents: write
     steps:
       - name: Getting the repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
 
@@ -92,7 +92,7 @@ jobs:
           cp .github/scripts/icon-${{ inputs.channel }}.png src-tauri/icons/icon.png
 
       - name: Installing node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20.19'
 
@@ -163,14 +163,14 @@ jobs:
           AX_STUDIO_SIGNING_KEY: ${{ secrets.AX_STUDIO_SIGNING_KEY }}
 
       - name: Upload NSIS Installer Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ax-studio-windows-exe-${{ inputs.new_version }}
           retention-days: 14
           path: |
             ./src-tauri/target/release/bundle/nsis/*.exe
       - name: Upload MSI Installer Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ax-studio-windows-msi-${{ inputs.new_version }}
           retention-days: 14
@@ -178,7 +178,7 @@ jobs:
             ./src-tauri/target/release/bundle/msi/*.msi
 
       - name: Upload Portable Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ax-studio-windows-portable-${{ inputs.new_version }}
           retention-days: 14

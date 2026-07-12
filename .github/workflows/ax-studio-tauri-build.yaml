@@ -26,10 +26,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Getting the repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Installing node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20.19'
 
@@ -73,7 +73,7 @@ jobs:
     needs: get-update-version
     steps:
       - name: Getting the repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -157,7 +157,7 @@ jobs:
       contents: write
     steps:
       - name: Getting the repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: create latest.json file
         run: |
@@ -222,7 +222,7 @@ jobs:
       contents: write
     steps:
       - name: Getting the repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Validate Minisign secrets
         if: ${{ env.HAS_MINISIGN_KEY != 'true' }}
@@ -292,7 +292,7 @@ jobs:
       contents: write
     steps:
       - name: Getting the repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Verify GitHub release assets
         env:
@@ -338,7 +338,7 @@ jobs:
 
       - name: Getting the repo
         if: ${{ env.HAS_TAP_TOKEN == 'true' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download release DMG and compute SHA256
         if: ${{ env.HAS_TAP_TOKEN == 'true' }}
