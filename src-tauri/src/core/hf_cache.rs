@@ -22,6 +22,7 @@ pub fn cache_root() -> Option<PathBuf> {
     )
 }
 
+#[cfg(target_os = "macos")]
 pub fn repo_cache_dir(model_id: &str) -> Result<PathBuf, String> {
     validate_model_id(model_id)?;
     let root = cache_root()
@@ -29,6 +30,7 @@ pub fn repo_cache_dir(model_id: &str) -> Result<PathBuf, String> {
     Ok(root.join(format!("models--{}", model_id.replace('/', "--"))))
 }
 
+#[cfg(target_os = "macos")]
 pub fn snapshot_dir(model_id: &str, revision: &str) -> Result<PathBuf, String> {
     validate_revision(revision)?;
     Ok(repo_cache_dir(model_id)?.join("snapshots").join(revision))
@@ -47,6 +49,7 @@ pub fn is_within_root(path: &Path, root: &Path) -> bool {
     normalized_path == normalized_root || normalized_path.starts_with(&normalized_root)
 }
 
+#[cfg(target_os = "macos")]
 pub fn validate_model_id(model_id: &str) -> Result<(), String> {
     if model_id.is_empty()
         || model_id.contains("..")
@@ -63,6 +66,7 @@ pub fn validate_model_id(model_id: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(target_os = "macos")]
 pub fn validate_revision(revision: &str) -> Result<(), String> {
     if revision.is_empty()
         || revision.contains("..")
