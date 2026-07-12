@@ -280,20 +280,18 @@ jobs:
         env:
           VERSION: ${{ inputs.new_version }}
         run: |
-          BUNDLE_MACOS="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos"
-          BUNDLE_DMG="./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg"
+          set -euo pipefail
+          BUNDLE_MACOS="$GITHUB_WORKSPACE/src-tauri/target/aarch64-apple-darwin/release/bundle/macos"
+          BUNDLE_DMG="$GITHUB_WORKSPACE/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg"
           if [ "${{ inputs.channel }}" = "stable" ]; then
             cd "$BUNDLE_MACOS"
             zip -r "ax-studio-mac-arm64-${VERSION}.zip" "AX Studio.app"
-            if [ -f "AX Studio.app.tar.gz" ]; then
-              mv "AX Studio.app.tar.gz" "AX.Studio.app.tar.gz"
-            fi
-            if [ -f "AX Studio.app.tar.gz.sig" ]; then
-              mv "AX Studio.app.tar.gz.sig" "AX.Studio.app.tar.gz.sig"
-            fi
-            if [ -f "${BUNDLE_DMG}/AX Studio_${VERSION}_aarch64.dmg" ]; then
-              mv "${BUNDLE_DMG}/AX Studio_${VERSION}_aarch64.dmg" "${BUNDLE_DMG}/AX.Studio_${VERSION}_aarch64.dmg"
-            fi
+            test -f "AX Studio.app.tar.gz"
+            test -f "AX Studio.app.tar.gz.sig"
+            test -f "${BUNDLE_DMG}/AX Studio_${VERSION}_aarch64.dmg"
+            mv "AX Studio.app.tar.gz" "AX.Studio.app.tar.gz"
+            mv "AX Studio.app.tar.gz.sig" "AX.Studio.app.tar.gz.sig"
+            mv "${BUNDLE_DMG}/AX Studio_${VERSION}_aarch64.dmg" "${BUNDLE_DMG}/AX.Studio_${VERSION}_aarch64.dmg"
             SIG_FILE="AX.Studio.app.tar.gz.sig"
             MAC_UNIVERSAL_SIG=""
             if [ -f "$SIG_FILE" ]; then
@@ -342,6 +340,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ inputs.new_version }}
         run: |
+          set -euo pipefail
           BUNDLE_MACOS="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos"
           BUNDLE_DMG="./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg"
           FILES=(
@@ -350,4 +349,7 @@ jobs:
           )
           TAR="$BUNDLE_MACOS/${{ steps.metadata.outputs.TAR_NAME }}"
           [ -f "$TAR" ] && FILES+=("$TAR")
+          for file in "${FILES[@]}"; do
+            test -f "$file"
+          done
           gh release upload "v${VERSION}" "${FILES[@]}" --clobber --repo "$GITHUB_REPOSITORY"
