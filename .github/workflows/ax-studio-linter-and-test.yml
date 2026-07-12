@@ -11,6 +11,7 @@ on:
       - 'package.json'
       - 'node_modules/**'
       - 'yarn.lock'
+      - 'scripts/release/**'
       - 'scripts/testing/**'
       - 'core/**'
       - 'extensions/**'
@@ -30,6 +31,7 @@ on:
       - 'package.json'
       - 'node_modules/**'
       - 'yarn.lock'
+      - 'scripts/release/**'
       - 'scripts/testing/**'
       - 'Makefile'
       - 'extensions/**'
@@ -62,6 +64,14 @@ jobs:
       - name: Lint GitHub Actions workflows
         run: |
           go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+
+      - name: Set up Node.js for release config validation
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.19'
+
+      - name: Validate release config
+        run: node scripts/release/validate-release-config.mjs
 
   secret-scan:
     runs-on: ubuntu-latest

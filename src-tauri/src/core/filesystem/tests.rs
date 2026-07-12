@@ -37,6 +37,10 @@ fn test_app_state() -> AppState {
     }
 }
 
+fn approved_read_path(path: &Path) -> PathBuf {
+    ax_studio_utils::normalize_path(&path.canonicalize().unwrap())
+}
+
 #[test]
 fn test_rm() {
     let app = mock_app();
@@ -169,7 +173,7 @@ async fn test_read_file_base64_requires_app_data_or_picker_approval() {
         .approved_read_files
         .lock()
         .await
-        .insert(outside_file.canonicalize().unwrap());
+        .insert(approved_read_path(&outside_file));
     let encoded = read_file_base64(
         app.handle().clone(),
         state,
@@ -399,7 +403,7 @@ async fn test_copy_file_copies_picker_approved_source_into_app_data() {
         .approved_read_files
         .lock()
         .await
-        .insert(source_path.canonicalize().unwrap());
+        .insert(approved_read_path(&source_path));
 
     copy_file(
         app.handle().clone(),
@@ -440,7 +444,7 @@ async fn test_copy_file_accepts_file_url_destination_in_app_data() {
         .approved_read_files
         .lock()
         .await
-        .insert(source_path.canonicalize().unwrap());
+        .insert(approved_read_path(&source_path));
 
     copy_file(
         app.handle().clone(),

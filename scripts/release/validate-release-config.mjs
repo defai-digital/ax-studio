@@ -12,6 +12,10 @@ const releaseWorkflowPaths = [
 const customNsisTemplatePath = 'src-tauri/tauri.bundle.windows.nsis.template'
 const expectedWindowsSignCommand = 'powershell -ExecutionPolicy Bypass -File ./sign.ps1 %1'
 const windowsLongPathsCommand = 'git config --global core.longpaths true'
+const requiredUpdaterPermissions = [
+  'updater:allow-check',
+  'updater:allow-download-and-install',
+]
 
 function readJson(relativePath) {
   return JSON.parse(fs.readFileSync(path.join(repoRoot, relativePath), 'utf8'))
@@ -53,6 +57,38 @@ if (tauriConfig.bundle?.createUpdaterArtifacts !== false) {
 const endpoints = tauriConfig.plugins?.updater?.endpoints
 if (!Array.isArray(endpoints) || endpoints.length === 0) {
   fail('src-tauri/tauri.conf.json must configure updater endpoints')
+}
+
+const activeCapabilityIds = tauriConfig.app?.security?.capabilities
+if (!Array.isArray(activeCapabilityIds) || activeCapabilityIds.length === 0) {
+  fail('src-tauri/tauri.conf.json must activate at least one capability')
+} else {
+  const mainWindowPermissions = new Set()
+  for (const capabilityId of activeCapabilityIds) {
+    if (typeof capabilityId !== 'string') continue
+
+    const capabilityPath = `src-tauri/capabilities/${capabilityId}.json`
+    if (!fs.existsSync(path.join(repoRoot, capabilityPath))) {
+      fail(`active capability ${capabilityId} is missing ${capabilityPath}`)
+      continue
+    }
+
+    const capability = readJson(capabilityPath)
+    const windows = capability.windows ?? []
+    if (!windows.includes('main') && !windows.includes('*')) continue
+
+    for (const permission of capability.permissions ?? []) {
+      const identifier =
+        typeof permission === 'string' ? permission : permission?.identifier
+      if (identifier) mainWindowPermissions.add(identifier)
+    }
+  }
+
+  for (const permission of requiredUpdaterPermissions) {
+    if (!mainWindowPermissions.has(permission)) {
+      fail(`active main-window capabilities must grant ${permission}`)
+    }
+  }
 }
 
 const platforms = Object.keys(latestTemplate.platforms ?? {})
