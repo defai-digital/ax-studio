@@ -176,7 +176,7 @@ if (windowsSignCommand) {
   if (!winConfig.bundle) winConfig.bundle = {}
   if (!winConfig.bundle.windows) winConfig.bundle.windows = {}
 
-  winConfig.bundle.windows.signCommand = 'powershell -ExecutionPolicy Bypass -File ./src-tauri/sign.ps1 %1'
+  winConfig.bundle.windows.signCommand = 'powershell -ExecutionPolicy Bypass -File ./sign.ps1 %1'
 
   writeJson(winConfigPath, winConfig)
   log(`${winConfigPath} → signCommand added`)

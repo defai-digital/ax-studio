@@ -10,6 +10,7 @@ const releaseWorkflowPaths = [
   '.github/workflows/template-tauri-build-windows-arm64.yml',
 ]
 const customNsisTemplatePath = 'src-tauri/tauri.bundle.windows.nsis.template'
+const expectedWindowsSignCommand = 'powershell -ExecutionPolicy Bypass -File ./sign.ps1 %1'
 
 function readJson(relativePath) {
   return JSON.parse(fs.readFileSync(path.join(repoRoot, relativePath), 'utf8'))
@@ -70,6 +71,16 @@ if (!fs.existsSync(path.join(repoRoot, customNsisTemplatePath))) {
       fail(`${workflowPath} references missing file ${customNsisTemplatePath}`)
     }
   }
+}
+
+const setVersionScript = fs.readFileSync(path.join(repoRoot, 'scripts/release/set-version.mjs'), 'utf8')
+const windowsSignCommand = setVersionScript.match(
+  /winConfig\.bundle\.windows\.signCommand\s*=\s*'([^']+)'/,
+)?.[1]
+if (windowsSignCommand !== expectedWindowsSignCommand) {
+  fail(
+    `scripts/release/set-version.mjs Windows sign command must be ${expectedWindowsSignCommand}, got ${windowsSignCommand ?? '(missing)'}`,
+  )
 }
 
 if (process.exitCode) {
