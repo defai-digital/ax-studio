@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 /**
  * Centralized version-bumping script for AX Studio.
  *
