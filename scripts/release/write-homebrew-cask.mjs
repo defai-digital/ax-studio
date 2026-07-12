@@ -47,7 +47,7 @@ const cask = `cask "ax-studio" do
   homepage "https://github.com/defai-digital/ax-studio"
 
   depends_on arch: :arm64
-  depends_on macos: ">= :sequoia"
+  depends_on macos: :sequoia
 
   caveats do
     <<~EOS
