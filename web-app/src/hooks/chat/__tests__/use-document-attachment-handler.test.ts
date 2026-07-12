@@ -628,4 +628,56 @@ describe('useDocumentAttachmentHandler', () => {
       useChatAttachments.getState().getAttachments(ATTACHMENTS_KEY)
     ).toHaveLength(0)
   })
+
+  it('does not call akidb_delete_chunks when fabric_search returns isError with parseable results', async () => {
+    // isError failure that still carries JSON results — must NOT delete those chunks
+    mockMcpCallTool.mockResolvedValueOnce({
+      error: '',
+      isError: true,
+      content: [
+        {
+          text: JSON.stringify({
+            results: [{ chunkId: 'should-not-delete-1' }, { chunkId: 'should-not-delete-2' }],
+          }),
+        },
+      ],
+    })
+
+    act(() => {
+      useFileRegistry.getState().addFile('thread_thread-1', {
+        file_id: 'iserror-file',
+        file_name: 'iserror.pdf',
+        file_path: '/tmp/iserror.pdf',
+        chunk_count: 2,
+        collection_id: 'thread_thread-1',
+        created_at: '2026-01-01T00:00:00Z',
+      })
+      useChatAttachments.getState().setAttachments(ATTACHMENTS_KEY, [
+        { name: 'iserror.pdf', type: 'document', id: 'iserror-file' },
+      ])
+    })
+
+    const { result } = renderHook(() =>
+      useDocumentAttachmentHandler({
+        attachmentsKey: ATTACHMENTS_KEY,
+        effectiveThreadId: 'thread-1',
+      })
+    )
+
+    await act(async () => {
+      await result.current.handleRemoveAttachment(0)
+    })
+
+    expect(mockMcpCallTool).toHaveBeenCalledWith(
+      expect.objectContaining({ toolName: 'fabric_search' })
+    )
+    expect(mockMcpCallTool).not.toHaveBeenCalledWith(
+      expect.objectContaining({ toolName: 'akidb_delete_chunks' })
+    )
+    // Local registry/attachment cleanup still proceeds
+    expect(useFileRegistry.getState().hasFiles('thread_thread-1')).toBe(false)
+    expect(
+      useChatAttachments.getState().getAttachments(ATTACHMENTS_KEY)
+    ).toHaveLength(0)
+  })
 })

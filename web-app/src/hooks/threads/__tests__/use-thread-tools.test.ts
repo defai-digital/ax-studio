@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import type { UIMessage } from '@ai-sdk/react'
-import { useThreadTools } from '../use-thread-tools'
+import {
+  extractRelevantSourceResult,
+  useThreadTools,
+} from '../use-thread-tools'
 
 // Mock ai SDK
 vi.mock('ai', () => ({
@@ -234,6 +237,107 @@ describe('useThreadTools', () => {
       )
 
       expect(result.current.toolCallAbortController.current).toBeNull()
+    })
+  })
+
+  describe('extractRelevantSourceResult', () => {
+    it('returns null when fabric_extract sets isError even if content looks like extract JSON', async () => {
+      const callTool = vi.fn().mockResolvedValue({
+        error: '',
+        isError: true,
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ text: 'POISONED_EXTRACT_SHOULD_NOT_APPEAR' }),
+          },
+        ],
+      })
+      const serviceHub = {
+        mcp: () => ({ callTool }),
+      } as never
+
+      const searchResult = {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              results: [
+                {
+                  source:
+                    '/Users/devop/Documents/akidb-testing/coding-interview-university.md',
+                  content:
+                    'After going through this study plan, I got hired as a Software Development Engineer at Amazon.',
+                  score: 1,
+                },
+              ],
+            }),
+          },
+        ],
+      }
+
+      const extracted = await extractRelevantSourceResult({
+        serviceHub,
+        result: searchResult,
+        query:
+          'What real-world hiring outcome did the author of coding interview university achieve?',
+      })
+
+      expect(callTool).toHaveBeenCalledWith(
+        expect.objectContaining({
+          toolName: 'fabric_extract',
+          arguments: {
+            file_path:
+              '/Users/devop/Documents/akidb-testing/coding-interview-university.md',
+          },
+        })
+      )
+      // Without getMcpToolFailureMessage, isError content would become extract output
+      expect(extracted).toBeNull()
+    })
+
+    it('returns extract content when fabric_extract succeeds', async () => {
+      const callTool = vi.fn().mockResolvedValue({
+        error: '',
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              text: 'I got hired as a Software Development Engineer at Amazon.',
+            }),
+          },
+        ],
+      })
+      const serviceHub = {
+        mcp: () => ({ callTool }),
+      } as never
+
+      const extracted = await extractRelevantSourceResult({
+        serviceHub,
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                results: [
+                  {
+                    source:
+                      '/Users/devop/Documents/akidb-testing/coding-interview-university.md',
+                    content: 'hired at Amazon',
+                    score: 1,
+                  },
+                ],
+              }),
+            },
+          ],
+        },
+        query:
+          'What real-world hiring outcome did the author of coding interview university achieve?',
+      })
+
+      expect(extracted?.content?.[0]?.text).toContain(
+        'Software Development Engineer at Amazon'
+      )
+      expect(extracted?.content?.[0]?.text).toContain('layer')
     })
   })
 })

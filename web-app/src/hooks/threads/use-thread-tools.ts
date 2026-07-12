@@ -99,7 +99,8 @@ function shouldExtractSourceForQuery(query: string): boolean {
   return /\b(author|hiring|hired|outcome|achieve|achieved|company|role|job|real-world|specific|exact)\b/i.test(query)
 }
 
-async function extractRelevantSourceResult({
+/** Exported for unit tests — production path is fabric_search post-processing. */
+export async function extractRelevantSourceResult({
   serviceHub,
   result,
   query,
