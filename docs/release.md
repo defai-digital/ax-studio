@@ -40,13 +40,24 @@ build:
 | `AZURE_CLIENT_SECRET` | Azure service principal secret. |
 | `AZURE_CERT_NAME` | Azure Key Vault certificate name. |
 
-Optional detached minisign signatures require both of these secrets:
+Stable releases require detached Minisign signatures. Configure all three
+secrets before publishing:
 
 | Secret | Purpose |
 | --- | --- |
 | `AX_STUDIO_MINISIGN_SECRET_KEY_B64` | Base64-encoded minisign secret key. |
 | `AX_STUDIO_MINISIGN_PUBLIC_KEY` | Minisign public key for verification. |
-| `AX_STUDIO_MINISIGN_PASSWORD` | Minisign key password, if the key is password protected. |
+| `AX_STUDIO_MINISIGN_PASSWORD` | Password for the encrypted Minisign secret key. |
+
+The matching public verification key is committed at
+[`docs/ax-studio.minisign.pub`](ax-studio.minisign.pub). Verify a downloaded
+asset with:
+
+```bash
+minisign -Vm AX.Studio_2.0.0_aarch64.dmg \
+  -p docs/ax-studio.minisign.pub \
+  -x AX.Studio_2.0.0_aarch64.dmg.minisig
+```
 
 The Homebrew tap update accepts either `HOMEBREW_TAP_TOKEN` or the legacy
 `TAP_TOKEN`. Prefer `HOMEBREW_TAP_TOKEN` for new configuration. The token needs

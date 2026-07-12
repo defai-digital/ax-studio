@@ -18,7 +18,7 @@
     "build:publish": "rimraf *.tgz --glob || true && yarn build && npm pack && mkdir -p ../../pre-install && cp *.tgz ../../pre-install/"
   },
   "devDependencies": {
-    "react": "19.0.0",
+    "react": "19.0.1",
     "rimraf": "6.0.1",
     "rolldown": "1.0.0-beta.1",
     "typescript": "5.8.3",
@@ -36,7 +36,7 @@
     "@tauri-apps/api": "2.8.0"
   },
   "peerDependencies": {
-    "react": "19.0.0"
+    "react": "19.0.1"
   },
   "bundleDependencies": [],
   "installConfig": {

@@ -211,16 +211,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      HAS_MINISIGN_KEY: ${{ secrets.AX_STUDIO_MINISIGN_SECRET_KEY_B64 != '' && secrets.AX_STUDIO_MINISIGN_PUBLIC_KEY != '' }}
+      HAS_MINISIGN_KEY: ${{ secrets.AX_STUDIO_MINISIGN_SECRET_KEY_B64 != '' && secrets.AX_STUDIO_MINISIGN_PUBLIC_KEY != '' && secrets.AX_STUDIO_MINISIGN_PASSWORD != '' }}
     permissions:
       contents: write
     steps:
       - name: Getting the repo
         uses: actions/checkout@v4
 
-      - name: Skip if minisign secrets are not configured
+      - name: Validate Minisign secrets
         if: ${{ env.HAS_MINISIGN_KEY != 'true' }}
-        run: echo "::notice::AX_STUDIO_MINISIGN_SECRET_KEY_B64 or AX_STUDIO_MINISIGN_PUBLIC_KEY not configured — skipping detached minisign signatures."
+        run: |
+          echo "::error::Stable releases require AX_STUDIO_MINISIGN_SECRET_KEY_B64, AX_STUDIO_MINISIGN_PUBLIC_KEY, and AX_STUDIO_MINISIGN_PASSWORD."
+          exit 1
 
       - name: Install minisign
         if: ${{ env.HAS_MINISIGN_KEY == 'true' }}

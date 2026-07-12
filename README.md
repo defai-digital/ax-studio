@@ -87,6 +87,10 @@ native ARM64 installer. If the latest release does not include
 
 All release assets are published on the
 [AX Studio releases page](https://github.com/defai-digital/ax-studio/releases).
+Every stable release asset includes a detached `.minisig` signature. The
+verification key and command are documented in
+[`docs/ax-studio.minisign.pub`](docs/ax-studio.minisign.pub) and
+[`docs/release.md`](docs/release.md).
 
 ### First Launch
 

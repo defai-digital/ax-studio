@@ -74,14 +74,14 @@ for (const asset of assets) {
   }
 }
 
-const signableAssets = [...requiredAssets, ...optionalAssets].filter((asset) => asset !== 'latest.json' && assets.includes(asset))
+const signableAssets = [...requiredAssets, ...optionalAssets].filter((asset) => assets.includes(asset))
 for (const asset of signableAssets) {
   const signature = `${asset}.minisig`
   if (assets.includes(signature)) {
     continue
   }
 
-  console.warn(`warning: missing optional minisign signature: ${signature}`)
+  fail(`missing minisign signature: ${signature}`)
 }
 
 if (process.exitCode) {
