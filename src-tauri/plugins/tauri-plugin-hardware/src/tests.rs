@@ -56,7 +56,7 @@ mod cpu_tests {
     fn test_cpu_name_not_empty() {
         let cpu_info = CpuStaticInfo::new();
         assert!(!cpu_info.name.is_empty());
-        assert!(cpu_info.name.len() > 0);
+        assert!(!cpu_info.name.is_empty());
     }
 
     #[test]

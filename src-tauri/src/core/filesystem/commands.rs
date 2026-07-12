@@ -8,7 +8,7 @@ use rfd::AsyncFileDialog;
 use std::ffi::OsString;
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use tauri::{AppHandle, Manager, Runtime, State};
 
 #[derive(Debug, serde::Deserialize)]
@@ -207,6 +207,9 @@ impl DecompressRequest {
 }
 
 fn normalize_copy_source_path(path: &str) -> Result<PathBuf, String> {
+    if path.is_empty() || path.len() > 4 * 1024 || path.chars().any(char::is_control) {
+        return Err("copy_file error: invalid source path".to_string());
+    }
     if path.starts_with("http://") || path.starts_with("https://") {
         return Err("copy_file error: source path must be a local file".to_string());
     }
@@ -265,6 +268,9 @@ fn normalize_app_data_write_path<R: Runtime>(
     path: &str,
     command: &str,
 ) -> Result<PathBuf, String> {
+    if path.is_empty() || path.len() > 4 * 1024 || path.chars().any(char::is_control) {
+        return Err(format!("{command} error: invalid destination path"));
+    }
     if path.starts_with("http://") || path.starts_with("https://") {
         return Err(format!(
             "{command} error: destination path must be local app data"
@@ -286,7 +292,12 @@ fn normalize_app_data_write_path<R: Runtime>(
             .trim_start_matches('\\');
         canonical_app_data.join(relative_normalized)
     } else {
-        PathBuf::from(path)
+        let path = PathBuf::from(path);
+        if path.is_absolute() {
+            path
+        } else {
+            canonical_app_data.join(path)
+        }
     };
 
     let resolved = normalize_with_existing_ancestor(destination);
@@ -308,6 +319,9 @@ fn normalize_app_data_write_path<R: Runtime>(
 // akidb_sync_now, and cancel_akidb_sync.
 
 pub(crate) fn normalize_save_target_path(path: &str) -> Result<PathBuf, String> {
+    if path.is_empty() || path.len() > 4 * 1024 || path.chars().any(char::is_control) {
+        return Err("save path is invalid".to_string());
+    }
     let path = PathBuf::from(path);
     if !path.is_absolute() {
         return Err("save path must be absolute".to_string());
@@ -330,19 +344,63 @@ pub(crate) fn normalize_save_target_path(path: &str) -> Result<PathBuf, String> 
 }
 
 const MAX_APPROVED_SAVE_PATHS: usize = 256;
+const MAX_APPROVED_READ_PATHS: usize = 256;
+const MAX_BASE64_READ_BYTES: u64 = 128 * 1024 * 1024;
+const MAX_TEXT_FILE_BYTES: u64 = 16 * 1024 * 1024;
+const MAX_STRUCTURED_FILE_BYTES: u64 = 4 * 1024 * 1024;
+const MAX_APPEND_FILE_BYTES: u64 = 128 * 1024 * 1024;
+const MAX_BINARY_WRITE_BYTES: usize = 128 * 1024 * 1024;
+const MAX_DIRECTORY_ENTRIES: usize = 50_000;
+const MAX_GGUF_PATHS: usize = 10_000;
+const MAX_ARCHIVE_INPUT_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+const MAX_ARCHIVE_ENTRY_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+const MAX_ARCHIVE_EXPANDED_BYTES: u64 = 8 * 1024 * 1024 * 1024;
+const MAX_ARCHIVE_ENTRIES: usize = 50_000;
+const MAX_ARCHIVE_PATH_BYTES: usize = 4 * 1024;
 
-fn evict_stale_save_paths(approved_save_paths: &mut std::collections::HashSet<PathBuf>) {
-    if approved_save_paths.len() > MAX_APPROVED_SAVE_PATHS {
-        approved_save_paths.clear();
+fn ensure_payload_limit(command: &str, bytes: usize, maximum: u64) -> Result<(), String> {
+    if u64::try_from(bytes).unwrap_or(u64::MAX) > maximum {
+        Err(format!(
+            "{command}: payload exceeds the {maximum}-byte limit"
+        ))
+    } else {
+        Ok(())
     }
+}
+
+fn write_atomically(path: &Path, data: &[u8]) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Write path has no parent directory".to_string())?;
+    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    let mut temporary =
+        tempfile::NamedTempFile::new_in(parent).map_err(|error| error.to_string())?;
+    temporary
+        .write_all(data)
+        .map_err(|error| error.to_string())?;
+    temporary.flush().map_err(|error| error.to_string())?;
+    temporary
+        .as_file()
+        .sync_all()
+        .map_err(|error| error.to_string())?;
+    temporary
+        .persist(path)
+        .map_err(|error| error.error.to_string())?;
+    Ok(())
 }
 
 pub(crate) fn approve_save_target(
     approved_save_paths: &mut std::collections::HashSet<PathBuf>,
     path: &str,
 ) -> Result<(), String> {
-    evict_stale_save_paths(approved_save_paths);
     let normalized = normalize_save_target_path(path)?;
+    if approved_save_paths.len() >= MAX_APPROVED_SAVE_PATHS
+        && !approved_save_paths.contains(&normalized)
+    {
+        return Err(format!(
+            "Too many approved save paths (maximum {MAX_APPROVED_SAVE_PATHS})"
+        ));
+    }
     approved_save_paths.insert(normalized);
     Ok(())
 }
@@ -357,6 +415,54 @@ pub(crate) fn consume_approved_save_target(
     } else {
         Err("write_binary_file error: path was not approved by save dialog".to_string())
     }
+}
+
+fn canonical_selected_path(
+    path: &std::path::Path,
+    expect_directory: bool,
+) -> Result<PathBuf, String> {
+    let canonical = path
+        .canonicalize()
+        .map(|path| ax_studio_utils::normalize_path(&path))
+        .map_err(|error| format!("Cannot resolve selected path: {error}"))?;
+    if expect_directory && !canonical.is_dir() {
+        return Err("Selected read path is not a directory".to_string());
+    }
+    if !expect_directory && !canonical.is_file() {
+        return Err("Selected read path is not a file".to_string());
+    }
+    Ok(canonical)
+}
+
+fn insert_bounded_approved_paths(
+    approved: &mut std::collections::HashSet<PathBuf>,
+    paths: impl IntoIterator<Item = PathBuf>,
+) -> Result<(), String> {
+    let paths = paths.into_iter().collect::<Vec<_>>();
+    let additional = paths
+        .iter()
+        .filter(|path| !approved.contains(*path))
+        .count();
+    if approved.len().saturating_add(additional) > MAX_APPROVED_READ_PATHS {
+        return Err(format!(
+            "Too many approved read paths (maximum {MAX_APPROVED_READ_PATHS})"
+        ));
+    }
+    approved.extend(paths);
+    Ok(())
+}
+
+fn is_read_path_approved(
+    path: &std::path::Path,
+    app_data_folder: &std::path::Path,
+    approved_files: &std::collections::HashSet<PathBuf>,
+    approved_directories: &std::collections::HashSet<PathBuf>,
+) -> bool {
+    path.starts_with(app_data_folder)
+        || approved_files.contains(path)
+        || approved_directories
+            .iter()
+            .any(|directory| path.starts_with(directory))
 }
 
 #[tauri::command]
@@ -427,21 +533,46 @@ pub fn mv<R: Runtime>(
 
 #[tauri::command]
 /// Copy a local file into a destination inside the app data folder.
-pub fn copy_file<R: Runtime>(
+pub async fn copy_file<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
+    state: State<'_, AppState>,
     request: PathPairRequest,
 ) -> Result<(), String> {
     let (source_arg, destination_arg) = request.into_paths("copy_file")?;
     let source = normalize_copy_source_path(&source_arg)?;
-    let destination = normalize_app_data_write_path(app_handle, &destination_arg, "copy_file")?;
+    let destination =
+        normalize_app_data_write_path(app_handle.clone(), &destination_arg, "copy_file")?;
 
-    if let Some(parent) = destination.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app_handle);
+    let app_data_folder = app_data_folder
+        .canonicalize()
+        .map(|path| ax_studio_utils::normalize_path(&path))
+        .unwrap_or_else(|_| ax_studio_utils::normalize_path(&app_data_folder));
+    {
+        let approved_files = state.approved_read_files.lock().await;
+        let approved_directories = state.approved_read_directories.lock().await;
+        if !is_read_path_approved(
+            &source,
+            &app_data_folder,
+            &approved_files,
+            &approved_directories,
+        ) {
+            return Err(
+                "copy_file error: source was not approved by the native open dialog".to_string(),
+            );
+        }
     }
 
-    fs::copy(&source, &destination)
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    tokio::task::spawn_blocking(move || {
+        if let Some(parent) = destination.parent() {
+            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+        fs::copy(&source, &destination)
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    })
+    .await
+    .map_err(|error| format!("copy_file task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -500,18 +631,25 @@ pub fn read_file_sync<R: Runtime>(
     request: SinglePathRequest,
 ) -> Result<String, String> {
     let path = resolve_path(app_handle, &request.into_path("read_file_sync")?)?;
+    let metadata = fs::metadata(&path).map_err(|error| error.to_string())?;
+    if !metadata.is_file() {
+        return Err("read_file_sync: path is not a file".to_string());
+    }
+    if metadata.len() > MAX_TEXT_FILE_BYTES {
+        return Err(format!(
+            "read_file_sync: file exceeds the {MAX_TEXT_FILE_BYTES}-byte limit"
+        ));
+    }
     fs::read_to_string(&path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-/// Read a file as base64-encoded string (for binary files like Excel, images, etc.)
-/// This command allows reading from arbitrary paths (not restricted to app data folder)
-/// since it's used for user-selected file uploads (e.g., AX BI data import).
-pub fn read_file_base64<R: Runtime>(
-    _app_handle: tauri::AppHandle<R>,
+/// Read an app-data or native-picker-approved file as base64.
+pub async fn read_file_base64<R: Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    state: State<'_, AppState>,
     request: SinglePathRequest,
 ) -> Result<String, String> {
-    // Extract path without app-data-folder restriction
     let raw_path = match request {
         SinglePathRequest::Legacy { args } => args
             .into_iter()
@@ -519,21 +657,57 @@ pub fn read_file_base64<R: Runtime>(
             .ok_or_else(|| "read_file_base64: no path provided".to_string())?,
         SinglePathRequest::Typed { path } => path,
     };
-    // Strip file:// prefix if present
-    let clean_path = if raw_path.starts_with("file://") {
-        raw_path.trim_start_matches("file://")
-    } else {
-        &raw_path
-    };
-    let path = std::path::Path::new(clean_path);
-    if !path.exists() {
-        return Err(format!("File not found: {}", clean_path));
+    if raw_path.is_empty() || raw_path.len() > 4 * 1024 || raw_path.chars().any(char::is_control) {
+        return Err("read_file_base64: invalid path".to_string());
     }
-    let bytes = fs::read(path).map_err(|e| format!("Failed to read {}: {}", clean_path, e))?;
-    Ok(base64::Engine::encode(
-        &base64::engine::general_purpose::STANDARD,
-        &bytes,
-    ))
+    let clean_path = if raw_path.starts_with("file:/") || raw_path.starts_with("file:\\") {
+        ax_studio_utils::normalize_file_path(&raw_path)
+    } else {
+        raw_path
+    };
+    let path = PathBuf::from(clean_path)
+        .canonicalize()
+        .map(|path| ax_studio_utils::normalize_path(&path))
+        .map_err(|error| format!("Cannot resolve read path: {error}"))?;
+    if !path.is_file() {
+        return Err("read_file_base64: path is not a file".to_string());
+    }
+
+    let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app_handle);
+    let app_data_folder = app_data_folder
+        .canonicalize()
+        .map(|path| ax_studio_utils::normalize_path(&path))
+        .unwrap_or_else(|_| ax_studio_utils::normalize_path(&app_data_folder));
+    let approved_files = state.approved_read_files.lock().await;
+    let approved_directories = state.approved_read_directories.lock().await;
+    if !is_read_path_approved(
+        &path,
+        &app_data_folder,
+        &approved_files,
+        &approved_directories,
+    ) {
+        return Err(
+            "read_file_base64: path was not approved by the native open dialog".to_string(),
+        );
+    }
+    drop(approved_directories);
+    drop(approved_files);
+
+    let metadata = fs::metadata(&path).map_err(|error| error.to_string())?;
+    if metadata.len() > MAX_BASE64_READ_BYTES {
+        return Err(format!(
+            "read_file_base64: file exceeds the {MAX_BASE64_READ_BYTES}-byte limit"
+        ));
+    }
+    tokio::task::spawn_blocking(move || {
+        let bytes = fs::read(&path).map_err(|error| format!("Failed to read file: {error}"))?;
+        Ok(base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            &bytes,
+        ))
+    })
+    .await
+    .map_err(|error| format!("read_file_base64 task join error: {error}"))?
 }
 
 #[tauri::command]
@@ -543,15 +717,9 @@ pub fn write_file_sync<R: Runtime>(
     request: PathPairRequest,
 ) -> Result<(), String> {
     let (path_arg, content) = request.into_paths("write_file_sync")?;
+    ensure_payload_limit("write_file_sync", content.len(), MAX_TEXT_FILE_BYTES)?;
     let path = resolve_path(app_handle, &path_arg)?;
-    // Append (not replace) the temp suffix so files sharing a stem but differing
-    // only by extension (e.g. settings.json / settings.yaml) don't collide on one
-    // shared temp path and race their fs::write / fs::rename.
-    let mut tmp = path.clone().into_os_string();
-    tmp.push(format!(".{}.tmp", std::process::id()));
-    let tmp_path = std::path::PathBuf::from(tmp);
-    fs::write(&tmp_path, content).map_err(|e| e.to_string())?;
-    fs::rename(&tmp_path, &path).map_err(|e| e.to_string())
+    write_atomically(&path, content.as_bytes())
 }
 
 #[tauri::command]
@@ -561,11 +729,9 @@ pub fn write_blob<R: Runtime>(
     request: FileContentRequest,
 ) -> Result<(), String> {
     let (path_arg, data) = request.into_parts("write_blob")?;
+    ensure_payload_limit("write_blob", data.len(), MAX_TEXT_FILE_BYTES)?;
     let path = normalize_app_data_write_path(app_handle, &path_arg, "write_blob")?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    fs::write(path, data.as_bytes()).map_err(|e| e.to_string())
+    write_atomically(&path, data.as_bytes())
 }
 
 #[tauri::command]
@@ -588,15 +754,30 @@ pub fn append_file_sync<R: Runtime>(
     request: FileContentRequest,
 ) -> Result<(), String> {
     let (path_arg, content) = request.into_parts("append_file_sync")?;
+    ensure_payload_limit("append_file_sync", content.len(), MAX_TEXT_FILE_BYTES)?;
     let path = normalize_app_data_write_path(app_handle, &path_arg, "append_file_sync")?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let mut file = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-        .map_err(|e| e.to_string())?;
+    let existing_size = fs::metadata(&path)
+        .map(|metadata| metadata.len())
+        .unwrap_or(0);
+    let resulting_size = existing_size
+        .checked_add(u64::try_from(content.len()).unwrap_or(u64::MAX))
+        .ok_or_else(|| "append_file_sync: resulting file size overflow".to_string())?;
+    if resulting_size > MAX_APPEND_FILE_BYTES {
+        return Err(format!(
+            "append_file_sync: resulting file exceeds the {MAX_APPEND_FILE_BYTES}-byte limit"
+        ));
+    }
+    let mut options = fs::OpenOptions::new();
+    options.create(true).append(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(nix::libc::O_NOFOLLOW);
+    }
+    let mut file = options.open(path).map_err(|e| e.to_string())?;
     file.write_all(content.as_bytes())
         .map_err(|e| e.to_string())
 }
@@ -617,7 +798,13 @@ pub fn get_gguf_files<R: Runtime>(
     let mut gguf = Vec::new();
     let mut non_gguf = Vec::new();
 
-    for path_arg in request.into_paths()? {
+    let paths = request.into_paths()?;
+    if paths.len() > MAX_GGUF_PATHS {
+        return Err(format!(
+            "get_gguf_files: more than {MAX_GGUF_PATHS} paths were supplied"
+        ));
+    }
+    for path_arg in paths {
         let path = resolve_path(app_handle.clone(), &path_arg)?;
         let output_path = path.to_string_lossy().to_string();
         let is_gguf = path
@@ -644,10 +831,16 @@ pub fn readdir_sync<R: Runtime>(
 ) -> Result<Vec<String>, String> {
     let path = resolve_path(app_handle, &request.into_path("read_dir_sync")?)?;
     let entries = fs::read_dir(&path).map_err(|e| e.to_string())?;
-    let paths: Vec<String> = entries
-        .filter_map(|entry| entry.ok())
-        .map(|entry| entry.path().to_string_lossy().to_string())
-        .collect();
+    let mut paths = Vec::new();
+    for entry in entries {
+        if paths.len() >= MAX_DIRECTORY_ENTRIES {
+            return Err(format!(
+                "readdir_sync: directory contains more than {MAX_DIRECTORY_ENTRIES} entries"
+            ));
+        }
+        let entry = entry.map_err(|error| error.to_string())?;
+        paths.push(entry.path().to_string_lossy().to_string());
+    }
     Ok(paths)
 }
 
@@ -658,21 +851,10 @@ pub fn write_yaml(
     request: WriteYamlRequest,
 ) -> Result<(), String> {
     let (data, save_path) = request.into_parts()?;
-    // YAML writes are restricted to the app data directory and validated before replace.
-    let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app.clone());
-    let save_path = ax_studio_utils::normalize_path(&app_data_folder.join(save_path));
-    if !save_path.starts_with(&app_data_folder) {
-        return Err(format!(
-            "Error: save path {} is not under app_data_folder {}",
-            save_path.to_string_lossy(),
-            app_data_folder.to_string_lossy(),
-        ));
-    }
-    let tmp_path = save_path.with_extension("yaml.tmp");
+    ensure_payload_limit("write_yaml", data.len(), MAX_STRUCTURED_FILE_BYTES)?;
+    let save_path = normalize_app_data_write_path(app, &save_path, "write_yaml")?;
     let _: serde_yaml::Value = serde_yaml::from_str(&data).map_err(|e| e.to_string())?;
-    fs::write(&tmp_path, data).map_err(|e| e.to_string())?;
-    fs::rename(&tmp_path, &save_path).map_err(|e| e.to_string())?;
-    Ok(())
+    write_atomically(&save_path, data.as_bytes())
 }
 
 #[tauri::command]
@@ -682,13 +864,11 @@ pub fn read_yaml<R: Runtime>(
     request: SinglePathRequest,
 ) -> Result<serde_json::Value, String> {
     let path = request.into_path("read_yaml")?;
-    let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app.clone());
-    let path = ax_studio_utils::normalize_path(&app_data_folder.join(path));
-    if !path.starts_with(&app_data_folder) {
+    let path = normalize_app_data_write_path(app, &path, "read_yaml")?;
+    let metadata = fs::metadata(&path).map_err(|error| error.to_string())?;
+    if !metadata.is_file() || metadata.len() > MAX_STRUCTURED_FILE_BYTES {
         return Err(format!(
-            "Error: path {} is not under app_data_folder {}",
-            path.to_string_lossy(),
-            app_data_folder.to_string_lossy(),
+            "read_yaml: file must be at most {MAX_STRUCTURED_FILE_BYTES} bytes"
         ));
     }
     let file = fs::File::open(&path).map_err(|e| e.to_string())?;
@@ -697,10 +877,422 @@ pub fn read_yaml<R: Runtime>(
     Ok(data)
 }
 
+#[derive(Clone, Copy)]
+enum ArchiveKind {
+    TarGz,
+    Zip,
+}
+
+struct ArchiveBudget {
+    entries: usize,
+    expanded_bytes: u64,
+}
+
+impl ArchiveBudget {
+    fn new() -> Self {
+        Self {
+            entries: 0,
+            expanded_bytes: 0,
+        }
+    }
+
+    fn record(&mut self, entry_bytes: u64) -> Result<(), String> {
+        if self.entries >= MAX_ARCHIVE_ENTRIES {
+            return Err(format!(
+                "Archive contains more than {MAX_ARCHIVE_ENTRIES} entries"
+            ));
+        }
+        if entry_bytes > MAX_ARCHIVE_ENTRY_BYTES {
+            return Err(format!(
+                "Archive entry exceeds the {MAX_ARCHIVE_ENTRY_BYTES}-byte limit"
+            ));
+        }
+        self.expanded_bytes = self
+            .expanded_bytes
+            .checked_add(entry_bytes)
+            .filter(|total| *total <= MAX_ARCHIVE_EXPANDED_BYTES)
+            .ok_or_else(|| {
+                format!("Archive expands beyond the {MAX_ARCHIVE_EXPANDED_BYTES}-byte limit")
+            })?;
+        self.entries += 1;
+        Ok(())
+    }
+}
+
+fn archive_kind(path: &Path) -> Result<ArchiveKind, String> {
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if name.ends_with(".tar.gz") {
+        Ok(ArchiveKind::TarGz)
+    } else if name.ends_with(".zip") {
+        Ok(ArchiveKind::Zip)
+    } else {
+        Err("Unsupported file format. Only .tar.gz and .zip are supported.".to_string())
+    }
+}
+
+fn resolve_archive_boundary_path(
+    canonical_app_data: &Path,
+    raw_path: &str,
+    description: &str,
+) -> Result<PathBuf, String> {
+    if raw_path.is_empty()
+        || raw_path.len() > MAX_ARCHIVE_PATH_BYTES
+        || raw_path.chars().any(char::is_control)
+        || raw_path.starts_with("http://")
+        || raw_path.starts_with("https://")
+    {
+        return Err(format!("Invalid {description}"));
+    }
+
+    let normalized = if raw_path.starts_with("file:/") || raw_path.starts_with("file:\\") {
+        ax_studio_utils::normalize_file_path(raw_path)
+    } else {
+        raw_path.to_string()
+    };
+    let path = PathBuf::from(normalized);
+    let candidate = if path.is_absolute() {
+        path
+    } else {
+        canonical_app_data.join(path)
+    };
+    let resolved = normalize_with_existing_ancestor(candidate);
+    if !resolved.starts_with(canonical_app_data) {
+        return Err(format!(
+            "Error: {description} {} is not under app_data_folder {}",
+            resolved.display(),
+            canonical_app_data.display()
+        ));
+    }
+    Ok(resolved)
+}
+
+fn safe_archive_destination(
+    output_root: &Path,
+    entry_path: &Path,
+    archive_name: &str,
+) -> Result<PathBuf, String> {
+    let display = entry_path.to_string_lossy();
+    if display.is_empty()
+        || display.len() > MAX_ARCHIVE_PATH_BYTES
+        || display.chars().any(char::is_control)
+    {
+        return Err(format!("Invalid {archive_name} entry path"));
+    }
+
+    let mut relative = PathBuf::new();
+    for component in entry_path.components() {
+        match component {
+            Component::Normal(component) => relative.push(component),
+            Component::CurDir => {}
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+                return Err(format!(
+                    "{archive_name} entry path traversal blocked: {display}"
+                ));
+            }
+        }
+    }
+    if relative.as_os_str().is_empty() {
+        return Err(format!("Invalid {archive_name} entry path"));
+    }
+
+    let destination = ax_studio_utils::normalize_path(&output_root.join(relative));
+    if !destination.starts_with(output_root) {
+        return Err(format!(
+            "{archive_name} entry path traversal blocked: {display}"
+        ));
+    }
+    Ok(destination)
+}
+
+fn ensure_safe_directory(output_root: &Path, directory: &Path) -> Result<(), String> {
+    let relative = directory.strip_prefix(output_root).map_err(|_| {
+        format!(
+            "Archive directory {} is outside extraction root",
+            directory.display()
+        )
+    })?;
+    let mut current = output_root.to_path_buf();
+    for component in relative.components() {
+        let Component::Normal(component) = component else {
+            continue;
+        };
+        current.push(component);
+        match fs::symlink_metadata(&current) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err(format!(
+                    "Archive extraction blocked by symlink directory: {}",
+                    current.display()
+                ));
+            }
+            Ok(metadata) if !metadata.is_dir() => {
+                return Err(format!(
+                    "Archive directory collides with a non-directory: {}",
+                    current.display()
+                ));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                fs::create_dir(&current).map_err(|error| {
+                    format!(
+                        "Failed to create archive directory {}: {error}",
+                        current.display()
+                    )
+                })?;
+            }
+            Err(error) => {
+                return Err(format!(
+                    "Failed to inspect archive directory {}: {error}",
+                    current.display()
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn create_safe_archive_file(
+    output_root: &Path,
+    destination: &Path,
+    archive_path: &Path,
+) -> Result<fs::File, String> {
+    if destination == archive_path {
+        return Err("Archive entry cannot overwrite the source archive".to_string());
+    }
+    let parent = destination
+        .parent()
+        .ok_or_else(|| "Archive file has no parent directory".to_string())?;
+    ensure_safe_directory(output_root, parent)?;
+
+    match fs::symlink_metadata(destination) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            return Err(format!(
+                "Archive file collides with a symlink: {}",
+                destination.display()
+            ));
+        }
+        Ok(metadata) if !metadata.is_file() => {
+            return Err(format!(
+                "Archive file collides with a non-file: {}",
+                destination.display()
+            ));
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("Failed to inspect archive file: {error}")),
+    }
+
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(nix::libc::O_NOFOLLOW);
+    }
+    options.open(destination).map_err(|error| {
+        format!(
+            "Failed to create archive file {}: {error}",
+            destination.display()
+        )
+    })
+}
+
+#[cfg(unix)]
+fn set_archive_permissions(path: &Path, mode: Option<u32>) {
+    use std::os::unix::fs::PermissionsExt;
+    if let Some(mode) = mode {
+        // Never restore setuid, setgid, or sticky bits from an untrusted archive.
+        let _ = fs::set_permissions(path, fs::Permissions::from_mode(mode & 0o777));
+    }
+}
+
+#[cfg(not(unix))]
+fn set_archive_permissions(_path: &Path, _mode: Option<u32>) {}
+
+fn replace_existing_archive_symlink(path: &Path) -> Result<(), String> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => fs::remove_file(path)
+            .map_err(|error| format!("Failed to replace archive symlink: {error}")),
+        Ok(_) => Err(format!(
+            "Archive symlink collides with an existing path: {}",
+            path.display()
+        )),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("Failed to inspect archive symlink: {error}")),
+    }
+}
+
+fn extract_tar_gz(file: fs::File, archive_path: &Path, output_root: &Path) -> Result<(), String> {
+    let decoder = flate2::read::GzDecoder::new(file);
+    let mut archive = tar::Archive::new(decoder);
+    let mut budget = ArchiveBudget::new();
+
+    for entry in archive.entries().map_err(|error| error.to_string())? {
+        let mut entry = entry.map_err(|error| error.to_string())?;
+        let size = entry.header().size().map_err(|error| error.to_string())?;
+        budget.record(size)?;
+        let entry_path = entry
+            .path()
+            .map_err(|error| error.to_string())?
+            .into_owned();
+        let destination = safe_archive_destination(output_root, &entry_path, "Tar")?;
+        let entry_type = entry.header().entry_type();
+
+        if entry_type.is_dir() {
+            ensure_safe_directory(output_root, &destination)?;
+            continue;
+        }
+
+        if entry_type.is_file() {
+            let mut output = create_safe_archive_file(output_root, &destination, archive_path)?;
+            let copied = std::io::copy(&mut entry, &mut output).map_err(|error| {
+                format!(
+                    "Failed to extract tar entry {}: {error}",
+                    entry_path.display()
+                )
+            })?;
+            if copied != size {
+                return Err(format!(
+                    "Tar entry {} size mismatch: expected {size}, wrote {copied}",
+                    entry_path.display()
+                ));
+            }
+            output.flush().map_err(|error| error.to_string())?;
+            drop(output);
+            set_archive_permissions(&destination, entry.header().mode().ok());
+            continue;
+        }
+
+        if entry_type.is_symlink() {
+            let link_target = entry
+                .link_name()
+                .map_err(|error| format!("Invalid symlink target: {error}"))?
+                .ok_or_else(|| "Symlink entry missing target".to_string())?
+                .into_owned();
+            if link_target.is_absolute() {
+                return Err(format!(
+                    "Tar symlink target escapes extraction root: {}",
+                    link_target.display()
+                ));
+            }
+            let link_parent = destination.parent().unwrap_or(output_root);
+            ensure_safe_directory(output_root, link_parent)?;
+            let lexical_target = ax_studio_utils::normalize_path(&link_parent.join(&link_target));
+            let resolved_target = normalize_with_existing_ancestor(link_parent.join(&link_target));
+            if !lexical_target.starts_with(output_root) || !resolved_target.starts_with(output_root)
+            {
+                return Err(format!(
+                    "Tar symlink target escapes extraction root: {} -> {}",
+                    entry_path.display(),
+                    link_target.display()
+                ));
+            }
+            replace_existing_archive_symlink(&destination)?;
+            #[cfg(unix)]
+            std::os::unix::fs::symlink(&link_target, &destination).map_err(|error| {
+                format!(
+                    "Failed to create symlink {} -> {}: {error}",
+                    destination.display(),
+                    link_target.display()
+                )
+            })?;
+            #[cfg(windows)]
+            std::os::windows::fs::symlink_file(&link_target, &destination).map_err(|error| {
+                format!(
+                    "Failed to create symlink {} -> {}: {error}",
+                    destination.display(),
+                    link_target.display()
+                )
+            })?;
+            continue;
+        }
+
+        return Err(format!(
+            "Unsupported tar entry type for {}",
+            entry_path.display()
+        ));
+    }
+    Ok(())
+}
+
+fn extract_zip(file: fs::File, archive_path: &Path, output_root: &Path) -> Result<(), String> {
+    let mut archive = zip::ZipArchive::new(file).map_err(|error| error.to_string())?;
+    if archive.len() > MAX_ARCHIVE_ENTRIES {
+        return Err(format!(
+            "Archive contains more than {MAX_ARCHIVE_ENTRIES} entries"
+        ));
+    }
+    let mut budget = ArchiveBudget::new();
+
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).map_err(|error| error.to_string())?;
+        budget.record(entry.size())?;
+        let entry_path = entry
+            .enclosed_name()
+            .ok_or_else(|| "Invalid zip entry path".to_string())?;
+        let destination = safe_archive_destination(output_root, &entry_path, "Zip")?;
+        let mode = entry.unix_mode();
+        let file_type = mode.unwrap_or_default() & 0o170000;
+        if file_type == 0o120000 {
+            return Err(format!(
+                "Zip symlink entries are not supported: {}",
+                entry.name()
+            ));
+        }
+
+        if entry.is_dir() {
+            ensure_safe_directory(output_root, &destination)?;
+            continue;
+        }
+        if file_type != 0 && file_type != 0o100000 {
+            return Err(format!("Unsupported zip entry type: {}", entry.name()));
+        }
+
+        let expected_size = entry.size();
+        let mut output = create_safe_archive_file(output_root, &destination, archive_path)?;
+        let copied = std::io::copy(&mut entry, &mut output)
+            .map_err(|error| format!("Failed to extract zip entry: {error}"))?;
+        if copied != expected_size {
+            return Err(format!(
+                "Zip entry {} size mismatch: expected {expected_size}, wrote {copied}",
+                entry.name()
+            ));
+        }
+        output.flush().map_err(|error| error.to_string())?;
+        drop(output);
+        set_archive_permissions(&destination, mode);
+    }
+    Ok(())
+}
+
+fn extract_archive(
+    archive_path: &Path,
+    output_root: &Path,
+    kind: ArchiveKind,
+) -> Result<(), String> {
+    // Use a short path on Windows for archives stored below paths with spaces.
+    #[cfg(windows)]
+    let file = if let Some(short_path) = ax_studio_utils::path::get_short_path(archive_path) {
+        fs::File::open(short_path).map_err(|error| error.to_string())?
+    } else {
+        fs::File::open(archive_path).map_err(|error| error.to_string())?
+    };
+    #[cfg(not(windows))]
+    let file = fs::File::open(archive_path).map_err(|error| error.to_string())?;
+
+    match kind {
+        ArchiveKind::TarGz => extract_tar_gz(file, archive_path, output_root),
+        ArchiveKind::Zip => extract_zip(file, archive_path, output_root),
+    }
+}
+
 #[tauri::command]
-/// Extract a `.tar.gz` or `.zip` archive into an app-data subdirectory.
+/// Extract a bounded `.tar.gz` or `.zip` archive into an app-data subdirectory.
 /// Accepts either a wrapped `request` object or flat `path`/`output_dir`/`outputDir` args.
-pub fn decompress<R: Runtime>(
+pub async fn decompress<R: Runtime>(
     app: tauri::AppHandle<R>,
     path: Option<String>,
     output_dir: Option<String>,
@@ -712,191 +1304,86 @@ pub fn decompress<R: Runtime>(
         req.into_parts()?
     } else {
         match (path, resolved_output) {
-            (Some(p), Some(o)) if !p.is_empty() && !o.is_empty() => (p, o),
+            (Some(path), Some(output)) if !path.is_empty() && !output.is_empty() => (path, output),
             _ => return Err("decompress error: Invalid argument".to_string()),
         }
     };
-    let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app.clone());
-    let path_buf = ax_studio_utils::normalize_path(&app_data_folder.join(&path));
-    if !path_buf.starts_with(&app_data_folder) {
+
+    let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app);
+    fs::create_dir_all(&app_data_folder)
+        .map_err(|error| format!("Failed to create app data directory: {error}"))?;
+    let canonical_app_data = app_data_folder
+        .canonicalize()
+        .map(|path| ax_studio_utils::normalize_path(&path))
+        .map_err(|error| format!("Failed to resolve app data directory: {error}"))?;
+
+    let archive_path = resolve_archive_boundary_path(&canonical_app_data, &path, "archive path")?;
+    let archive_path = archive_path
+        .canonicalize()
+        .map(|path| ax_studio_utils::normalize_path(&path))
+        .map_err(|error| format!("Failed to resolve archive path: {error}"))?;
+    if !archive_path.starts_with(&canonical_app_data) || !archive_path.is_file() {
+        return Err("Archive must be a file inside app_data_folder".to_string());
+    }
+    let metadata = fs::metadata(&archive_path).map_err(|error| error.to_string())?;
+    if metadata.len() > MAX_ARCHIVE_INPUT_BYTES {
         return Err(format!(
-            "Error: archive path {} is not under app_data_folder {}",
-            path_buf.to_string_lossy(),
-            app_data_folder.to_string_lossy(),
+            "Archive exceeds the {MAX_ARCHIVE_INPUT_BYTES}-byte input limit"
         ));
     }
+    let kind = archive_kind(&archive_path)?;
 
-    let output_dir_buf = ax_studio_utils::normalize_path(&app_data_folder.join(&output_dir));
-    if !output_dir_buf.starts_with(&app_data_folder) {
-        return Err(format!(
-            "Error: output directory {} is not under app_data_folder {}",
-            output_dir_buf.to_string_lossy(),
-            app_data_folder.to_string_lossy(),
-        ));
+    let output_root =
+        resolve_archive_boundary_path(&canonical_app_data, &output_dir, "output directory")?;
+    let output_was_new = !output_root.exists();
+    if output_root.exists() && !output_root.is_dir() {
+        return Err("Archive output path is not a directory".to_string());
+    }
+    fs::create_dir_all(&output_root)
+        .map_err(|error| format!("Failed to create output directory: {error}"))?;
+    let output_root = output_root
+        .canonicalize()
+        .map(|path| ax_studio_utils::normalize_path(&path))
+        .map_err(|error| format!("Failed to resolve output directory: {error}"))?;
+    if !output_root.starts_with(&canonical_app_data) {
+        return Err("Archive output directory escaped app_data_folder".to_string());
     }
 
-    // Ensure output directory exists
-    fs::create_dir_all(&output_dir_buf).map_err(|e| {
-        format!(
-            "Failed to create output directory {}: {}",
-            output_dir_buf.to_string_lossy(),
-            e
-        )
-    })?;
-
-    // Use short path on Windows to handle paths with spaces
-    #[cfg(windows)]
-    let file = {
-        if let Some(short_path) = ax_studio_utils::path::get_short_path(&path_buf) {
-            fs::File::open(&short_path).map_err(|e| e.to_string())?
-        } else {
-            fs::File::open(&path_buf).map_err(|e| e.to_string())?
-        }
-    };
-
-    #[cfg(not(windows))]
-    let file = fs::File::open(&path_buf).map_err(|e| e.to_string())?;
-    if path.ends_with(".tar.gz") {
-        let tar = flate2::read::GzDecoder::new(file);
-        let mut archive = tar::Archive::new(tar);
-        for entry in archive.entries().map_err(|e| e.to_string())? {
-            let mut entry = entry.map_err(|e| e.to_string())?;
-            let entry_path_string = entry
-                .path()
-                .map_err(|e| e.to_string())?
-                .to_string_lossy()
-                .to_string();
-
-            let entry_type = entry.header().entry_type();
-            let full_path =
-                ax_studio_utils::normalize_path(&output_dir_buf.join(&entry_path_string));
-            if !full_path.starts_with(&output_dir_buf) {
-                return Err(format!(
-                    "Tar entry path traversal blocked: {}",
-                    entry_path_string
-                ));
-            }
-            // Ensure parent directories exist — tar archives may omit
-            // intermediate directory entries (e.g. llama.cpp releases).
-            if let Some(parent) = full_path.parent() {
-                fs::create_dir_all(parent).map_err(|e| {
-                    format!(
-                        "Failed to create parent directory {}: {e}",
-                        parent.display()
-                    )
-                })?;
-            }
-
-            // Safely extract symlinks only if the link target stays within
-            // output_dir_buf. Without this, llama.cpp's libXYZ.0.dylib ->
-            // libXYZ.0.0.8763.dylib symlinks are dropped and the binary
-            // fails to load its dynamic libraries at runtime.
-            // Hardlinks are still rejected since they can cross filesystem
-            // boundaries and are rarely used in release archives.
-            if entry_type.is_symlink() {
-                let link_target = entry
-                    .link_name()
-                    .map_err(|e| format!("Invalid symlink target: {e}"))?
-                    .ok_or_else(|| "Symlink entry missing target".to_string())?
-                    .to_path_buf();
-
-                // Resolve the link target relative to where the symlink lives
-                let link_parent = full_path.parent().unwrap_or(&output_dir_buf);
-                let resolved_target =
-                    ax_studio_utils::normalize_path(&link_parent.join(&link_target));
-                if !resolved_target.starts_with(&output_dir_buf) {
-                    log::warn!(
-                        "Rejecting symlink with out-of-bounds target: {} -> {}",
-                        entry_path_string,
-                        link_target.display()
-                    );
-                    continue;
-                }
-
-                // Remove any existing file at the symlink path (re-extract case)
-                let _ = fs::remove_file(&full_path);
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::symlink;
-                    symlink(&link_target, &full_path).map_err(|e| {
-                        format!(
-                            "Failed to create symlink `{}` -> `{}`: {e}",
-                            full_path.display(),
-                            link_target.display()
-                        )
-                    })?;
-                }
-                #[cfg(windows)]
-                {
-                    // On Windows, create a file symlink (requires SeCreateSymbolicLinkPrivilege)
-                    if let Err(e) = std::os::windows::fs::symlink_file(&link_target, &full_path) {
-                        log::warn!(
-                            "Failed to create symlink on Windows `{}` -> `{}`: {e}",
-                            full_path.display(),
-                            link_target.display()
-                        );
-                    }
-                }
-                continue;
-            }
-
-            if entry_type.is_hard_link() {
-                log::warn!("Rejecting hardlink entry in tar: {}", entry_path_string);
-                continue;
-            }
-
-            entry.unpack(&full_path).map_err(|e| {
-                format!(
-                    "failed to unpack `{}` into `{}`: {e}",
-                    entry_path_string,
-                    full_path.display()
-                )
-            })?;
-        }
-    } else if path.ends_with(".zip") {
-        let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
-        for i in 0..zip.len() {
-            let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
-            let entry_path = entry
-                .enclosed_name()
-                .ok_or_else(|| "Invalid zip entry path".to_string())?;
-            let outpath = ax_studio_utils::normalize_path(&output_dir_buf.join(entry_path));
-            if !outpath.starts_with(&output_dir_buf) {
-                return Err(format!(
-                    "Zip entry path traversal blocked: {}",
-                    entry.name()
-                ));
-            }
-
-            if entry.name().ends_with('/') {
-                std::fs::create_dir_all(&outpath).map_err(|e| e.to_string())?;
-            } else {
-                if let Some(parent) = outpath.parent() {
-                    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-                }
-                let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
-                std::io::copy(&mut entry, &mut outfile).map_err(|e| e.to_string())?;
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::PermissionsExt;
-                    if let Some(mode) = entry.unix_mode() {
-                        // Strip setuid/setgid/sticky bits from archive-provided
-                        // permissions — only keep the standard rwx triad so a
-                        // malicious archive can't plant a setuid binary.
-                        let safe_mode = mode & 0o777;
-                        let _ = std::fs::set_permissions(
-                            &outpath,
-                            std::fs::Permissions::from_mode(safe_mode),
-                        );
-                    }
-                }
+    tokio::task::spawn_blocking(move || {
+        let result = extract_archive(&archive_path, &output_root, kind);
+        if result.is_err() && output_was_new {
+            if let Err(error) = fs::remove_dir_all(&output_root) {
+                log::warn!(
+                    "Failed to clean partial archive output {}: {error}",
+                    output_root.display()
+                );
             }
         }
-    } else {
-        return Err("Unsupported file format. Only .tar.gz and .zip are supported.".to_string());
+        result
+    })
+    .await
+    .map_err(|error| format!("Archive extraction task failed: {error}"))?
+}
+
+#[cfg(test)]
+mod archive_budget_tests {
+    use super::*;
+
+    #[test]
+    fn rejects_oversized_entry_and_expanded_total() {
+        let mut budget = ArchiveBudget::new();
+        assert!(budget.record(MAX_ARCHIVE_ENTRY_BYTES + 1).is_err());
+
+        budget.expanded_bytes = MAX_ARCHIVE_EXPANDED_BYTES;
+        assert!(budget.record(1).is_err());
     }
 
-    Ok(())
+    #[test]
+    fn rejects_excess_entry_count() {
+        let mut budget = ArchiveBudget::new();
+        budget.entries = MAX_ARCHIVE_ENTRIES;
+        assert!(budget.record(0).is_err());
+    }
 }
 
 // rfd native file dialog
@@ -922,6 +1409,7 @@ fn allow_selected_directory<R: Runtime>(
 /// Open the native file or directory picker and return the selected path values.
 pub async fn open_dialog<R: Runtime>(
     app: AppHandle<R>,
+    state: State<'_, AppState>,
     options: Option<DialogOpenOptions>,
 ) -> Result<Option<serde_json::Value>, String> {
     let mut dialog = AsyncFileDialog::new();
@@ -946,6 +1434,9 @@ pub async fn open_dialog<R: Runtime>(
             return match result {
                 Some(folder) => {
                     allow_selected_directory(&app, folder.path())?;
+                    let canonical = canonical_selected_path(folder.path(), true)?;
+                    let mut approved = state.approved_read_directories.lock().await;
+                    insert_bounded_approved_paths(&mut approved, [canonical])?;
                     Ok(Some(serde_json::Value::String(
                         folder.path().to_string_lossy().to_string(),
                     )))
@@ -959,6 +1450,14 @@ pub async fn open_dialog<R: Runtime>(
             let result = dialog.pick_files().await;
             return match result {
                 Some(files) => {
+                    let canonical_paths = files
+                        .iter()
+                        .map(|file| canonical_selected_path(file.path(), false))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    {
+                        let mut approved = state.approved_read_files.lock().await;
+                        insert_bounded_approved_paths(&mut approved, canonical_paths)?;
+                    }
                     let paths = files
                         .iter()
                         .map(|file| {
@@ -980,6 +1479,9 @@ pub async fn open_dialog<R: Runtime>(
     match result {
         Some(file) => {
             allow_selected_file(&app, file.path())?;
+            let canonical = canonical_selected_path(file.path(), false)?;
+            let mut approved = state.approved_read_files.lock().await;
+            insert_bounded_approved_paths(&mut approved, [canonical])?;
             Ok(Some(serde_json::Value::String(
                 file.path().to_string_lossy().to_string(),
             )))
@@ -1046,17 +1548,31 @@ pub async fn write_binary_file(
     path: String,
     base64_data: String,
 ) -> Result<(), String> {
+    let maximum_encoded_bytes = MAX_BINARY_WRITE_BYTES
+        .checked_mul(4)
+        .and_then(|bytes| bytes.checked_div(3))
+        .and_then(|bytes| bytes.checked_add(4))
+        .unwrap_or(usize::MAX);
+    if base64_data.len() > maximum_encoded_bytes {
+        return Err(format!(
+            "write_binary_file: decoded data exceeds the {MAX_BINARY_WRITE_BYTES}-byte limit"
+        ));
+    }
     let data = base64::engine::general_purpose::STANDARD
         .decode(&base64_data)
         .map_err(|e| e.to_string())?;
+    if data.len() > MAX_BINARY_WRITE_BYTES {
+        return Err(format!(
+            "write_binary_file: decoded data exceeds the {MAX_BINARY_WRITE_BYTES}-byte limit"
+        ));
+    }
     let normalized_path = {
         let mut approved_save_paths = state.approved_save_paths.lock().await;
         consume_approved_save_target(&mut approved_save_paths, &path)?
     };
-    tokio::task::spawn_blocking(move || std::fs::write(&normalized_path, &data))
+    tokio::task::spawn_blocking(move || write_atomically(&normalized_path, &data))
         .await
         .map_err(|e| format!("write_binary_file task join error: {e}"))?
-        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1066,12 +1582,12 @@ pub async fn write_text_file(
     path: String,
     content: String,
 ) -> Result<(), String> {
+    ensure_payload_limit("write_text_file", content.len(), MAX_TEXT_FILE_BYTES)?;
     let normalized_path = {
         let mut approved_save_paths = state.approved_save_paths.lock().await;
         consume_approved_save_target(&mut approved_save_paths, &path)?
     };
-    tokio::task::spawn_blocking(move || std::fs::write(&normalized_path, content))
+    tokio::task::spawn_blocking(move || write_atomically(&normalized_path, content.as_bytes()))
         .await
         .map_err(|e| format!("write_text_file task join error: {e}"))?
-        .map_err(|e| e.to_string())
 }

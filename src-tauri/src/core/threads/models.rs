@@ -1,6 +1,27 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
+const MAX_STORAGE_IDENTIFIER_BYTES: usize = 128;
+pub(crate) const MAX_THREAD_RECORD_BYTES: usize = 4 * 1024 * 1024;
+pub(crate) const MAX_MESSAGE_RECORD_BYTES: usize = 16 * 1024 * 1024;
+const MAX_THREAD_ASSISTANTS: usize = 256;
+const MAX_MESSAGE_CONTENT_ITEMS: usize = 10_000;
+
+pub(crate) fn validate_storage_identifier(kind: &str, value: &str) -> Result<(), String> {
+    if value.is_empty()
+        || value.len() > MAX_STORAGE_IDENTIFIER_BYTES
+        || !value
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
+    {
+        Err(format!(
+            "{kind} must contain 1-{MAX_STORAGE_IDENTIFIER_BYTES} ASCII letters, digits, '-' or '_'"
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 /// Deserialize an `Option<i64>` that may have been written as either an integer
 /// or a floating-point number on disk.
 ///
@@ -102,8 +123,19 @@ pub struct ThreadRecord {
 
 impl ThreadRecord {
     pub fn validate(&self) -> Result<(), String> {
-        if self.id.trim().is_empty() {
-            return Err("ThreadRecord has empty id".to_string());
+        validate_storage_identifier("Thread id", &self.id)?;
+        if self.assistants.len() > MAX_THREAD_ASSISTANTS {
+            return Err(format!(
+                "Thread has more than {MAX_THREAD_ASSISTANTS} assistants"
+            ));
+        }
+        let serialized_size = serde_json::to_vec(self)
+            .map_err(|error| format!("Failed to validate thread record: {error}"))?
+            .len();
+        if serialized_size > MAX_THREAD_RECORD_BYTES {
+            return Err(format!(
+                "Thread record exceeds the {MAX_THREAD_RECORD_BYTES}-byte limit"
+            ));
         }
         Ok(())
     }
@@ -157,11 +189,20 @@ pub struct MessageRecord {
 
 impl MessageRecord {
     pub fn validate(&self) -> Result<(), String> {
-        if self.id.trim().is_empty() {
-            return Err("MessageRecord has empty id".to_string());
+        validate_storage_identifier("Message id", &self.id)?;
+        validate_storage_identifier("Thread id", &self.thread_id)?;
+        if self.content.len() > MAX_MESSAGE_CONTENT_ITEMS {
+            return Err(format!(
+                "Message has more than {MAX_MESSAGE_CONTENT_ITEMS} content items"
+            ));
         }
-        if self.thread_id.trim().is_empty() {
-            return Err(format!("MessageRecord {} has empty thread_id", self.id));
+        let serialized_size = serde_json::to_vec(self)
+            .map_err(|error| format!("Failed to validate message record: {error}"))?
+            .len();
+        if serialized_size > MAX_MESSAGE_RECORD_BYTES {
+            return Err(format!(
+                "Message record exceeds the {MAX_MESSAGE_RECORD_BYTES}-byte limit"
+            ));
         }
         Ok(())
     }
@@ -277,7 +318,7 @@ mod tests {
             ..Default::default()
         };
         let err = thread.validate().unwrap_err();
-        assert!(err.contains("empty id"), "unexpected error: {err}");
+        assert!(err.contains("Thread id"), "unexpected error: {err}");
     }
 
     #[test]
@@ -309,7 +350,7 @@ mod tests {
             ..Default::default()
         };
         let err = message.validate().unwrap_err();
-        assert!(err.contains("empty id"), "unexpected error: {err}");
+        assert!(err.contains("Message id"), "unexpected error: {err}");
     }
 
     #[test]
@@ -320,7 +361,7 @@ mod tests {
             ..Default::default()
         };
         let err = message.validate().unwrap_err();
-        assert!(err.contains("empty thread_id"), "unexpected error: {err}");
+        assert!(err.contains("Thread id"), "unexpected error: {err}");
     }
 
     #[test]
@@ -331,5 +372,13 @@ mod tests {
             ..Default::default()
         };
         assert!(message.validate().is_err());
+    }
+
+    #[test]
+    fn storage_identifiers_reject_path_and_normalization_collisions() {
+        for invalid in ["../thread", "thread/name", "thread.name", "å", "   "] {
+            assert!(validate_storage_identifier("Thread id", invalid).is_err());
+        }
+        assert!(validate_storage_identifier("Thread id", "01JZ-THREAD_123").is_ok());
     }
 }

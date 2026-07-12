@@ -1,14 +1,20 @@
 use std::fs;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, Runtime, State};
 
 use crate::core::app::commands::{
-    default_data_folder_path, get_app_data_folder_path, update_app_configuration,
+    default_data_folder_path, get_app_data_folder_path, is_managed_data_folder,
+    update_app_configuration, validate_data_folder_path, write_data_folder_marker,
 };
 use crate::core::app::models::AppConfiguration;
 use crate::core::mcp::helpers::{stop_mcp_servers_with_context, ShutdownContext};
 use crate::core::state::AppState;
 use ax_studio_utils::normalize_path;
+
+const MAX_BROWSER_LOG_MESSAGE_BYTES: usize = 64 * 1024;
+const MAX_BROWSER_LOG_FILE_NAME_BYTES: usize = 256;
+const MAX_LOG_READ_BYTES: u64 = 4 * 1024 * 1024;
 
 fn is_path_in_allowed_user_dirs(
     canonical_path: &std::path::Path,
@@ -155,7 +161,22 @@ pub fn is_subdirectory(from: String, to: String) -> Result<bool, String> {
 #[tauri::command]
 pub fn log(request: LogRequest) -> Result<(), String> {
     let (message, file_name) = request.into_parts()?;
+    if message.len() > MAX_BROWSER_LOG_MESSAGE_BYTES
+        || message
+            .chars()
+            .any(|character| character.is_control() && !matches!(character, '\r' | '\n' | '\t'))
+    {
+        return Err(format!(
+            "log message exceeds the {MAX_BROWSER_LOG_MESSAGE_BYTES}-byte limit or contains unsafe control characters"
+        ));
+    }
+    let message = message.replace('\r', "\\r").replace('\n', "\\n");
     if let Some(file_name) = file_name {
+        if file_name.len() > MAX_BROWSER_LOG_FILE_NAME_BYTES
+            || file_name.chars().any(char::is_control)
+        {
+            return Err("log file name is invalid".to_string());
+        }
         ::log::info!("[browser:{file_name}] {message}");
     } else {
         ::log::info!("[browser] {message}");
@@ -182,13 +203,25 @@ pub async fn factory_reset<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    let _reset_guard = state.factory_reset_lock.lock().await;
+    // Prove the destructive target is an app-managed directory before
+    // stopping services or closing windows. A corrupt/legacy configuration
+    // must fail without disrupting the running application.
+    let data_folder =
+        validate_data_folder_path(&get_app_data_folder_path(app_handle.clone()).to_string_lossy())?;
+    if !is_managed_data_folder(&app_handle, &data_folder) {
+        return Err(format!(
+            "Refusing to reset unmarked custom data directory: {}",
+            data_folder.display()
+        ));
+    }
+
     let windows = app_handle.webview_windows();
     for (label, window) in windows.iter() {
         window.close().unwrap_or_else(|_| {
             ::log::warn!("Failed to close window: {label:?}");
         });
     }
-    let data_folder = get_app_data_folder_path(app_handle.clone());
     ::log::info!("Factory reset, removing data folder: {data_folder:?}");
 
     let _ = stop_mcp_servers_with_context(&app_handle, &state, ShutdownContext::FactoryReset).await;
@@ -199,8 +232,6 @@ pub async fn factory_reset<R: Runtime>(
     }
 
     {
-        let _reset_guard = state.factory_reset_lock.lock().await;
-
         use crate::core::mcp::lockfile::cleanup_own_locks;
         if let Err(e) = cleanup_own_locks(&app_handle) {
             ::log::warn!("Failed to cleanup lock files: {}", e);
@@ -215,6 +246,7 @@ pub async fn factory_reset<R: Runtime>(
 
         fs::create_dir_all(&data_folder)
             .map_err(|e| format!("Failed to recreate data folder: {e}"))?;
+        write_data_folder_marker(&data_folder)?;
     }
 
     // Reset the configuration
@@ -258,14 +290,41 @@ pub fn open_file_explorer(path: String) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn read_logs<R: Runtime>(app: AppHandle<R>) -> Result<String, String> {
-    let log_path = get_app_data_folder_path(app).join("logs").join("app.log");
+    let app_data = get_app_data_folder_path(app);
+    let canonical_app_data = app_data
+        .canonicalize()
+        .map(|path| normalize_path(&path))
+        .unwrap_or_else(|_| normalize_path(&app_data));
+    let log_path = app_data.join("logs").join("app.log");
     if !log_path.exists() {
         return Err("Log file not found".to_string());
     }
-    let content = tokio::task::spawn_blocking(move || fs::read_to_string(log_path))
-        .await
-        .map_err(|e| format!("read_logs task error: {e}"))?
-        .map_err(|e| e.to_string())?;
+    let log_path = log_path
+        .canonicalize()
+        .map(|path| normalize_path(&path))
+        .map_err(|error| format!("Failed to resolve log file: {error}"))?;
+    if !log_path.starts_with(&canonical_app_data) || !log_path.is_file() {
+        return Err("Log file escaped the app data directory".to_string());
+    }
+    let content = tokio::task::spawn_blocking(move || -> Result<String, std::io::Error> {
+        let mut file = fs::File::open(log_path)?;
+        let length = file.metadata()?.len();
+        let read_length = length.min(MAX_LOG_READ_BYTES);
+        if read_length < length {
+            file.seek(SeekFrom::End(-(read_length as i64)))?;
+        }
+        let mut bytes = Vec::with_capacity(read_length as usize);
+        file.read_to_end(&mut bytes)?;
+        if read_length < length {
+            if let Some(newline) = bytes.iter().position(|byte| *byte == b'\n') {
+                bytes.drain(..=newline);
+            }
+        }
+        Ok(String::from_utf8_lossy(&bytes).into_owned())
+    })
+    .await
+    .map_err(|e| format!("read_logs task error: {e}"))?
+    .map_err(|e| e.to_string())?;
     Ok(redact_sensitive_data(&content))
 }
 
@@ -361,6 +420,25 @@ mod tests {
         });
 
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_log_rejects_oversized_or_unsafe_fields() {
+        assert!(log(LogRequest::Typed {
+            message: "x".repeat(MAX_BROWSER_LOG_MESSAGE_BYTES + 1),
+            file_name: None,
+        })
+        .is_err());
+        assert!(log(LogRequest::Typed {
+            message: "message".to_string(),
+            file_name: Some("forged\nsource.ts".to_string()),
+        })
+        .is_err());
+        assert!(log(LogRequest::Typed {
+            message: "line one\nline two".to_string(),
+            file_name: Some("source.ts".to_string()),
+        })
+        .is_ok());
     }
 
     #[cfg(windows)]

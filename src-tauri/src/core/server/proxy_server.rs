@@ -1,5 +1,5 @@
 //! HTTP server lifecycle for the AX Studio API proxy.
-use crate::core::state::ServerHandle;
+use crate::core::{network_security::PublicDnsResolver, state::ServerHandle};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Server;
 use reqwest::Client;
@@ -51,6 +51,16 @@ pub async fn start_server<R: tauri::Runtime>(
     let connect_timeout_secs = proxy_timeout.min(30);
     let client = Client::builder()
         .connect_timeout(std::time::Duration::from_secs(connect_timeout_secs))
+        // Redirect destinations bypass the provider URL chosen by the user and
+        // would otherwise bypass the per-request SSRF check.
+        .redirect(reqwest::redirect::Policy::none())
+        // Validate the exact DNS answers used by reqwest, closing the gap
+        // between the async preflight lookup and the actual connection.
+        // `localhost` is explicitly allowed for local model providers; other
+        // private hostnames must use a literal, per-request-approved IP.
+        .dns_resolver(Arc::new(PublicDnsResolver::allowing_loopback_host(
+            "localhost",
+        )))
         .pool_max_idle_per_host(10)
         .pool_idle_timeout(std::time::Duration::from_secs(30))
         .build()?;

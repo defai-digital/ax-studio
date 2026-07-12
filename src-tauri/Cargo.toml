@@ -125,14 +125,11 @@ subtle = "2.6"
 regex = "1"
 base64 = "0.22"
 semver = "1"
+tempfile = "3.20.0"
 
 [dependencies.tauri]
 workspace = true
 features = ["protocol-asset", "test"]
-
-[target.'cfg(windows)'.dev-dependencies]
-tempfile = "3.20.0"
-
 
 [target.'cfg(unix)'.dependencies]
 nix = { workspace = true }

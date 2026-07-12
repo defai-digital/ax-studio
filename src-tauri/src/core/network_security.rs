@@ -61,17 +61,30 @@ async fn lookup_validated(host: &str, allow_private: bool) -> io::Result<Vec<Soc
 #[derive(Clone, Debug, Default)]
 pub struct PublicDnsResolver {
     allowed_private_hosts: Arc<HashSet<String>>,
+    loopback_only_hosts: Arc<HashSet<String>>,
 }
 
 impl PublicDnsResolver {
     pub fn allowing_private_host(host: &str) -> Self {
         Self {
             allowed_private_hosts: Arc::new(HashSet::from([normalized_host(host)])),
+            loopback_only_hosts: Arc::new(HashSet::new()),
+        }
+    }
+
+    pub fn allowing_loopback_host(host: &str) -> Self {
+        Self {
+            allowed_private_hosts: Arc::new(HashSet::new()),
+            loopback_only_hosts: Arc::new(HashSet::from([normalized_host(host)])),
         }
     }
 
     fn allows_private_host(&self, host: &str) -> bool {
         self.allowed_private_hosts.contains(&normalized_host(host))
+    }
+
+    fn requires_loopback_host(&self, host: &str) -> bool {
+        self.loopback_only_hosts.contains(&normalized_host(host))
     }
 }
 
@@ -79,10 +92,18 @@ impl Resolve for PublicDnsResolver {
     fn resolve(&self, name: Name) -> Resolving {
         let host = name.as_str().to_string();
         let allow_private = self.allows_private_host(&host);
+        let require_loopback = self.requires_loopback_host(&host);
         Box::pin(async move {
-            let addresses = lookup_validated(&host, allow_private)
+            let addresses = lookup_validated(&host, allow_private || require_loopback)
                 .await
                 .map_err(|error| -> Box<dyn std::error::Error + Send + Sync> { Box::new(error) })?;
+            if require_loopback && addresses.iter().any(|address| !address.ip().is_loopback()) {
+                return Err(Box::new(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    format!("{host} resolved to a non-loopback address"),
+                ))
+                    as Box<dyn std::error::Error + Send + Sync>);
+            }
             Ok(Box::new(addresses.into_iter()) as Addrs)
         })
     }
@@ -170,5 +191,9 @@ mod tests {
         let resolver = PublicDnsResolver::allowing_private_host("Proxy.Internal.");
         assert!(resolver.allows_private_host("proxy.internal"));
         assert!(!resolver.allows_private_host("evil.proxy.internal"));
+
+        let loopback = PublicDnsResolver::allowing_loopback_host("LOCALHOST.");
+        assert!(loopback.requires_loopback_host("localhost"));
+        assert!(!loopback.requires_loopback_host("evil.localhost"));
     }
 }

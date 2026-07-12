@@ -8,7 +8,9 @@ use super::helpers::{
     get_lock_for_thread, prune_unused_message_locks, read_messages_from_path,
     remove_lock_for_thread, rewrite_messages_file, update_thread_metadata,
 };
-use super::models::{MessageRecord, ThreadRecord};
+use super::models::{
+    validate_storage_identifier, MessageRecord, ThreadRecord, MAX_THREAD_RECORD_BYTES,
+};
 use super::{
     constants::THREADS_FILE,
     utils::{
@@ -28,20 +30,46 @@ pub async fn list_threads<R: Runtime>(
     task::spawn_blocking(move || -> Result<Vec<ThreadRecord>, String> {
         let mut threads = Vec::new();
         let mut skipped = 0u32;
+        let mut scanned = 0usize;
         if !data_dir.exists() {
             return Ok(threads);
         }
 
         for entry in fs::read_dir(&data_dir).map_err(|e| e.to_string())? {
+            scanned += 1;
+            if scanned > 100_000 {
+                return Err("Thread directory contains more than 100000 entries".to_string());
+            }
             let entry = entry.map_err(|e| e.to_string())?;
             let path = entry.path();
-            if path.is_dir() {
+            if entry.file_type().map_err(|e| e.to_string())?.is_dir() {
                 let thread_metadata_path = path.join(THREADS_FILE);
                 if thread_metadata_path.exists() {
+                    if fs::metadata(&thread_metadata_path)
+                        .map_err(|error| error.to_string())?
+                        .len()
+                        > MAX_THREAD_RECORD_BYTES as u64
+                    {
+                        skipped += 1;
+                        continue;
+                    }
                     let data =
                         fs::read_to_string(&thread_metadata_path).map_err(|e| e.to_string())?;
-                    match serde_json::from_str(&data) {
-                        Ok(thread) => threads.push(thread),
+                    match serde_json::from_str::<ThreadRecord>(&data) {
+                        Ok(thread)
+                            if thread.validate().is_ok()
+                                && path.file_name().and_then(|name| name.to_str())
+                                    == Some(thread.id.as_str()) =>
+                        {
+                            threads.push(thread)
+                        }
+                        Ok(_) => {
+                            skipped += 1;
+                            log::warn!(
+                                "Skipping thread metadata with invalid or mismatched id: {}",
+                                thread_metadata_path.display()
+                            );
+                        }
                         Err(e) => {
                             skipped += 1;
                             log::warn!(
@@ -80,12 +108,20 @@ pub async fn create_thread<R: Runtime>(
     let uuid = thread.id.clone();
     let thread_dir = get_thread_dir(app_handle.clone(), &uuid);
     let path = get_thread_metadata_path(app_handle.clone(), &uuid);
-    let data = serde_json::to_string_pretty(&thread).map_err(|e| e.to_string())?;
+    let persisted_thread = thread.clone();
     tokio::task::spawn_blocking(move || {
-        if !thread_dir.exists() {
-            fs::create_dir_all(&thread_dir).map_err(|e| e.to_string())?;
+        fs::create_dir(&thread_dir).map_err(|error| {
+            if error.kind() == std::io::ErrorKind::AlreadyExists {
+                format!("Thread '{uuid}' already exists")
+            } else {
+                error.to_string()
+            }
+        })?;
+        if let Err(error) = update_thread_metadata(&path, &persisted_thread) {
+            let _ = fs::remove_dir_all(&thread_dir);
+            return Err(error);
         }
-        fs::write(path, data).map_err(|e| e.to_string())
+        Ok(())
     })
     .await
     .map_err(|e| format!("create_thread task error: {e}"))??;
@@ -134,6 +170,7 @@ pub async fn delete_thread<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     thread_id: String,
 ) -> Result<(), String> {
+    validate_storage_identifier("Thread id", &thread_id)?;
     {
         let lock = get_lock_for_thread(&thread_id).await;
         let _guard = lock.lock().await;
@@ -156,12 +193,15 @@ pub async fn list_messages<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     thread_id: String,
 ) -> Result<Vec<MessageRecord>, String> {
+    validate_storage_identifier("Thread id", &thread_id)?;
     let lock = get_lock_for_thread(&thread_id).await;
     let _guard = lock.lock().await;
     let path = get_messages_path(app_handle.clone(), &thread_id);
-    let messages = tokio::task::spawn_blocking(move || read_messages_from_path(&path))
-        .await
-        .map_err(|e| format!("list_messages task error: {e}"))?;
+    let expected_thread_id = thread_id.clone();
+    let messages =
+        tokio::task::spawn_blocking(move || read_messages_from_path(&path, &expected_thread_id))
+            .await
+            .map_err(|e| format!("list_messages task error: {e}"))?;
     drop(_guard);
     drop(lock);
     prune_unused_message_locks().await;
@@ -185,6 +225,9 @@ pub async fn create_message<R: Runtime>(
     }
     let path = get_messages_path(app_handle.clone(), &thread_id);
     let thread_dir = get_thread_dir(app_handle.clone(), &thread_id);
+    if !get_thread_metadata_path(app_handle.clone(), &thread_id).is_file() {
+        return Err("Cannot create a message for a missing thread".to_string());
+    }
 
     {
         let lock = get_lock_for_thread(&thread_id).await;
@@ -192,8 +235,8 @@ pub async fn create_message<R: Runtime>(
 
         let data = serde_json::to_string(&message).map_err(|e| e.to_string())?;
         task::spawn_blocking(move || -> Result<(), String> {
-            if !thread_dir.exists() {
-                fs::create_dir_all(&thread_dir).map_err(|e| e.to_string())?;
+            if !thread_dir.is_dir() {
+                return Err("Thread directory does not exist".to_string());
             }
             let mut file = fs::OpenOptions::new()
                 .create(true)
@@ -235,7 +278,7 @@ pub async fn modify_message<R: Runtime>(
         let messages_path = get_messages_path(app_handle.clone(), thread_id);
         let message_id_owned = message_id.to_string();
         let message_clone = message.clone();
-        task::spawn_blocking(move || {
+        let changed = task::spawn_blocking(move || {
             rewrite_messages_file(&messages_path, |existing| {
                 if existing.id == message_id_owned {
                     Some(message_clone.clone())
@@ -246,6 +289,9 @@ pub async fn modify_message<R: Runtime>(
         })
         .await
         .map_err(|e| format!("modify_message task error: {e}"))??;
+        if !changed {
+            return Err(format!("Message '{message_id}' not found"));
+        }
     }
     prune_unused_message_locks().await;
     Ok(message)
@@ -258,6 +304,8 @@ pub async fn delete_message<R: Runtime>(
     thread_id: String,
     message_id: String,
 ) -> Result<(), String> {
+    validate_storage_identifier("Thread id", &thread_id)?;
+    validate_storage_identifier("Message id", &message_id)?;
     {
         let lock = get_lock_for_thread(&thread_id).await;
         let _guard = lock.lock().await;
@@ -287,6 +335,7 @@ pub async fn get_thread_assistant<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     thread_id: String,
 ) -> Result<serde_json::Value, String> {
+    validate_storage_identifier("Thread id", &thread_id)?;
     let path = get_thread_metadata_path(app_handle, &thread_id);
     if !path.exists() {
         return Err("Thread not found".to_string());
@@ -298,6 +347,7 @@ pub async fn get_thread_assistant<R: Runtime>(
     let result = task::spawn_blocking(move || -> Result<serde_json::Value, String> {
         let data = fs::read_to_string(&path).map_err(|e| e.to_string())?;
         let thread: ThreadRecord = serde_json::from_str(&data).map_err(|e| e.to_string())?;
+        thread.validate()?;
         if let Some(first) = thread.assistants.first() {
             Ok(first.clone())
         } else {
@@ -321,6 +371,7 @@ pub async fn create_thread_assistant<R: Runtime>(
     thread_id: String,
     assistant: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
+    validate_storage_identifier("Thread id", &thread_id)?;
     let path = get_thread_metadata_path(app_handle.clone(), &thread_id);
     if !path.exists() {
         return Err("Thread not found".to_string());
@@ -337,6 +388,7 @@ pub async fn create_thread_assistant<R: Runtime>(
 
     let mut thread: ThreadRecord = serde_json::from_str(&data).map_err(|e| e.to_string())?;
     thread.assistants.push(assistant.clone());
+    thread.validate()?;
 
     task::spawn_blocking(move || update_thread_metadata(&path, &thread))
         .await
@@ -355,6 +407,7 @@ pub async fn modify_thread_assistant<R: Runtime>(
     thread_id: String,
     assistant: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
+    validate_storage_identifier("Thread id", &thread_id)?;
     let path = get_thread_metadata_path(app_handle.clone(), &thread_id);
     if !path.exists() {
         return Err("Thread not found".to_string());
@@ -381,6 +434,7 @@ pub async fn modify_thread_assistant<R: Runtime>(
         .position(|a| a.get("id").and_then(|v| v.as_str()) == Some(assistant_id.as_str()))
         .ok_or_else(|| format!("Assistant '{assistant_id}' not found in thread '{thread_id}'"))?;
     thread.assistants[index] = assistant.clone();
+    thread.validate()?;
     task::spawn_blocking(move || update_thread_metadata(&path, &thread))
         .await
         .map_err(|e| format!("modify_thread_assistant task error: {e}"))??;

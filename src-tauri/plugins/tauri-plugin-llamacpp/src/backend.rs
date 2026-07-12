@@ -1107,7 +1107,7 @@ mod tests {
         let backend_a = v1_path.join("backend-a");
         let backend_empty = v1_path.join("backend-empty");
 
-        fs::create_dir_all(&backend_a.join("build").join("bin")).unwrap();
+        fs::create_dir_all(backend_a.join("build").join("bin")).unwrap();
         fs::create_dir_all(&backend_empty).unwrap();
 
         // Create mock executable

@@ -34,7 +34,6 @@ macro_rules! desktop_handlers {
             // App configuration commands
             crate::core::app::commands::get_app_configurations,
             crate::core::app::commands::get_user_home_path,
-            crate::core::app::commands::update_app_configuration,
             crate::core::app::commands::get_app_data_folder_path,
             crate::core::app::commands::get_configuration_file_path,
             crate::core::app::commands::default_data_folder_path,

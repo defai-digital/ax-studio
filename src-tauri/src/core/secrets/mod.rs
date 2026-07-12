@@ -2,6 +2,7 @@ use std::sync::{Mutex, OnceLock};
 
 const CREDENTIAL_SERVICE: &str = "ai.axstudio.app";
 const PROXY_PASSWORD_KEY: &str = "proxy-password";
+const MAX_SECRET_BYTES: usize = 16 * 1024;
 
 static CREDENTIAL_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
@@ -59,6 +60,11 @@ pub async fn get_secret(key: String) -> Result<Option<String>, String> {
 #[tauri::command]
 pub async fn set_secret(key: String, value: String) -> Result<(), String> {
     let key = validate_key(&key)?;
+    if value.len() > MAX_SECRET_BYTES || value.contains('\0') {
+        return Err(format!(
+            "Secure credential exceeds the {MAX_SECRET_BYTES}-byte limit or contains NUL"
+        ));
+    }
     tauri::async_runtime::spawn_blocking(move || {
         #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
         {
@@ -94,12 +100,27 @@ pub async fn delete_secret(key: String) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_key, PROXY_PASSWORD_KEY};
+    use super::{validate_key, MAX_SECRET_BYTES, PROXY_PASSWORD_KEY};
 
     #[test]
     fn only_known_secret_keys_are_accepted() {
         assert_eq!(validate_key(PROXY_PASSWORD_KEY), Ok(PROXY_PASSWORD_KEY));
         assert!(validate_key("arbitrary-secret").is_err());
         assert!(validate_key("").is_err());
+    }
+
+    #[tokio::test]
+    async fn secret_payload_is_bounded_before_keyring_access() {
+        assert!(super::set_secret(
+            PROXY_PASSWORD_KEY.to_string(),
+            "x".repeat(MAX_SECRET_BYTES + 1),
+        )
+        .await
+        .is_err());
+        assert!(
+            super::set_secret(PROXY_PASSWORD_KEY.to_string(), "bad\0secret".to_string())
+                .await
+                .is_err()
+        );
     }
 }
