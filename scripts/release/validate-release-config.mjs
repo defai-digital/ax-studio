@@ -5,6 +5,11 @@ import path from 'node:path'
 
 const repoRoot = path.resolve(import.meta.dirname, '..', '..')
 const stablePlatforms = ['darwin-aarch64', 'windows-x86_64', 'windows-aarch64']
+const releaseWorkflowPaths = [
+  '.github/workflows/template-tauri-build-windows-x64.yml',
+  '.github/workflows/template-tauri-build-windows-arm64.yml',
+]
+const customNsisTemplatePath = 'src-tauri/tauri.bundle.windows.nsis.template'
 
 function readJson(relativePath) {
   return JSON.parse(fs.readFileSync(path.join(repoRoot, relativePath), 'utf8'))
@@ -55,6 +60,15 @@ for (const platform of stablePlatforms) {
   const entry = latestTemplate.platforms?.[platform]
   if (!entry || typeof entry.signature !== 'string' || typeof entry.url !== 'string') {
     fail(`src-tauri/latest.json.template platform ${platform} must have signature and url string fields`)
+  }
+}
+
+if (!fs.existsSync(path.join(repoRoot, customNsisTemplatePath))) {
+  for (const workflowPath of releaseWorkflowPaths) {
+    const workflow = fs.readFileSync(path.join(repoRoot, workflowPath), 'utf8')
+    if (workflow.includes(customNsisTemplatePath)) {
+      fail(`${workflowPath} references missing file ${customNsisTemplatePath}`)
+    }
   }
 }
 

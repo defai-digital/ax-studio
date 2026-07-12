@@ -117,59 +117,24 @@ jobs:
             ${TAURI_UPDATER_PUBKEY:+--updater-pubkey "$TAURI_UPDATER_PUBKEY"} \
             --windows-sign-command
 
-      - name: Configure Windows-specific settings and NSIS template
+      - name: Configure channel-specific settings
+        if: inputs.channel != 'stable'
         shell: bash
         run: |
-          jq '.bundle.windows.nsis.template = "tauri.bundle.windows.nsis.template"' ./src-tauri/tauri.windows.conf.json > /tmp/tauri.windows.conf.json
-          mv /tmp/tauri.windows.conf.json ./src-tauri/tauri.windows.conf.json
-
-          generate_build_version() {
-              local new_version="$1"
-              local base_version t_value
-              if [[ "$new_version" == *-* ]]; then
-                  base_version="${new_version%%-*}"
-                  suffix="${new_version#*-}"
-                  if [[ "$suffix" =~ ^rc([0-9]+)-beta$ ]]; then
-                      t_value="${BASH_REMATCH[1]}"
-                  else
-                      t_value="$suffix"
-                  fi
-              else
-                  base_version="$new_version"
-                  t_value="0"
-              fi
-              new_base_version="$base_version"
-              new_build_version="${base_version}.${t_value}"
-          }
-          generate_build_version ${{ inputs.new_version }}
-          sed -i "s/ax_studio_version/$new_base_version/g" ./src-tauri/tauri.bundle.windows.nsis.template
-          sed -i "s/ax_studio_build/$new_build_version/g" ./src-tauri/tauri.bundle.windows.nsis.template
-
-          if [ "${{ inputs.channel }}" != "stable" ]; then
-            if [[ "${{ inputs.channel }}" == "nightly" ]]; then
-              jq '.plugins.updater.endpoints = ["https://apps-nightly.axstudio.ai/update-check", "https://delta.axstudio.ai/${{ inputs.channel }}/latest.json"]' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
-            else
-              jq '.plugins.updater.endpoints = ["https://delta.axstudio.ai/${{ inputs.channel }}/latest.json"]' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
-            fi
-            mv /tmp/tauri.conf.json ./src-tauri/tauri.conf.json
-
-            jq --arg name "AX Studio-${{ inputs.channel }}" '.productName = $name' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
-            mv /tmp/tauri.conf.json ./src-tauri/tauri.conf.json
-
-            chmod +x .github/scripts/rename-tauri-app.sh
-            .github/scripts/rename-tauri-app.sh ./src-tauri/tauri.conf.json ${{ inputs.channel }}
-
-            ctoml ./src-tauri/Cargo.toml package.name "ax-studio-${{ inputs.channel }}"
-
-            chmod +x .github/scripts/rename-workspace.sh
-            .github/scripts/rename-workspace.sh ./package.json ${{ inputs.channel }}
-
-            sed -i "s/ax_studio_productname/AX Studio-${{ inputs.channel }}/g" ./src-tauri/tauri.bundle.windows.nsis.template
-            sed -i "s/ax_studio_mainbinaryname/ax-studio-${{ inputs.channel }}/g" ./src-tauri/tauri.bundle.windows.nsis.template
+          if [[ "${{ inputs.channel }}" == "nightly" ]]; then
+            jq '.plugins.updater.endpoints = ["https://apps-nightly.axstudio.ai/update-check", "https://delta.axstudio.ai/${{ inputs.channel }}/latest.json"]' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
           else
-            sed -i "s/ax_studio_productname/AX Studio/g" ./src-tauri/tauri.bundle.windows.nsis.template
-            sed -i "s/ax_studio_mainbinaryname/ax-studio/g" ./src-tauri/tauri.bundle.windows.nsis.template
+            jq '.plugins.updater.endpoints = ["https://delta.axstudio.ai/${{ inputs.channel }}/latest.json"]' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
           fi
+          mv /tmp/tauri.conf.json ./src-tauri/tauri.conf.json
+
+          chmod +x .github/scripts/rename-tauri-app.sh
+          .github/scripts/rename-tauri-app.sh ./src-tauri/tauri.conf.json ${{ inputs.channel }}
+
+          ctoml ./src-tauri/Cargo.toml package.name "ax-studio-${{ inputs.channel }}"
+
+          chmod +x .github/scripts/rename-workspace.sh
+          .github/scripts/rename-workspace.sh ./package.json ${{ inputs.channel }}
 
       - name: Install AzureSignTool
         run: |
