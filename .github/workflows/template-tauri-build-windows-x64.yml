@@ -192,38 +192,49 @@ jobs:
           retention-days: 14
           path: |
             ./src-tauri/target/release/AX Studio*.exe
+            ./src-tauri/target/release/ax-studio.exe
 
       ## Set output filename for windows
       - name: Set output filename for windows
         shell: bash
+        env:
+          VERSION: ${{ inputs.new_version }}
         run: |
-          cd ./src-tauri/target/release/bundle/nsis
+          set -euo pipefail
+          TARGET_DIR="./src-tauri/target/release"
+          NSIS_DIR="${TARGET_DIR}/bundle/nsis"
           if [ "${{ inputs.channel }}" != "stable" ]; then
-            FILE_NAME="AX Studio-${{ inputs.channel }}_${{ inputs.new_version }}_x64-setup.exe"
-            WIN_SIG=$(cat "AX Studio-${{ inputs.channel }}_${{ inputs.new_version }}_x64-setup.exe.sig")
-
-            MSI_FILE="AX Studio-${{ inputs.channel }}_${{ inputs.new_version }}_x64_en-US.msi"
-            PORTABLE_FILE_NAME="AX Studio-${{ inputs.channel }}_${{ inputs.new_version }}_x64-portable.exe"
+            RAW_FILE_NAME="AX Studio-${{ inputs.channel }}_${VERSION}_x64-setup.exe"
+            FILE_NAME="AX.Studio-${{ inputs.channel }}_${VERSION}_x64-setup.exe"
+            MSI_FILE="AX Studio-${{ inputs.channel }}_${VERSION}_x64_en-US.msi"
+            PORTABLE_FILE_NAME="AX.Studio-${{ inputs.channel }}_${VERSION}_x64-portable.exe"
           else
-            FILE_NAME="AX Studio_${{ inputs.new_version }}_x64-setup.exe"
-            WIN_SIG=$(cat "AX Studio_${{ inputs.new_version }}_x64-setup.exe.sig")
-            
-            MSI_FILE="AX Studio_${{ inputs.new_version }}_x64_en-US.msi"
-            PORTABLE_FILE_NAME="AX Studio_${{ inputs.new_version }}_x64-portable.exe"
+            RAW_FILE_NAME="AX Studio_${VERSION}_x64-setup.exe"
+            FILE_NAME="AX.Studio_${VERSION}_x64-setup.exe"
+            MSI_FILE="AX Studio_${VERSION}_x64_en-US.msi"
+            PORTABLE_FILE_NAME="AX.Studio_${VERSION}_x64-portable.exe"
           fi
-          # go to ./src-tauri/target/release
-          cd ../..
 
-          # find the actual portable exe produced by the build
-          PORTABLE_SRC=$(find . -maxdepth 1 -type f -name 'AX Studio*.exe' -print -quit)
-          if [ -z "$PORTABLE_SRC" ] || [ ! -f "$PORTABLE_SRC" ]; then
-            echo "Error: portable exe matching 'AX Studio*.exe' not found in $(pwd)" >&2
-            exit 1
+          if [ -f "${NSIS_DIR}/${RAW_FILE_NAME}" ]; then
+            mv "${NSIS_DIR}/${RAW_FILE_NAME}" "${NSIS_DIR}/${FILE_NAME}"
           fi
-          PORTABLE_SRC=${PORTABLE_SRC#./}
-          # copy to deterministic versioned filename
-          cp "$PORTABLE_SRC" "$PORTABLE_FILE_NAME"
-          echo "Portable exe: $PORTABLE_SRC -> $PORTABLE_FILE_NAME"
+          if [ -f "${NSIS_DIR}/${RAW_FILE_NAME}.sig" ]; then
+            mv "${NSIS_DIR}/${RAW_FILE_NAME}.sig" "${NSIS_DIR}/${FILE_NAME}.sig"
+          fi
+          test -f "${NSIS_DIR}/${FILE_NAME}"
+
+          WIN_SIG=""
+          if [ -f "${NSIS_DIR}/${FILE_NAME}.sig" ]; then
+            WIN_SIG=$(cat "${NSIS_DIR}/${FILE_NAME}.sig")
+          fi
+
+          PORTABLE_SRC=$(find "$TARGET_DIR" -maxdepth 1 -type f \( -name "AX Studio*.exe" -o -name "ax-studio.exe" \) -print -quit || true)
+          if [ -n "$PORTABLE_SRC" ] && [ -f "$PORTABLE_SRC" ]; then
+            cp "$PORTABLE_SRC" "${TARGET_DIR}/${PORTABLE_FILE_NAME}"
+            echo "Portable exe: $PORTABLE_SRC -> ${TARGET_DIR}/${PORTABLE_FILE_NAME}"
+          else
+            echo "::notice::Portable Windows x64 exe not found; continuing with NSIS installer only."
+          fi
 
           {
             echo "WIN_SIG=${WIN_SIG}"

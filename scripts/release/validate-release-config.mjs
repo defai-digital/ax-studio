@@ -79,6 +79,9 @@ for (const workflowPath of releaseWorkflowPaths) {
   if (!workflow.includes(windowsLongPathsCommand)) {
     fail(`${workflowPath} must enable Git long-path support with: ${windowsLongPathsCommand}`)
   }
+  if (!workflow.includes('-name "ax-studio.exe"')) {
+    fail(`${workflowPath} must recognize the raw Tauri portable binary ax-studio.exe`)
+  }
 }
 
 const setVersionScript = fs.readFileSync(path.join(repoRoot, 'scripts/release/set-version.mjs'), 'utf8')
