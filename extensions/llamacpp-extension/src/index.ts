@@ -2627,7 +2627,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         fileName: 'model.gguf',
       })
 
-      const proxy = getProxyConfig()
+      const proxy = await getProxyConfig()
       const proxyArg = buildProxyArg(proxy)
 
       try {
@@ -2709,7 +2709,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
       if (opts.mmprojPath.startsWith('http')) {
         if (!downloadExt) throw new Error('Download extension not available')
-        const proxy = getProxyConfig()
+        const proxy = await getProxyConfig()
         await downloadExt.downloadFile(
           opts.mmprojPath,
           mmprojFilePath,

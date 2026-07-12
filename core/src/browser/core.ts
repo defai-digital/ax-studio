@@ -13,11 +13,19 @@ const PRIVATE_HOSTNAME_PATTERNS = [
   /^192\.168\./,
   /^0\./,
   /^169\.254\./,
+  /^100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./,
+  /^192\.0\.(?:0|2)\./,
+  /^198\.(?:1[89]\.|51\.100\.)/,
+  /^203\.0\.113\./,
+  /^(?:22[4-9]|2[3-4]\d|25[0-5])\./,
   // Unique local (fc00::/7 → fc00–fdff) and link-local (fe80::/10 → fe80–febf)
   /^f[cd][0-9a-f]{2}:/i,
   /^fe[89ab][0-9a-f]:/i,
+  /^fe[c-f][0-9a-f]:/i,
+  /^ff[0-9a-f]{2}:/i,
+  /^2001:db8:/i,
+  /^::$/i,
   /^::1$/i,
-  /^localhost$/i,
   /^$/,
 ]
 
@@ -30,14 +38,16 @@ const unwrapIpv6Hostname = (hostname: string): string => {
 }
 
 /**
- * Expand IPv4-mapped IPv6 (::ffff:a.b.c.d or ::ffff:HHHH:LLLL) to dotted IPv4.
- * Returns null when the host is not an IPv4-mapped address.
+ * Expand IPv4-mapped/compatible IPv6 (::ffff:a.b.c.d, ::ffff:HHHH:LLLL,
+ * or ::HHHH:LLLL) to dotted IPv4.
  */
-const ipv4FromMappedIpv6 = (hostname: string): string | null => {
-  const dotted = hostname.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i)
+const ipv4FromEmbeddedIpv6 = (hostname: string): string | null => {
+  const dotted = hostname.match(/^::(?:ffff:)?(\d{1,3}(?:\.\d{1,3}){3})$/i)
   if (dotted) return dotted[1]
 
-  const hex = hostname.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i)
+  const hex = hostname.match(
+    /^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i
+  )
   if (!hex) return null
 
   const hi = Number.parseInt(hex[1], 16)
@@ -51,14 +61,27 @@ const isPrivateHostname = (hostname: string): boolean => {
   if (!hostname) return true
 
   const normalized = unwrapIpv6Hostname(hostname.trim())
+    .replace(/\.$/, '')
+    .toLowerCase()
   if (!normalized) return true
+
+  if (
+    normalized === 'localhost' ||
+    normalized.endsWith('.localhost') ||
+    normalized === 'local' ||
+    normalized.endsWith('.local') ||
+    normalized === 'internal' ||
+    normalized.endsWith('.internal')
+  ) {
+    return true
+  }
 
   if (PRIVATE_HOSTNAME_PATTERNS.some((pattern) => pattern.test(normalized))) {
     return true
   }
 
   // IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1 / ::ffff:7f00:1)
-  const mappedIpv4 = ipv4FromMappedIpv6(normalized)
+  const mappedIpv4 = ipv4FromEmbeddedIpv6(normalized)
   if (mappedIpv4) {
     return PRIVATE_HOSTNAME_PATTERNS.some((pattern) => pattern.test(mappedIpv4))
   }
@@ -74,6 +97,9 @@ export const validateUrlProtocol = (url: string): void => {
       throw new Error(
         `Unsafe URL protocol: ${parsedUrl.protocol}. Only http and https are allowed.`
       )
+    }
+    if (parsedUrl.username || parsedUrl.password) {
+      throw new Error('URLs with embedded credentials are not allowed.')
     }
     if (isPrivateHostname(parsedUrl.hostname)) {
       throw new Error(

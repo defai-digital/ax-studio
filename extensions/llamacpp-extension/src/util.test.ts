@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { invoke } from '@tauri-apps/api/core'
 import {
   getProxyConfig,
   buildProxyArg,
@@ -8,6 +9,12 @@ import {
   parseSimpleYaml,
   toSimpleYaml,
 } from './util'
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn().mockResolvedValue(null),
+}))
+
+const invokeMock = vi.mocked(invoke)
 
 const basenameNoExt = (filePath: string): string => {
   const name = filePath.includes('/') ? filePath.split('/').pop()! : filePath
@@ -78,73 +85,74 @@ describe('basenameNoExt', () => {
 describe('getProxyConfig', () => {
   beforeEach(() => {
     localStorage.clear()
+    invokeMock.mockResolvedValue(null)
   })
 
-  it('returns null when no proxy config is stored', () => {
-    expect(getProxyConfig()).toBeNull()
+  it('returns null when no proxy config is stored', async () => {
+    expect(await getProxyConfig()).toBeNull()
   })
 
-  it('returns null when proxy is disabled', () => {
+  it('returns null when proxy is disabled', async () => {
     localStorage.setItem(
       'setting-proxy-config',
       JSON.stringify({ enabled: false, host: 'proxy.example.com', port: 8080 })
     )
-    expect(getProxyConfig()).toBeNull()
+    expect(await getProxyConfig()).toBeNull()
   })
 
-  it('returns null when host is missing', () => {
+  it('returns null when host is missing', async () => {
     localStorage.setItem(
       'setting-proxy-config',
       JSON.stringify({ enabled: true, host: '', port: 8080 })
     )
-    expect(getProxyConfig()).toBeNull()
+    expect(await getProxyConfig()).toBeNull()
   })
 
-  it('returns proxy config when enabled with valid host', () => {
+  it('returns proxy config when enabled with valid host', async () => {
     localStorage.setItem(
       'setting-proxy-config',
       JSON.stringify({ enabled: true, host: 'proxy.local', port: 3128 })
     )
-    const config = getProxyConfig()
+    const config = await getProxyConfig()
     expect(config).not.toBeNull()
     expect(config!.host).toBe('proxy.local')
     expect(config!.port).toBe(3128)
   })
 
-  it('defaults port to 8080 when invalid', () => {
+  it('defaults port to 8080 when invalid', async () => {
     localStorage.setItem(
       'setting-proxy-config',
       JSON.stringify({ enabled: true, host: 'proxy.local', port: 'invalid' })
     )
-    const config = getProxyConfig()
+    const config = await getProxyConfig()
     expect(config!.port).toBe(8080)
   })
 
-  it('accepts decimal string ports', () => {
+  it('accepts decimal string ports', async () => {
     localStorage.setItem(
       'setting-proxy-config',
       JSON.stringify({ enabled: true, host: 'proxy.local', port: '3128' })
     )
-    const config = getProxyConfig()
+    const config = await getProxyConfig()
     expect(config!.port).toBe(3128)
   })
 
-  it('rejects non-decimal and out-of-range proxy ports', () => {
+  it('rejects non-decimal and out-of-range proxy ports', async () => {
     for (const port of ['0x10', '1e3', '8080.5', 0, 65536, Infinity]) {
       localStorage.setItem(
         'setting-proxy-config',
         JSON.stringify({ enabled: true, host: 'proxy.local', port })
       )
-      expect(getProxyConfig()!.port).toBe(8080)
+      expect((await getProxyConfig())!.port).toBe(8080)
     }
   })
 
-  it('returns null for invalid JSON', () => {
+  it('returns null for invalid JSON', async () => {
     localStorage.setItem('setting-proxy-config', 'not-json')
-    expect(getProxyConfig()).toBeNull()
+    expect(await getProxyConfig()).toBeNull()
   })
 
-  it('includes optional fields when present', () => {
+  it('includes optional fields when present', async () => {
     localStorage.setItem(
       'setting-proxy-config',
       JSON.stringify({
@@ -157,14 +165,14 @@ describe('getProxyConfig', () => {
         noVerify: true,
       })
     )
-    const config = getProxyConfig()
+    const config = await getProxyConfig()
     expect(config!.user).toBe('admin')
     expect(config!.password).toBe('secret')
     expect(config!.https).toBe(true)
     expect(config!.noVerify).toBe(true)
   })
 
-  it('parses boolean-like proxy flags without treating false strings as true', () => {
+  it('parses boolean-like proxy flags without treating false strings as true', async () => {
     for (const [https, noVerify, expectedHttps, expectedNoVerify] of [
       ['true', '1', true, true],
       ['false', '0', false, false],
@@ -181,10 +189,41 @@ describe('getProxyConfig', () => {
           noVerify,
         })
       )
-      const config = getProxyConfig()
+      const config = await getProxyConfig()
       expect(config!.https).toBe(expectedHttps)
       expect(config!.noVerify).toBe(expectedNoVerify)
     }
+  })
+
+  it('reads the current Zustand shape and retrieves password from secure storage', async () => {
+    invokeMock.mockResolvedValue('credential-store-secret')
+    localStorage.setItem(
+      'setting-proxy-config',
+      JSON.stringify({
+        state: {
+          proxyEnabled: true,
+          proxyUrl: 'https://proxy.example.com:8443',
+          proxyUsername: 'alice',
+          proxyPassword: '',
+          proxyIgnoreSSL: true,
+          noProxy: 'localhost, *.internal',
+        },
+        version: 0,
+      })
+    )
+
+    await expect(getProxyConfig()).resolves.toEqual({
+      host: 'proxy.example.com',
+      port: 8443,
+      user: 'alice',
+      password: 'credential-store-secret',
+      https: true,
+      noVerify: true,
+      noProxy: ['localhost', '*.internal'],
+    })
+    expect(invokeMock).toHaveBeenCalledWith('get_secret', {
+      key: 'proxy-password',
+    })
   })
 })
 
@@ -201,7 +240,7 @@ describe('buildProxyArg', () => {
 
   it('builds https URL when https is true', () => {
     const result = buildProxyArg({ host: 'proxy.local', port: 443, https: true })
-    expect(result!.url).toBe('https://proxy.local:443')
+    expect(result!.url).toBe('https://proxy.local')
   })
 
   it('includes username when provided', () => {
@@ -209,14 +248,16 @@ describe('buildProxyArg', () => {
     expect(result!.username).toBe('admin')
   })
 
-  it('embeds credentials in the proxy URL when provided', () => {
+  it('keeps credentials out of the proxy URL and in dedicated fields', () => {
     const result = buildProxyArg({
       host: 'proxy.local',
       port: 8080,
       user: 'admin',
       password: 'secret with space',
     })
-    expect(result!.url).toBe('http://admin:secret%20with%20space@proxy.local:8080')
+    expect(result!.url).toBe('http://proxy.local:8080')
+    expect(result!.username).toBe('admin')
+    expect(result!.password).toBe('secret with space')
   })
 
   it('includes password when provided', () => {
@@ -238,6 +279,32 @@ describe('buildProxyArg', () => {
     const result = buildProxyArg({ host: 'proxy.local', port: 8080 })
     expect(result!.username).toBeUndefined()
     expect(result!.password).toBeUndefined()
+  })
+
+  it('pairs partial credentials and forwards no_proxy entries', () => {
+    const result = buildProxyArg({
+      host: 'proxy.local',
+      port: 8080,
+      user: 'admin',
+      noProxy: ['localhost', '*.internal'],
+    })
+    expect(result).toMatchObject({
+      url: 'http://proxy.local:8080',
+      username: 'admin',
+      password: '',
+      no_proxy: ['localhost', '*.internal'],
+    })
+  })
+
+  it('rejects malformed proxy hosts instead of constructing an ambiguous URL', () => {
+    for (const host of [
+      'user:secret@proxy.local/path',
+      'proxy.local/path',
+      'proxy.local?target=other',
+      'proxy.local#fragment',
+    ]) {
+      expect(buildProxyArg({ host, port: 8080 })).toBeNull()
+    }
   })
 })
 

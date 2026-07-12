@@ -1,36 +1,71 @@
-use super::models::{DownloadEvent, DownloadItem, ProgressTracker, ProxyConfig};
+pub use super::http_client::{
+    _get_client_for_item, _get_file_size, _get_maybe_resume_with_fallback,
+};
+use super::models::{DownloadEvent, DownloadItem, ProgressTracker};
+use super::policy::redact_url_for_log;
+pub use super::policy::{
+    _convert_headers, err_to_string, validate_download_request, validate_download_task_id,
+};
+#[cfg(test)]
+pub use super::policy::{create_proxy_from_config, should_bypass_proxy, validate_proxy_config};
+#[cfg(test)]
+use super::{
+    http_client::{content_range_start, same_origin},
+    models::ProxyConfig,
+    policy::{
+        validate_download_url, MAX_DOWNLOAD_HEADERS, MAX_DOWNLOAD_HEADER_BYTES, MAX_DOWNLOAD_ITEMS,
+    },
+};
 use crate::core::app::commands::get_app_data_folder_path;
 use crate::core::hf_cache;
 use ax_studio_utils::normalize_path;
 use futures_util::{future::join_all, StreamExt};
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use std::collections::HashMap;
-use std::path::Path;
-use std::time::Duration;
+use reqwest::header::HeaderMap;
+#[cfg(test)]
+use reqwest::header::HeaderValue;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use tauri::{Emitter, Runtime};
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio_util::sync::CancellationToken;
+#[cfg(test)]
 use url::Url;
 
-// ===== CONSTANTS =====
-
-// ===== UTILITY FUNCTIONS =====
-
-pub fn err_to_string<E: std::fmt::Display>(e: E) -> String {
-    format!("Error: {e}")
+pub fn download_destination_key(path: &Path) -> String {
+    if cfg!(any(target_os = "macos", windows)) {
+        // Default macOS and Windows filesystems are case-insensitive even
+        // though PathBuf equality is not. Treat case variants as one writer.
+        path.to_string_lossy().to_lowercase()
+    } else {
+        path.to_string_lossy().into_owned()
+    }
 }
 
-// ===== VALIDATION FUNCTIONS =====
-
-fn validate_download_url(url: &str) -> Result<(), String> {
-    if ax_studio_utils::is_internal_url(url) {
-        return Err(format!(
-            "Download URL '{}' points to an internal/private address",
-            url
-        ));
+fn ensure_unique_download_paths(paths: &[PathBuf]) -> Result<(), String> {
+    let mut seen = HashSet::with_capacity(paths.len());
+    for path in paths {
+        let identity = download_destination_key(path);
+        if !seen.insert(identity) {
+            return Err(format!(
+                "Download request contains duplicate destination: {}",
+                path.display()
+            ));
+        }
     }
     Ok(())
+}
+
+pub fn resolve_download_destinations<R: Runtime>(
+    app: &tauri::AppHandle<R>,
+    items: &[DownloadItem],
+) -> Result<Vec<PathBuf>, String> {
+    let paths = items
+        .iter()
+        .map(|item| resolve_download_save_path(app, &item.save_path))
+        .collect::<Result<Vec<_>, _>>()?;
+    ensure_unique_download_paths(&paths)?;
+    Ok(paths)
 }
 
 /// Validates a downloaded file against expected hash and size
@@ -45,7 +80,7 @@ async fn validate_downloaded_file(
     if item.sha256.is_none() && item.size.is_none() {
         log::debug!(
             "No validation data provided for {}, skipping validation",
-            item.url
+            redact_url_for_log(&item.url)
         );
         return Ok(());
     }
@@ -74,7 +109,10 @@ async fn validate_downloaded_file(
 
     // Validate size if provided (fast check first)
     if let Some(expected_size) = &item.size {
-        log::info!("Starting size verification for {}", item.url);
+        log::info!(
+            "Starting size verification for {}",
+            redact_url_for_log(&item.url)
+        );
 
         match tokio::fs::metadata(save_path).await {
             Ok(metadata) => {
@@ -83,7 +121,7 @@ async fn validate_downloaded_file(
                 if actual_size != *expected_size {
                     log::error!(
                         "Size verification failed for {}. Expected: {} bytes, Actual: {} bytes",
-                        item.url,
+                        redact_url_for_log(&item.url),
                         expected_size,
                         actual_size
                     );
@@ -94,7 +132,7 @@ async fn validate_downloaded_file(
 
                 log::info!(
                     "Size verification successful for {} ({} bytes)",
-                    item.url,
+                    redact_url_for_log(&item.url),
                     actual_size
                 );
             }
@@ -111,13 +149,16 @@ async fn validate_downloaded_file(
 
     // Check for cancellation before expensive hash computation
     if cancel_token.is_cancelled() {
-        log::info!("Validation cancelled for {}", item.url);
+        log::info!("Validation cancelled for {}", redact_url_for_log(&item.url));
         return Err("Validation cancelled".to_string());
     }
 
     // Validate hash if provided (expensive check second)
     if let Some(expected_sha256) = &item.sha256 {
-        log::info!("Starting Hash verification for {}", item.url);
+        log::info!(
+            "Starting hash verification for {}",
+            redact_url_for_log(&item.url)
+        );
 
         match ax_studio_utils::crypto::compute_file_sha256_with_cancellation(
             save_path,
@@ -126,10 +167,10 @@ async fn validate_downloaded_file(
         .await
         {
             Ok(computed_sha256) => {
-                if computed_sha256 != *expected_sha256 {
+                if !computed_sha256.eq_ignore_ascii_case(expected_sha256) {
                     log::error!(
                         "Hash verification failed for {}. Expected: {}, Computed: {}",
-                        item.url,
+                        redact_url_for_log(&item.url),
                         expected_sha256,
                         computed_sha256
                     );
@@ -137,7 +178,10 @@ async fn validate_downloaded_file(
                     return Err("Hash verification failed. The downloaded file is corrupted or has been tampered with.".to_string());
                 }
 
-                log::info!("Hash verification successful for {}", item.url);
+                log::info!(
+                    "Hash verification successful for {}",
+                    redact_url_for_log(&item.url)
+                );
             }
             Err(e) => {
                 log::error!(
@@ -150,94 +194,11 @@ async fn validate_downloaded_file(
         }
     }
 
-    log::info!("All validations passed for {}", item.url);
+    log::info!(
+        "All validations passed for {}",
+        redact_url_for_log(&item.url)
+    );
     Ok(())
-}
-
-pub fn validate_proxy_config(config: &ProxyConfig) -> Result<(), String> {
-    let url =
-        Url::parse(&config.url).map_err(|e| format!("Invalid proxy URL '{}': {e}", config.url))?;
-
-    match url.scheme() {
-        "http" | "https" | "socks4" | "socks5" => {}
-        scheme => return Err(format!("Unsupported proxy scheme: {scheme}")),
-    }
-
-    // Validate authentication credentials
-    if config.username.is_some() && config.password.is_none() {
-        return Err("Username provided without password".to_string());
-    }
-
-    if config.password.is_some() && config.username.is_none() {
-        return Err("Password provided without username".to_string());
-    }
-
-    // Validate no_proxy entries
-    if let Some(no_proxy) = &config.no_proxy {
-        for entry in no_proxy {
-            if entry.is_empty() {
-                return Err("Empty no_proxy entry".to_string());
-            }
-            // Basic validation for wildcard patterns
-            if entry.starts_with("*.") && entry.len() < 3 {
-                return Err(format!("Invalid wildcard pattern: {entry}"));
-            }
-        }
-    }
-
-    // SSL verification settings are all optional booleans, no validation needed
-
-    Ok(())
-}
-
-pub fn create_proxy_from_config(config: &ProxyConfig) -> Result<reqwest::Proxy, String> {
-    // Validate the configuration first
-    validate_proxy_config(config)?;
-
-    let mut proxy = reqwest::Proxy::all(&config.url).map_err(err_to_string)?;
-
-    // Add authentication if provided
-    if let (Some(username), Some(password)) = (&config.username, &config.password) {
-        proxy = proxy.basic_auth(username, password);
-    }
-
-    Ok(proxy)
-}
-
-pub fn should_bypass_proxy(url: &str, no_proxy: &[String]) -> bool {
-    if no_proxy.is_empty() {
-        return false;
-    }
-
-    // Parse the URL to get the host
-    let parsed_url = match Url::parse(url) {
-        Ok(u) => u,
-        Err(_) => return false,
-    };
-
-    let host = match parsed_url.host_str() {
-        Some(h) => h,
-        None => return false,
-    };
-
-    // Check if host matches any no_proxy entry
-    for entry in no_proxy {
-        if entry == "*" {
-            return true;
-        }
-
-        // Simple wildcard matching — require a dot before the domain so that
-        // "*.example.com" matches "foo.example.com" but NOT "example.com".
-        if let Some(domain) = entry.strip_prefix("*.") {
-            if host.ends_with(&format!(".{domain}")) {
-                return true;
-            }
-        } else if host == entry {
-            return true;
-        }
-    }
-
-    false
 }
 
 pub fn resolve_download_save_path<R: Runtime>(
@@ -281,87 +242,6 @@ pub fn resolve_download_save_path<R: Runtime>(
     Ok(save_path)
 }
 
-pub fn _get_client_for_item(
-    item: &DownloadItem,
-    header_map: &HeaderMap,
-) -> Result<reqwest::Client, String> {
-    let mut client_builder = reqwest::Client::builder()
-        .connect_timeout(Duration::from_secs(30))
-        .http2_keep_alive_timeout(Duration::from_secs(15))
-        .default_headers(header_map.clone());
-
-    // Add proxy configuration if provided
-    if let Some(proxy_config) = &item.proxy {
-        // Handle SSL verification settings
-        if proxy_config.ignore_ssl.unwrap_or(false) {
-            // Security fix: Require SHA256 validation when SSL is disabled
-            if item.sha256.is_none() {
-                return Err(format!(
-                    "SSL certificate verification disabled for download from {}. \
-                    SHA256 hash validation is required for security but not provided. \
-                    Downloads without hash verification can be tampered with.",
-                    item.url
-                ));
-            }
-            client_builder = client_builder.danger_accept_invalid_certs(true);
-            log::warn!(
-                "⚠️ SSL certificate verification disabled for download from {}. \
-                Proceeding with SHA256 hash validation only.",
-                item.url
-            );
-        }
-
-        // Note: reqwest doesn't have fine-grained SSL verification controls
-        // for verify_proxy_ssl, verify_proxy_host_ssl, verify_peer_ssl, verify_host_ssl
-        // These settings are handled by the underlying TLS implementation
-
-        // Check if this URL should bypass proxy
-        let no_proxy = proxy_config.no_proxy.as_deref().unwrap_or(&[]);
-        if !should_bypass_proxy(&item.url, no_proxy) {
-            let proxy = create_proxy_from_config(proxy_config)?;
-            client_builder = client_builder.proxy(proxy);
-            log::info!("Using proxy {} for URL {}", proxy_config.url, item.url);
-        } else {
-            log::info!("Bypassing proxy for URL {}", item.url);
-        }
-    }
-
-    client_builder.build().map_err(err_to_string)
-}
-
-pub fn _convert_headers(
-    headers: &HashMap<String, String>,
-) -> Result<HeaderMap, Box<dyn std::error::Error>> {
-    let mut header_map = HeaderMap::new();
-    for (k, v) in headers {
-        let key = HeaderName::from_bytes(k.as_bytes())?;
-        let value = HeaderValue::from_str(v)?;
-        header_map.insert(key, value);
-    }
-    Ok(header_map)
-}
-
-pub async fn _get_file_size(
-    client: &reqwest::Client,
-    url: &str,
-) -> Result<u64, Box<dyn std::error::Error>> {
-    let resp = tokio::time::timeout(Duration::from_secs(10), client.head(url).send()).await??;
-    if !resp.status().is_success() {
-        return Err(format!("Failed to get file size: HTTP status {}", resp.status()).into());
-    }
-    // this is buggy, always return 0 for HEAD request
-    // Ok(resp.content_length().unwrap_or(0))
-
-    match resp.headers().get("content-length") {
-        Some(value) => {
-            let value_str = value.to_str()?;
-            let value_u64: u64 = value_str.parse()?;
-            Ok(value_u64)
-        }
-        None => Ok(0),
-    }
-}
-
 // ===== MAIN DOWNLOAD FUNCTIONS =====
 
 // Context passed to `download_single_file` to reduce the number of arguments
@@ -373,6 +253,7 @@ struct DownloadCtx {
     progress_tracker: ProgressTracker,
     task_id: String,
     model_id: Option<String>,
+    emit_validation_event: bool,
 }
 
 /// Downloads multiple files in parallel with individual progress tracking
@@ -386,9 +267,12 @@ pub async fn _download_files_internal(
 ) -> Result<(), String> {
     log::info!("Start download task: {task_id}");
 
-    for item in items {
-        validate_download_url(&item.url)?;
-    }
+    validate_download_request(items, task_id, headers)?;
+
+    // Resolve every destination before the first network request. This makes
+    // root enforcement deterministic and prevents duplicate writers from
+    // racing against the same .tmp/final path.
+    let resolved_paths = resolve_download_destinations(&app, items)?;
 
     let header_map = _convert_headers(headers).map_err(err_to_string)?;
 
@@ -402,7 +286,9 @@ pub async fn _download_files_internal(
                 let client = _get_client_for_item(item, &header_map).map_err(err_to_string)?;
                 // HEAD size is only an estimate the GET path later refines; a failed or
                 // slow HEAD (common on HuggingFace CDN) must not abort the whole batch.
-                let size = _get_file_size(&client, &item_url).await.unwrap_or(0);
+                let size = _get_file_size(&client, &item_url, &header_map)
+                    .await
+                    .unwrap_or(0);
                 Ok::<_, String>((item_url, size))
             }
         })
@@ -415,7 +301,9 @@ pub async fn _download_files_internal(
         file_sizes.insert(url, size);
     }
 
-    let total_size: u64 = file_sizes.values().sum();
+    let total_size = file_sizes
+        .values()
+        .fold(0u64, |total, size| total.saturating_add(*size));
     log::info!("Total download size from HEAD: {total_size} bytes");
 
     let evt_name = format!("download-{task_id}");
@@ -449,13 +337,14 @@ pub async fn _download_files_internal(
                     .map(|s| s.to_string())
             })
         });
+    let validation_event_index = items
+        .iter()
+        .position(|item| item.sha256.is_some() || item.size.is_some());
 
     // Collect download tasks for parallel execution
     let mut download_tasks = Vec::new();
 
-    for (index, item) in items.iter().enumerate() {
-        let save_path = resolve_download_save_path(&app, &item.save_path)?;
-
+    for (index, (item, save_path)) in items.iter().zip(resolved_paths).enumerate() {
         // Spawn download task for each file
         let item_clone = item.clone();
         let app_clone = app.clone();
@@ -470,90 +359,79 @@ pub async fn _download_files_internal(
             progress_tracker: progress_tracker.clone(),
             task_id: task_id.to_string(),
             model_id: download_model_id.clone(),
+            emit_validation_event: validation_event_index == Some(index),
         };
+        let failure_token = cancel_token.clone();
 
         let task = tokio::spawn(async move {
-            download_single_file(app_clone, &item_clone, &save_path, file_id, file_size, ctx).await
+            let result =
+                download_single_file(app_clone, &item_clone, &save_path, file_id, file_size, ctx)
+                    .await;
+            if result.is_err() {
+                // One failed shard makes the batch unusable; stop sibling
+                // transfers promptly and then await them below for cleanup.
+                failure_token.cancel();
+            }
+            result
         });
 
         download_tasks.push(task);
     }
 
-    // Wait for all downloads to complete
-    let mut validation_tasks = Vec::new();
-    for (task, item) in download_tasks.into_iter().zip(items.iter()) {
-        let result = task.await.map_err(|e| format!("Task join error: {e}"))?;
-
+    // Join every spawned task even after the first error. Dropping a JoinHandle
+    // detaches it, which previously allowed a sibling writer to commit after
+    // the batch had already returned failure.
+    let mut first_error = None;
+    let mut prepared_downloads = Vec::with_capacity(items.len());
+    for result in join_all(download_tasks).await {
         match result {
-            Ok(downloaded_path) => {
-                // Spawn validation task in parallel
-                let item_clone = item.clone();
-                let app_clone = app.clone();
-                let path_clone = downloaded_path.clone();
-                let cancel_token_clone = cancel_token.clone();
-                let validation_task = tokio::spawn(async move {
-                    validate_downloaded_file(
-                        &item_clone,
-                        &path_clone,
-                        &app_clone,
-                        &cancel_token_clone,
-                        false,
-                    )
-                    .await
-                });
-                validation_tasks.push((validation_task, downloaded_path, item.clone()));
+            Ok(Ok(prepared)) => prepared_downloads.push(prepared),
+            Ok(Err(error)) => {
+                // Prefer the causal transfer/validation failure over sibling
+                // cancellation noise regardless of item ordering.
+                if first_error.is_none()
+                    || (first_error.as_deref() == Some("Download cancelled")
+                        && error != "Download cancelled")
+                {
+                    first_error = Some(error);
+                }
             }
-            Err(e) => return Err(e),
+            Err(error) => {
+                if first_error.is_none() {
+                    first_error = Some(format!("Task join error: {error}"));
+                }
+            }
         }
     }
-
-    let model_id = items
-        .iter()
-        .find_map(|item| item.model_id.as_ref())
-        .map(|s| s.as_str())
-        .or_else(|| {
-            items.first().and_then(|item| {
-                std::path::Path::new(&item.save_path)
-                    .parent()
-                    .and_then(|p| p.file_name())
-                    .and_then(|n| n.to_str())
-            })
-        })
-        .unwrap_or("unknown");
-
-    if !validation_tasks.is_empty()
-        && items
-            .iter()
-            .any(|item| item.sha256.is_some() || item.size.is_some())
-    {
-        app.emit(
-            "onModelValidationStarted",
-            serde_json::json!({
-                "modelId": model_id,
-                "downloadType": "Model",
-            }),
-        )
-        .ok();
-        log::info!("Starting validation for model: {model_id}");
+    if let Some(error) = first_error {
+        for prepared in prepared_downloads {
+            cleanup_partial_download(&prepared.tmp_path, &prepared.url_path, false).await;
+        }
+        return Err(error);
     }
 
-    // Wait for all validations to complete
-    for (validation_task, save_path, _item) in validation_tasks {
-        let validation_result = validation_task
-            .await
-            .map_err(|e| format!("Validation task join error: {e}"))?;
-
-        if let Err(validation_error) = validation_result {
-            // Clean up the file if validation fails
-            let _ = tokio::fs::remove_file(&save_path).await;
-
-            // Try to clean up the parent directory if it's empty
-            if let Some(parent) = save_path.parent() {
-                let _ = tokio::fs::remove_dir(parent).await;
-            }
-
-            return Err(validation_error);
+    if cancel_token.is_cancelled() {
+        for prepared in prepared_downloads {
+            cleanup_partial_download(&prepared.tmp_path, &prepared.url_path, false).await;
         }
+        return Err("Download cancelled".to_string());
+    }
+
+    // No final destination is touched until every shard has downloaded and
+    // passed verification. This prevents mixed-version model directories when
+    // a later shard fails.
+    for index in 0..prepared_downloads.len() {
+        let prepared = &prepared_downloads[index];
+        if let Err(error) = commit_download_file(&prepared.tmp_path, &prepared.final_path).await {
+            for pending in &prepared_downloads[index..] {
+                cleanup_partial_download(&pending.tmp_path, &pending.url_path, false).await;
+            }
+            return Err(error);
+        }
+        if let Err(error) = tokio::fs::remove_file(&prepared.url_path).await {
+            log::warn!("Failed to remove .url sidecar after download: {error}");
+        }
+        log::info!("Finished downloading: {}", prepared.display_url);
     }
 
     // Emit final progress
@@ -568,7 +446,94 @@ pub async fn _download_files_internal(
     Ok(())
 }
 
-/// Downloads a single file without blocking other downloads
+fn with_appended_extension(path: &Path, suffix: &str) -> PathBuf {
+    let current_extension = path.extension().unwrap_or_default().to_string_lossy();
+    if current_extension.is_empty() {
+        path.with_extension(suffix)
+    } else {
+        path.with_extension(format!("{current_extension}.{suffix}"))
+    }
+}
+
+async fn cleanup_partial_download(tmp_path: &Path, url_path: &Path, preserve_resume: bool) {
+    if preserve_resume {
+        // A resumable partial requires both files. Keeping only the .tmp while
+        // deleting the URL sidecar silently disables resume on the next attempt.
+        return;
+    }
+    let _ = tokio::fs::remove_file(tmp_path).await;
+    let _ = tokio::fs::remove_file(url_path).await;
+}
+
+#[cfg(windows)]
+fn replace_file_windows(tmp_path: &Path, final_path: &Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{ReplaceFileW, REPLACEFILE_WRITE_THROUGH};
+
+    let final_wide = final_path
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+    let tmp_wide = tmp_path
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+    let replaced = unsafe {
+        ReplaceFileW(
+            final_wide.as_ptr(),
+            tmp_wide.as_ptr(),
+            std::ptr::null(),
+            REPLACEFILE_WRITE_THROUGH,
+            std::ptr::null(),
+            std::ptr::null(),
+        )
+    };
+    if replaced == 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+async fn commit_download_file(tmp_path: &Path, final_path: &Path) -> Result<(), String> {
+    #[cfg(not(windows))]
+    {
+        // POSIX rename atomically replaces an existing destination, preserving
+        // the verified old file until the new one is ready to commit.
+        tokio::fs::rename(tmp_path, final_path)
+            .await
+            .map_err(err_to_string)
+    }
+
+    #[cfg(windows)]
+    {
+        // std/tokio rename cannot replace an existing file on Windows. The OS
+        // primitive preserves the old destination unless the replacement can
+        // be committed atomically and flushes the operation before returning.
+        if !final_path.exists() {
+            return tokio::fs::rename(tmp_path, final_path)
+                .await
+                .map_err(err_to_string);
+        }
+        let tmp_path = tmp_path.to_path_buf();
+        let final_path = final_path.to_path_buf();
+        tokio::task::spawn_blocking(move || replace_file_windows(&tmp_path, &final_path))
+            .await
+            .map_err(|error| format!("Download commit task failed: {error}"))?
+            .map_err(err_to_string)
+    }
+}
+
+struct PreparedDownload {
+    tmp_path: PathBuf,
+    url_path: PathBuf,
+    final_path: PathBuf,
+    display_url: String,
+}
+
+/// Downloads, validates, and transactionally commits one file.
 async fn download_single_file(
     app: tauri::AppHandle<impl Runtime>,
     item: &DownloadItem,
@@ -576,7 +541,7 @@ async fn download_single_file(
     file_id: String,
     _file_size: u64,
     ctx: DownloadCtx,
-) -> Result<std::path::PathBuf, String> {
+) -> Result<PreparedDownload, String> {
     let DownloadCtx {
         header_map,
         resume,
@@ -585,6 +550,7 @@ async fn download_single_file(
         progress_tracker,
         task_id,
         model_id,
+        emit_validation_event,
     } = ctx;
     // Create parent directories if they don't exist
     if let Some(parent) = save_path.parent() {
@@ -595,16 +561,8 @@ async fn download_single_file(
         }
     }
 
-    let current_extension = save_path.extension().unwrap_or_default().to_string_lossy();
-    let append_extension = |ext: &str| {
-        if current_extension.is_empty() {
-            ext.to_string()
-        } else {
-            format!("{current_extension}.{ext}")
-        }
-    };
-    let tmp_save_path = save_path.with_extension(append_extension("tmp"));
-    let url_save_path = save_path.with_extension(append_extension("url"));
+    let tmp_save_path = with_appended_extension(save_path, "tmp");
+    let url_save_path = with_appended_extension(save_path, "url");
 
     let mut should_resume = resume
         && tmp_save_path.exists()
@@ -613,41 +571,47 @@ async fn download_single_file(
             .map(|url| url == item.url) // check if we resume the same URL
             .unwrap_or(false);
 
+    let client = _get_client_for_item(item, &header_map).map_err(err_to_string)?;
     tokio::fs::write(&url_save_path, item.url.clone())
         .await
         .map_err(err_to_string)?;
 
-    // Decode URL for better readability in logs
-    let decoded_url = url::Url::parse(&item.url)
-        .map(|u| u.to_string())
-        .unwrap_or_else(|_| item.url.clone());
-    log::info!("Started downloading: {decoded_url}");
-    let client = _get_client_for_item(item, &header_map).map_err(err_to_string)?;
+    log::info!("Started downloading: {}", redact_url_for_log(&item.url));
     let mut download_delta = 0u64;
     let mut initial_progress = 0u64;
 
-    let (resp, _actual_url) = if should_resume {
+    let had_resume_state = should_resume;
+    let response_result = if should_resume {
         let downloaded_size = tmp_save_path.metadata().map_err(err_to_string)?.len();
-        match _get_maybe_resume_internal(&client, &item.url, downloaded_size).await {
-            Ok(resp) => {
+        match _get_maybe_resume_with_fallback(&client, &item.url, downloaded_size, &header_map)
+            .await
+        {
+            Ok(response) => {
                 log::info!(
                     "Resume download: {}, already downloaded {} bytes",
-                    item.url,
+                    redact_url_for_log(&item.url),
                     downloaded_size
                 );
                 initial_progress = downloaded_size;
-                (resp, item.url.clone())
+                Ok(response)
             }
             Err(e) => {
                 // fallback to normal download with proxy support
                 log::warn!("Failed to resume download: {e}");
                 should_resume = false;
-                _get_maybe_resume_with_fallback(&client, &item.url, 0).await?
+                _get_maybe_resume_with_fallback(&client, &item.url, 0, &header_map).await
             }
         }
     } else {
         // Use mirror fallback for new downloads
-        _get_maybe_resume_with_fallback(&client, &item.url, 0).await?
+        _get_maybe_resume_with_fallback(&client, &item.url, 0, &header_map).await
+    };
+    let (resp, _actual_url) = match response_result {
+        Ok(response) => response,
+        Err(error) => {
+            cleanup_partial_download(&tmp_save_path, &url_save_path, had_resume_state).await;
+            return Err(error);
+        }
     };
 
     // Refine the expected file size from the actual GET/206 response Content-Length.
@@ -658,7 +622,7 @@ async fn download_single_file(
     //   • Resumed download: Content-Length = remaining bytes → total = initial + remaining
     if let Some(content_length) = resp.content_length() {
         if content_length > 0 {
-            let full_size = initial_progress + content_length;
+            let full_size = initial_progress.saturating_add(content_length);
             progress_tracker.set_file_total(&file_id, full_size).await;
             log::info!("File size from GET Content-Length: {full_size} bytes");
         }
@@ -683,32 +647,26 @@ async fn download_single_file(
 
     let mut stream = resp.bytes_stream();
 
-    let file = if should_resume {
+    let file_result = if should_resume {
         // resume download, append to existing file
         tokio::fs::OpenOptions::new()
             .write(true)
             .append(true)
             .open(&tmp_save_path)
             .await
-            .map_err(err_to_string)?
     } else {
         // start new download, create a new file
-        File::create(&tmp_save_path).await.map_err(err_to_string)?
+        File::create(&tmp_save_path).await
+    };
+    let file = match file_result {
+        Ok(file) => file,
+        Err(error) => {
+            cleanup_partial_download(&tmp_save_path, &url_save_path, had_resume_state).await;
+            return Err(err_to_string(error));
+        }
     };
     let mut writer = tokio::io::BufWriter::new(file);
     let mut total_transferred = initial_progress;
-
-    // Helper: clean up sidecar files on any early exit.
-    let cleanup = |keep_tmp: bool| {
-        let tmp = tmp_save_path.clone();
-        let url_f = url_save_path.clone();
-        async move {
-            if !keep_tmp {
-                tokio::fs::remove_file(&tmp).await.ok();
-            }
-            tokio::fs::remove_file(&url_f).await.ok();
-        }
-    };
 
     // Write chunks using select! so cancellation is immediate rather than
     // waiting for the next chunk to arrive from a slow server.
@@ -716,8 +674,9 @@ async fn download_single_file(
         let maybe_chunk = tokio::select! {
             biased;
             _ = cancel_token.cancelled() => {
-                cleanup(should_resume).await;  // keep .tmp only when resumable
-                log::info!("Download cancelled: {}", item.url);
+                drop(writer);
+                cleanup_partial_download(&tmp_save_path, &url_save_path, should_resume).await;
+                log::info!("Download cancelled: {}", redact_url_for_log(&item.url));
                 return Err("Download cancelled".to_string());
             }
             chunk = stream.next() => chunk,
@@ -726,19 +685,30 @@ async fn download_single_file(
         let chunk = match maybe_chunk {
             None => break,
             Some(Err(e)) => {
-                cleanup(true).await; // keep .tmp for potential resume
+                drop(writer);
+                cleanup_partial_download(&tmp_save_path, &url_save_path, true).await;
                 return Err(err_to_string(e));
             }
             Some(Ok(c)) => c,
         };
 
         if let Err(e) = writer.write_all(&chunk).await {
-            cleanup(true).await;
+            drop(writer);
+            cleanup_partial_download(&tmp_save_path, &url_save_path, true).await;
             return Err(err_to_string(e));
         }
 
         download_delta += chunk.len() as u64;
-        total_transferred += chunk.len() as u64;
+        total_transferred = total_transferred.saturating_add(chunk.len() as u64);
+
+        if item
+            .size
+            .is_some_and(|expected_size| total_transferred > expected_size)
+        {
+            drop(writer);
+            cleanup_partial_download(&tmp_save_path, &url_save_path, false).await;
+            return Err("Downloaded data exceeds the expected file size".to_string());
+        }
 
         // Update progress every 1 MB for responsive UI
         if download_delta >= 1024 * 1024 {
@@ -761,8 +731,35 @@ async fn download_single_file(
     }
 
     if let Err(e) = writer.flush().await {
-        cleanup(true).await;
+        drop(writer);
+        cleanup_partial_download(&tmp_save_path, &url_save_path, true).await;
         return Err(err_to_string(e));
+    }
+    drop(writer);
+
+    if cancel_token.is_cancelled() {
+        cleanup_partial_download(&tmp_save_path, &url_save_path, false).await;
+        return Err("Download cancelled".to_string());
+    }
+
+    // Validate the temporary file before touching an existing verified final
+    // destination. A bad hash/size can no longer delete the user's old model.
+    if let Err(error) = validate_downloaded_file(
+        item,
+        &tmp_save_path,
+        &app,
+        &cancel_token,
+        emit_validation_event,
+    )
+    .await
+    {
+        cleanup_partial_download(&tmp_save_path, &url_save_path, false).await;
+        return Err(error);
+    }
+
+    if cancel_token.is_cancelled() {
+        cleanup_partial_download(&tmp_save_path, &url_save_path, false).await;
+        return Err("Download cancelled".to_string());
     }
 
     // Final progress update for this file
@@ -780,78 +777,35 @@ async fn download_single_file(
     };
     app.emit(&evt_name, evt).ok();
 
-    // rename tmp file to final file
-    tokio::fs::rename(&tmp_save_path, &save_path)
-        .await
-        .map_err(err_to_string)?;
-    if let Err(e) = tokio::fs::remove_file(&url_save_path).await {
-        log::warn!("Failed to remove .url sidecar after download: {e}");
-    }
-
-    // Decode URL for better readability in logs
-    let decoded_url = url::Url::parse(&item.url)
-        .map(|u| u.to_string())
-        .unwrap_or_else(|_| item.url.clone());
-    log::info!("Finished downloading: {decoded_url}");
-    Ok(save_path.to_path_buf())
-}
-
-// ===== HTTP CLIENT HELPER FUNCTIONS =====
-
-/// Attempts download directly from the given URL with resume support
-pub async fn _get_maybe_resume_with_fallback(
-    client: &reqwest::Client,
-    url: &str,
-    start_bytes: u64,
-) -> Result<(reqwest::Response, String), String> {
-    log::info!("Downloading from URL: {}", url);
-    let resp = _get_maybe_resume_internal(client, url, start_bytes).await?;
-    Ok((resp, url.to_string()))
-}
-
-/// Internal function to attempt download from a single URL (without HMAC)
-async fn _get_maybe_resume_internal(
-    client: &reqwest::Client,
-    url: &str,
-    start_bytes: u64,
-) -> Result<reqwest::Response, String> {
-    let request = if start_bytes > 0 {
-        client
-            .get(url)
-            .header("Range", format!("bytes={start_bytes}-"))
-    } else {
-        client.get(url)
-    };
-
-    let resp = tokio::time::timeout(Duration::from_secs(30), request.send())
-        .await
-        .map_err(|_| "Request timed out after 30s".to_string())?
-        .map_err(err_to_string)?;
-
-    if start_bytes > 0 {
-        if resp.status() != reqwest::StatusCode::PARTIAL_CONTENT {
-            return Err(format!(
-                "Failed to resume download: HTTP status {}, {}",
-                resp.status(),
-                resp.text().await.unwrap_or_default()
-            ));
-        }
-        Ok(resp)
-    } else {
-        if !resp.status().is_success() {
-            return Err(format!(
-                "Failed to download: HTTP status {}, {}",
-                resp.status(),
-                resp.text().await.unwrap_or_default()
-            ));
-        }
-        Ok(resp)
-    }
+    Ok(PreparedDownload {
+        tmp_path: tmp_save_path,
+        url_path: url_save_path,
+        final_path: save_path.to_path_buf(),
+        display_url: redact_url_for_log(&item.url),
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_download_item() -> DownloadItem {
+        DownloadItem {
+            url: "https://example.com/model.gguf".to_string(),
+            save_path: "models/model.gguf".to_string(),
+            proxy: None,
+            sha256: None,
+            size: None,
+            model_id: Some("org/model".to_string()),
+        }
+    }
+
+    fn unique_test_dir(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "ax-studio-download-{name}-{}",
+            uuid::Uuid::new_v4()
+        ))
+    }
 
     // --- err_to_string ---
 
@@ -869,6 +823,177 @@ mod tests {
         assert!(result.contains("file missing"));
     }
 
+    // --- privileged request boundary ---
+
+    #[test]
+    fn test_validate_download_request_accepts_well_formed_payload() {
+        let item = test_download_item();
+        let mut headers = HashMap::new();
+        headers.insert("Authorization".to_string(), "Bearer token".to_string());
+
+        assert!(validate_download_request(&[item], "model-download_1", &headers).is_ok());
+    }
+
+    #[test]
+    fn test_validate_download_request_rejects_empty_or_oversized_batches() {
+        assert!(validate_download_request(&[], "task", &HashMap::new()).is_err());
+
+        let items = vec![test_download_item(); MAX_DOWNLOAD_ITEMS + 1];
+        let error = validate_download_request(&items, "task", &HashMap::new()).unwrap_err();
+        assert!(error.contains("batch limit"));
+    }
+
+    #[test]
+    fn test_validate_download_request_rejects_invalid_task_ids() {
+        let items = [test_download_item()];
+        for task_id in ["", "model/download", "contains space", "dots.are.fragile"] {
+            assert!(
+                validate_download_request(&items, task_id, &HashMap::new()).is_err(),
+                "{task_id:?} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_download_request_rejects_bad_hashes_and_paths() {
+        let mut bad_hash = test_download_item();
+        bad_hash.sha256 = Some("abc123".to_string());
+        assert!(validate_download_request(&[bad_hash], "task", &HashMap::new()).is_err());
+
+        let mut bad_path = test_download_item();
+        bad_path.save_path = "models/\0model.gguf".to_string();
+        assert!(validate_download_request(&[bad_path], "task", &HashMap::new()).is_err());
+
+        let mut insecure = test_download_item();
+        insecure.proxy = Some(ProxyConfig {
+            url: "https://proxy.example.com".to_string(),
+            username: None,
+            password: None,
+            no_proxy: None,
+            ignore_ssl: Some(true),
+        });
+        assert!(validate_download_request(&[insecure], "task", &HashMap::new()).is_err());
+    }
+
+    #[test]
+    fn test_validate_download_url_blocks_credentials_and_non_global_targets() {
+        for url in [
+            "https://user:password@example.com/model",
+            "http://127.0.0.1/model",
+            "http://[::ffff:192.168.1.2]/model",
+            "http://localhost./model",
+            "http://metadata.service.internal/model",
+            "file:///etc/passwd",
+        ] {
+            assert!(
+                validate_download_url(url).is_err(),
+                "{url} should be rejected"
+            );
+        }
+        assert!(validate_download_url("https://example.com/model").is_ok());
+    }
+
+    #[test]
+    fn test_redact_url_for_log_removes_credentials_query_and_fragment() {
+        let redacted = redact_url_for_log(
+            "https://user:secret@example.com/model?X-Amz-Signature=secret#fragment",
+        );
+        assert_eq!(redacted, "https://example.com/model?[REDACTED]");
+        assert!(!redacted.contains("secret"));
+        assert!(!redacted.contains("user"));
+    }
+
+    #[test]
+    fn test_duplicate_download_destinations_are_rejected() {
+        let paths = [
+            PathBuf::from("/tmp/model.gguf"),
+            PathBuf::from("/tmp/model.gguf"),
+        ];
+        assert!(ensure_unique_download_paths(&paths).is_err());
+    }
+
+    #[cfg(any(target_os = "macos", windows))]
+    #[test]
+    fn test_case_variant_destinations_are_rejected_on_case_insensitive_platforms() {
+        let paths = [
+            PathBuf::from("/tmp/Model.gguf"),
+            PathBuf::from("/tmp/model.gguf"),
+        ];
+        assert!(ensure_unique_download_paths(&paths).is_err());
+    }
+
+    #[test]
+    fn test_content_range_start_requires_well_formed_byte_range() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            reqwest::header::CONTENT_RANGE,
+            HeaderValue::from_static("bytes 1024-2047/4096"),
+        );
+        assert_eq!(content_range_start(&headers), Some(1024));
+
+        headers.insert(
+            reqwest::header::CONTENT_RANGE,
+            HeaderValue::from_static("items 1-2/3"),
+        );
+        assert_eq!(content_range_start(&headers), None);
+    }
+
+    #[test]
+    fn test_same_origin_includes_effective_port_and_scheme() {
+        let base = Url::parse("https://example.com/path").unwrap();
+        assert!(same_origin(
+            &base,
+            &Url::parse("https://example.com:443/other").unwrap()
+        ));
+        assert!(!same_origin(
+            &base,
+            &Url::parse("https://cdn.example.com/path").unwrap()
+        ));
+        assert!(!same_origin(
+            &base,
+            &Url::parse("http://example.com/path").unwrap()
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_partial_cleanup_preserves_complete_resume_state_or_removes_both() {
+        let dir = unique_test_dir("cleanup");
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let tmp = dir.join("model.gguf.tmp");
+        let url = dir.join("model.gguf.url");
+        tokio::fs::write(&tmp, b"partial").await.unwrap();
+        tokio::fs::write(&url, b"https://example.com/model")
+            .await
+            .unwrap();
+
+        cleanup_partial_download(&tmp, &url, true).await;
+        assert!(tmp.exists());
+        assert!(url.exists());
+
+        cleanup_partial_download(&tmp, &url, false).await;
+        assert!(!tmp.exists());
+        assert!(!url.exists());
+        let _ = tokio::fs::remove_dir_all(dir).await;
+    }
+
+    #[tokio::test]
+    async fn test_commit_replaces_existing_file_only_after_temp_is_ready() {
+        let dir = unique_test_dir("commit");
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let final_path = dir.join("model.gguf");
+        let tmp_path = dir.join("model.gguf.tmp");
+        tokio::fs::write(&final_path, b"verified-old")
+            .await
+            .unwrap();
+        tokio::fs::write(&tmp_path, b"verified-new").await.unwrap();
+
+        commit_download_file(&tmp_path, &final_path).await.unwrap();
+
+        assert_eq!(tokio::fs::read(&final_path).await.unwrap(), b"verified-new");
+        assert!(!tmp_path.exists());
+        let _ = tokio::fs::remove_dir_all(dir).await;
+    }
+
     // --- validate_proxy_config ---
 
     #[test]
@@ -884,7 +1009,7 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_proxy_config_valid_socks5() {
+    fn test_validate_proxy_config_rejects_unsupported_socks5() {
         let config = ProxyConfig {
             url: "socks5://proxy.example.com:1080".to_string(),
             username: Some("user".to_string()),
@@ -892,7 +1017,7 @@ mod tests {
             no_proxy: None,
             ignore_ssl: None,
         };
-        assert!(validate_proxy_config(&config).is_ok());
+        assert!(validate_proxy_config(&config).is_err());
     }
 
     #[test]
@@ -905,6 +1030,36 @@ mod tests {
             ignore_ssl: None,
         };
         assert!(validate_proxy_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_proxy_config_rejects_embedded_credentials() {
+        let config = ProxyConfig {
+            url: "http://user:secret@proxy.example.com:8080".to_string(),
+            username: None,
+            password: None,
+            no_proxy: None,
+            ignore_ssl: None,
+        };
+        assert!(validate_proxy_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_proxy_config_rejects_path_query_and_fragment() {
+        for url in [
+            "http://proxy.example.com:8080/path",
+            "http://proxy.example.com:8080?target=other",
+            "http://proxy.example.com:8080#fragment",
+        ] {
+            let config = ProxyConfig {
+                url: url.to_string(),
+                username: None,
+                password: None,
+                no_proxy: None,
+                ignore_ssl: None,
+            };
+            assert!(validate_proxy_config(&config).is_err(), "{url} should fail");
+        }
     }
 
     #[test]
@@ -991,6 +1146,18 @@ mod tests {
     }
 
     #[test]
+    fn test_should_bypass_proxy_ipv4_prefix_wildcard() {
+        assert!(should_bypass_proxy(
+            "https://192.168.10.20/file",
+            &["192.168.*".to_string()]
+        ));
+        assert!(!should_bypass_proxy(
+            "https://192.169.10.20/file",
+            &["192.168.*".to_string()]
+        ));
+    }
+
+    #[test]
     fn test_should_bypass_proxy_no_match() {
         assert!(!should_bypass_proxy(
             "https://external.com",
@@ -1035,5 +1202,32 @@ mod tests {
         let headers = HashMap::new();
         let result = _convert_headers(&headers).unwrap();
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_convert_headers_rejects_transport_managed_headers() {
+        for name in ["Host", "Content-Length", "Range", "Transfer-Encoding"] {
+            let mut headers = HashMap::new();
+            headers.insert(name.to_string(), "value".to_string());
+            assert!(
+                _convert_headers(&headers).is_err(),
+                "{name} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn test_convert_headers_enforces_count_and_total_size_limits() {
+        let too_many = (0..=MAX_DOWNLOAD_HEADERS)
+            .map(|index| (format!("x-header-{index}"), "value".to_string()))
+            .collect();
+        assert!(_convert_headers(&too_many).is_err());
+
+        let mut too_large = HashMap::new();
+        too_large.insert(
+            "x-large".to_string(),
+            "x".repeat(MAX_DOWNLOAD_HEADER_BYTES + 1),
+        );
+        assert!(_convert_headers(&too_large).is_err());
     }
 }

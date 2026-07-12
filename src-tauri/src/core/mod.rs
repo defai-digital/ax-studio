@@ -5,6 +5,7 @@ pub mod filesystem;
 pub mod hf_cache;
 pub mod mcp;
 pub mod mlx;
+pub mod network_security;
 pub mod research;
 pub mod secrets;
 pub mod server;

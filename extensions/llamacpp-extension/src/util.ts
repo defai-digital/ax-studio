@@ -4,6 +4,8 @@
  * Written from scratch for Ax-Studio (UNLICENSED).
  */
 
+import { invoke } from '@tauri-apps/api/core'
+
 export interface ProxyConfig {
   host: string
   port: number
@@ -11,7 +13,10 @@ export interface ProxyConfig {
   password?: string
   https?: boolean
   noVerify?: boolean
+  noProxy?: string[]
 }
+
+const PROXY_PASSWORD_SECRET = 'proxy-password'
 
 const parseProxyPort = (value: unknown): number => {
   if (typeof value === 'number') {
@@ -44,19 +49,77 @@ const parseProxyBoolean = (value: unknown): boolean => {
  * Read proxy configuration from localStorage.
  * Returns null if proxy is disabled or not configured.
  */
-export function getProxyConfig(): ProxyConfig | null {
+const readSecureProxyPassword = async (fallback?: unknown): Promise<string | undefined> => {
+  try {
+    const value = await invoke<unknown>('get_secret', {
+      key: PROXY_PASSWORD_SECRET,
+    })
+    if (typeof value === 'string' && value) return value
+  } catch {
+    // Browser-only tests and legacy installs may not expose the Tauri command.
+  }
+  return typeof fallback === 'string' && fallback ? fallback : undefined
+}
+
+const parseNoProxy = (value: unknown): string[] | undefined => {
+  const entries = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(',')
+      : []
+  const normalized = entries
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+  return normalized.length ? normalized : undefined
+}
+
+export async function getProxyConfig(): Promise<ProxyConfig | null> {
   try {
     const raw = localStorage.getItem('setting-proxy-config')
     if (!raw) return null
-    const config = JSON.parse(raw)
-    if (!config || !config.enabled || !config.host) return null
+    const persisted = JSON.parse(raw)
+    if (!persisted || typeof persisted !== 'object') return null
+
+    // Current Zustand shape. Passwords intentionally live only in the OS
+    // credential store, so retrieve them through the narrow Tauri command.
+    const state = persisted.state
+    if (state && typeof state === 'object' && 'proxyEnabled' in state) {
+      if (!state.proxyEnabled || typeof state.proxyUrl !== 'string') return null
+      const parsedUrl = new URL(state.proxyUrl)
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) return null
+      if (!parsedUrl.hostname || parsedUrl.username || parsedUrl.password) return null
+      const port = parsedUrl.port
+        ? parseProxyPort(parsedUrl.port)
+        : parsedUrl.protocol === 'https:'
+          ? 443
+          : 80
+      const password = await readSecureProxyPassword(state.proxyPassword)
+      return {
+        host: parsedUrl.hostname,
+        port,
+        user:
+          typeof state.proxyUsername === 'string' && state.proxyUsername
+            ? state.proxyUsername
+            : undefined,
+        password,
+        https: parsedUrl.protocol === 'https:',
+        noVerify: Boolean(state.proxyIgnoreSSL),
+        noProxy: parseNoProxy(state.noProxy),
+      }
+    }
+
+    // Legacy extension-owned shape kept for existing installations.
+    const config = persisted
+    if (!config.enabled || typeof config.host !== 'string' || !config.host) return null
     return {
       host: config.host,
       port: parseProxyPort(config.port),
       user: config.user,
-      password: config.password,
+      password: await readSecureProxyPassword(config.password),
       https: parseProxyBoolean(config.https),
       noVerify: parseProxyBoolean(config.noVerify),
+      noProxy: parseNoProxy(config.noProxy),
     }
   } catch {
     return null
@@ -72,19 +135,40 @@ export function getProxyConfig(): ProxyConfig | null {
  */
 export function buildProxyArg(
   proxy: ProxyConfig | null
-): Record<string, string | boolean> | null {
+): Record<string, string | string[] | boolean> | null {
   if (!proxy) return null
   const scheme = proxy.https ? 'https' : 'http'
-  const auth =
-    proxy.user || proxy.password
-      ? `${encodeURIComponent(proxy.user ?? '')}:${encodeURIComponent(proxy.password ?? '')}@`
-      : ''
-  const result: Record<string, string | boolean> = {
-    url: `${scheme}://${auth}${proxy.host}:${proxy.port}`,
+  const rawHost = proxy.host.trim()
+  // A host field must remain a host when interpolated into a URL. Reject URL
+  // delimiters up front so legacy localStorage cannot smuggle a path/query.
+  if (!rawHost || /[/?#@]/.test(rawHost)) return null
+  const host = rawHost.includes(':') && !rawHost.startsWith('[')
+    ? `[${rawHost}]`
+    : rawHost
+  let parsedUrl: URL
+  try {
+    parsedUrl = new URL(`${scheme}://${host}:${parseProxyPort(proxy.port)}`)
+  } catch {
+    return null
   }
-  if (proxy.user) result.username = proxy.user
-  if (proxy.password) result.password = proxy.password
+  if (
+    parsedUrl.username ||
+    parsedUrl.password ||
+    !parsedUrl.hostname ||
+    parsedUrl.pathname !== '/' ||
+    parsedUrl.search ||
+    parsedUrl.hash
+  ) return null
+
+  const result: Record<string, string | string[] | boolean> = {
+    url: parsedUrl.toString().replace(/\/$/, ''),
+  }
+  if (proxy.user || proxy.password) {
+    result.username = proxy.user ?? ''
+    result.password = proxy.password ?? ''
+  }
   if (proxy.noVerify) result.ignore_ssl = true
+  if (proxy.noProxy?.length) result.no_proxy = proxy.noProxy
   return result
 }
 

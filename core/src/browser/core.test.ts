@@ -57,9 +57,31 @@ describe('test core apis', () => {
       'private/internal networks'
     )
     expect(() => openExternalUrl('http://10.0.0.1/something')).toThrow('private/internal networks')
+    expect(() => openExternalUrl('http://api.localhost./something')).toThrow(
+      'private/internal networks'
+    )
+    expect(() => openExternalUrl('http://printer.local/something')).toThrow(
+      'private/internal networks'
+    )
+  })
+
+  it('should reject reserved IPv4 address space', () => {
+    for (const url of [
+      'http://0.0.0.1/',
+      'http://100.64.0.1/',
+      'http://192.0.2.1/',
+      'http://198.18.0.1/',
+      'http://198.51.100.1/',
+      'http://203.0.113.1/',
+      'http://224.0.0.1/',
+      'http://255.255.255.255/',
+    ]) {
+      expect(() => openExternalUrl(url)).toThrow('private/internal networks')
+    }
   })
 
   it('should reject IPv6 loopback, ULA, link-local, and IPv4-mapped private hosts', () => {
+    expect(() => openExternalUrl('http://[::]/')).toThrow('private/internal networks')
     // URL.hostname may keep brackets around IPv6 literals; patterns must still match.
     expect(() => openExternalUrl('http://[::1]/')).toThrow('private/internal networks')
     expect(() => openExternalUrl('http://[fc00::1]/')).toThrow('private/internal networks')
@@ -76,10 +98,35 @@ describe('test core apis', () => {
     expect(() => openExternalUrl('http://[::ffff:10.0.0.1]/')).toThrow(
       'private/internal networks'
     )
+    expect(() => openExternalUrl('http://[::192.168.1.10]/')).toThrow(
+      'private/internal networks'
+    )
+    expect(() => openExternalUrl('http://[fec0::1]/')).toThrow('private/internal networks')
+    expect(() => openExternalUrl('http://[ff02::1]/')).toThrow('private/internal networks')
+    expect(() => openExternalUrl('http://[2001:db8::1]/')).toThrow(
+      'private/internal networks'
+    )
+  })
+
+  it('should reject URLs with embedded credentials', () => {
+    expect(() => openExternalUrl('https://user:secret@example.com/model')).toThrow(
+      'embedded credentials'
+    )
   })
 
   it('should still allow public IPv6 hosts', async () => {
     const url = 'http://[2001:4860:4860::8888]/'
+    globalThis.core = {
+      api: {
+        openExternalUrl: vi.fn().mockResolvedValue(undefined),
+      },
+    }
+    await openExternalUrl(url)
+    expect(globalThis.core.api.openExternalUrl).toHaveBeenCalledWith(url)
+  })
+
+  it('should not mistake public domains beginning with ff for IPv6 multicast', async () => {
+    const url = 'https://ffmpeg.org/'
     globalThis.core = {
       api: {
         openExternalUrl: vi.fn().mockResolvedValue(undefined),

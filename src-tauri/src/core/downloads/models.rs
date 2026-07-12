@@ -7,12 +7,61 @@ use tokio_util::sync::CancellationToken;
 pub struct DownloadTaskState {
     pub token: CancellationToken,
     pub generation: u64,
+    pub destination_keys: Vec<String>,
 }
 
 #[derive(Default)]
 pub struct DownloadManagerState {
     pub cancel_tokens: HashMap<String, DownloadTaskState>,
     pub next_generation: u64,
+}
+
+impl DownloadManagerState {
+    pub fn register_task(
+        &mut self,
+        task_id: &str,
+        token: CancellationToken,
+        destination_keys: Vec<String>,
+    ) -> Result<u64, String> {
+        if self.cancel_tokens.contains_key(task_id) {
+            return Err(format!("Download task '{task_id}' is already active"));
+        }
+
+        if let Some(conflict) = destination_keys.iter().find(|candidate| {
+            self.cancel_tokens
+                .values()
+                .any(|task| task.destination_keys.contains(candidate))
+        }) {
+            return Err(format!(
+                "Another active download already owns destination '{conflict}'"
+            ));
+        }
+
+        self.next_generation = self
+            .next_generation
+            .checked_add(1)
+            .ok_or_else(|| "Download generation counter exhausted".to_string())?;
+        let generation = self.next_generation;
+        self.cancel_tokens.insert(
+            task_id.to_string(),
+            DownloadTaskState {
+                token,
+                generation,
+                destination_keys,
+            },
+        );
+        Ok(generation)
+    }
+
+    pub fn finish_task(&mut self, task_id: &str, generation: u64) {
+        if self
+            .cancel_tokens
+            .get(task_id)
+            .is_some_and(|task| task.generation == generation)
+        {
+            self.cancel_tokens.remove(task_id);
+        }
+    }
 }
 
 #[derive(serde::Deserialize, Clone, Debug)]
@@ -81,11 +130,11 @@ impl ProgressTracker {
     /// Get combined (transferred, total) across all files
     pub async fn get_total_progress(&self) -> (u64, u64) {
         let stats = self.file_stats.lock().await;
-        let mut total_transferred = 0;
-        let mut total_size = 0;
+        let mut total_transferred: u64 = 0;
+        let mut total_size: u64 = 0;
         for (transferred, size) in stats.values() {
-            total_transferred += transferred;
-            total_size += size;
+            total_transferred = total_transferred.saturating_add(*transferred);
+            total_size = total_size.saturating_add(*size);
         }
         (total_transferred, total_size)
     }
@@ -94,6 +143,64 @@ impl ProgressTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn download_manager_reserves_task_ids_and_destinations_until_finish() {
+        let mut manager = DownloadManagerState::default();
+        let first_generation = manager
+            .register_task(
+                "task-a",
+                CancellationToken::new(),
+                vec!["/models/a.gguf".to_string()],
+            )
+            .unwrap();
+
+        assert!(manager
+            .register_task(
+                "task-a",
+                CancellationToken::new(),
+                vec!["/models/b.gguf".to_string()],
+            )
+            .unwrap_err()
+            .contains("already active"));
+        assert!(manager
+            .register_task(
+                "task-b",
+                CancellationToken::new(),
+                vec!["/models/a.gguf".to_string()],
+            )
+            .unwrap_err()
+            .contains("already owns destination"));
+
+        manager.finish_task("task-a", first_generation + 1);
+        assert!(manager.cancel_tokens.contains_key("task-a"));
+        manager.finish_task("task-a", first_generation);
+        assert!(!manager.cancel_tokens.contains_key("task-a"));
+
+        assert!(manager
+            .register_task(
+                "task-b",
+                CancellationToken::new(),
+                vec!["/models/a.gguf".to_string()],
+            )
+            .is_ok());
+    }
+
+    #[test]
+    fn download_manager_rejects_generation_overflow_without_registering() {
+        let mut manager = DownloadManagerState {
+            next_generation: u64::MAX,
+            ..Default::default()
+        };
+        assert!(manager
+            .register_task(
+                "task",
+                CancellationToken::new(),
+                vec!["/models/a.gguf".to_string()],
+            )
+            .is_err());
+        assert!(manager.cancel_tokens.is_empty());
+    }
 
     // --- DownloadEvent serialization ---
 
@@ -212,6 +319,18 @@ mod tests {
         let (transferred, total) = tracker.get_total_progress().await;
         assert_eq!(transferred, 2000);
         assert_eq!(total, 3000);
+    }
+
+    #[tokio::test]
+    async fn test_progress_tracker_saturates_untrusted_totals() {
+        let tracker = ProgressTracker::new(HashMap::from([
+            ("a".to_string(), u64::MAX),
+            ("b".to_string(), 1),
+        ]));
+        tracker.update_progress("a", u64::MAX).await;
+        tracker.update_progress("b", 1).await;
+
+        assert_eq!(tracker.get_total_progress().await, (u64::MAX, u64::MAX));
     }
 
     #[tokio::test]
