@@ -88,7 +88,9 @@ export function extractInferenceParams(
   if (!modelParams) return {}
   const result: Record<string, unknown> = {}
   for (const [key, rawValue] of Object.entries(modelParams)) {
-    if (!INFERENCE_ALLOW.has(key) && !validationRules[key]) continue
+    // Only inference keys — do not admit model-load keys merely because they
+    // share the global validationRules table (ctx_len, ngl, embedding, …).
+    if (!INFERENCE_ALLOW.has(key)) continue
     const value = normalizeValue(key, rawValue)
     if (validationRules[key]) {
       if (validationRules[key](value)) {
@@ -116,6 +118,9 @@ export function extractModelLoadParams(
   if (!modelParams) return {}
   const result: Record<string, unknown> = {}
   for (const [key, rawValue] of Object.entries(modelParams)) {
+    // Only model-load keys — do not admit inference keys merely because they
+    // share the global validationRules table (temperature, max_tokens, …).
+    if (!MODEL_LOAD_ALLOW.has(key)) continue
     const value = normalizeValue(key, rawValue)
     if (validationRules[key]) {
       if (validationRules[key](value)) {
@@ -123,7 +128,7 @@ export function extractModelLoadParams(
       } else if (originParams && key in originParams) {
         result[key] = originParams[key]
       }
-    } else if (MODEL_LOAD_ALLOW.has(key)) {
+    } else {
       result[key] = value
     }
   }

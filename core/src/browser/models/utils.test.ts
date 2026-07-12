@@ -346,6 +346,32 @@ describe('extractInferenceParams', () => {
     })
     expect(modelParams).toEqual(snapshot)
   })
+
+  it('does not leak model-load keys that share validationRules', () => {
+    // Mixed bags are common when settings and runtime params share a map.
+    // Model-load keys must not appear in inference output even when valid.
+    const modelParams = {
+      temperature: 0.7,
+      max_tokens: 100,
+      engine: 'llamacpp',
+      ctx_len: 4096,
+      ngl: 32,
+      embedding: true,
+      llama_model_path: '/models/x.gguf',
+      prompt_template: 'tmpl',
+      mmproj: '/mmproj',
+      vision_model: true,
+      text_model: false,
+      n_parallel: 2,
+      cpu_threads: 8,
+    }
+
+    expect(extractInferenceParams(modelParams)).toEqual({
+      temperature: 0.7,
+      max_tokens: 100,
+      engine: 'llamacpp',
+    })
+  })
 })
 
 describe('extractModelLoadParams', () => {
@@ -434,5 +460,31 @@ describe('extractModelLoadParams', () => {
       embedding: true,
     })
     expect(modelParams).toEqual(snapshot)
+  })
+
+  it('does not leak inference keys that share validationRules', () => {
+    const modelParams = {
+      ctx_len: 4096,
+      ngl: 32,
+      embedding: true,
+      pre_prompt: 'System:',
+      temperature: 0.7,
+      max_tokens: 100,
+      top_p: 0.9,
+      stream: true,
+      engine: 'llamacpp',
+      frequency_penalty: 0.1,
+      presence_penalty: 0.2,
+      repeat_penalty: 1.1,
+      min_p: 0.05,
+      stop: ['\n'],
+    }
+
+    expect(extractModelLoadParams(modelParams)).toEqual({
+      ctx_len: 4096,
+      ngl: 32,
+      embedding: true,
+      pre_prompt: 'System:',
+    })
   })
 })

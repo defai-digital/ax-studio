@@ -13,16 +13,57 @@ const PRIVATE_HOSTNAME_PATTERNS = [
   /^192\.168\./,
   /^0\./,
   /^169\.254\./,
-  /^fc00:/i,
-  /^fe80:/i,
+  // Unique local (fc00::/7 → fc00–fdff) and link-local (fe80::/10 → fe80–febf)
+  /^f[cd][0-9a-f]{2}:/i,
+  /^fe[89ab][0-9a-f]:/i,
   /^::1$/i,
   /^localhost$/i,
   /^$/,
 ]
 
+/** Strip IPv6 brackets that some URL parsers keep on `hostname`. */
+const unwrapIpv6Hostname = (hostname: string): string => {
+  if (hostname.startsWith('[') && hostname.endsWith(']')) {
+    return hostname.slice(1, -1)
+  }
+  return hostname
+}
+
+/**
+ * Expand IPv4-mapped IPv6 (::ffff:a.b.c.d or ::ffff:HHHH:LLLL) to dotted IPv4.
+ * Returns null when the host is not an IPv4-mapped address.
+ */
+const ipv4FromMappedIpv6 = (hostname: string): string | null => {
+  const dotted = hostname.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i)
+  if (dotted) return dotted[1]
+
+  const hex = hostname.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i)
+  if (!hex) return null
+
+  const hi = Number.parseInt(hex[1], 16)
+  const lo = Number.parseInt(hex[2], 16)
+  if (!Number.isFinite(hi) || !Number.isFinite(lo)) return null
+
+  return `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`
+}
+
 const isPrivateHostname = (hostname: string): boolean => {
   if (!hostname) return true
-  return PRIVATE_HOSTNAME_PATTERNS.some((pattern) => pattern.test(hostname))
+
+  const normalized = unwrapIpv6Hostname(hostname.trim())
+  if (!normalized) return true
+
+  if (PRIVATE_HOSTNAME_PATTERNS.some((pattern) => pattern.test(normalized))) {
+    return true
+  }
+
+  // IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1 / ::ffff:7f00:1)
+  const mappedIpv4 = ipv4FromMappedIpv6(normalized)
+  if (mappedIpv4) {
+    return PRIVATE_HOSTNAME_PATTERNS.some((pattern) => pattern.test(mappedIpv4))
+  }
+
+  return false
 }
 
 export const validateUrlProtocol = (url: string): void => {

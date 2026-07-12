@@ -59,6 +59,36 @@ describe('test core apis', () => {
     expect(() => openExternalUrl('http://10.0.0.1/something')).toThrow('private/internal networks')
   })
 
+  it('should reject IPv6 loopback, ULA, link-local, and IPv4-mapped private hosts', () => {
+    // URL.hostname may keep brackets around IPv6 literals; patterns must still match.
+    expect(() => openExternalUrl('http://[::1]/')).toThrow('private/internal networks')
+    expect(() => openExternalUrl('http://[fc00::1]/')).toThrow('private/internal networks')
+    expect(() => openExternalUrl('http://[fd12:3456:789a::1]/')).toThrow(
+      'private/internal networks'
+    )
+    expect(() => openExternalUrl('http://[fe80::1]/')).toThrow('private/internal networks')
+    expect(() => openExternalUrl('http://[::ffff:127.0.0.1]/')).toThrow(
+      'private/internal networks'
+    )
+    expect(() => openExternalUrl('http://[::ffff:192.168.1.10]/')).toThrow(
+      'private/internal networks'
+    )
+    expect(() => openExternalUrl('http://[::ffff:10.0.0.1]/')).toThrow(
+      'private/internal networks'
+    )
+  })
+
+  it('should still allow public IPv6 hosts', async () => {
+    const url = 'http://[2001:4860:4860::8888]/'
+    globalThis.core = {
+      api: {
+        openExternalUrl: vi.fn().mockResolvedValue(undefined),
+      },
+    }
+    await openExternalUrl(url)
+    expect(globalThis.core.api.openExternalUrl).toHaveBeenCalledWith(url)
+  })
+
   it('should join paths', async () => {
     const paths = ['/path/one', '/path/two']
     globalThis.core = {
