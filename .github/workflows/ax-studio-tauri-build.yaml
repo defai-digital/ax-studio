@@ -115,6 +115,8 @@ jobs:
 
   build-macos:
     needs: [get-update-version, validate-release-tag, create-draft-release]
+    permissions:
+      contents: write
     uses: ./.github/workflows/template-tauri-build-macos.yml
     with:
       ref: refs/tags/v${{ needs.get-update-version.outputs.new_version }}
@@ -125,6 +127,8 @@ jobs:
 
   build-windows:
     needs: [get-update-version, validate-release-tag, create-draft-release]
+    permissions:
+      contents: write
     uses: ./.github/workflows/template-tauri-build-windows-x64.yml
     with:
       ref: refs/tags/v${{ needs.get-update-version.outputs.new_version }}
@@ -135,6 +139,8 @@ jobs:
 
   build-windows-arm64:
     needs: [get-update-version, validate-release-tag, create-draft-release]
+    permissions:
+      contents: write
     uses: ./.github/workflows/template-tauri-build-windows-arm64.yml
     with:
       ref: refs/tags/v${{ needs.get-update-version.outputs.new_version }}
