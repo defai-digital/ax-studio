@@ -12,7 +12,7 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
         'common:newChat': 'New Chat',
         'common:search': 'Search',
         'common:hub': 'Hub',
-        'common:axBi': 'Ax-BI',
+        'common:axBi': 'AX BI',
       }
       return map[key] ?? key
     },
@@ -106,9 +106,9 @@ describe('NavMain', () => {
     expect(screen.getByText('Hub')).toBeInTheDocument()
   })
 
-  it('renders Ax-BI link', () => {
+  it('renders AX BI link', () => {
     render(<NavMain />)
-    const link = screen.getByText('Ax-BI').closest('a')
+    const link = screen.getByText('AX BI').closest('a')
     expect(link).toHaveAttribute('href', '/ax-bi')
   })
 

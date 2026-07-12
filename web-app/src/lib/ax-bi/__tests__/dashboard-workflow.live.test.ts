@@ -90,7 +90,7 @@ function makeServiceHub(client: LiveMcpClient) {
 }
 
 describe.skipIf(process.env.AX_BI_LIVE_SMOKE !== 'true')(
-  'AX-BI live chart workflow smoke',
+  'AX BI live chart workflow smoke',
   () => {
     it(
       'creates every supported chart family and a named dashboard through the AX-Studio workflow',

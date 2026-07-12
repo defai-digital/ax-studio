@@ -17,10 +17,10 @@ import { stripUnavailableToolParts } from './transport-types'
 
 const MCP_TOOL_USE_INSTRUCTION = `
 
-## CRITICAL: AX-BI IS A TOOL SERVICE, NOT MATPLOTLIB
+## CRITICAL: AX BI IS A TOOL SERVICE, NOT MATPLOTLIB
 
-"AX-BI" refers to the AX-BI MCP server (a business intelligence tool), NOT matplotlib axes or any Python library.
-When the user says "Use ax-bi", "upload to ax-bi", or similar, they want you to use the AX-BI MCP tools.
+"AX BI" refers to the ax-bi MCP server (a business intelligence tool), NOT matplotlib axes or any Python library.
+When the user says "Use AX BI", "use ax-bi", "upload to ax-bi", or similar, they want you to use the AX BI MCP tools.
 NEVER interpret "ax-bi" as matplotlib, pandas, or any Python code.
 
 ## CRITICAL: FILE PROCESSING - USE THE TOOL, NOT PYTHON
@@ -31,7 +31,7 @@ When the user attaches a file and says "upload", "process", "analyze", or simila
 3. Call process_file_for_bi with the file path from [Attached files: filename at /path]
 4. That's it. The tool handles everything.
 
-This is a LOCAL operation - the AX-BI engine runs on localhost. You are NOT uploading to an external server.
+This is a LOCAL operation - the AX BI engine runs on localhost. You are NOT uploading to an external server.
 
 WRONG: Writing pandas/matplotlib code to process the file
 WRONG: Saying "I cannot upload files to external servers"
@@ -49,11 +49,14 @@ When the user asks to create, save, update, or add a chart/dashboard/report from
 - Use chart/dashboard/data tools directly. Do not write Python, pandas, matplotlib, seaborn, SQL snippets, or instructions for the user to run.
 - If tools cannot complete the request, return the actual tool error instead of creating a code fallback.
 
-AX-BI MCP rules:
-- For existing AX-BI datasets, first use dataset discovery tools such as list_datasets, search_business_assets, get_dataset_info, or get_schema.
+AX BI MCP rules:
+- For existing AX BI datasets, first use dataset discovery tools such as list_datasets, search_business_assets, get_dataset_info, or get_schema.
 - Do not call upload_file or upload_files unless the user attached a file or explicitly asked to upload/import a file.
 - If the user names a dataset, pass that dataset name/search result forward instead of inventing or uploading replacement data.
-- CRITICAL: All AX-BI MCP tools expect arguments wrapped in a 'request' key.
+- CRITICAL: All AX BI MCP tools expect arguments wrapped in a 'request' key.
+- For a complete dashboard from a natural-language request, prefer prompt_to_dashboard({ request: { prompt: "..." } }). It plans, creates charts, and composes the dashboard in one server workflow.
+- Use plan_dashboard only when the user explicitly requests a plan or dry-run. It returns { plan, warnings }, not a bare plan.
+- create_chart_from_intent accepts structured chart_type, metrics, dimensions, filters, time_range, and kind fields when a single intent-driven chart is appropriate.
 - CRITICAL: Use generate_chart with the correct schema:
   - Use 'dataset_id' (numeric), NOT 'dataset'
   - Use chart_type: 'xy' (NOT 'bar', 'line', etc.)
@@ -61,11 +64,10 @@ AX-BI MCP rules:
   - x: { name: 'column_name' }
   - y: [{ name: 'column', aggregate: 'SUM', label: 'SUM(column)' }]
   - Example: generate_chart({ request: { dataset_id: 123, config: { chart_type: 'xy', x: { name: 'Product line' }, y: [{ name: 'Total', aggregate: 'SUM', label: 'SUM(Total)' }], kind: 'bar', orientation: 'vertical' } } })
-- CRITICAL: Do NOT use create_chart_from_intent. It has broken intent parsing.
 - When a chart/dashboard tool returns a URL, return that saved URL to the user.
 
 File upload rules:
-- When the user attaches a file and asks to upload it to AX-BI, use the process_file_for_bi tool IMMEDIATELY.
+- When the user attaches a file and asks to upload it to AX BI, use the process_file_for_bi tool IMMEDIATELY.
 - Extract the file path from the message: [Attached files: filename at /path/to/file]
 - Call process_file_for_bi with file_path and filename parameters.
 - CRITICAL: Do NOT try to read, extract, or process the file yourself. The process_file_for_bi tool handles file reading internally.

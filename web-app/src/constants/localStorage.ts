@@ -7,7 +7,6 @@ export const localStorageKey = {
   modelSources: 'model-sources',
   settingInterface: 'setting-appearance',
   settingGeneral: 'setting-general',
-  settingAxBiLiveNavigation: 'setting-ax-bi-live-navigation',
   axBiSessions: 'ax-bi-sessions',
 
   settingCodeBlock: 'setting-code-block',

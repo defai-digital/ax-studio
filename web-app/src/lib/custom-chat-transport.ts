@@ -429,12 +429,12 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
           console.warn('Failed to load RAG tools:', error)
         }
 
-        // Add custom AX-BI file upload tool that reads files as base64
+        // Add custom AX BI file upload tool that reads files as base64
         if (this.serviceHub) {
           const serviceHub = this.serviceHub
           toolsRecord['process_file_for_bi'] = {
             description:
-              'LOCAL DATA PROCESSING: Read a file from the local filesystem and process it for business intelligence analysis. This tool reads the file content and sends it to the local AX-BI analytics engine running on this machine (localhost). Use this when the user wants to analyze or visualize a file with AX-BI.',
+              'LOCAL DATA PROCESSING: Read a file from the local filesystem and process it for business intelligence analysis. This tool reads the file content and sends it to the local AX BI analytics engine running on this machine (localhost). Use this when the user wants to analyze or visualize a file with AX BI.',
             inputSchema: jsonSchema({
               type: 'object',
               properties: {

@@ -1,3 +1,5 @@
+import { normalizeAxBiMcpUrl } from './endpoints'
+
 type JsonRpcRequest = {
   jsonrpc: '2.0'
   id: string
@@ -37,20 +39,56 @@ export type MCPToolResult = {
 }
 
 export type DashboardPlan = {
+  plan_id: string
   title: string
   description?: string
+  datasets?: Array<Record<string, unknown>>
   sections: Array<{
     title: string
-    chart_intents: Array<{
-      metric: string
-      dimension?: string
-      chart_type: string
-    }>
+    chart_intents: Array<Record<string, unknown>>
   }>
-  global_filters?: Record<string, unknown>
+  chart_intents?: Array<Record<string, unknown>>
+  global_filters?: Array<Record<string, unknown>>
+  layout_hints?: Record<string, unknown>
   clarifying_questions?: string[]
   assumptions?: string[]
-  confidence_score?: number
+  confidence?: number
+}
+
+export type DashboardPlanEnvelope = {
+  plan: DashboardPlan
+  warnings: string[]
+}
+
+export type WorkflowStepStatus = {
+  name: string
+  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped'
+  detail?: string
+  duration_ms?: number
+}
+
+export type PromptToDashboardResult = {
+  dashboard?: Record<string, unknown> | null
+  dashboard_url?: string | null
+  plan?: DashboardPlan | null
+  charts?: Array<{
+    chart_id?: number | null
+    chart_name?: string
+    chart_type?: string
+    purpose?: string
+    confidence?: number
+    preview_url?: string | null
+    warnings?: string[]
+  }>
+  layout_summary?: string
+  lineage?: Record<string, unknown> | null
+  warnings?: string[]
+  error?: string | null
+  total_duration_ms?: number
+  status?: 'completed' | 'partial' | 'blocked' | 'failed' | 'dry_run'
+  steps?: WorkflowStepStatus[]
+  charts_succeeded?: number
+  charts_failed?: number
 }
 
 class AxBIAuthProvider {
@@ -76,15 +114,36 @@ class MCPClient {
   private requestId = 0
   private sessionId: string | null = null
   private initialized = false
+  private initialization: Promise<void> | null = null
 
   constructor(
-    private readonly mcpUrl: string,
+    private readonly mcpEndpoint: string,
     private readonly auth: AxBIAuthProvider,
     private readonly timeout = 60_000
   ) {}
 
   async initialize(): Promise<void> {
     if (this.initialized) return
+    if (!this.initialization) {
+      this.initialization = this.startInitialization().finally(() => {
+        this.initialization = null
+      })
+    }
+    await this.initialization
+  }
+
+  async callTool<T = MCPToolResult>(
+    name: string,
+    args?: Record<string, unknown>
+  ): Promise<T> {
+    await this.initialize()
+    return this.sendRequest<T>({
+      method: 'tools/call',
+      params: { name, arguments: args ?? {} },
+    })
+  }
+
+  private async startInitialization(): Promise<void> {
     await this.sendRequest({
       method: 'initialize',
       params: {
@@ -100,17 +159,6 @@ class MCPClient {
     this.initialized = true
   }
 
-  async callTool<T = MCPToolResult>(
-    name: string,
-    args?: Record<string, unknown>
-  ): Promise<T> {
-    await this.initialize()
-    return this.sendRequest<T>({
-      method: 'tools/call',
-      params: { name, arguments: args ?? {} },
-    })
-  }
-
   private async sendRequest<T>(
     request: Omit<JsonRpcRequest, 'jsonrpc' | 'id'>
   ): Promise<T> {
@@ -122,7 +170,7 @@ class MCPClient {
     }
     if (this.sessionId) headers['Mcp-Session-Id'] = this.sessionId
 
-    const response = await fetch(`${this.mcpUrl}/mcp`, {
+    const response = await fetch(this.mcpEndpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify({ jsonrpc: '2.0', id, ...request }),
@@ -131,13 +179,13 @@ class MCPClient {
 
     if (!response.ok) {
       const text = await response.text().catch(() => '')
-      throw new Error(`AX-BI MCP request failed (${response.status}): ${text}`)
+      throw new Error(`AX BI MCP request failed (${response.status}): ${text}`)
     }
 
     const sessionId = response.headers.get('mcp-session-id')
     if (sessionId) this.sessionId = sessionId
 
-    const contentType = response.headers.get('content-type') ?? ''
+    const contentType = response.headers.get('content-type')?.toLowerCase() ?? ''
     if (contentType.includes('text/event-stream')) {
       return this.parseSseResponse<T>(await response.text(), id)
     }
@@ -152,20 +200,30 @@ class MCPClient {
     }
     if (this.sessionId) headers['Mcp-Session-Id'] = this.sessionId
 
-    await fetch(`${this.mcpUrl}/mcp`, {
+    const response = await fetch(this.mcpEndpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify({ jsonrpc: '2.0', method }),
       signal: AbortSignal.timeout(5_000),
-    }).catch(() => undefined)
+    })
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      throw new Error(
+        `AX BI MCP notification failed (${response.status}): ${text}`
+      )
+    }
   }
 
   private parseSseResponse<T>(text: string, expectedId: string): T {
-    const lines = text.split('\n')
-    for (let i = lines.length - 1; i >= 0; i -= 1) {
-      const line = lines[i].trim()
-      if (!line.startsWith('data:')) continue
-      const data = line.slice(5).trim()
+    const events = text.split(/\r?\n\r?\n/)
+    for (let i = events.length - 1; i >= 0; i -= 1) {
+      const data = events[i]
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).replace(/^ /, ''))
+        .join('\n')
+        .trim()
       if (!data) continue
       try {
         const parsed = JSON.parse(data) as JsonRpcResponse
@@ -173,10 +231,10 @@ class MCPClient {
           return this.extractResult<T>(parsed, expectedId)
         }
       } catch {
-        // Ignore non-JSON SSE payloads.
+        continue
       }
     }
-    throw new Error('AX-BI MCP returned no JSON-RPC response')
+    throw new Error('AX BI MCP returned no JSON-RPC response')
   }
 
   private extractResult<T>(response: JsonRpcResponse, expectedId: string): T {
@@ -185,25 +243,47 @@ class MCPClient {
     }
     if (response.id !== expectedId) {
       throw new Error(
-        `AX-BI MCP returned response id ${response.id}; expected ${expectedId}`
+        `AX BI MCP returned response id ${response.id}; expected ${expectedId}`
       )
     }
     return response.result as T
   }
 }
 
-class AIResource {
+export class AIResource {
   constructor(private readonly mcp: MCPClient) {}
 
   async planDashboard(params: {
     prompt: string
     dataset_candidates?: number[]
     constraints?: Record<string, unknown>
-  }): Promise<DashboardPlan> {
-    return this.callMcpTool<DashboardPlan>('plan_dashboard', {
+  }): Promise<DashboardPlanEnvelope> {
+    return this.callMcpTool<DashboardPlanEnvelope>('plan_dashboard', {
       prompt: params.prompt,
       dataset_candidates: params.dataset_candidates ?? [],
       constraints: params.constraints ?? {},
+    })
+  }
+
+  async promptToDashboard(params: {
+    prompt: string
+    dataset_ids?: number[]
+    max_charts?: number
+    draft?: boolean
+    save_charts?: boolean
+    dry_run?: boolean
+    min_confidence?: number
+    force?: boolean
+  }): Promise<PromptToDashboardResult> {
+    return this.callMcpTool<PromptToDashboardResult>('prompt_to_dashboard', {
+      prompt: params.prompt,
+      dataset_ids: params.dataset_ids ?? [],
+      max_charts: params.max_charts ?? 6,
+      draft: params.draft ?? true,
+      save_charts: params.save_charts ?? true,
+      dry_run: params.dry_run ?? false,
+      min_confidence: params.min_confidence ?? 0.25,
+      force: params.force ?? false,
     })
   }
 
@@ -218,39 +298,70 @@ class AIResource {
     name: string,
     args: Record<string, unknown>
   ): Promise<T> {
-    const result = await this.mcp.callTool<MCPToolResult>(name, args)
-    if (result.isError) {
-      const message = result.content?.find((item) => item.text)?.text
-      throw new Error(message ?? `AX-BI MCP tool "${name}" failed`)
+    const result = await this.mcp.callTool<unknown>(name, { request: args })
+    if (!isRecord(result)) {
+      throw new Error(`AX BI MCP tool "${name}" returned a malformed result`)
+    }
+    if (result.isError === true) {
+      const content = Array.isArray(result.content) ? result.content : []
+      const message = content.find(
+        (item) => isRecord(item) && typeof item.text === 'string'
+      )?.text
+      throw new Error(
+        typeof message === 'string'
+          ? message
+          : `AX BI MCP tool "${name}" failed`
+      )
     }
 
     const structured = result.structuredContent ?? result.structured_content
-    if (structured && typeof structured === 'object') return structured as T
+    if (structured !== undefined) {
+      if (!isRecord(structured)) {
+        throw new Error(
+          `AX BI MCP tool "${name}" returned malformed structured content`
+        )
+      }
+      return structured as T
+    }
 
-    const text = result.content?.find((item) => item.text)?.text
-    if (text) {
+    if (result.content !== undefined && !Array.isArray(result.content)) {
+      throw new Error(`AX BI MCP tool "${name}" returned malformed content`)
+    }
+    const text = result.content?.find(
+      (item) => isRecord(item) && item.type === 'text'
+    )?.text
+    if (typeof text === 'string') {
       try {
         return JSON.parse(text) as T
       } catch {
-        return text as T
+        throw new Error(`AX BI MCP tool "${name}" returned malformed JSON`)
       }
     }
 
-    throw new Error(`AX-BI MCP tool "${name}" returned no content`)
+    throw new Error(`AX BI MCP tool "${name}" returned no content`)
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function deriveMcpUrl(baseUrl: string): string {
+  const url = new URL(baseUrl)
+  url.port = '5008'
+  return url.toString()
 }
 
 export class AxBI {
   readonly ai: AIResource
 
   constructor(config: AxBIConfig) {
-    const baseUrl = config.baseUrl.replace(/\/+$/, '')
-    const mcpUrl = (config.mcpUrl ?? baseUrl)
-      .replace(/\/+$/, '')
-      .replace(/\/mcp$/, '')
+    const mcpEndpoint = normalizeAxBiMcpUrl(
+      config.mcpUrl ?? deriveMcpUrl(config.baseUrl)
+    )
     this.ai = new AIResource(
       new MCPClient(
-        mcpUrl,
+        mcpEndpoint,
         new AxBIAuthProvider(config.auth),
         config.timeout ?? 60_000
       )

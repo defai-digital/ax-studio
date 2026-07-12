@@ -14,7 +14,7 @@ describe('useAxBiSessions', () => {
     useAxBiSessions.getState().reset()
   })
 
-  it('creates a dedicated active Ax-BI session', () => {
+  it('creates a dedicated active AX BI session', () => {
     const session = useAxBiSessions
       .getState()
       .createSession({ title: 'Revenue dashboard' })

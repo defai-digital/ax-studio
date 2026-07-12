@@ -3,10 +3,13 @@ import type { MCPConfig } from '@/services/mcp/types'
 import type { MCPServerConfig } from '@/hooks/tools/useMCPServers'
 import type { MCPTool, MCPToolCallResult } from '@ax-studio/core'
 import { getFirstMcpText, isRecord, parseJsonMcpResult } from './mcp-result'
+import {
+  AX_BI_SERVER,
+  DEFAULT_AX_BI_MCP_URL,
+  normalizeAxBiMcpUrl,
+} from './endpoints'
 
-const AX_BI_SERVER = 'ax-bi'
-
-export const DEFAULT_AX_BI_MCP_URL = 'http://127.0.0.1:8088/mcp'
+export { DEFAULT_AX_BI_MCP_URL } from './endpoints'
 
 export type AxBiDataset = {
   id?: string | number
@@ -14,19 +17,6 @@ export type AxBiDataset = {
   schema?: string
   databaseName?: string
   url?: string
-}
-
-function normalizeAxBiMcpUrl(value: string): string {
-  const trimmed = value.trim()
-  if (!trimmed) return DEFAULT_AX_BI_MCP_URL
-
-  const withProtocol = /^https?:\/\//i.test(trimmed)
-    ? trimmed
-    : `http://${trimmed}`
-  const withoutTrailingSlash = withProtocol.replace(/\/+$/, '')
-  return /\/mcp$/i.test(withoutTrailingSlash)
-    ? withoutTrailingSlash
-    : `${withoutTrailingSlash}/mcp`
 }
 
 export async function getConfiguredAxBiMcpUrl(
@@ -112,7 +102,7 @@ async function callAxBiDatasetTool({
   }
 
   throw new Error(
-    'AX-BI MCP is connected, but the list_datasets tool is not available.'
+    'AX BI MCP is connected, but the list_datasets tool is not available.'
   )
 }
 
@@ -171,7 +161,7 @@ function parseAxBiDatasetList(result: MCPToolCallResult): AxBiDataset[] {
   const parsed = parseJsonMcpResult<Record<string, unknown>>(result)
   if (!parsed) {
     const text = getFirstMcpText(result)
-    throw new Error(text || 'AX-BI MCP returned no dataset list.')
+    throw new Error(text || 'AX BI MCP returned no dataset list.')
   }
 
   const seen = new Set<string>()

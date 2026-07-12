@@ -378,7 +378,7 @@ export function useThreadChat({
         }
       }
 
-      // Preserve document attachment metadata so workflows (e.g. AX-BI) can
+      // Preserve document attachment metadata so workflows (e.g. AX BI) can
       // access the original file paths even though documents are inlined as
       // text rather than added as file parts.
       const existingMeta = userMessage.metadata as Record<string, unknown> ?? {}

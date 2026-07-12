@@ -145,7 +145,7 @@ describe('ax-bi datasets', () => {
         serviceHub: serviceHub as never,
         url: 'localhost:8088',
       })
-    ).resolves.toBe('http://localhost:8088/mcp')
+    ).resolves.toBe('http://localhost:5008/mcp')
 
     expect(updateMCPConfig).toHaveBeenCalledWith(
       expect.stringContaining('"ax-bi"')
@@ -154,13 +154,13 @@ describe('ax-bi datasets', () => {
       'ax-bi',
       expect.objectContaining({
         type: 'http',
-        url: 'http://localhost:8088/mcp',
+        url: 'http://localhost:5008/mcp',
         active: true,
       })
     )
   })
 
-  it('preserves already normalized AX-BI MCP URLs when connecting', async () => {
+  it('preserves already normalized AX BI MCP URLs when connecting', async () => {
     const updateMCPConfig = vi.fn().mockResolvedValue(undefined)
     const activateMCPServer = vi.fn().mockResolvedValue(undefined)
     const serviceHub = {
@@ -174,9 +174,9 @@ describe('ax-bi datasets', () => {
     await expect(
       connectAxBiMcpServer({
         serviceHub: serviceHub as never,
-        url: 'http://localhost:8088/mcp/',
+        url: 'http://localhost:5008/mcp/',
       })
-    ).resolves.toBe('http://localhost:8088/mcp')
+    ).resolves.toBe('http://localhost:5008/mcp')
   })
 
   it('uses list_datasets when available', async () => {

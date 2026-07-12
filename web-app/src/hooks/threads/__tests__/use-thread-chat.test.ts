@@ -302,7 +302,7 @@ describe('useThreadChat', () => {
       ])
     })
 
-    it('passes failed document-processing attachments to direct AX-BI dashboard workflow', async () => {
+    it('passes failed document-processing attachments to direct AX BI dashboard workflow', async () => {
       const attachment = {
         name: 'sales.csv',
         type: 'document' as const,
@@ -318,13 +318,13 @@ describe('useThreadChat', () => {
       })
       axBiWorkflowMocks.runAxBiDashboardWorkflow.mockResolvedValueOnce({
         handled: true,
-        message: 'Created AX-BI dashboard',
+        message: 'Created AX BI dashboard',
       })
 
       const { result } = renderHook(() => useThreadChat(defaultParams()))
 
       await act(async () => {
-        await result.current.processAndSendMessage('Create an AX-BI dashboard from this file')
+        await result.current.processAndSendMessage('Create an AX BI dashboard from this file')
       })
 
       expect(runAxBiDashboardWorkflow).toHaveBeenCalledWith(

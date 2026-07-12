@@ -506,7 +506,7 @@ pub fn read_file_sync<R: Runtime>(
 #[tauri::command]
 /// Read a file as base64-encoded string (for binary files like Excel, images, etc.)
 /// This command allows reading from arbitrary paths (not restricted to app data folder)
-/// since it's used for user-selected file uploads (e.g., AX-BI data import).
+/// since it's used for user-selected file uploads (e.g., AX BI data import).
 pub fn read_file_base64<R: Runtime>(
     _app_handle: tauri::AppHandle<R>,
     request: SinglePathRequest,

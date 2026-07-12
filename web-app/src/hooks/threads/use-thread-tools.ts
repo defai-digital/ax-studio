@@ -21,9 +21,7 @@ import { toast } from 'sonner'
 import {
   findAxBiTool,
   getAxBiResultUrl,
-  didAxBiQueueLiveUpdate,
   parseAxBiToolResult,
-  withAxBiAutoNavigate,
 } from '@/lib/ax-bi/tool-navigation'
 import { normalizeMcpResultForToolOutput } from '@/lib/ax-bi/mcp-result'
 
@@ -400,7 +398,7 @@ export function useThreadTools({
           try {
             const toolName = toolCall.toolName
             const rawToolInput = toolCall.input as Record<string, unknown>
-            const toolInput = withAxBiAutoNavigate(mcpTools, toolName, rawToolInput)
+            const toolInput = rawToolInput
 
             // Reject duplicate fabric_search calls — return the instruction to answer
             if (toolName === 'fabric_search' && fabricSearchUsedInTurn.current) {
@@ -441,7 +439,7 @@ export function useThreadTools({
             } else if (mcpToolNames.has(toolName)) {
               result = await serviceHub.mcp().callTool({ toolName, arguments: toolInput })
             } else if (toolName === 'process_file_for_bi') {
-              // Custom tool: read file as base64 and upload to AX-BI
+              // Custom tool: read file as base64 and upload to AX BI
               try {
                 const { fs } = await import('@ax-studio/core')
                 const input = toolCall.input as { file_path: string; filename: string }
@@ -481,14 +479,12 @@ export function useThreadTools({
               ? parseAxBiToolResult(result)
               : null
             if (axBiToolResult?.success === false) {
-              toast.error('AX-BI tool failed', {
+              toast.error('AX BI tool failed', {
                 description:
                   typeof axBiToolResult.error === 'string'
                     ? axBiToolResult.error
-                    : 'The AX-BI tool returned an error.',
+                    : 'The AX BI tool returned an error.',
               })
-            } else if (axBiToolResult && didAxBiQueueLiveUpdate(axBiToolResult)) {
-              toast.success('AX-BI updated')
             } else if (axBiToolResult) {
               const url = getAxBiResultUrl(toolName, axBiToolResult)
               if (url) {
