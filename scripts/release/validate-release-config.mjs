@@ -2,10 +2,12 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
+import { WINDOWS_SIGN_COMMAND } from './set-version.mjs'
 
 const repoRoot = path.resolve(import.meta.dirname, '..', '..')
 const stablePlatforms = ['darwin-aarch64', 'windows-x86_64', 'windows-aarch64']
 const releaseWorkflowPaths = [
+  '.github/workflows/template-tauri-build-macos.yml',
   '.github/workflows/template-tauri-build-windows-x64.yml',
   '.github/workflows/template-tauri-build-windows-arm64.yml',
 ]
@@ -112,6 +114,13 @@ if (!fs.existsSync(path.join(repoRoot, customNsisTemplatePath))) {
 
 for (const workflowPath of releaseWorkflowPaths) {
   const workflow = fs.readFileSync(path.join(repoRoot, workflowPath), 'utf8')
+  if (workflow.includes('ctoml') || workflow.includes('cargo-bins/cargo-binstall@main')) {
+    fail(`${workflowPath} must not install mutable manifest-editing tools during a release`)
+  }
+}
+
+for (const workflowPath of releaseWorkflowPaths.filter((workflowPath) => workflowPath.includes('windows'))) {
+  const workflow = fs.readFileSync(path.join(repoRoot, workflowPath), 'utf8')
   if (!workflow.includes(windowsLongPathsCommand)) {
     fail(`${workflowPath} must enable Git long-path support with: ${windowsLongPathsCommand}`)
   }
@@ -121,12 +130,13 @@ for (const workflowPath of releaseWorkflowPaths) {
 }
 
 const setVersionScript = fs.readFileSync(path.join(repoRoot, 'scripts/release/set-version.mjs'), 'utf8')
-const windowsSignCommand = setVersionScript.match(
-  /winConfig\.bundle\.windows\.signCommand\s*=\s*'([^']+)'/,
-)?.[1]
-if (windowsSignCommand !== expectedWindowsSignCommand) {
+const cargoManifest = fs.readFileSync(path.join(repoRoot, 'src-tauri/Cargo.toml'), 'utf8')
+if (/['"]devtools['"]/.test(cargoManifest) || /['"]devtools['"]/.test(setVersionScript)) {
+  fail('production release configuration must not enable or inject the Tauri devtools feature')
+}
+if (WINDOWS_SIGN_COMMAND !== expectedWindowsSignCommand) {
   fail(
-    `scripts/release/set-version.mjs Windows sign command must be ${expectedWindowsSignCommand}, got ${windowsSignCommand ?? '(missing)'}`,
+    `scripts/release/set-version.mjs Windows sign command must be ${expectedWindowsSignCommand}, got ${WINDOWS_SIGN_COMMAND}`,
   )
 }
 

@@ -102,12 +102,6 @@ jobs:
       - name: Install jq
         uses: dcarbone/install-jq-action@v2.0.1
 
-      - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@main
-
-      - name: Install ctoml
-        run: cargo binstall ctoml --no-confirm
-
       - name: Update app version from release tag
         env:
           VERSION: ${{ inputs.new_version }}
@@ -133,8 +127,6 @@ jobs:
 
           chmod +x .github/scripts/rename-tauri-app.sh
           .github/scripts/rename-tauri-app.sh ./src-tauri/tauri.conf.json ${{ inputs.channel }}
-
-          ctoml ./src-tauri/Cargo.toml package.name "ax-studio-${{ inputs.channel }}"
 
           chmod +x .github/scripts/rename-workspace.sh
           .github/scripts/rename-workspace.sh ./package.json ${{ inputs.channel }}

@@ -112,12 +112,6 @@ jobs:
       - name: Install jq
         uses: dcarbone/install-jq-action@v2.0.1
 
-      - name: Install ctoml
-        uses: cargo-bins/cargo-binstall@main
-
-      - name: Install ctoml binary
-        run: cargo binstall ctoml --no-confirm
-
       - name: Set up Xcode version
         uses: maxim-lobanov/setup-xcode@v1
         with:
@@ -178,8 +172,6 @@ jobs:
 
           chmod +x .github/scripts/rename-tauri-app.sh
           .github/scripts/rename-tauri-app.sh ./src-tauri/tauri.conf.json ${{ inputs.channel }}
-
-          ctoml ./src-tauri/Cargo.toml package.name "ax-studio-${{ inputs.channel }}"
 
           chmod +x .github/scripts/rename-workspace.sh
           .github/scripts/rename-workspace.sh ./package.json ${{ inputs.channel }}
