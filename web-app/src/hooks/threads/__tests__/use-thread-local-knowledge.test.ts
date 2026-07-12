@@ -240,6 +240,38 @@ describe('useThreadLocalKnowledge', () => {
     expect(mockServiceHub.callTool).not.toHaveBeenCalled()
   })
 
+  it('reports a search error when fabric_search sets isError without top-level error', async () => {
+    useLocalKnowledge.setState({
+      localKnowledgeEnabled: true,
+      localKnowledgeEnabledPerThread: { 'thread-1': true },
+    })
+
+    mockServiceHub.callTool.mockResolvedValue({
+      error: '',
+      isError: true,
+      content: [{ type: 'text', text: 'permission denied' }],
+    })
+
+    const { result } = renderHook(() => useThreadLocalKnowledge(threadId))
+
+    let knowledge: Awaited<ReturnType<typeof result.current.prepareLocalKnowledge>> = {
+      context: '',
+    }
+    await act(async () => {
+      knowledge = await result.current.prepareLocalKnowledge(
+        'What real-world hiring outcome did the author achieve?'
+      )
+    })
+
+    // Must not misclassify MCP isError as a soft "no matching documents" miss
+    expect(knowledge.retrieval?.error).toMatch(/error/i)
+    expect(knowledge.retrieval?.error).not.toMatch(/No matching documents/)
+    expect(knowledge.context).toContain('Local Knowledge Base')
+    expect(knowledge.context).not.toContain(
+      'No matching documents were found in the local knowledge base.'
+    )
+  })
+
   it('returns prepareLocalKnowledge as a function', () => {
     const { result } = renderHook(() => useThreadLocalKnowledge(threadId))
     expect(typeof result.current.prepareLocalKnowledge).toBe('function')

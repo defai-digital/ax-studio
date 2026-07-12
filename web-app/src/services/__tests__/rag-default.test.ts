@@ -100,6 +100,19 @@ describe('DefaultRAGService', () => {
       expect(result).toBe('')
     })
 
+    it('returns empty string when fabric_extract sets isError without top-level error', async () => {
+      const hub = makeServiceHub({
+        error: '',
+        isError: true,
+        content: [{ text: 'permission denied' }],
+      })
+      service.setMcpService(hub.mcp())
+
+      // Must not treat error content text as the document body
+      const result = await service.parseDocument('/tmp/locked.pdf')
+      expect(result).toBe('')
+    })
+
     it('handles plain text response (non-JSON)', async () => {
       const hub = makeServiceHub({
         error: '',
@@ -182,6 +195,25 @@ describe('DefaultRAGService', () => {
           }),
         })
       )
+    })
+
+    it('returns error when fabric_search sets isError without top-level error', async () => {
+      const mockCallTool = vi.fn().mockResolvedValue({
+        error: '',
+        isError: true,
+        content: [{ text: 'index unavailable' }],
+      })
+      service.setMcpService({ callTool: mockCallTool })
+
+      const result = await service.callTool({
+        toolName: 'retrieve',
+        arguments: { query: 'test query' },
+        threadId: 'thread-123',
+        scope: 'thread',
+      })
+
+      expect(result.error).toContain('index unavailable')
+      expect(result.error).toMatch(/Search failed/)
     })
 
     it('returns error when query is empty', async () => {
@@ -308,6 +340,25 @@ describe('DefaultRAGService', () => {
       expect(payload.chunks).toHaveLength(1)
       expect(payload.chunks[0].id).toBe('chunk-1')
       expect(payload.chunks[0].chunk_file_order).toBe(2)
+    })
+
+    it('returns error when fabric_search sets isError without top-level error', async () => {
+      const mockCallTool = vi.fn().mockResolvedValue({
+        error: '',
+        isError: true,
+        content: [{ text: 'collection missing' }],
+      })
+      service.setMcpService({ callTool: mockCallTool })
+
+      const result = await service.callTool({
+        toolName: 'get_chunks',
+        arguments: { file_id: 'file-1', start_order: 0, end_order: 2 },
+        threadId: 'thread-123',
+        scope: 'thread',
+      })
+
+      expect(result.error).toContain('collection missing')
+      expect(result.error).toMatch(/get_chunks failed/)
     })
 
     it('rejects non-integer chunk ranges before calling fabric_search', async () => {

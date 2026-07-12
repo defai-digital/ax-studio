@@ -7,6 +7,7 @@ import {
   formatFabricToolText,
   parseFabricSearchResults,
 } from '@/lib/fabric-search'
+import { getMcpToolFailureMessage } from '@/lib/ax-bi/mcp-result'
 import { pushUniqueNormalizedString } from '@/lib/utils/array'
 import { extractErrorMessage } from '@/lib/utils/error'
 
@@ -106,7 +107,10 @@ function isRecoverableLocalKnowledgeError(error: unknown): boolean {
 async function retryRecoverableSearch<T>(operation: () => Promise<T>): Promise<T> {
   try {
     const result = await operation()
-    const maybeError = (result as { error?: string } | undefined)?.error
+    const maybeError = getMcpToolFailureMessage(
+      (result as { error?: string; content?: Array<{ text?: string }>; isError?: boolean; is_error?: boolean }) ??
+        {}
+    )
     if (maybeError && isRecoverableLocalKnowledgeError(maybeError)) {
       return await operation()
     }
@@ -187,7 +191,7 @@ async function buildContextFromSearchResult(
   if (source) {
     try {
       const extracted = await callFabricExtract(serviceHub, source)
-      if (!extracted?.error) {
+      if (!getMcpToolFailureMessage(extracted ?? {})) {
         const text = extracted.content?.find((part) => part?.text)?.text
         if (text) {
           const parsed = JSON.parse(text) as { text?: string }
@@ -247,7 +251,9 @@ export function useThreadLocalKnowledge(threadId: string) {
           mode: 'hybrid',
         })
 
-        if (!result?.error && !fabricSearchHasResults(result)) {
+        // MCP CallToolResult marks failures with isError/is_error, not only error.
+        const globalFailure = getMcpToolFailureMessage(result ?? {})
+        if (!globalFailure && !fabricSearchHasResults(result)) {
           for (const fallbackQuery of buildKeywordFallbackQueries(query)) {
             const fallbackResult = await callFabricSearch(serviceHub, {
               query: fallbackQuery,
@@ -255,14 +261,18 @@ export function useThreadLocalKnowledge(threadId: string) {
               mode: 'keyword',
               layer: 'raw',
             })
-            if (!fallbackResult?.error && fabricSearchHasResults(fallbackResult)) {
+            if (
+              !getMcpToolFailureMessage(fallbackResult ?? {}) &&
+              fabricSearchHasResults(fallbackResult)
+            ) {
               result = fallbackResult
               break
             }
           }
         }
 
-        if (result?.error || !fabricSearchHasResults(result)) {
+        const resultFailure = getMcpToolFailureMessage(result ?? {})
+        if (resultFailure || !fabricSearchHasResults(result)) {
           const threadResult = await callFabricSearch(serviceHub, {
             query,
             collection_id: threadCollectionId(threadId),
@@ -270,25 +280,44 @@ export function useThreadLocalKnowledge(threadId: string) {
             mode: 'hybrid',
           })
 
-          if (threadResult?.error) {
+          const threadFailure = getMcpToolFailureMessage(threadResult ?? {})
+          if (threadFailure) {
+            const errorMessage =
+              'fabric_search returned an error for both global and thread collections.'
             return {
-              context: buildNoKnowledgeContext('fabric_search returned an error for both global and thread collections.'),
+              context: buildNoKnowledgeContext(errorMessage),
               retrieval: {
                 searched: true,
                 extracted: false,
-                error: 'fabric_search returned an error for both global and thread collections.',
+                error: errorMessage,
               },
             }
           }
 
           const threadChunks = formatFabricToolText(threadResult)
           if (!fabricSearchHasResults(threadResult) || !threadChunks) {
+            // Hard MCP failure on global + empty thread must not look like "no hits".
+            if (resultFailure) {
+              const errorMessage =
+                'fabric_search returned an error for both global and thread collections.'
+              return {
+                context: buildNoKnowledgeContext(errorMessage),
+                retrieval: {
+                  searched: true,
+                  extracted: false,
+                  error: errorMessage,
+                },
+              }
+            }
             return {
-              context: buildNoKnowledgeContext('No matching documents were found in the local knowledge base.'),
+              context: buildNoKnowledgeContext(
+                'No matching documents were found in the local knowledge base.'
+              ),
               retrieval: {
                 searched: true,
                 extracted: false,
-                error: 'No matching documents were found in the local knowledge base.',
+                error:
+                  'No matching documents were found in the local knowledge base.',
               },
             }
           }

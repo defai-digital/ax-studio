@@ -3150,4 +3150,84 @@ describe('AX BI dashboard workflow', () => {
       chartUrl: 'http://127.0.0.1:8080/explore/?slice_id=99',
     })
   })
+
+  it('fails the chart workflow when generate_chart returns isError JSON without top-level error', async () => {
+    const serviceHub = {
+      mcp: () => ({
+        getTools: async () => [
+          {
+            server: 'ax-bi',
+            name: 'list_datasets',
+            description: '',
+            inputSchema: {},
+          },
+          {
+            server: 'ax-bi',
+            name: 'get_dataset_info',
+            description: '',
+            inputSchema: {},
+          },
+          {
+            server: 'ax-bi',
+            name: 'generate_chart',
+            description: '',
+            inputSchema: {},
+          },
+        ],
+        callTool: async (args: { toolName: string; arguments: object }) => {
+          if (args.toolName === 'list_datasets') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    result: [{ id: 12, table_name: 'palmer_penguins' }],
+                  }),
+                },
+              ],
+            }
+          }
+          if (args.toolName === 'get_dataset_info') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    columns: [
+                      { name: 'species', type: 'TEXT' },
+                      { name: 'body_mass_g', type: 'FLOAT' },
+                    ],
+                  }),
+                },
+              ],
+            }
+          }
+          // MCP-style failure: isError + JSON body, empty top-level error
+          return {
+            error: '',
+            isError: true,
+            content: [
+              {
+                text: JSON.stringify({
+                  status: 'failed',
+                  detail: 'permission denied for dataset',
+                }),
+              },
+            ],
+          }
+        },
+      }),
+    }
+
+    // Before the fail-first fix, parseJsonToolResult returned the error JSON as
+    // a ChartResult and the workflow reported a false success without a URL.
+    // Now isError forces a hard failure that must not be treated as a chart.
+    await expect(
+      runAxBiExistingDatasetChartWorkflow({
+        prompt:
+          'Use AX BI MCP only. Find dataset palmer_penguins. Create a saved bar chart showing COUNT(*) by species. Name it Test - Penguins Count by Species.',
+        serviceHub: serviceHub as never,
+      })
+    ).rejects.toThrow(/permission denied|failed/i)
+  })
 })

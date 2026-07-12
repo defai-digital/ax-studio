@@ -16,6 +16,7 @@ import {
   threadCollectionId,
   projectCollectionId,
 } from '@/lib/file-registry'
+import { getMcpToolFailureMessage } from '@/lib/ax-bi/mcp-result'
 
 const RAG_SERVER = 'rag-internal'
 const RETRIEVE_DEFAULT_TOP_K = 3
@@ -174,8 +175,9 @@ export class DefaultRAGService implements RAGService {
         arguments: { file_path: path },
       })
 
-      if (result.error) {
-        console.warn('[RAG] fabric_extract error:', result.error)
+      const failure = getMcpToolFailureMessage(result)
+      if (failure) {
+        console.warn('[RAG] fabric_extract error:', failure)
         return ''
       }
 
@@ -266,8 +268,9 @@ export class DefaultRAGService implements RAGService {
         arguments: searchArgs,
       })
 
-      if (result.error) {
-        return fail(`Search failed: ${result.error}`)
+      const searchFailure = getMcpToolFailureMessage(result)
+      if (searchFailure) {
+        return fail(`Search failed: ${searchFailure}`)
       }
 
       const text = result.content?.[0]?.text ?? '{}'
@@ -374,8 +377,9 @@ export class DefaultRAGService implements RAGService {
         },
       })
 
-      if (result.error) {
-        return fail(`get_chunks failed: ${result.error}`)
+      const chunksFailure = getMcpToolFailureMessage(result)
+      if (chunksFailure) {
+        return fail(`get_chunks failed: ${chunksFailure}`)
       }
 
       const text = result.content?.[0]?.text ?? '{}'
