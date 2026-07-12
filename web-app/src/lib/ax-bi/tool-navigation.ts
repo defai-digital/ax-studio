@@ -48,6 +48,9 @@ export function parseAxBiToolResult(result: {
 export function normalizeAxBiResultUrl(value: string): string | undefined {
   const trimmed = value.trim()
   if (!trimmed) return undefined
+  // Protocol-relative URLs (`//evil.example/...`) resolve against the default
+  // BI base and become absolute attacker hosts while still passing http(s).
+  if (trimmed.startsWith('//')) return undefined
 
   let url: URL
   try {

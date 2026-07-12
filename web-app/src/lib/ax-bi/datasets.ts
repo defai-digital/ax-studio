@@ -2,7 +2,12 @@ import type { ServiceHub } from '@/services'
 import type { MCPConfig } from '@/services/mcp/types'
 import type { MCPServerConfig } from '@/hooks/tools/useMCPServers'
 import type { MCPTool, MCPToolCallResult } from '@ax-studio/core'
-import { getFirstMcpText, isRecord, parseJsonMcpResult } from './mcp-result'
+import {
+  getFirstMcpText,
+  getMcpToolFailureMessage,
+  isRecord,
+  parseJsonMcpResult,
+} from './mcp-result'
 import {
   AX_BI_SERVER,
   DEFAULT_AX_BI_MCP_URL,
@@ -156,7 +161,8 @@ function normalizeDatasetRecord(
 }
 
 function parseAxBiDatasetList(result: MCPToolCallResult): AxBiDataset[] {
-  if (result.error) throw new Error(result.error)
+  const failure = getMcpToolFailureMessage(result)
+  if (failure) throw new Error(failure)
 
   const parsed = parseJsonMcpResult<Record<string, unknown>>(result)
   if (!parsed) {

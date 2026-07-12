@@ -1,5 +1,9 @@
-import { describe, it, expect } from 'vitest'
-import { mcpServersSchema, mcpSettingsSchema } from '../mcp.schema'
+import { afterEach, describe, it, expect, vi } from 'vitest'
+import {
+  mcpServersSchema,
+  mcpSettingsSchema,
+  parseMcpServersRecord,
+} from '../mcp.schema'
 
 function parseServerConfig(config: unknown) {
   const result = mcpServersSchema.safeParse({ server: config })
@@ -128,6 +132,28 @@ describe('mcpServersSchema', () => {
       badServer: 'not-an-object',
     })
     expect(result.success).toBe(false)
+  })
+})
+
+describe('parseMcpServersRecord', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('keeps valid servers when a sibling fails validation', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const servers = parseMcpServersRecord({
+      good: { type: 'http', url: 'https://mcp.example.com/mcp' },
+      bad: { type: 'http' },
+    })
+    expect(servers).toEqual({
+      good: expect.objectContaining({
+        type: 'http',
+        url: 'https://mcp.example.com/mcp',
+      }),
+    })
+    expect(servers).not.toHaveProperty('bad')
+    expect(warn).toHaveBeenCalled()
   })
 })
 

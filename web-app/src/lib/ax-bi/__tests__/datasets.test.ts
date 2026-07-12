@@ -210,4 +210,16 @@ describe('ax-bi datasets', () => {
       }),
     })
   })
+
+  it('throws when list_datasets returns isError without a top-level error string', async () => {
+    const { serviceHub } = makeDatasetServiceHub({
+      error: '',
+      isError: true,
+      content: [{ text: 'access denied' }],
+    })
+
+    await expect(
+      listAxBiDatasets({ serviceHub: serviceHub as never })
+    ).rejects.toThrow('access denied')
+  })
 })

@@ -181,4 +181,27 @@ describe('AX BI SDK shim', () => {
       expect(url).toBe('https://bi.example.com/mcp')
     }
   })
+
+  it('throws when tools/call returns is_error (snake_case) failure', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonRpcResponse('1', {}))
+      .mockResolvedValueOnce(new Response(null, { status: 202 }))
+      .mockResolvedValueOnce(
+        jsonRpcResponse('2', {
+          is_error: true,
+          content: [{ type: 'text', text: 'dataset not found' }],
+        })
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const client = new AxBI({
+      baseUrl: 'http://127.0.0.1:8088',
+      mcpUrl: 'http://127.0.0.1:5008/mcp',
+    })
+
+    await expect(
+      client.ai.planDashboard({ prompt: 'Plan' })
+    ).rejects.toThrow('dataset not found')
+  })
 })

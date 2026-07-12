@@ -190,6 +190,43 @@ describe('TauriMCPService', () => {
       })
     })
 
+    it('keeps valid MCP servers when a sibling entry is invalid', async () => {
+      mockCore.api.getMcpConfigs.mockResolvedValue(
+        JSON.stringify({
+          mcpServers: {
+            good: {
+              type: 'http',
+              url: 'http://127.0.0.1:5008/mcp',
+              command: '',
+              args: [],
+              env: {},
+              active: true,
+            },
+            bad: {
+              type: 'http',
+              // invalid: http servers require a URL
+              command: '',
+              args: [],
+              env: {},
+            },
+          },
+          mcpSettings: { ...DEFAULT_MCP_SETTINGS },
+        })
+      )
+
+      const result = await mcpService.getMCPConfig()
+
+      expect(result.mcpServers).toEqual({
+        good: expect.objectContaining({
+          type: 'http',
+          url: 'http://127.0.0.1:5008/mcp',
+          active: true,
+        }),
+      })
+      expect(result.mcpServers).not.toHaveProperty('bad')
+      expect(consoleWarnSpy).toHaveBeenCalled()
+    })
+
     it('should handle API rejection', async () => {
       const mockError = new Error('Failed to get config')
       mockCore.api.getMcpConfigs.mockRejectedValue(mockError)

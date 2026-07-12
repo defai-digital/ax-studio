@@ -69,4 +69,11 @@ describe('AX BI tool navigation helpers', () => {
   it('rejects non-HTTP result URLs', () => {
     expect(normalizeAxBiResultUrl('javascript:alert(1)')).toBeUndefined()
   })
+
+  it('rejects protocol-relative URLs that hijack the host via base resolution', () => {
+    expect(normalizeAxBiResultUrl('//evil.example/phish')).toBeUndefined()
+    expect(
+      normalizeAxBiResultUrl('//evil.example/ax-bi/dashboard/1/')
+    ).toBeUndefined()
+  })
 })

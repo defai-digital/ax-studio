@@ -41,12 +41,30 @@ export function fabricSearchHasResults(result: unknown): boolean {
       const parsed = JSON.parse(text) as { results?: unknown[] }
       return Array.isArray(parsed.results) && parsed.results.length > 0
     } catch {
-      return !text.includes('"results":[]')
+      // Non-JSON tool/error text is not a structured hit (e.g. "Connection refused").
+      return false
     }
   }
 
-  const formatted = formatFabricToolText(result)
-  return Boolean(formatted) && !formatted.includes('"results":[]')
+  // Multi-part content: only structured JSON with non-empty results counts.
+  try {
+    const content = (result as FabricToolResult | undefined)?.content
+    if (!Array.isArray(content)) return false
+    for (const part of content) {
+      if (part?.type !== 'text' || typeof part.text !== 'string') continue
+      try {
+        const parsed = JSON.parse(part.text) as { results?: unknown[] }
+        if (Array.isArray(parsed.results) && parsed.results.length > 0) {
+          return true
+        }
+      } catch {
+        // keep scanning other parts
+      }
+    }
+  } catch {
+    return false
+  }
+  return false
 }
 
 export function parseFabricSearchResults(

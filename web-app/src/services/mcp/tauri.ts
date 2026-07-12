@@ -7,7 +7,10 @@ import { MCPTool } from '@/types/mcp'
 import { DEFAULT_MCP_SETTINGS } from '@/hooks/tools/useMCPServers'
 import type { MCPServerConfig, MCPServers, MCPSettings } from '@/hooks/tools/useMCPServers'
 import type { MCPConfig, MCPService, ToolCallWithCancellationResult } from './types'
-import { mcpServersSchema, mcpSettingsSchema } from '@/schemas/mcp.schema'
+import {
+  mcpSettingsSchema,
+  parseMcpServersRecord,
+} from '@/schemas/mcp.schema'
 import { extractErrorMessage, toError } from '@/lib/utils/error'
 
 const DEFAULT_UNAVAILABLE_TOOL_ERROR = 'MCP service unavailable'
@@ -139,15 +142,15 @@ export class TauriMCPService implements MCPService {
     const { mcpServers, mcpSettings, ...legacyServers } = parsed
     const hasLegacyServers = Object.keys(legacyServers).length > 0
 
-    // Try the explicit mcpServers field first, fall back to legacy top-level keys
-    let serversParsed = mcpServersSchema.safeParse(mcpServers)
-    if (!serversParsed.success && hasLegacyServers) {
-      serversParsed = mcpServersSchema.safeParse(legacyServers)
+    // Parse entry-by-entry so one invalid server cannot wipe valid siblings.
+    // Prefer explicit mcpServers; fall back to legacy top-level keys.
+    let normalizedServers: MCPServers = parseMcpServersRecord(mcpServers)
+    if (
+      Object.keys(normalizedServers).length === 0 &&
+      hasLegacyServers
+    ) {
+      normalizedServers = parseMcpServersRecord(legacyServers)
     }
-    if (!serversParsed.success) {
-      console.warn('MCP servers config did not match expected schema:', serversParsed.error.message)
-    }
-    const normalizedServers: MCPServers = (serversParsed.success ? serversParsed.data : {}) as MCPServers
 
     const settingsParsed = mcpSettingsSchema.safeParse(mcpSettings)
     const normalizedSettings: MCPSettings = {

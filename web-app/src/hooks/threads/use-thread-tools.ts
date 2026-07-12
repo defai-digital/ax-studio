@@ -23,7 +23,10 @@ import {
   getAxBiResultUrl,
   parseAxBiToolResult,
 } from '@/lib/ax-bi/tool-navigation'
-import { normalizeMcpResultForToolOutput } from '@/lib/ax-bi/mcp-result'
+import {
+  getMcpToolFailureMessage,
+  normalizeMcpResultForToolOutput,
+} from '@/lib/ax-bi/mcp-result'
 
 export type AddToolOutputFn = (...args: unknown[]) => unknown
 
@@ -462,8 +465,10 @@ export function useThreadTools({
               result = { error: `Tool '${toolName}' not found in any service` }
             }
 
-            // Mark fabric_search as called
-            if (toolName === 'fabric_search' && !result.error) {
+            const toolFailure = getMcpToolFailureMessage(result)
+
+            // Mark fabric_search as called only on successful results
+            if (toolName === 'fabric_search' && !toolFailure) {
               fabricSearchUsedInTurn.current = true
             }
 
@@ -475,29 +480,34 @@ export function useThreadTools({
               })
             }
 
-            const axBiToolResult = findAxBiTool(mcpTools, toolName)
-              ? parseAxBiToolResult(result)
-              : null
-            if (axBiToolResult?.success === false) {
-              toast.error('AX BI tool failed', {
-                description:
-                  typeof axBiToolResult.error === 'string'
-                    ? axBiToolResult.error
-                    : 'The AX BI tool returned an error.',
-              })
-            } else if (axBiToolResult) {
-              const url = getAxBiResultUrl(toolName, axBiToolResult)
-              if (url) {
-                await serviceHub.opener().openUrl(url)
+            // Re-evaluate after fabric retry (may clear or set failure)
+            const finalFailure = getMcpToolFailureMessage(result)
+
+            if (!finalFailure) {
+              const axBiToolResult = findAxBiTool(mcpTools, toolName)
+                ? parseAxBiToolResult(result)
+                : null
+              if (axBiToolResult?.success === false) {
+                toast.error('AX BI tool failed', {
+                  description:
+                    typeof axBiToolResult.error === 'string'
+                      ? axBiToolResult.error
+                      : 'The AX BI tool returned an error.',
+                })
+              } else if (axBiToolResult) {
+                const url = getAxBiResultUrl(toolName, axBiToolResult)
+                if (url) {
+                  await serviceHub.opener().openUrl(url)
+                }
               }
             }
 
-            if (result.error) {
+            if (finalFailure) {
               addToolOutput({
                 state: 'output-error',
                 tool: toolCall.toolName,
                 toolCallId: toolCall.toolCallId,
-                errorText: `Error: ${result.error}`,
+                errorText: `Error: ${finalFailure}`,
               })
             } else {
               // For fabric_search, append an instruction to the tool result so the model

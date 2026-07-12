@@ -293,6 +293,19 @@ describe('DefaultUploadsService', () => {
       ).rejects.toThrow('pipeline crashed')
     })
 
+    it('throws when fabric_ingest_run sets isError without a top-level error string', async () => {
+      const hub = makeServiceHub({
+        error: '',
+        isError: true,
+        content: [{ text: 'ingest rejected by server' }],
+      })
+      service.setMcpService(hub.mcp())
+
+      await expect(
+        service.ingestFileAttachment('t1', makeDocAttachment())
+      ).rejects.toThrow('ingest rejected by server')
+    })
+
     it('throws when filesSucceeded is 0', async () => {
       const metrics = {
         filesSucceeded: 0,

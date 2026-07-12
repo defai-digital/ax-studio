@@ -2,7 +2,12 @@ import { fs } from '@ax-studio/core'
 import type { ServiceHub } from '@/services'
 import type { Attachment } from '@/types/attachment'
 import type { MCPTool, MCPToolCallResult } from '@ax-studio/core'
-import { getFirstMcpText, isRecord, parseJsonMcpResult } from './mcp-result'
+import {
+  getFirstMcpText,
+  getMcpToolFailureMessage,
+  isRecord,
+  parseJsonMcpResult,
+} from './mcp-result'
 import {
   AxBI,
   type DashboardPlan,
@@ -258,17 +263,16 @@ export type AxBiChartIntentExtractor = (
 ) => Promise<AxBiChartIntentDraft | null>
 
 function parseJsonToolResult<T>(result: MCPToolCallResult): T {
+  // Failure flags must win over structured/JSON content so error payloads
+  // like `{ "status": "failed" }` are never treated as chart/dashboard data.
+  const failure = getMcpToolFailureMessage(result)
+  if (failure) throw new Error(failure)
+
   const parsedJson = parseJsonMcpResult<Record<string, unknown>>(result)
   if (parsedJson) return parsedJson as T
 
-  const isError = result.isError ?? result.is_error
-  const textError = getFirstMcpText(result)
   throw new Error(
-    result.error ||
-      textError ||
-      (isError
-        ? 'AX BI MCP returned an error response without details'
-        : 'AX BI MCP returned an empty response')
+    getFirstMcpText(result) || 'AX BI MCP returned an empty response'
   )
 }
 

@@ -311,7 +311,8 @@ export class AIResource {
     if (!isRecord(result)) {
       throw new Error(`AX BI MCP tool "${name}" returned a malformed result`)
     }
-    if (result.isError === true) {
+    // MCP CallToolResult uses isError (camel) or is_error (snake); either is failure.
+    if (result.isError === true || result.is_error === true) {
       const content = Array.isArray(result.content) ? result.content : []
       const message = content.find(
         (item) => isRecord(item) && typeof item.text === 'string'

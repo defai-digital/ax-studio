@@ -17,6 +17,15 @@ describe('fabric search helpers', () => {
     expect(fabricSearchHasResults(toolResult('{"results":[]}'))).toBe(false)
   })
 
+  it('does not treat non-JSON error prose as a knowledge hit', () => {
+    expect(fabricSearchHasResults(toolResult('Connection refused'))).toBe(
+      false
+    )
+    expect(
+      fabricSearchHasResults(toolResult('<html>Internal Server Error</html>'))
+    ).toBe(false)
+  })
+
   it('formats text content from tool results and string fallbacks', () => {
     expect(
       formatFabricToolText({
