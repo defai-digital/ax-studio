@@ -1,5 +1,5 @@
 use super::helpers::{
-    _download_files_internal, download_destination_key, err_to_string,
+    _download_files_internal, download_destination_keys, err_to_string,
     resolve_download_destinations, validate_download_request,
 };
 use super::models::DownloadItem;
@@ -22,7 +22,7 @@ pub async fn download_files<R: Runtime>(
     validate_download_request(&items, task_id, &headers)?;
     let destination_keys = resolve_download_destinations(&app, &items)?
         .iter()
-        .map(|path| download_destination_key(path))
+        .flat_map(|path| download_destination_keys(path))
         .collect();
 
     let cancel_token = CancellationToken::new();

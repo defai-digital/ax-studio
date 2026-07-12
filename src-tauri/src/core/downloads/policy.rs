@@ -90,7 +90,7 @@ pub fn validate_download_task_id(task_id: &str) -> Result<(), String> {
 }
 
 fn validate_download_item(item: &DownloadItem) -> Result<(), String> {
-    validate_download_url(&item.url)?;
+    let parsed_url = validate_download_url(&item.url)?;
 
     if item.save_path.trim().is_empty() || item.save_path.len() > MAX_DOWNLOAD_PATH_LEN {
         return Err(format!(
@@ -105,6 +105,12 @@ fn validate_download_item(item: &DownloadItem) -> Result<(), String> {
         if hash.len() != 64 || !hash.bytes().all(|byte| byte.is_ascii_hexdigit()) {
             return Err("Download SHA-256 must contain exactly 64 hexadecimal characters".into());
         }
+    }
+
+    if parsed_url.scheme() == "http" && item.sha256.is_none() {
+        return Err(
+            "SHA-256 verification is required for downloads over insecure HTTP".to_string(),
+        );
     }
 
     if let Some(model_id) = &item.model_id {

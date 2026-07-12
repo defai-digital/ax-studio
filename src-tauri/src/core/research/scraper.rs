@@ -92,7 +92,8 @@ async fn fetch_public_html(
         let mut body = Vec::with_capacity(initial_capacity);
         let mut stream = response.bytes_stream();
         while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|error| format!("Failed to read body: {error}"))?;
+            let chunk =
+                chunk.map_err(|error| format!("Failed to read body: {}", error.without_url()))?;
             append_bounded_body(&mut body, &chunk)?;
         }
         return Ok(String::from_utf8_lossy(&body).into_owned());

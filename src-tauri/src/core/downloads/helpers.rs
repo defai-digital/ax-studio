@@ -23,14 +23,19 @@ use futures_util::{future::join_all, StreamExt};
 use reqwest::header::HeaderMap;
 #[cfg(test)]
 use reqwest::header::HeaderValue;
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tauri::{Emitter, Runtime};
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
+use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 #[cfg(test)]
 use url::Url;
+
+const MAX_CONCURRENT_DOWNLOAD_FILES: usize = 8;
 
 pub fn download_destination_key(path: &Path) -> String {
     if cfg!(any(target_os = "macos", windows)) {
@@ -42,15 +47,44 @@ pub fn download_destination_key(path: &Path) -> String {
     }
 }
 
+fn with_appended_extension(path: &Path, suffix: &str) -> PathBuf {
+    let current_extension = path.extension().unwrap_or_default().to_string_lossy();
+    if current_extension.is_empty() {
+        path.with_extension(suffix)
+    } else {
+        path.with_extension(format!("{current_extension}.{suffix}"))
+    }
+}
+
+fn resume_url_fingerprint(url: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(url.as_bytes());
+    format!("sha256:{}", hex::encode(hasher.finalize()))
+}
+
+/// Return every filesystem identity owned by a download destination.
+///
+/// Reservations must cover the final path and its stable resume artifacts.
+/// Otherwise a destination such as `model.gguf.tmp` can collide with another
+/// download's temporary file even though the two final paths differ.
+pub fn download_destination_keys(path: &Path) -> [String; 3] {
+    [
+        download_destination_key(path),
+        download_destination_key(&with_appended_extension(path, "tmp")),
+        download_destination_key(&with_appended_extension(path, "url")),
+    ]
+}
+
 fn ensure_unique_download_paths(paths: &[PathBuf]) -> Result<(), String> {
-    let mut seen = HashSet::with_capacity(paths.len());
+    let mut seen = HashSet::with_capacity(paths.len().saturating_mul(3));
     for path in paths {
-        let identity = download_destination_key(path);
-        if !seen.insert(identity) {
-            return Err(format!(
-                "Download request contains duplicate destination: {}",
-                path.display()
-            ));
+        for identity in download_destination_keys(path) {
+            if !seen.insert(identity) {
+                return Err(format!(
+                    "Download request contains overlapping destination artifacts near: {}",
+                    path.display()
+                ));
+            }
         }
     }
     Ok(())
@@ -277,18 +311,34 @@ pub async fn _download_files_internal(
     let header_map = _convert_headers(headers).map_err(err_to_string)?;
 
     // Calculate sizes for each file concurrently
+    let size_limit = Arc::new(Semaphore::new(MAX_CONCURRENT_DOWNLOAD_FILES));
     let size_futures = items
         .iter()
         .map(|item| {
             let item_url = item.url.clone();
             let header_map = header_map.clone();
+            let size_limit = Arc::clone(&size_limit);
+            let size_cancel_token = cancel_token.clone();
             async move {
+                let _permit = tokio::select! {
+                    _ = size_cancel_token.cancelled() => {
+                        return Err("Download cancelled".to_string());
+                    }
+                    permit = size_limit.acquire_owned() => {
+                        permit.map_err(|_| "Download concurrency limiter closed".to_string())?
+                    }
+                };
                 let client = _get_client_for_item(item, &header_map).map_err(err_to_string)?;
                 // HEAD size is only an estimate the GET path later refines; a failed or
                 // slow HEAD (common on HuggingFace CDN) must not abort the whole batch.
-                let size = _get_file_size(&client, &item_url, &header_map)
-                    .await
-                    .unwrap_or(0);
+                let size = tokio::select! {
+                    _ = size_cancel_token.cancelled() => {
+                        return Err("Download cancelled".to_string());
+                    }
+                    result = _get_file_size(&client, &item_url, &header_map) => {
+                        result.unwrap_or(0)
+                    }
+                };
                 Ok::<_, String>((item_url, size))
             }
         })
@@ -343,6 +393,7 @@ pub async fn _download_files_internal(
 
     // Collect download tasks for parallel execution
     let mut download_tasks = Vec::new();
+    let transfer_limit = Arc::new(Semaphore::new(MAX_CONCURRENT_DOWNLOAD_FILES));
 
     for (index, (item, save_path)) in items.iter().zip(resolved_paths).enumerate() {
         // Spawn download task for each file
@@ -362,8 +413,17 @@ pub async fn _download_files_internal(
             emit_validation_event: validation_event_index == Some(index),
         };
         let failure_token = cancel_token.clone();
+        let transfer_limit = Arc::clone(&transfer_limit);
 
         let task = tokio::spawn(async move {
+            let _permit = tokio::select! {
+                _ = failure_token.cancelled() => {
+                    return Err("Download cancelled".to_string());
+                }
+                permit = transfer_limit.acquire_owned() => {
+                    permit.map_err(|_| "Download concurrency limiter closed".to_string())?
+                }
+            };
             let result =
                 download_single_file(app_clone, &item_clone, &save_path, file_id, file_size, ctx)
                     .await;
@@ -444,15 +504,6 @@ pub async fn _download_files_internal(
     };
     app.emit(&evt_name, final_evt).ok();
     Ok(())
-}
-
-fn with_appended_extension(path: &Path, suffix: &str) -> PathBuf {
-    let current_extension = path.extension().unwrap_or_default().to_string_lossy();
-    if current_extension.is_empty() {
-        path.with_extension(suffix)
-    } else {
-        path.with_extension(format!("{current_extension}.{suffix}"))
-    }
 }
 
 async fn cleanup_partial_download(tmp_path: &Path, url_path: &Path, preserve_resume: bool) {
@@ -552,6 +603,9 @@ async fn download_single_file(
         model_id,
         emit_validation_event,
     } = ctx;
+    if cancel_token.is_cancelled() {
+        return Err("Download cancelled".to_string());
+    }
     // Create parent directories if they don't exist
     if let Some(parent) = save_path.parent() {
         if !parent.exists() {
@@ -563,16 +617,19 @@ async fn download_single_file(
 
     let tmp_save_path = with_appended_extension(save_path, "tmp");
     let url_save_path = with_appended_extension(save_path, "url");
+    let url_fingerprint = resume_url_fingerprint(&item.url);
 
     let mut should_resume = resume
         && tmp_save_path.exists()
         && tokio::fs::read_to_string(&url_save_path)
             .await
-            .map(|url| url == item.url) // check if we resume the same URL
+            // Accept the old plaintext format once so existing partials remain
+            // resumable, then overwrite it with the non-sensitive fingerprint.
+            .map(|stored| stored == url_fingerprint || stored == item.url)
             .unwrap_or(false);
 
     let client = _get_client_for_item(item, &header_map).map_err(err_to_string)?;
-    tokio::fs::write(&url_save_path, item.url.clone())
+    tokio::fs::write(&url_save_path, &url_fingerprint)
         .await
         .map_err(err_to_string)?;
 
@@ -581,30 +638,41 @@ async fn download_single_file(
     let mut initial_progress = 0u64;
 
     let had_resume_state = should_resume;
-    let response_result = if should_resume {
-        let downloaded_size = tmp_save_path.metadata().map_err(err_to_string)?.len();
-        match _get_maybe_resume_with_fallback(&client, &item.url, downloaded_size, &header_map)
-            .await
-        {
-            Ok(response) => {
-                log::info!(
-                    "Resume download: {}, already downloaded {} bytes",
-                    redact_url_for_log(&item.url),
-                    downloaded_size
-                );
-                initial_progress = downloaded_size;
-                Ok(response)
-            }
-            Err(e) => {
-                // fallback to normal download with proxy support
-                log::warn!("Failed to resume download: {e}");
-                should_resume = false;
+    let response_result = tokio::select! {
+        biased;
+        _ = cancel_token.cancelled() => Err("Download cancelled".to_string()),
+        result = async {
+            if should_resume {
+                let downloaded_size = tmp_save_path.metadata().map_err(err_to_string)?.len();
+                match _get_maybe_resume_with_fallback(
+                    &client,
+                    &item.url,
+                    downloaded_size,
+                    &header_map,
+                )
+                .await
+                {
+                    Ok(response) => {
+                        log::info!(
+                            "Resume download: {}, already downloaded {} bytes",
+                            redact_url_for_log(&item.url),
+                            downloaded_size
+                        );
+                        initial_progress = downloaded_size;
+                        Ok(response)
+                    }
+                    Err(_) => {
+                        // fallback to normal download with proxy support
+                        log::warn!("Failed to resume download; restarting from byte zero");
+                        should_resume = false;
+                        _get_maybe_resume_with_fallback(&client, &item.url, 0, &header_map).await
+                    }
+                }
+            } else {
+                // Use mirror fallback for new downloads
                 _get_maybe_resume_with_fallback(&client, &item.url, 0, &header_map).await
             }
-        }
-    } else {
-        // Use mirror fallback for new downloads
-        _get_maybe_resume_with_fallback(&client, &item.url, 0, &header_map).await
+        } => result,
     };
     let (resp, _actual_url) = match response_result {
         Ok(response) => response,
@@ -687,7 +755,7 @@ async fn download_single_file(
             Some(Err(e)) => {
                 drop(writer);
                 cleanup_partial_download(&tmp_save_path, &url_save_path, true).await;
-                return Err(err_to_string(e));
+                return Err(err_to_string(e.without_url()));
             }
             Some(Ok(c)) => c,
         };
@@ -876,6 +944,16 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_download_request_requires_integrity_for_plain_http() {
+        let mut item = test_download_item();
+        item.url = "http://example.com/model.gguf".to_string();
+        assert!(validate_download_request(&[item.clone()], "task", &HashMap::new()).is_err());
+
+        item.sha256 = Some("a".repeat(64));
+        assert!(validate_download_request(&[item], "task", &HashMap::new()).is_ok());
+    }
+
+    #[test]
     fn test_validate_download_url_blocks_credentials_and_non_global_targets() {
         for url in [
             "https://user:password@example.com/model",
@@ -904,12 +982,41 @@ mod tests {
     }
 
     #[test]
+    fn test_resume_sidecar_fingerprints_sensitive_urls() {
+        let url = "https://example.com/model?X-Amz-Signature=secret";
+        let fingerprint = resume_url_fingerprint(url);
+
+        assert!(fingerprint.starts_with("sha256:"));
+        assert_eq!(fingerprint.len(), "sha256:".len() + 64);
+        assert!(!fingerprint.contains("secret"));
+        assert_eq!(fingerprint, resume_url_fingerprint(url));
+        assert_ne!(
+            fingerprint,
+            resume_url_fingerprint("https://example.com/other")
+        );
+    }
+
+    #[test]
     fn test_duplicate_download_destinations_are_rejected() {
         let paths = [
             PathBuf::from("/tmp/model.gguf"),
             PathBuf::from("/tmp/model.gguf"),
         ];
         assert!(ensure_unique_download_paths(&paths).is_err());
+    }
+
+    #[test]
+    fn test_destination_cannot_overlap_another_download_resume_artifact() {
+        for reserved_suffix in ["tmp", "url"] {
+            let paths = [
+                PathBuf::from("/tmp/model.gguf"),
+                PathBuf::from(format!("/tmp/model.gguf.{reserved_suffix}")),
+            ];
+            assert!(
+                ensure_unique_download_paths(&paths).is_err(),
+                "a final destination must not overlap the {reserved_suffix} artifact"
+            );
+        }
     }
 
     #[cfg(any(target_os = "macos", windows))]

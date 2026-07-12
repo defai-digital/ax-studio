@@ -3,6 +3,8 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
+const MAX_ACTIVE_DOWNLOAD_TASKS: usize = 16;
+
 #[derive(Clone)]
 pub struct DownloadTaskState {
     pub token: CancellationToken,
@@ -25,6 +27,11 @@ impl DownloadManagerState {
     ) -> Result<u64, String> {
         if self.cancel_tokens.contains_key(task_id) {
             return Err(format!("Download task '{task_id}' is already active"));
+        }
+        if self.cancel_tokens.len() >= MAX_ACTIVE_DOWNLOAD_TASKS {
+            return Err(format!(
+                "Too many active download tasks (maximum {MAX_ACTIVE_DOWNLOAD_TASKS})"
+            ));
         }
 
         if let Some(conflict) = destination_keys.iter().find(|candidate| {
@@ -187,6 +194,33 @@ mod tests {
     }
 
     #[test]
+    fn download_manager_reserves_resume_artifact_names_across_tasks() {
+        let mut manager = DownloadManagerState::default();
+        manager
+            .register_task(
+                "task-a",
+                CancellationToken::new(),
+                vec![
+                    "/models/a.gguf".to_string(),
+                    "/models/a.gguf.tmp".to_string(),
+                    "/models/a.gguf.url".to_string(),
+                ],
+            )
+            .unwrap();
+
+        for artifact in ["/models/a.gguf.tmp", "/models/a.gguf.url"] {
+            assert!(manager
+                .register_task(
+                    "task-b",
+                    CancellationToken::new(),
+                    vec![artifact.to_string()],
+                )
+                .unwrap_err()
+                .contains("already owns destination"));
+        }
+    }
+
+    #[test]
     fn download_manager_rejects_generation_overflow_without_registering() {
         let mut manager = DownloadManagerState {
             next_generation: u64::MAX,
@@ -200,6 +234,29 @@ mod tests {
             )
             .is_err());
         assert!(manager.cancel_tokens.is_empty());
+    }
+
+    #[test]
+    fn download_manager_enforces_active_task_limit() {
+        let mut manager = DownloadManagerState::default();
+        for index in 0..MAX_ACTIVE_DOWNLOAD_TASKS {
+            manager
+                .register_task(
+                    &format!("task-{index}"),
+                    CancellationToken::new(),
+                    vec![format!("/models/{index}.gguf")],
+                )
+                .unwrap();
+        }
+
+        assert!(manager
+            .register_task(
+                "one-too-many",
+                CancellationToken::new(),
+                vec!["/models/overflow.gguf".to_string()],
+            )
+            .unwrap_err()
+            .contains("Too many active download tasks"));
     }
 
     // --- DownloadEvent serialization ---
