@@ -11,6 +11,7 @@ const releaseWorkflowPaths = [
 ]
 const customNsisTemplatePath = 'src-tauri/tauri.bundle.windows.nsis.template'
 const expectedWindowsSignCommand = 'powershell -ExecutionPolicy Bypass -File ./sign.ps1 %1'
+const windowsLongPathsCommand = 'git config --global core.longpaths true'
 
 function readJson(relativePath) {
   return JSON.parse(fs.readFileSync(path.join(repoRoot, relativePath), 'utf8'))
@@ -70,6 +71,13 @@ if (!fs.existsSync(path.join(repoRoot, customNsisTemplatePath))) {
     if (workflow.includes(customNsisTemplatePath)) {
       fail(`${workflowPath} references missing file ${customNsisTemplatePath}`)
     }
+  }
+}
+
+for (const workflowPath of releaseWorkflowPaths) {
+  const workflow = fs.readFileSync(path.join(repoRoot, workflowPath), 'utf8')
+  if (!workflow.includes(windowsLongPathsCommand)) {
+    fail(`${workflowPath} must enable Git long-path support with: ${windowsLongPathsCommand}`)
   }
 }
 
