@@ -2,13 +2,15 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
+import * as setVersion from '../release/set-version.mjs'
+
+const {
   CliUsageError,
   parseCliArguments,
   patchCargoPackageVersion,
   prepareVersionChanges,
   writeVersionChanges,
-} from '../release/set-version.mjs'
+} = setVersion
 
 const temporaryRoots = []
 
