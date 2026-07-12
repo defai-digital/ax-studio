@@ -366,12 +366,17 @@ export class DefaultRAGService implements RAGService {
     }
 
     try {
+      // fabric_search ranks by score, not file order. Request enough candidates
+      // for the requested range, then filter/sort by offset client-side.
+      const rangeSize = endOrder - startOrder + 1
+      const topK = Math.min(Math.max(endOrder + 1, rangeSize, 64), 10_000)
+
       const result = await hub.callTool({
         toolName: 'fabric_search',
         arguments: {
           query: '',
           collection_id: collectionId,
-          top_k: endOrder - startOrder + 1,
+          top_k: topK,
           mode: 'keyword',
           filters: { doc_id: fileId },
         },
@@ -396,13 +401,30 @@ export class DefaultRAGService implements RAGService {
         })
       }
 
-      const chunks = (parsed.results ?? []).map((r) => ({
-        id: r.chunkId ?? r.chunk_id ?? '',
-        text: r.content ?? r.text ?? '',
-        score: r.score ?? 0,
-        file_id: fileId,
-        chunk_file_order: r.offset ?? 0,
-      }))
+      const chunks = (parsed.results ?? [])
+        .map((r) => {
+          const rawOrder = r.offset ?? r.chunk_file_order ?? r.chunkFileOrder
+          const order =
+            typeof rawOrder === 'number'
+              ? rawOrder
+              : typeof rawOrder === 'string' && rawOrder.trim() !== ''
+                ? Number(rawOrder)
+                : NaN
+          return {
+            id: String(r.chunkId ?? r.chunk_id ?? ''),
+            text: String(r.content ?? r.text ?? ''),
+            score: typeof r.score === 'number' ? r.score : 0,
+            file_id: fileId,
+            chunk_file_order: order,
+          }
+        })
+        .filter(
+          (chunk) =>
+            Number.isFinite(chunk.chunk_file_order) &&
+            chunk.chunk_file_order >= startOrder &&
+            chunk.chunk_file_order <= endOrder
+        )
+        .sort((a, b) => a.chunk_file_order - b.chunk_file_order)
 
       return ok({
         thread_id: args.threadId,

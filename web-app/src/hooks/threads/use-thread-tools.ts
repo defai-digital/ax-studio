@@ -121,8 +121,13 @@ async function extractRelevantSourceResult({
     const extracted = await serviceHub.mcp().callTool({
       toolName: 'fabric_extract',
       arguments: { file_path: source },
-    }) as { error?: string; content?: ToolResultContent }
-    if (extracted.error) return null
+    }) as {
+      error?: string
+      content?: ToolResultContent
+      isError?: boolean
+      is_error?: boolean
+    }
+    if (getMcpToolFailureMessage(extracted)) return null
 
     const text = extracted.content?.find((part) => part?.type === 'text' && part.text)?.text
     if (!text) return null

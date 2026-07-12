@@ -45,6 +45,16 @@ export function parseAxBiToolResult(result: {
   ) as AxBiToolResult | null
 }
 
+function isTrustedAxBiHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase()
+  if (host === 'localhost' || host === '127.0.0.1') return true
+  try {
+    return host === new URL(DEFAULT_AX_BI_WEB_URL).hostname.toLowerCase()
+  } catch {
+    return false
+  }
+}
+
 export function normalizeAxBiResultUrl(value: string): string | undefined {
   const trimmed = value.trim()
   if (!trimmed) return undefined
@@ -59,6 +69,8 @@ export function normalizeAxBiResultUrl(value: string): string | undefined {
     return undefined
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined
+  // Auto-open only trusted local/default BI hosts — absolute https://evil/… must not open.
+  if (!isTrustedAxBiHostname(url.hostname)) return undefined
 
   if (/^\/superset\/dashboard(?:\/|$)/i.test(url.pathname)) {
     url.pathname = url.pathname.replace(

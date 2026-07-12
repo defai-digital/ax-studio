@@ -76,4 +76,13 @@ describe('AX BI tool navigation helpers', () => {
       normalizeAxBiResultUrl('//evil.example/ax-bi/dashboard/1/')
     ).toBeUndefined()
   })
+
+  it('rejects absolute http(s) URLs on untrusted hosts for auto-open', () => {
+    expect(
+      normalizeAxBiResultUrl('https://evil.example/ax-bi/dashboard/1/')
+    ).toBeUndefined()
+    expect(
+      normalizeAxBiResultUrl('http://attacker.example/explore/?slice_id=1')
+    ).toBeUndefined()
+  })
 })

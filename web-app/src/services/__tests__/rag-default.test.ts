@@ -329,17 +329,57 @@ describe('DefaultRAGService', () => {
           arguments: expect.objectContaining({
             query: '',
             collection_id: 'thread_thread-123',
-            top_k: 3,
             mode: 'keyword',
             filters: { doc_id: 'file-1' },
           }),
         })
       )
+      // top_k must cover the requested order range, not merely range size
+      const topK = mockCallTool.mock.calls[0][0].arguments.top_k as number
+      expect(topK).toBeGreaterThanOrEqual(5)
 
       const payload = JSON.parse(result.content[0].text)
       expect(payload.chunks).toHaveLength(1)
       expect(payload.chunks[0].id).toBe('chunk-1')
       expect(payload.chunks[0].chunk_file_order).toBe(2)
+    })
+
+    it('filters and sorts chunks by chunk_file_order within start/end range', async () => {
+      const mockCallTool = vi.fn().mockResolvedValue({
+        error: '',
+        content: [
+          {
+            text: JSON.stringify({
+              results: [
+                { chunkId: 'c0', content: 'zero', score: 0.9, offset: 0 },
+                { chunkId: 'c3', content: 'three', score: 0.8, offset: 3 },
+                { chunkId: 'c1', content: 'one', score: 0.7, offset: 1 },
+                { chunkId: 'c5', content: 'five', score: 0.6, offset: 5 },
+                { chunkId: 'c2', content: 'two', score: 0.5, offset: 2 },
+              ],
+            }),
+          },
+        ],
+      })
+      service.setMcpService({ callTool: mockCallTool })
+
+      const result = await service.callTool({
+        toolName: 'get_chunks',
+        arguments: { file_id: 'file-1', start_order: 1, end_order: 3 },
+        threadId: 'thread-123',
+        scope: 'thread',
+      })
+
+      expect(result.error).toBe('')
+      const payload = JSON.parse(result.content[0].text)
+      expect(payload.chunks.map((c: { id: string }) => c.id)).toEqual([
+        'c1',
+        'c2',
+        'c3',
+      ])
+      expect(
+        payload.chunks.map((c: { chunk_file_order: number }) => c.chunk_file_order)
+      ).toEqual([1, 2, 3])
     })
 
     it('returns error when fabric_search sets isError without top-level error', async () => {

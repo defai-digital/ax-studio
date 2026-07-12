@@ -237,17 +237,24 @@ export class DefaultUploadsService implements UploadsService {
       throw new Error(`Document indexing failed: ${errorMsg}`)
     }
 
-    const fileId = ulid()
+    // Re-use the registry file_id when the same path is re-ingested so callers
+    // do not keep orphan attachment ids that no longer match the registry.
+    const path = attachment.path!
+    const existing = useFileRegistry
+      .getState()
+      .listFiles(collectionId)
+      .find((file) => file.file_path === path)
+    const fileId = existing?.file_id ?? ulid()
 
     useFileRegistry.getState().addFile(collectionId, {
       file_id: fileId,
       file_name: attachment.name,
-      file_path: attachment.path!,
+      file_path: path,
       file_type: attachment.fileType,
       file_size: attachment.size,
       chunk_count: metrics.totalChunksGenerated,
       collection_id: collectionId,
-      created_at: new Date().toISOString(),
+      created_at: existing?.created_at ?? new Date().toISOString(),
     })
 
     return {

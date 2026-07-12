@@ -67,6 +67,32 @@ describe('file-registry', () => {
       expect(useFileRegistry.getState().listFiles('col')).toHaveLength(1)
     })
 
+    it('updates metadata on re-add of the same path while keeping the original file_id', () => {
+      useFileRegistry.getState().addFile(
+        'col',
+        makeEntry({
+          file_id: 'stable-id',
+          file_path: '/docs/a.pdf',
+          chunk_count: 2,
+        })
+      )
+      useFileRegistry.getState().addFile(
+        'col',
+        makeEntry({
+          file_id: 'orphan-new-id',
+          file_path: '/docs/a.pdf',
+          chunk_count: 9,
+          file_name: 'a-renamed.pdf',
+        })
+      )
+
+      const files = useFileRegistry.getState().listFiles('col')
+      expect(files).toHaveLength(1)
+      expect(files[0].file_id).toBe('stable-id')
+      expect(files[0].chunk_count).toBe(9)
+      expect(files[0].file_name).toBe('a-renamed.pdf')
+    })
+
     it('allows same path in different collections', () => {
       const entry = makeEntry()
       useFileRegistry.getState().addFile('col-a', entry)
