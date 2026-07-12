@@ -154,6 +154,12 @@ keyring = { version = "3.6.3", default-features = false, features = ["windows-na
 # `rev` deliberately to the peeled commit for the release tag we validated —
 # do NOT use `branch = "main"`, which would silently auto-pull every new
 # commit and could break our integration without notice.
+#
+# Integration review (2026-07-12): HEAD of ax-engine was ~422 commits ahead
+# (mostly TUI/benchmarks). Studio worker uses EngineSessionConfig fields
+# (mlx_model_artifacts_dir/source, mlx_disable_ngram_acceleration) and
+# GenerateRequest/GenerateStreamEvent shapes that still match this pin; keep
+# the pin until a Metal-validated bump is performed.
 [target.'cfg(target_os = "macos")'.dependencies]
 ax-engine-core = { git = "https://github.com/defai-digital/ax-engine", rev = "a55ac03df228d4b0343d4dfbf6f1ccef4fba419b" }
 ax-engine-sdk = { git = "https://github.com/defai-digital/ax-engine", rev = "a55ac03df228d4b0343d4dfbf6f1ccef4fba419b", features = ["mlx-native", "tokenizer"] }

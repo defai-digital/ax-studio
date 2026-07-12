@@ -91,4 +91,78 @@ describe('createMlxIpcFetch', () => {
     done.resolve()
     await reader.cancel()
   })
+
+  it('maps OpenAI chat params onto mlx_chat_completion IPC args', async () => {
+    mocks.invoke.mockImplementation(async (command: string, args: any) => {
+      if (command === 'mlx_load_model') {
+        expect(args).toEqual({ modelId: 'mlx-community/Qwen3-4B-4bit' })
+        return undefined
+      }
+      if (command === 'mlx_chat_completion') {
+        expect(args).toEqual({
+          modelId: 'mlx-community/Qwen3-4B-4bit',
+          messages: [{ role: 'user', content: 'hi' }],
+          params: {
+            max_output_tokens: 128,
+            temperature: 0.2,
+            top_p: 0.9,
+            top_k: 40,
+            repetition_penalty: 1.1,
+            seed: 7,
+            stop: ['END'],
+          },
+        })
+        return {
+          id: 'mlx-1',
+          object: 'chat.completion',
+          created: 1,
+          model: 'mlx-community/Qwen3-4B-4bit',
+          choices: [
+            {
+              index: 0,
+              message: { role: 'assistant', content: 'ok' },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: {
+            prompt_tokens: 1,
+            completion_tokens: 1,
+            total_tokens: 2,
+          },
+        }
+      }
+      throw new Error(`unexpected command ${command}`)
+    })
+
+    const fetchFn = createMlxIpcFetch()
+    const response = await fetchFn('http://localhost/v1/chat/completions', {
+      method: 'POST',
+      body: JSON.stringify({
+        model: 'mlx-community/Qwen3-4B-4bit',
+        stream: false,
+        messages: [{ role: 'user', content: 'hi' }],
+        max_tokens: 128,
+        temperature: 0.2,
+        top_p: 0.9,
+        top_k: 40,
+        frequency_penalty: 0.1,
+        seed: 7,
+        stop: 'END',
+      }),
+    })
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      object: 'chat.completion',
+      choices: [{ message: { content: 'ok' } }],
+    })
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      'mlx_load_model',
+      expect.objectContaining({ modelId: 'mlx-community/Qwen3-4B-4bit' })
+    )
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      'mlx_chat_completion',
+      expect.any(Object)
+    )
+  })
 })

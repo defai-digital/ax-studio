@@ -53,8 +53,18 @@ describe('AX BI SDK shim', () => {
     for (const [url] of fetchMock.mock.calls) {
       expect(url).toBe('http://127.0.0.1:5008/mcp')
     }
+    // Streamable HTTP requires Accept on every POST, including notifications.
+    for (const call of fetchMock.mock.calls) {
+      expect(call[1]?.headers).toMatchObject({
+        Accept: 'application/json, text/event-stream',
+      })
+    }
     expect(fetchMock.mock.calls[1]?.[1]?.headers).toMatchObject({
       'Mcp-Session-Id': 'session-1',
+    })
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
+      jsonrpc: '2.0',
+      method: 'notifications/initialized',
     })
     expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toEqual({
       jsonrpc: '2.0',
@@ -107,5 +117,68 @@ describe('AX BI SDK shim', () => {
         warnings: [],
       }
     )
+  })
+
+  it('accepts numeric JSON-RPC response ids from streamable HTTP', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 202 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 2,
+            result: {
+              structuredContent: {
+                plan: { plan_id: 'p2', title: 'Numeric', sections: [] },
+                warnings: [],
+              },
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const client = new AxBI({
+      baseUrl: 'http://127.0.0.1:8088',
+      mcpUrl: 'http://127.0.0.1:5008/mcp',
+    })
+
+    await expect(client.ai.planDashboard({ prompt: 'Plan' })).resolves.toEqual({
+      plan: { plan_id: 'p2', title: 'Numeric', sections: [] },
+      warnings: [],
+    })
+  })
+
+  it('does not force MCP port 5008 on remote web bases', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonRpcResponse('1', {}))
+      .mockResolvedValueOnce(new Response(null, { status: 202 }))
+      .mockResolvedValueOnce(
+        jsonRpcResponse('2', {
+          structuredContent: {
+            plan: { plan_id: 'p3', title: 'Remote', sections: [] },
+            warnings: [],
+          },
+        })
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const client = new AxBI({
+      baseUrl: 'https://bi.example.com',
+    })
+    await client.ai.planDashboard({ prompt: 'Plan' })
+
+    for (const [url] of fetchMock.mock.calls) {
+      expect(url).toBe('https://bi.example.com/mcp')
+    }
   })
 })

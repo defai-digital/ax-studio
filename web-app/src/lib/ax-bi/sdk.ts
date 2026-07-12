@@ -1,5 +1,7 @@
 import { normalizeAxBiMcpUrl } from './endpoints'
 
+type JsonRpcId = string | number
+
 type JsonRpcRequest = {
   jsonrpc: '2.0'
   id: string
@@ -8,10 +10,10 @@ type JsonRpcRequest = {
 }
 
 type JsonRpcResponse =
-  | { jsonrpc: '2.0'; id: string; result: unknown }
+  | { jsonrpc: '2.0'; id: JsonRpcId; result: unknown }
   | {
       jsonrpc: '2.0'
-      id: string
+      id: JsonRpcId
       error: { code: number; message: string; data?: unknown }
     }
 
@@ -110,6 +112,14 @@ class AxBIAuthProvider {
   }
 }
 
+/** Streamable HTTP requires both MIME types on every POST, including notifications. */
+const MCP_ACCEPT = 'application/json, text/event-stream'
+
+function sameJsonRpcId(actual: unknown, expected: string): boolean {
+  // MCP allows id as string | number; coerce so SSE/JSON responses match.
+  return String(actual) === expected
+}
+
 class MCPClient {
   private requestId = 0
   private sessionId: string | null = null
@@ -159,20 +169,24 @@ class MCPClient {
     this.initialized = true
   }
 
+  private baseHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: MCP_ACCEPT,
+      ...this.auth.headers(),
+    }
+    if (this.sessionId) headers['Mcp-Session-Id'] = this.sessionId
+    return headers
+  }
+
   private async sendRequest<T>(
     request: Omit<JsonRpcRequest, 'jsonrpc' | 'id'>
   ): Promise<T> {
     const id = String(++this.requestId)
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json, text/event-stream',
-      ...this.auth.headers(),
-    }
-    if (this.sessionId) headers['Mcp-Session-Id'] = this.sessionId
 
     const response = await fetch(this.mcpEndpoint, {
       method: 'POST',
-      headers,
+      headers: this.baseHeaders(),
       body: JSON.stringify({ jsonrpc: '2.0', id, ...request }),
       signal: AbortSignal.timeout(this.timeout),
     })
@@ -194,15 +208,10 @@ class MCPClient {
   }
 
   private async sendNotification(method: string): Promise<void> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...this.auth.headers(),
-    }
-    if (this.sessionId) headers['Mcp-Session-Id'] = this.sessionId
-
+    // FastMCP streamable-HTTP rejects POSTs without Accept (HTTP 406).
     const response = await fetch(this.mcpEndpoint, {
       method: 'POST',
-      headers,
+      headers: this.baseHeaders(),
       body: JSON.stringify({ jsonrpc: '2.0', method }),
       signal: AbortSignal.timeout(5_000),
     })
@@ -227,7 +236,7 @@ class MCPClient {
       if (!data) continue
       try {
         const parsed = JSON.parse(data) as JsonRpcResponse
-        if ('id' in parsed && parsed.id === expectedId) {
+        if ('id' in parsed && sameJsonRpcId(parsed.id, expectedId)) {
           return this.extractResult<T>(parsed, expectedId)
         }
       } catch {
@@ -241,9 +250,9 @@ class MCPClient {
     if ('error' in response) {
       throw new Error(response.error.message)
     }
-    if (response.id !== expectedId) {
+    if (!sameJsonRpcId(response.id, expectedId)) {
       throw new Error(
-        `AX BI MCP returned response id ${response.id}; expected ${expectedId}`
+        `AX BI MCP returned response id ${String(response.id)}; expected ${expectedId}`
       )
     }
     return response.result as T
@@ -346,9 +355,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+/**
+ * Derive an MCP endpoint from the AX BI web base URL.
+ * Local web (8088 / default port) maps to MCP on 5008; remote hosts keep their
+ * port and rely on reverse-proxy `/mcp` routing (normalized next).
+ */
 function deriveMcpUrl(baseUrl: string): string {
   const url = new URL(baseUrl)
-  url.port = '5008'
+  const isLocal =
+    url.hostname === '127.0.0.1' || url.hostname === 'localhost'
+  if (isLocal && (url.port === '8088' || url.port === '')) {
+    url.port = '5008'
+  }
   return url.toString()
 }
 
