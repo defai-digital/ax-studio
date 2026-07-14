@@ -455,9 +455,14 @@ export function AxBiWorkspace() {
                         {run.url ? (
                           <a
                             href={run.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
                             className="text-primary hover:underline"
+                            onClick={(event) => {
+                              // Tauri webviews do not honor target=_blank for
+                              // external BI URLs; open via the opener plugin so
+                              // localhost/127.0.0.1 chart links actually launch.
+                              event.preventDefault()
+                              void serviceHub.opener().openUrl(run.url!)
+                            }}
                           >
                             Open result
                           </a>
