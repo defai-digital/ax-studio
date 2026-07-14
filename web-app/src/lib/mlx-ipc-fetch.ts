@@ -11,9 +11,11 @@
  *
  * For the `mlx` provider, the "upstream" lives inside this very process —
  * `ax-engine-sdk` is linked into `src-tauri` and runs MLX natively on Metal.
- * Routing chat through HTTP → proxy → ax-engine-server → mlx_lm would mean two
- * extra hops and a subprocess we don't need. Instead we substitute the `fetch`
- * given to `createOpenAICompatible` with this shim. The shim:
+ * This is the **in_process** Local Engine backend (ADR-009 / ax-engine
+ * LOCAL-ENGINE-CLIENTS). Routing chat through HTTP → proxy → ax-engine-server
+ * would mean two extra hops and a subprocess we don't need. Instead we
+ * substitute the `fetch` given to `createOpenAICompatible` with this shim
+ * (also exposed via `InProcessLocalEngineBackend.createChatFetch`). The shim:
  *
  *  1. Parses the OpenAI chat-completion request from the request body.
  *  2. Ensures the model is loaded via `invoke('mlx_load_model', ...)` (idempotent).
