@@ -11,7 +11,7 @@
 
 本規格定義 Phase 1：刪除 AX Studio frontend 的 BI chart／dashboard domain logic，改由一個薄的 authoring workflow 呼叫 AX BI 現有 MCP 高階工具。
 
-Phase 1 不新增 AX BI REST endpoint，也不宣稱已完成跨 repo正式 SDK。AX Studio 現有 `AxBI` client是 typed MCP adapter。
+Phase 1 不新增 AX BI REST endpoint，也不宣稱已完成跨 repo正式 SDK。AX Studio 的 deterministic authoring adapter 使用既有 `ServiceHub.mcp()` transport，以共用 connection、authentication headers、timeout、proxy tool與 lifecycle管理。
 
 ## 2. Baseline
 
@@ -28,7 +28,8 @@ Call sites：
 
 Client transport：
 
-- `web-app/src/lib/ax-bi/sdk.ts`
+- `web-app/src/services/mcp/`
+- `web-app/src/lib/ax-bi/authoring-client.ts`
 
 Phase 1前，Studio依序嘗試 existing-dataset chart workflow、attachment dashboard workflow與 SDK dashboard workflow。Phase 1後只有一個 authoring workflow。
 
@@ -37,7 +38,8 @@ Phase 1前，Studio依序嘗試 existing-dataset chart workflow、attachment das
 ~~~text
 web-app/src/lib/ax-bi/
   authoring-workflow.ts  # request classification, delegation, result projection
-  sdk.ts                 # typed MCP transport adapter
+  authoring-client.ts    # typed adapter over ServiceHub MCP transport
+  sdk.ts                 # Phase 1 contract types and compatibility shim
   datasets.ts            # connection and dataset listing for workspace
   endpoints.ts           # URL normalization
   mcp-result.ts          # generic MCP envelope parsing
@@ -89,10 +91,9 @@ interface AIResource {
 
 `getAuthoringCapabilities()` 呼叫 AX BI 的無參數 MCP discovery tool，回傳
 contract version、enabled operations、upload formats、preview support 與
-deployment limits。Phase 1 authoring workflow不會因舊版 AX BI 缺少此工具而
-拒絕執行；workspace可在後續版本用它做 feature detection與 UI gating。
+deployment limits、authenticated-principal operations與 server-side LLM狀態。Phase 1 authoring workflow在每次 mutation前執行 capability negotiation；工具缺失、版本不相容、operation未授權或格式／大小不符時 fail closed。
 
-所有 method透過既有 `callMcpTool` 包裝 `{ request: params }`，並統一處理 `isError`、`structuredContent`與 JSON text fallback。
+所有 method透過 `ServiceHub.mcp().callTool()` 包裝 `{ request: params }`，並統一處理 `isError`、`structuredContent`與 JSON text fallback。MCP server config中的 JWT／API-key headers與 timeout由既有 transport處理；authoring mutation關閉 transport-level automatic retry，直到 AX BI提供 idempotency contract。
 
 ## 5. Workflow contract
 
@@ -197,7 +198,7 @@ prompt_to_dashboard({
 2. PPT／PPTX回傳 unsupported message，不假裝可抽表。
 3. 缺少已核准 path時回傳 failed result。
 4. 使用 `fs.readFileBase64(path)`。
-5. 呼叫：
+5. 先依 capabilities檢查 upload operation、格式、大小及 max charts，再呼叫：
 
 ~~~text
 upload_and_plan({ file_content, filename, prompt })
@@ -205,7 +206,7 @@ upload_and_plan({ file_content, filename, prompt })
 
 6. 從 response.dataset.id取得 dataset ID。
 7. Chart呼叫 `create_chart_from_intent({ prompt, dataset_id, save_chart })`。
-8. Dashboard呼叫 `prompt_to_dashboard({ prompt, dataset_ids: [id] })`。
+8. Dashboard呼叫 `prompt_to_dashboard({ prompt, dataset_ids: [id], plan })`，直接執行 `upload_and_plan`回傳且已驗證的 plan，不再重新規劃。
 
 Studio不得使用 `response.dataset.columns`建立 chart plans。
 
@@ -303,6 +304,7 @@ const directAxBiResult = await runAxBiAuthoringWorkflow({
 - dashboard tool request envelope。
 - upload-and-plan envelope。
 - structured result、text result、SSE與 error handling。
+- MCP endpoint normalization、notification Accept header及 deployment-specific headers。
 
 ### Workflow
 
@@ -311,6 +313,9 @@ const directAxBiResult = await runAxBiAuthoringWorkflow({
 - dashboard create delegates once to `promptToDashboard`。
 - dashboard plan delegates once to `planDashboard`。
 - attachment delegates upload first，then pins returned dataset ID。
+- capability version／operation／upload limits fail closed。
+- production path使用 ServiceHub MCP，不建立空 token的 browser fetch client。
+- mutation遇到 transport failure不自動 retry。
 - missing path／unsupported presentation returns explicit failure。
 - failed AX BI result does not become success。
 - no test asserts chart config shape from AX Studio。
@@ -357,7 +362,7 @@ Rollback只能恢復舊版 AX Studio release，不建立 runtime feature flag切
 
 1. AX Studio只有一個 direct AX BI authoring workflow。
 2. Workflow不包含 chart config、column inference或 dashboard composition。
-3. SDK有 chart、dashboard、plan與 upload typed methods。
+3. Authoring client有 capability、chart、dashboard、plan與 upload typed methods，且共用 ServiceHub MCP transport。
 4. Workspace與 thread使用同一 adapter。
 5. 舊 workflow與 config-specific tests已移除。
 6. System prompt不再宣稱不存在的 Python chart runtime。

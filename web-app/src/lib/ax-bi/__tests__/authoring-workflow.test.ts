@@ -12,6 +12,24 @@ function createClient() {
   return {
     ai: {
       createChartFromIntent: vi.fn(),
+      getAuthoringCapabilities: vi.fn().mockResolvedValue({
+        contract_version: '1.0',
+        operations: [
+          'plan_dashboard',
+          'create_chart_from_intent',
+          'prompt_to_dashboard',
+          'upload_and_plan',
+        ],
+        artifact_types: ['chart', 'dashboard'],
+        preview_before_save: true,
+        upload_formats: ['csv', 'tsv', 'xls', 'xlsx', 'parquet'],
+        limits: {
+          max_charts_per_dashboard: 12,
+          max_upload_bytes: 100_000_000,
+        },
+        async_jobs: false,
+        llm_configured: false,
+      }),
       planDashboard: vi.fn(),
       promptToDashboard: vi.fn(),
       uploadAndPlan: vi.fn(),
@@ -89,6 +107,7 @@ describe('runAxBiAuthoringWorkflow', () => {
       dataset_id: undefined,
       save_chart: true,
     })
+    expect(client.ai.getAuthoringCapabilities).toHaveBeenCalledOnce()
     expect(result).toMatchObject({
       handled: true,
       delegated: true,
@@ -111,6 +130,7 @@ describe('runAxBiAuthoringWorkflow', () => {
     expect(client.ai.planDashboard).toHaveBeenCalledWith({
       prompt: 'Plan an AX BI dashboard for revenue',
       dataset_candidates: [],
+      constraints: { max_charts: 6 },
     })
     expect(client.ai.promptToDashboard).not.toHaveBeenCalled()
     expect(result).toMatchObject({
@@ -140,6 +160,7 @@ describe('runAxBiAuthoringWorkflow', () => {
     expect(client.ai.promptToDashboard).toHaveBeenCalledWith({
       prompt: 'Use AX BI to create a revenue dashboard',
       dataset_ids: [],
+      max_charts: 6,
     })
     expect(result).toMatchObject({
       handled: true,
@@ -181,10 +202,13 @@ describe('runAxBiAuthoringWorkflow', () => {
       file_content: 'base64-data',
       filename: 'sales.csv',
       prompt: 'Create a dashboard from this file',
+      max_charts: 6,
     })
     expect(client.ai.promptToDashboard).toHaveBeenCalledWith({
       prompt: 'Create a dashboard from this file',
       dataset_ids: [42],
+      max_charts: 6,
+      plan,
     })
   })
 
@@ -279,5 +303,130 @@ describe('runAxBiAuthoringWorkflow', () => {
       status: 'failed',
       message: 'AX BI authoring failed: MCP service unavailable',
     })
+  })
+
+  it('uses the configured ServiceHub MCP transport for production calls', async () => {
+    const callTool = vi.fn().mockImplementation(({ toolName }) => {
+      if (toolName === 'get_authoring_capabilities') {
+        return Promise.resolve({
+          error: '',
+          content: [
+            {
+              text: JSON.stringify({
+                contract_version: '1.0',
+                operations: ['create_chart_from_intent'],
+                artifact_types: ['chart'],
+                preview_before_save: true,
+                upload_formats: [],
+                limits: { max_charts_per_dashboard: 6 },
+                async_jobs: false,
+                llm_configured: false,
+              }),
+            },
+          ],
+        })
+      }
+      return Promise.resolve({
+        error: '',
+        content: [
+          {
+            text: JSON.stringify({ success: true, chart_name: 'Revenue' }),
+          },
+        ],
+      })
+    })
+    const configuredServiceHub = {
+      mcp: () => ({
+        getTools: vi.fn().mockResolvedValue([
+          { server: 'ax-bi', name: 'get_authoring_capabilities' },
+          { server: 'ax-bi', name: 'create_chart_from_intent' },
+        ]),
+        callTool,
+      }),
+    }
+
+    const result = await runAxBiAuthoringWorkflow({
+      prompt: 'Use AX BI to create a revenue chart',
+      serviceHub: configuredServiceHub as never,
+    })
+
+    expect(result).toMatchObject({ handled: true, status: 'completed' })
+    expect(callTool).toHaveBeenNthCalledWith(1, {
+      serverName: 'ax-bi',
+      toolName: 'get_authoring_capabilities',
+      arguments: {},
+      retryOnTransportFailure: false,
+    })
+    expect(callTool).toHaveBeenNthCalledWith(2, {
+      serverName: 'ax-bi',
+      toolName: 'create_chart_from_intent',
+      arguments: {
+        request: {
+          prompt: 'Use AX BI to create a revenue chart',
+          dataset_id: undefined,
+          save_chart: true,
+        },
+      },
+      retryOnTransportFailure: false,
+    })
+  })
+
+  it('fails closed when the requested authoring operation is unavailable', async () => {
+    const client = createClient()
+    client.ai.getAuthoringCapabilities.mockResolvedValue({
+      contract_version: '1.0',
+      operations: ['plan_dashboard'],
+      artifact_types: ['chart', 'dashboard'],
+      preview_before_save: true,
+      upload_formats: [],
+      limits: { max_charts_per_dashboard: 6 },
+      async_jobs: false,
+      llm_configured: false,
+    })
+
+    const result = await runAxBiAuthoringWorkflow({
+      prompt: 'Use AX BI to create a revenue chart',
+      serviceHub,
+      client,
+    })
+
+    expect(result).toMatchObject({
+      handled: true,
+      status: 'failed',
+      message: expect.stringContaining('create_chart_from_intent'),
+    })
+    expect(client.ai.createChartFromIntent).not.toHaveBeenCalled()
+  })
+
+  it('rejects oversized uploads before reading file content', async () => {
+    const client = createClient()
+    client.ai.getAuthoringCapabilities.mockResolvedValue({
+      contract_version: '1.0',
+      operations: ['upload_and_plan', 'prompt_to_dashboard'],
+      artifact_types: ['chart', 'dashboard'],
+      preview_before_save: true,
+      upload_formats: ['csv'],
+      limits: { max_charts_per_dashboard: 6, max_upload_bytes: 10 },
+      async_jobs: false,
+      llm_configured: false,
+    })
+
+    const result = await runAxBiAuthoringWorkflow({
+      prompt: 'Create a dashboard from this file',
+      attachments: [
+        {
+          name: 'sales.csv',
+          type: 'document',
+          path: '/tmp/sales.csv',
+          size: 11,
+        },
+      ],
+      serviceHub,
+      client,
+    })
+
+    expect(result).toMatchObject({ handled: true, status: 'failed' })
+    expect(readFileBase64).not.toHaveBeenCalled()
+    expect(client.ai.uploadAndPlan).not.toHaveBeenCalled()
   })
 })

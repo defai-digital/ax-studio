@@ -122,6 +122,12 @@ export type AuthoringCapabilities = {
     | 'prompt_to_dashboard'
     | 'upload_and_plan'
   >
+  deployment_operations?: Array<
+    | 'plan_dashboard'
+    | 'create_chart_from_intent'
+    | 'prompt_to_dashboard'
+    | 'upload_and_plan'
+  >
   artifact_types: Array<'chart' | 'dashboard'>
   preview_before_save: boolean
   upload_formats: Array<'csv' | 'tsv' | 'xls' | 'xlsx' | 'parquet'>
@@ -130,6 +136,9 @@ export type AuthoringCapabilities = {
     max_upload_bytes?: number | null
   }
   async_jobs: boolean
+  llm_configured: boolean
+  llm_provider_type?: string | null
+  llm_model?: string | null
 }
 
 class AxBIAuthProvider {
@@ -326,6 +335,7 @@ export class AIResource {
   async promptToDashboard(params: {
     prompt: string
     dataset_ids?: number[]
+    plan?: DashboardPlan
     max_charts?: number
     draft?: boolean
     save_charts?: boolean
@@ -334,8 +344,9 @@ export class AIResource {
     force?: boolean
   }): Promise<PromptToDashboardResult> {
     return this.callMcpTool<PromptToDashboardResult>('prompt_to_dashboard', {
-      prompt: params.prompt,
-      dataset_ids: params.dataset_ids ?? [],
+          prompt: params.prompt,
+          dataset_ids: params.dataset_ids ?? [],
+          plan: params.plan,
       max_charts: params.max_charts ?? 6,
       draft: params.draft ?? true,
       save_charts: params.save_charts ?? true,

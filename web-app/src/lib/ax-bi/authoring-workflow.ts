@@ -1,15 +1,17 @@
 import { fs } from '@ax-studio/core'
 import type { ServiceHub } from '@/services'
 import type { Attachment } from '@/types/attachment'
-import { getConfiguredAxBiMcpUrl } from './datasets'
-import { DEFAULT_AX_BI_WEB_URL } from './endpoints'
 import {
-  AxBI,
+  type AuthoringCapabilities,
   type CreateChartFromIntentResult,
   type DashboardPlan,
   type PromptToDashboardResult,
   type UploadAndPlanResult,
 } from './sdk'
+import {
+  createServiceHubAxBiAuthoringClient,
+  type AxBiAuthoringClient,
+} from './authoring-client'
 import { normalizeAxBiResultUrl } from './tool-navigation'
 
 const SUPPORTED_DATA_TYPES = new Set([
@@ -43,16 +45,6 @@ export type AxBiAuthoringWorkflowResult =
       artifactUrl?: string
       plan?: DashboardPlan | null
     }
-
-type AxBiAuthoringClient = {
-  ai: Pick<
-    AxBI['ai'],
-    | 'createChartFromIntent'
-    | 'planDashboard'
-    | 'promptToDashboard'
-    | 'uploadAndPlan'
-  >
-}
 
 export type RunAxBiAuthoringWorkflowOptions = {
   prompt: string
@@ -99,12 +91,59 @@ function isDelegationRequest({
   return AX_BI_REFERENCE.test(prompt) || pickDataAttachment(attachments ?? []) != null
 }
 
-async function createClient(serviceHub: ServiceHub): Promise<AxBI> {
-  return new AxBI({
-    baseUrl: DEFAULT_AX_BI_WEB_URL,
-    mcpUrl: await getConfiguredAxBiMcpUrl(serviceHub),
-    auth: { type: 'token', accessToken: '' },
-  })
+function createClient(serviceHub: ServiceHub): AxBiAuthoringClient {
+  return createServiceHubAxBiAuthoringClient(serviceHub)
+}
+
+type AuthoringOperation = AuthoringCapabilities['operations'][number]
+
+function validateCapabilities(
+  capabilities: AuthoringCapabilities
+): AuthoringCapabilities {
+  if (capabilities.contract_version !== '1.0') {
+    throw new Error(
+      `AX BI authoring contract ${String(capabilities.contract_version)} is not supported; expected 1.0.`
+    )
+  }
+  if (!Array.isArray(capabilities.operations)) {
+    throw new Error('AX BI returned malformed authoring capabilities.')
+  }
+  const maxCharts = capabilities.limits?.max_charts_per_dashboard
+  if (!Number.isInteger(maxCharts) || maxCharts < 1) {
+    throw new Error('AX BI returned an invalid dashboard chart limit.')
+  }
+  return capabilities
+}
+
+function requireOperation(
+  capabilities: AuthoringCapabilities,
+  operation: AuthoringOperation
+): void {
+  if (!capabilities.operations.includes(operation)) {
+    throw new Error(
+      `AX BI authoring operation ${operation} is disabled or not authorized for this user.`
+    )
+  }
+}
+
+function validateAttachment(
+  attachment: Attachment,
+  capabilities: AuthoringCapabilities
+): void {
+  const fileType = normalizeFileType(attachment)
+  if (!capabilities.upload_formats.some((format) => format === fileType)) {
+    throw new Error(`AX BI does not support ${fileType || 'this'} upload format.`)
+  }
+  const maxUploadBytes = capabilities.limits.max_upload_bytes
+  if (
+    typeof attachment.size === 'number' &&
+    typeof maxUploadBytes === 'number' &&
+    attachment.size > maxUploadBytes
+  ) {
+    throw new Error(
+      `${attachment.name} exceeds the AX BI upload limit of ${maxUploadBytes} bytes.`
+    )
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -273,7 +312,8 @@ function planResult(
 async function uploadAttachment(
   client: AxBiAuthoringClient,
   attachment: Attachment,
-  prompt: string
+  prompt: string,
+  maxCharts: number
 ): Promise<UploadAndPlanResult> {
   if (!attachment.path) {
     throw new Error(
@@ -284,6 +324,7 @@ async function uploadAttachment(
     file_content: await fs.readFileBase64(attachment.path),
     filename: attachment.name,
     prompt,
+    max_charts: maxCharts,
   })
 }
 
@@ -326,12 +367,35 @@ export async function runAxBiAuthoringWorkflow({
   const planOnly =
     PLAN_ACTION.test(normalizedPrompt) && !MUTATING_ACTION.test(normalizedPrompt)
   try {
-    const axbi = client ?? (await createClient(serviceHub))
+    const axbi = client ?? createClient(serviceHub)
+    const capabilities = validateCapabilities(
+      await axbi.ai.getAuthoringCapabilities()
+    )
+    if (attachment) {
+      requireOperation(capabilities, 'upload_and_plan')
+      validateAttachment(attachment, capabilities)
+    }
+    if (!wantsDashboard) {
+      requireOperation(capabilities, 'create_chart_from_intent')
+    } else if (planOnly && !attachment) {
+      requireOperation(capabilities, 'plan_dashboard')
+    } else if (!planOnly) {
+      requireOperation(capabilities, 'prompt_to_dashboard')
+    }
+    const maxCharts = Math.min(
+      6,
+      capabilities.limits.max_charts_per_dashboard
+    )
     let upload: UploadAndPlanResult | undefined
     let datasetId: number | string | undefined
 
     if (attachment) {
-      upload = await uploadAttachment(axbi, attachment, normalizedPrompt)
+      upload = await uploadAttachment(
+        axbi,
+        attachment,
+        normalizedPrompt,
+        maxCharts
+      )
       datasetId = datasetIdFromUpload(upload)
       if (datasetId == null) {
         return {
@@ -378,6 +442,7 @@ export async function runAxBiAuthoringWorkflow({
       const envelope = await axbi.ai.planDashboard({
         prompt: normalizedPrompt,
         dataset_candidates: numericId == null ? [] : [numericId],
+        constraints: { max_charts: maxCharts },
       })
       return planResult(envelope.plan, [
         ...(upload?.warnings ?? []),
@@ -399,6 +464,8 @@ export async function runAxBiAuthoringWorkflow({
     const result = await axbi.ai.promptToDashboard({
       prompt: normalizedPrompt,
       dataset_ids: numericId == null ? [] : [numericId],
+      max_charts: maxCharts,
+      ...(upload?.plan ? { plan: upload.plan } : {}),
     })
     const status = dashboardStatus(result)
     const url = result.dashboard_url
