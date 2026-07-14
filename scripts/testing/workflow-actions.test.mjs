@@ -47,6 +47,43 @@ describe('GitHub Actions dependency boundaries', () => {
     }
   })
 
+  it('requires Windows Authenticode credentials and validates them before building', () => {
+    const windowsWorkflows = readWorkflows()
+      .filter(({ fileName }) => fileName.includes('build-windows'))
+
+    expect(windowsWorkflows.length).toBe(2)
+
+    const signingSecrets = [
+      'AZURE_KEY_VAULT_URI',
+      'AZURE_CLIENT_ID',
+      'AZURE_TENANT_ID',
+      'AZURE_CLIENT_SECRET',
+      'AZURE_CERT_NAME',
+    ]
+
+    for (const workflow of windowsWorkflows) {
+      for (const secret of signingSecrets) {
+        expect(workflow.content).toMatch(
+          new RegExp(`${secret}:\\n\\s+required: true`),
+        )
+      }
+      expect(workflow.content).toContain('Validate Windows signing configuration')
+      expect(workflow.content.indexOf('Validate Windows signing configuration'))
+        .toBeLessThan(workflow.content.indexOf('- name: Build app'))
+    }
+  })
+
+  it('keeps Windows signing fail-closed and verifies the expected certificate', () => {
+    const signScript = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'sign.ps1'), 'utf8')
+
+    expect(signScript).not.toContain('Skipping Windows code signing')
+    expect(signScript).toContain('-fd sha256')
+    expect(signScript).toContain('-td sha256')
+    expect(signScript).toContain('Get-AuthenticodeSignature')
+    expect(signScript).toContain('FC40F1109912C025E751E804AA9BD1538A2D12EF')
+    expect(signScript).toContain('$LASTEXITCODE')
+  })
+
   it('does not execute actions from mutable branch refs', () => {
     const mutableReferences = []
 

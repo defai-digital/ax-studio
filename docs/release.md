@@ -28,9 +28,10 @@ repository secrets before running `Tauri Builder - Tag` for a stable release:
 | `AX_STUDIO_SIGNING_KEY` | Application signing key consumed by the release build. |
 
 Windows x64 and ARM64 artifacts are part of the supported desktop release.
-Authenticode signing is enabled when these Azure signing secrets are configured;
-otherwise the workflow emits unsigned Windows artifacts and warns during the
-build:
+Authenticode signing is fail-closed: all Azure signing secrets are required,
+and missing credentials, signing failures, certificate mismatches, or invalid
+Authenticode signatures must fail the release. The release workflow must never
+publish unsigned Windows artifacts:
 
 | Secret | Purpose |
 | --- | --- |
@@ -39,6 +40,11 @@ build:
 | `AZURE_TENANT_ID` | Azure tenant ID. |
 | `AZURE_CLIENT_SECRET` | Azure service principal secret. |
 | `AZURE_CERT_NAME` | Azure Key Vault certificate name. |
+
+The Azure service principal must be scoped to the signing vault and have
+certificate `Get`, secret `Get`, and key `Sign` permissions. Public Windows
+artifacts must be independently verified after upload and show
+`DEFAI Private Limited` as the valid Authenticode signer.
 
 Stable releases require detached Minisign signatures. Configure all three
 secrets before publishing:
