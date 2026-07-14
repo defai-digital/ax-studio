@@ -445,9 +445,9 @@ Use this path when contributing to AX Studio or running the app from source.
 
 ### Prerequisites
 
-- Node.js 20.19+ or 22.12+
+- Node.js 24+
 - Yarn 4.5.3
-- Rust 1.77.2+
+- Rust 1.80.0+
 - Tauri CLI 2.x
 - macOS users building MLX support: Apple Silicon is required for the MLX provider
 - Desktop development is focused on macOS and Windows. Linux may compile from

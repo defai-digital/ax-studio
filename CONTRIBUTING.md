@@ -36,7 +36,7 @@ Use this file as the contributor entry point, then follow the package-specific g
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 24+
 - Yarn `4.5.3`
 - Rust toolchain
 - Tauri CLI
