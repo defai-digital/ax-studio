@@ -67,11 +67,6 @@ const cask = `cask "ax-studio" do
 
   app "AX Studio.app"
 
-  postflight do
-    system_command "/usr/bin/xattr",
-                   args: ["-cr", "#{appdir}/AX Studio.app"]
-  end
-
   zap trash: [
     "~/Library/Application Support/AX Studio",
     "~/Library/Application Support/Ax-Studio",

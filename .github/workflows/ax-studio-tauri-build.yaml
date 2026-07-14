@@ -149,8 +149,113 @@ jobs:
       channel: stable
     secrets: inherit
 
+  verify-macos-release-signature:
+    needs: [get-update-version, build-macos]
+    runs-on: macos-latest
+    timeout-minutes: 15
+    permissions:
+      # Draft release assets require write access to be downloaded.
+      contents: write
+    steps:
+      - name: Download macOS release DMG
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+        run: |
+          mkdir -p artifacts
+          gh release download "v${VERSION}" \
+            --dir artifacts \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "AX.Studio_${VERSION}_aarch64.dmg"
+
+      - name: Verify Apple signature and notarization
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+        run: |
+          set -euo pipefail
+          DMG="artifacts/AX.Studio_${VERSION}_aarch64.dmg"
+          MOUNT_POINT="$(mktemp -d)"
+          cleanup() {
+            hdiutil detach "$MOUNT_POINT" -quiet || true
+            rm -rf "$MOUNT_POINT"
+          }
+          trap cleanup EXIT
+
+          xcrun stapler validate "$DMG"
+          spctl --assess --type install --verbose=2 "$DMG"
+          hdiutil attach "$DMG" -nobrowse -readonly -mountpoint "$MOUNT_POINT"
+
+          APP="$MOUNT_POINT/AX Studio.app"
+          test -d "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          SIGNATURE_DETAILS="$(codesign -dv --verbose=4 "$APP" 2>&1)"
+          printf '%s\n' "$SIGNATURE_DETAILS"
+          grep -F "Authority=Developer ID Application: DEFAI PRIVATE LIMITED" <<< "$SIGNATURE_DETAILS"
+          grep -F "TeamIdentifier=${APPLE_TEAM_ID}" <<< "$SIGNATURE_DETAILS"
+          spctl --assess --type execute --verbose=2 "$APP"
+
+  verify-windows-authenticode:
+    needs: [get-update-version, build-windows, build-windows-arm64]
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      # Draft release assets require write access to be downloaded.
+      contents: write
+    steps:
+      - name: Download Windows release executables
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          gh release download "v$env:VERSION" `
+            --dir artifacts `
+            --repo $env:GITHUB_REPOSITORY `
+            --pattern "*.exe"
+
+      - name: Verify Windows Authenticode signatures
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+        run: |
+          $expectedThumbprint = 'FC40F1109912C025E751E804AA9BD1538A2D12EF'
+          $requiredInstallers = @(
+            "AX.Studio_$env:VERSION`_x64-setup.exe",
+            "AX.Studio_$env:VERSION`_arm64-setup.exe"
+          )
+
+          foreach ($installer in $requiredInstallers) {
+            if (-not (Test-Path (Join-Path artifacts $installer))) {
+              throw "Required signed Windows installer is missing: $installer"
+            }
+          }
+
+          $executables = @(Get-ChildItem artifacts -Filter '*.exe' -File)
+          if ($executables.Count -lt 2) {
+            throw 'Expected at least the x64 and ARM64 Windows installers.'
+          }
+
+          foreach ($executable in $executables) {
+            $signature = Get-AuthenticodeSignature -FilePath $executable.FullName
+            if ($signature.Status -ne 'Valid') {
+              throw "Invalid Authenticode signature for $($executable.Name): $($signature.StatusMessage)"
+            }
+            if ($signature.SignerCertificate.Thumbprint -ne $expectedThumbprint) {
+              throw "Unexpected signer certificate for $($executable.Name): $($signature.SignerCertificate.Thumbprint)"
+            }
+            if ($signature.SignerCertificate.Subject -notmatch 'CN=DEFAI Private Limited') {
+              throw "Unexpected signer subject for $($executable.Name): $($signature.SignerCertificate.Subject)"
+            }
+            if ($null -eq $signature.TimeStamperCertificate) {
+              throw "Missing trusted timestamp for $($executable.Name)"
+            }
+            Write-Host "Verified $($executable.Name): $($signature.SignerCertificate.Subject)"
+          }
+
   sync-temp-to-latest:
-    needs: [create-draft-release, get-update-version, build-macos, build-windows, build-windows-arm64]
+    needs: [create-draft-release, get-update-version, build-macos, build-windows, build-windows-arm64, verify-macos-release-signature, verify-windows-authenticode]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -294,6 +399,9 @@ jobs:
       - name: Getting the repo
         uses: actions/checkout@v7
 
+      - name: Install minisign
+        run: sudo apt-get update && sudo apt-get install -y minisign
+
       - name: Verify GitHub release assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -309,6 +417,26 @@ jobs:
           node scripts/release/verify-latest-json.mjs \
             --file artifacts/latest.json \
             --version "${{ needs.get-update-version.outputs.new_version }}"
+
+      - name: Verify uploaded Minisign signatures
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v${{ needs.get-update-version.outputs.new_version }}
+        run: |
+          rm -rf artifacts
+          mkdir artifacts
+          gh release download "$TAG" --dir artifacts --repo "$GITHUB_REPOSITORY"
+          files=()
+          for signature in artifacts/*.minisig; do
+            artifact="${signature%.minisig}"
+            test -f "$artifact"
+            files+=("$artifact")
+          done
+          test "${#files[@]}" -gt 0
+          node scripts/release/minisign-artifacts.mjs \
+            --verify-only \
+            --public-key docs/ax-studio.minisign.pub \
+            "${files[@]}"
 
   publish-release:
     needs: [create-draft-release, get-update-version, verify-release-assets]
@@ -332,9 +460,11 @@ jobs:
     env:
       HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' || secrets.TAP_TOKEN != '' }}
     steps:
-      - name: Skip if no tap token configured
+      - name: Validate Homebrew tap token
         if: ${{ env.HAS_TAP_TOKEN != 'true' }}
-        run: echo "::notice::HOMEBREW_TAP_TOKEN or TAP_TOKEN not configured — skipping Homebrew tap update."
+        run: |
+          echo "::error::Stable releases require HOMEBREW_TAP_TOKEN or TAP_TOKEN."
+          exit 1
 
       - name: Getting the repo
         if: ${{ env.HAS_TAP_TOKEN == 'true' }}
@@ -370,3 +500,37 @@ jobs:
           git diff --cached --quiet && echo "No cask changes to commit." && exit 0
           git commit -m "Update ax-studio cask to ${VERSION}"
           git push
+
+  verify-homebrew-install:
+    needs: [get-update-version, update-homebrew-tap]
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - name: Install AX Studio from Homebrew tap
+        env:
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+        run: |
+          set -euo pipefail
+          brew untap defai-digital/ax-studio >/dev/null 2>&1 || true
+          brew tap defai-digital/ax-studio
+          brew audit --cask --strict defai-digital/ax-studio/ax-studio
+          CASK_VERSION="$(brew info --cask --json=v2 defai-digital/ax-studio/ax-studio | jq -r '.casks[0].version')"
+          test "$CASK_VERSION" = "$VERSION"
+          brew install --cask defai-digital/ax-studio/ax-studio
+
+      - name: Verify Homebrew-installed application
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          APP="/Applications/AX Studio.app"
+          test -d "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          SIGNATURE_DETAILS="$(codesign -dv --verbose=4 "$APP" 2>&1)"
+          grep -F "Authority=Developer ID Application: DEFAI PRIVATE LIMITED" <<< "$SIGNATURE_DETAILS"
+          grep -F "TeamIdentifier=${APPLE_TEAM_ID}" <<< "$SIGNATURE_DETAILS"
+          spctl --assess --type execute --verbose=2 "$APP"
+
+      - name: Uninstall test application
+        if: always()
+        run: brew uninstall --cask ax-studio || true

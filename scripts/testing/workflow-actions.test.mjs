@@ -84,6 +84,40 @@ describe('GitHub Actions dependency boundaries', () => {
     expect(signScript).toContain('$LASTEXITCODE')
   })
 
+  it('independently verifies uploaded Apple, Authenticode, and Minisign signatures', () => {
+    const releaseWorkflow = fs.readFileSync(
+      path.join(workflowsDirectory, 'ax-studio-tauri-build.yaml'),
+      'utf8',
+    )
+
+    expect(releaseWorkflow).toContain('verify-macos-release-signature:')
+    expect(releaseWorkflow).toContain('xcrun stapler validate')
+    expect(releaseWorkflow).toContain('Authority=Developer ID Application: DEFAI PRIVATE LIMITED')
+    expect(releaseWorkflow).toContain('verify-windows-authenticode:')
+    expect(releaseWorkflow).toContain('Get-AuthenticodeSignature')
+    expect(releaseWorkflow).toContain('FC40F1109912C025E751E804AA9BD1538A2D12EF')
+    expect(releaseWorkflow).toContain('--verify-only')
+    expect(releaseWorkflow).toContain('docs/ax-studio.minisign.pub')
+  })
+
+  it('requires and verifies the Homebrew stable release path', () => {
+    const releaseWorkflow = fs.readFileSync(
+      path.join(workflowsDirectory, 'ax-studio-tauri-build.yaml'),
+      'utf8',
+    )
+    const caskWriter = fs.readFileSync(
+      path.join(repoRoot, 'scripts', 'release', 'write-homebrew-cask.mjs'),
+      'utf8',
+    )
+
+    expect(releaseWorkflow).toContain('Stable releases require HOMEBREW_TAP_TOKEN or TAP_TOKEN.')
+    expect(releaseWorkflow).toContain('verify-homebrew-install:')
+    expect(releaseWorkflow).toContain('brew audit --cask --strict')
+    expect(releaseWorkflow).toContain('brew install --cask defai-digital/ax-studio/ax-studio')
+    expect(releaseWorkflow).toContain('spctl --assess --type execute')
+    expect(caskWriter).not.toContain('xattr')
+  })
+
   it('does not execute actions from mutable branch refs', () => {
     const mutableReferences = []
 
