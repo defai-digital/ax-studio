@@ -46,6 +46,20 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 Linux users should use AX Serving, OpenAI-compatible endpoints, or source builds
 when they need AX workflows outside the supported desktop release targets.
 
+### Platform and Inference Profiles
+
+AX Studio uses different local-inference profiles by platform:
+
+| Profile | Platforms | Inference model |
+| --- | --- | --- |
+| Primary desktop client | macOS Apple Silicon | AX Engine/MLX and `llama.cpp` |
+| CUDA desktop client | Windows x64 | `llama.cpp`; CUDA is selected when a compatible NVIDIA GPU and driver are available |
+| API/URL-first client | Windows ARM64 and iPad | Connect to a local or remote OpenAI-compatible inference endpoint such as AX Serving, Ollama, or another reachable server |
+
+Windows ARM64 builds may have an ARM64 `llama.cpp` backend available, but the
+supported product path for Windows ARM64 is API/URL-first. iPad is intended as
+an API/URL client and does not run the desktop local-inference executables.
+
 ### Install
 
 **macOS Apple Silicon - recommended**
@@ -149,10 +163,12 @@ Use this path when you want inference to run on your own machine.
 
 Local model support depends on the machine and runtime:
 
-- `llama.cpp` is the default GGUF local inference path on macOS and Windows.
-- MLX requires Apple Silicon macOS.
-- Ollama and OpenAI-compatible servers must already be running locally or on a
-  reachable host.
+- macOS Apple Silicon supports AX Engine/MLX and `llama.cpp` for local inference.
+- Windows x64 uses `llama.cpp`; compatible NVIDIA systems can use CUDA.
+- Windows ARM64 and iPad should use AX Serving, Ollama, or another
+  OpenAI-compatible server through a configured API/base URL.
+- OpenAI-compatible servers must already be running locally or on a reachable
+  host.
 
 ### Quickstart: MCP Tools
 
@@ -336,10 +352,10 @@ AX Studio supports multiple local inference paths:
 
 | Runtime | Platform | Use it when |
 | --- | --- | --- |
-| `llama.cpp` | macOS, Windows | You want GGUF local inference through the bundled engine manager |
+| `llama.cpp` | macOS Apple Silicon, Windows x64 | You want GGUF local inference through the bundled engine manager |
 | MLX provider | Apple Silicon macOS | You want in-process AX Engine SDK inference on Metal |
-| AX Serving / OpenAI-compatible | Any reachable endpoint | You already run a local or remote OpenAI-compatible model server |
-| Ollama | Local machine | You want AX Studio to use models served by Ollama |
+| AX Serving / OpenAI-compatible | Windows ARM64, iPad, or any reachable endpoint | You already run a local or remote OpenAI-compatible model server |
+| Ollama | Any reachable machine | You want AX Studio to use models served by Ollama through its API |
 
 The app separates local runtime configuration from cloud provider settings so
 users can decide when work stays local and when it routes to a hosted model.
