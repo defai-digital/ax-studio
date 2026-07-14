@@ -307,6 +307,8 @@ export const predefinedProviders = [
   },
   // MLX (AX Studio -> Tauri IPC -> ax-engine-sdk native runner -> Apple MLX)
   //
+  // Default Local Engine backend is **in_process** (ADR-009). Sidecar HTTP
+  // (`ax-engine serve`) is optional/future — see web-app/src/lib/local-engine/.
   // Models are discovered from app-managed local downloads/imports. Do not add
   // catalog models here, otherwise the Hub will mark them as downloaded before
   // they exist on disk.
