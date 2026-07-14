@@ -70,8 +70,14 @@ export class TauriUpdaterService implements UpdaterService {
       this.installableCheckPromise = check()
     }
 
-    const update = await this.installableCheckPromise
-    this.installableCheckPromise = null
+    let update: Update | null
+    try {
+      update = await this.installableCheckPromise
+    } finally {
+      // A rejected check must not poison later Update Now attempts. Clearing
+      // in finally lets the next attempt retry after a transient failure.
+      this.installableCheckPromise = null
+    }
 
     if (!update) throw new Error('No update available')
 
