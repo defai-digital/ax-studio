@@ -52,6 +52,10 @@ if (tauriConfig.bundle?.active !== true) {
   fail('src-tauri/tauri.conf.json bundle.active must be true')
 }
 
+if (tauriConfig.bundle?.publisher !== 'DEFAI Private Limited') {
+  fail('src-tauri/tauri.conf.json bundle.publisher must be DEFAI Private Limited')
+}
+
 if (tauriConfig.bundle?.createUpdaterArtifacts !== false) {
   fail('src-tauri/tauri.conf.json should keep bundle.createUpdaterArtifacts false in source; release CI enables it')
 }

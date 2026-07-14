@@ -1,0 +1,61 @@
+name: Report inappropriate AI content
+description: Report harmful or inappropriate AI content shown by AX Studio
+title: "[AI content report] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form to report AI-generated content that may violate law, safety expectations, or Microsoft Store policies.
+
+        Do not include API keys, access tokens, private files, personal information, or the full conversation. Describe the concern with the minimum detail needed to investigate it. If confidential follow-up is required, say so without posting the confidential material.
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - Sexual or exploitative content
+        - Hate, harassment, or threats
+        - Violence, weapons, or self-harm
+        - Illegal or dangerous activity
+        - Privacy or personal information
+        - Deceptive or harmful misinformation
+        - Other policy or safety concern
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: AX Studio version
+      description: Find this in Settings → General.
+      placeholder: 2.0.3
+    validations:
+      required: true
+  - type: input
+    id: provider-model
+    attributes:
+      label: Provider and model
+      description: For example, a local GGUF model or the configured cloud provider and model name.
+      placeholder: Local llama.cpp / model-name
+    validations:
+      required: true
+  - type: textarea
+    id: concern
+    attributes:
+      label: What happened?
+      description: Summarize the output and why it is inappropriate. Do not paste sensitive content.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction information
+      description: Include only non-sensitive steps that help reproduce or identify the issue.
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Acknowledgements
+      options:
+        - label: I removed secrets, private files, personal information, and unnecessary harmful content from this report.
+          required: true
+        - label: I understand this report is submitted to a public GitHub repository.
+          required: true

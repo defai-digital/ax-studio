@@ -52,6 +52,18 @@ describe('MessageRatingActions', () => {
     })
   })
 
+  it('links to the dedicated AI-content report form', () => {
+    setup()
+    fireEvent.click(screen.getByLabelText('Poor response'))
+
+    expect(
+      screen.getByRole('link', { name: 'Report inappropriate AI content' })
+    ).toHaveAttribute(
+      'href',
+      'https://github.com/defai-digital/ax-studio/issues/new?template=ai-content-report.yml'
+    )
+  })
+
   it('pre-fills the form from existing feedback and can clear it', () => {
     const props = setup({
       rating: 'down',

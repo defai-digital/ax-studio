@@ -4,7 +4,7 @@
  * optional comment) so a downvote records *why*, not just a bare flag.
  */
 import { useEffect, useState } from 'react'
-import { ThumbsDown, ThumbsUp } from 'lucide-react'
+import { Flag, ThumbsDown, ThumbsUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -13,6 +13,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import { AX_STUDIO_EXTERNAL_LINKS } from '@/constants/external-links'
 
 export type MessageFeedback = {
   reasons?: string[]
@@ -132,6 +133,17 @@ export function MessageRatingActions({
             placeholder="Add details (optional)"
             className="min-h-16 text-xs"
           />
+          <a
+            href={AX_STUDIO_EXTERNAL_LINKS.aiContentReport}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Report inappropriate AI content"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => setOpen(false)}
+          >
+            <Flag className="size-3.5" />
+            Report inappropriate content
+          </a>
           <div className="flex items-center justify-between">
             {rating === 'down' ? (
               <Button

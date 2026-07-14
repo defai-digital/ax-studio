@@ -5,6 +5,11 @@ import { fileURLToPath } from 'node:url'
 
 const args = ['tauri', 'build']
 const explicitTarget = process.env.TAURI_BUILD_TARGET?.trim()
+const explicitConfig = process.env.TAURI_BUILD_CONFIG?.trim()
+
+if (explicitConfig) {
+  args.push('--config', explicitConfig)
+}
 
 if (explicitTarget) {
   args.push('--target', explicitTarget)
@@ -19,6 +24,8 @@ if (explicitTarget) {
     args.push('--bundles', 'app')
   }
 }
+
+args.push(...process.argv.slice(2))
 
 const result = spawnSync('yarn', args, {
   stdio: 'inherit',

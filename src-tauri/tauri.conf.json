@@ -77,7 +77,7 @@
     }
   },
   "bundle": {
-    "publisher": "AX Studio",
+    "publisher": "DEFAI Private Limited",
     "active": true,
     "createUpdaterArtifacts": false,
     "icon": ["icons/icon.png", "icons/icon.ico"],

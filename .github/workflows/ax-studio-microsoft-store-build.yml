@@ -1,0 +1,154 @@
+name: Microsoft Store Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Existing stable tag version, for example 2.0.3'
+        required: true
+        type: string
+
+concurrency:
+  group: microsoft-store-${{ inputs.version }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Get repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Validate version and Store configuration
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${INPUT_VERSION#v}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version must look like 2.0.3, got: $INPUT_VERSION"
+            exit 1
+          fi
+          git fetch --force origin "refs/tags/v${VERSION}:refs/tags/v${VERSION}"
+          git rev-parse --verify "refs/tags/v${VERSION}"
+          git checkout --detach "refs/tags/v${VERSION}"
+          node scripts/release/validate-microsoft-store-config.mjs
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  build-store-x64:
+    needs: preflight
+    uses: ./.github/workflows/template-tauri-build-windows-x64.yml
+    with:
+      ref: refs/tags/v${{ needs.preflight.outputs.version }}
+      public_provider: none
+      new_version: ${{ needs.preflight.outputs.version }}
+      channel: stable
+      microsoft_store: true
+    secrets: inherit
+
+  build-store-arm64:
+    needs: preflight
+    uses: ./.github/workflows/template-tauri-build-windows-arm64.yml
+    with:
+      ref: refs/tags/v${{ needs.preflight.outputs.version }}
+      public_provider: none
+      new_version: ${{ needs.preflight.outputs.version }}
+      channel: stable
+      microsoft_store: true
+    secrets: inherit
+
+  verify-store-artifacts:
+    needs: [preflight, build-store-x64, build-store-arm64]
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Get repository
+        uses: actions/checkout@v7
+        with:
+          ref: refs/tags/v${{ needs.preflight.outputs.version }}
+
+      - name: Download x64 Store installer
+        uses: actions/download-artifact@v8
+        with:
+          name: ax-studio-windows-store-exe-${{ needs.preflight.outputs.version }}
+          path: artifacts/x64
+
+      - name: Download ARM64 Store installer
+        uses: actions/download-artifact@v8
+        with:
+          name: ax-studio-windows-store-arm64-exe-${{ needs.preflight.outputs.version }}
+          path: artifacts/arm64
+
+      - name: Assemble immutable submission files
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force store-artifacts | Out-Null
+
+          $x64 = @(Get-ChildItem artifacts/x64 -Recurse -File -Filter '*_x64-setup.exe')
+          $arm64 = @(Get-ChildItem artifacts/arm64 -Recurse -File -Filter '*_arm64-setup.exe')
+          if ($x64.Count -ne 1) { throw "Expected one x64 Store installer, found $($x64.Count)." }
+          if ($arm64.Count -ne 1) { throw "Expected one ARM64 Store installer, found $($arm64.Count)." }
+
+          Copy-Item $x64[0].FullName "store-artifacts/AX.Studio_${VERSION}_x64-store-setup.exe"
+          Copy-Item $arm64[0].FullName "store-artifacts/AX.Studio_${VERSION}_arm64-store-setup.exe"
+
+      - name: Verify installer signatures
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($installer in Get-ChildItem store-artifacts -Filter '*.exe' -File) {
+            $signature = Get-AuthenticodeSignature $installer.FullName
+            if ($signature.Status -ne 'Valid') {
+              throw "Invalid Authenticode signature for $($installer.Name): $($signature.StatusMessage)"
+            }
+            if ($signature.SignerCertificate.Subject -notmatch 'CN=DEFAI Private Limited') {
+              throw "Unexpected signer for $($installer.Name): $($signature.SignerCertificate.Subject)"
+            }
+            if ($null -eq $signature.TimeStamperCertificate) {
+              throw "Missing trusted timestamp for $($installer.Name)."
+            }
+          }
+
+      - name: Smoke-test silent x64 install, launch, PE signatures, and uninstall
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          ./scripts/release/test-microsoft-store-installer.ps1 `
+            -InstallerPath "store-artifacts/AX.Studio_${VERSION}_x64-store-setup.exe"
+
+      - name: Write submission checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem store-artifacts -Filter '*.exe' -File |
+            Sort-Object Name |
+            ForEach-Object {
+              $hash = (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLowerInvariant()
+              "$hash  $($_.Name)"
+            } | Set-Content -Encoding ascii store-artifacts/SHA256SUMS.txt
+
+      - name: Upload immutable Store submission bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: ax-studio-microsoft-store-submission-${{ needs.preflight.outputs.version }}
+          retention-days: 90
+          if-no-files-found: error
+          path: store-artifacts/*

@@ -506,6 +506,13 @@ describe('General Settings Route', () => {
     // Check for external links
     const links = screen.getAllByRole('link')
     expect(links.length).toBeGreaterThan(0)
+    expect(links.map((link) => link.getAttribute('href'))).toEqual(
+      expect.arrayContaining([
+        'https://github.com/defai-digital/ax-studio#readme',
+        'https://github.com/defai-digital/ax-studio/releases',
+        'https://github.com/defai-digital/ax-studio/issues/new/choose',
+      ])
+    )
   })
 
   it('should handle logs window opening', async () => {
