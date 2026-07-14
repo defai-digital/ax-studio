@@ -39,7 +39,7 @@ describe('toolchain version pins', () => {
     ).toEqual([])
   })
 
-  it('pins Rust MSRV to 1.80.0 across src-tauri manifests', () => {
+  it('pins Rust MSRV to 1.85.0 across src-tauri manifests', () => {
     const cargoTomls = [
       'src-tauri/Cargo.toml',
       'src-tauri/plugins/tauri-plugin-hardware/Cargo.toml',
@@ -50,7 +50,7 @@ describe('toolchain version pins', () => {
       const content = read(relativePath)
       const match = content.match(/^rust-version\s*=\s*"([^"]+)"/m)
       expect(match, `${relativePath} must declare rust-version`).not.toBeNull()
-      expect(match[1], `${relativePath} rust-version`).toBe('1.80.0')
+      expect(match[1], `${relativePath} rust-version`).toBe('1.85.0')
     }
   })
 })
