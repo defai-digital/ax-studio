@@ -64,7 +64,7 @@ describe('GitHub Actions dependency boundaries', () => {
     for (const workflow of windowsWorkflows) {
       for (const secret of signingSecrets) {
         expect(workflow.content).toMatch(
-          new RegExp(`${secret}:\\n\\s+required: true`),
+          new RegExp(`${secret}:\\r?\\n\\s+required: true`),
         )
       }
       expect(workflow.content).toContain('Validate Windows signing configuration')
