@@ -80,8 +80,8 @@ assessment.
 Create an annotated release tag from a tested `main` commit and push it:
 
 ```bash
-git tag -a v2.0.5 -m "AX Studio 2.0.5"
-git push origin v2.0.5
+git tag -a v2.0.3 -m "AX Studio 2.0.3"
+git push origin v2.0.3
 ```
 
 The tag starts `Tauri Builder - Tag`. The workflow creates a draft release and
