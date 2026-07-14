@@ -34,6 +34,12 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 
 ## Get Started
 
+### Installation Index
+
+- [macOS Apple Silicon](#macos-apple-silicon---recommended) — Homebrew or GitHub release
+- [Windows x64 and ARM64](#windows) — signed installer from GitHub Releases
+- [iPad](#ipad-apiurl-first-planned) — planned App Store/TestFlight client using an API or base URL
+
 ### Supported Desktop Targets
 
 | Platform | Status | Install path |
@@ -62,7 +68,7 @@ an API/URL client and does not run the desktop local-inference executables.
 
 ### Install
 
-**macOS Apple Silicon - recommended**
+#### macOS Apple Silicon - recommended
 
 1. Install Homebrew if you do not already have it:
 
@@ -87,7 +93,7 @@ Homebrew setups that require explicit trust for third-party taps.
 The Homebrew cask is the fastest install path for supported Macs. Manual
 downloads are available from GitHub Releases if you prefer not to use Homebrew.
 
-**Windows**
+#### Windows
 
 Download AX Studio only from the official
 [GitHub Releases](https://github.com/defai-digital/ax-studio/releases/latest)
@@ -115,7 +121,7 @@ Get-AuthenticodeSignature ".\AX.Studio_*_x64-setup.exe" |
 The expected status is `Valid`, and the certificate subject must identify
 `DEFAI Private Limited`.
 
-**Manual download**
+#### Manual download
 
 All release assets are published on the
 [AX Studio releases page](https://github.com/defai-digital/ax-studio/releases).
@@ -123,6 +129,15 @@ Every stable release asset includes a detached `.minisig` signature. The
 verification key and command are documented in
 [`docs/ax-studio.minisign.pub`](docs/ax-studio.minisign.pub) and
 [`docs/release.md`](docs/release.md).
+
+#### iPad (API/URL-first; planned)
+
+iPad support is planned as a mobile client and is not included in the current
+desktop release assets. When the mobile build is available, install AX Studio
+through TestFlight or the App Store, then open **Settings -> Providers** and
+configure an API key plus the base URL for AX Serving, Ollama, or another
+reachable OpenAI-compatible inference server. The iPad client will not run the
+desktop local-inference executables.
 
 ### First Launch
 
