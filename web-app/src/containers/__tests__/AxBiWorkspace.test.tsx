@@ -22,9 +22,8 @@ vi.mock('@/lib/ax-bi/datasets', () => ({
   listAxBiDatasets: vi.fn().mockResolvedValue([]),
 }))
 
-vi.mock('@/lib/ax-bi/dashboard-workflow', () => ({
-  runAxBiExistingDatasetChartWorkflow: vi.fn(),
-  runAxBiSdkPromptWorkflow: vi.fn(),
+vi.mock('@/lib/ax-bi/authoring-workflow', () => ({
+  runAxBiAuthoringWorkflow: vi.fn(),
 }))
 
 describe('AxBiWorkspace Open result', () => {

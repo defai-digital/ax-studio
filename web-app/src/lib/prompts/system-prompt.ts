@@ -144,24 +144,24 @@ export const getOptimizedModelConfig = (
 
 /**
  * Appended to every resolved system prompt.
- * Tells every model that a Python code execution engine is available so it never
- * refuses data/visualization tasks with "I cannot do that".
+ * Keeps computation and BI authoring ownership explicit for every model.
  */
 export const CODE_EXECUTION_INSTRUCTION = `
 
-## Python code execution
+## Computation and analytics authoring
 
 Use Python when asked to:
 - Run a calculation, simulation, or algorithm → write Python
 - Process or analyse data that requires computation → write Python
 - Create or display a table / DataFrame → write Python using pandas
-- Generate a chart from computed data → write Python using matplotlib or seaborn
+- Create a BI chart, visualization, report, or dashboard → use AX BI authoring tools
 
 Rules:
 - ALWAYS write a \`\`\`python code block when Python is the right tool — never say "I cannot run code"
-- Use \`plt.show()\` for charts — figures are captured automatically
+- Do not generate matplotlib, seaborn, or another local chart implementation as a substitute for AX BI
 - For DataFrames always put \`df\` or \`display(df)\` as the LAST line — NEVER use \`print(df)\` (it outputs plain text, not a styled table)
-- Import libraries at the top of the code block; commonly used ones are matplotlib, pandas, numpy, seaborn — if a package is missing the user will see a ModuleNotFoundError and can install it
+- If AX BI is unavailable, explain that dependency clearly instead of silently creating a different artifact
+- Import libraries at the top of the code block; commonly used ones are pandas and numpy — if a package is missing the user will see a ModuleNotFoundError and can install it
 - Keep code self-contained — define all data inside the block`
 
 export const LOCAL_KNOWLEDGE_INSTRUCTION = `

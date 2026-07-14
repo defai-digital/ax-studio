@@ -25,11 +25,7 @@ import {
 import { getModelContextLength } from '@/lib/models'
 import { convertThreadMessagesToUIMessages } from '@/lib/messages'
 import { getVersionMeta, selectVisibleMessages } from '@/lib/messages/versions'
-import {
-  runAxBiDashboardWorkflow,
-  runAxBiExistingDatasetChartWorkflow,
-  runAxBiSdkPromptWorkflow,
-} from '@/lib/ax-bi/dashboard-workflow'
+import { runAxBiAuthoringWorkflow } from '@/lib/ax-bi/authoring-workflow'
 import {
   ThreadMessage,
   MessageStatus,
@@ -294,28 +290,11 @@ export function useThreadChat({
       addMessage(userMessage)
       updateThreadTimestamp(threadId)
 
-      let directAxBiResult:
-        | Awaited<ReturnType<typeof runAxBiExistingDatasetChartWorkflow>>
-        | Awaited<ReturnType<typeof runAxBiDashboardWorkflow>>
-        | Awaited<ReturnType<typeof runAxBiSdkPromptWorkflow>>
-
-      directAxBiResult = await runAxBiExistingDatasetChartWorkflow({
+      const directAxBiResult = await runAxBiAuthoringWorkflow({
         prompt: normalizedText,
+        attachments: pendingAttachments,
         serviceHub,
       })
-      if (!directAxBiResult.handled) {
-        directAxBiResult = await runAxBiDashboardWorkflow({
-          prompt: normalizedText,
-          attachments: pendingAttachments,
-          serviceHub,
-        })
-      }
-      if (!directAxBiResult.handled) {
-        directAxBiResult = await runAxBiSdkPromptWorkflow({
-          prompt: normalizedText,
-          serviceHub,
-        })
-      }
 
       if (directAxBiResult.handled) {
         const assistantMessage = newAssistantThreadContent(
@@ -323,14 +302,15 @@ export function useThreadChat({
           directAxBiResult.message,
           {
             axBi: {
-              sdk: 'plan' in directAxBiResult,
+              delegated: directAxBiResult.delegated,
+              artifactType: directAxBiResult.artifactType,
               dashboardUrl:
-                'dashboardUrl' in directAxBiResult
-                  ? directAxBiResult.dashboardUrl
+                directAxBiResult.artifactType === 'dashboard'
+                  ? directAxBiResult.artifactUrl
                   : undefined,
               chartUrl:
-                'chartUrl' in directAxBiResult
-                  ? directAxBiResult.chartUrl
+                directAxBiResult.artifactType === 'chart'
+                  ? directAxBiResult.artifactUrl
                   : undefined,
             },
           },

@@ -88,6 +88,126 @@ describe('AX BI SDK shim', () => {
     })
   })
 
+  it('uses AX BI high-level chart and upload authoring contracts', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonRpcResponse('1', {}))
+      .mockResolvedValueOnce(new Response(null, { status: 202 }))
+      .mockResolvedValueOnce(
+        jsonRpcResponse('2', {
+          structuredContent: {
+            success: true,
+            chart_name: 'Revenue',
+          },
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonRpcResponse('3', {
+          structuredContent: {
+            dataset: { id: 42 },
+            plan: null,
+            warnings: [],
+          },
+        })
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const client = new AxBI({
+      baseUrl: 'http://127.0.0.1:8088',
+      mcpUrl: 'http://127.0.0.1:5008/mcp',
+    })
+
+    await client.ai.createChartFromIntent({
+      prompt: 'Show monthly revenue',
+      dataset_id: 42,
+      save_chart: false,
+    })
+    await client.ai.uploadAndPlan({
+      file_content: 'base64-data',
+      filename: 'sales.csv',
+      prompt: 'Create a sales dashboard',
+    })
+
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toEqual({
+      jsonrpc: '2.0',
+      id: '2',
+      method: 'tools/call',
+      params: {
+        name: 'create_chart_from_intent',
+        arguments: {
+          request: {
+            prompt: 'Show monthly revenue',
+            dataset_id: 42,
+            save_chart: false,
+            max_preview_rows: 100,
+          },
+        },
+      },
+    })
+    expect(JSON.parse(String(fetchMock.mock.calls[3]?.[1]?.body))).toEqual({
+      jsonrpc: '2.0',
+      id: '3',
+      method: 'tools/call',
+      params: {
+        name: 'upload_and_plan',
+        arguments: {
+          request: {
+            file_content: 'base64-data',
+            filename: 'sales.csv',
+            prompt: 'Create a sales dashboard',
+            max_charts: 6,
+          },
+        },
+      },
+    })
+  })
+
+  it('discovers the versioned AX BI authoring capabilities', async () => {
+    const capabilities = {
+      contract_version: '1.0',
+      operations: [
+        'plan_dashboard',
+        'create_chart_from_intent',
+        'prompt_to_dashboard',
+        'upload_and_plan',
+      ],
+      artifact_types: ['chart', 'dashboard'],
+      preview_before_save: true,
+      upload_formats: ['csv', 'tsv', 'xls', 'xlsx', 'parquet'],
+      limits: {
+        max_charts_per_dashboard: 12,
+        max_upload_bytes: 104857600,
+      },
+      async_jobs: false,
+    }
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonRpcResponse('1', {}))
+      .mockResolvedValueOnce(new Response(null, { status: 202 }))
+      .mockResolvedValueOnce(
+        jsonRpcResponse('2', { structuredContent: capabilities })
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const client = new AxBI({
+      baseUrl: 'http://127.0.0.1:8088',
+      mcpUrl: 'http://127.0.0.1:5008/mcp',
+    })
+
+    await expect(client.ai.getAuthoringCapabilities()).resolves.toEqual(
+      capabilities
+    )
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toEqual({
+      jsonrpc: '2.0',
+      id: '2',
+      method: 'tools/call',
+      params: {
+        name: 'get_authoring_capabilities',
+        arguments: {},
+      },
+    })
+  })
+
   it('parses multiline SSE tool responses', async () => {
     const fetchMock = vi
       .fn()
