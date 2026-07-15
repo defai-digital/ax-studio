@@ -40,7 +40,6 @@ default = [
     "tauri/tray-icon",
     "tauri/test",
     "tauri/custom-protocol",
-    "desktop",
 ]
 hardware = ["dep:tauri-plugin-hardware"]
 deep-link = ["dep:tauri-plugin-deep-link"]
@@ -49,6 +48,7 @@ desktop = [
     "deep-link",
     "hardware",
     "llamacpp",
+    "dep:rfd",
 ]
 test-tauri = [
     "tauri/wry",
@@ -112,7 +112,7 @@ tokio = { workspace = true }
 tokio-util = "0.7.14"
 url = "2.5"
 uuid = { version = "1.7", features = ["v4"] }
-rfd = { version = "0.15.4", default-features = false, features = [
+rfd = { version = "0.15.4", optional = true, default-features = false, features = [
   "tokio",
   "gtk3",
   "common-controls-v6",

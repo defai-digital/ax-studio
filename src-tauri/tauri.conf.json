@@ -80,6 +80,9 @@
     "publisher": "DEFAI Private Limited",
     "active": true,
     "createUpdaterArtifacts": false,
+    "iOS": {
+      "developmentTeam": "N5ZUZDUJS6"
+    },
     "icon": ["icons/icon.png", "icons/icon.ico"],
     "resources": ["resources/LICENSE"]
   }

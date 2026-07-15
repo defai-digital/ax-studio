@@ -46,7 +46,7 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 | --- | --- | --- |
 | macOS Apple Silicon | Active support | Homebrew cask or GitHub release assets |
 | Windows x64 | Active support | GitHub release installer |
-| Windows ARM64 | Active support | GitHub release installer |
+| Windows ARM64 | API/URL client | GitHub release installer |
 | Linux desktop | Not active support | Source builds only, without release/SLA expectations |
 
 Linux users should use AX Serving, OpenAI-compatible endpoints, or source builds
@@ -62,9 +62,9 @@ AX Studio uses different local-inference profiles by platform:
 | CUDA desktop client | Windows x64 | `llama.cpp`; CUDA is selected when a compatible NVIDIA GPU and driver are available |
 | API/URL-first client | Windows ARM64 and iPad | Connect to a local or remote OpenAI-compatible inference endpoint such as AX Serving, Ollama, or another reachable server |
 
-Windows ARM64 builds may have an ARM64 `llama.cpp` backend available, but the
-supported product path for Windows ARM64 is API/URL-first. iPad is intended as
-an API/URL client and does not run the desktop local-inference executables.
+Windows ARM64 does not run a local inference backend in the supported product
+configuration. It is an API/URL client, as is iPad; neither target downloads or
+executes AX Engine or `llama.cpp` binaries.
 
 ### Install
 

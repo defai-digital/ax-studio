@@ -7,8 +7,12 @@ use core::{
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default().plugin(tauri_plugin_single_instance::init(
+    let builder = tauri::Builder::default();
+
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(
         |_app, argv, _cwd| {
             log::info!(
                 "A new app instance was opened with {argv:?} and the deep link event was already triggered"
@@ -22,12 +26,15 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_store::Builder::new().build());
 
-    #[cfg(feature = "deep-link")]
+    #[cfg(all(feature = "deep-link", desktop))]
     {
         app_builder = app_builder.plugin(tauri_plugin_deep_link::init());
     }
-    app_builder = app_builder.plugin(tauri_plugin_hardware::init());
-    app_builder = app_builder.plugin(tauri_plugin_llamacpp::init());
+    #[cfg(desktop)]
+    {
+        app_builder = app_builder.plugin(tauri_plugin_hardware::init());
+        app_builder = app_builder.plugin(tauri_plugin_llamacpp::init());
+    }
 
     let app_builder = app_builder.invoke_handler(commands::desktop_handlers!());
 

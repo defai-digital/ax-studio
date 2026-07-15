@@ -10,10 +10,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 describe('platform/utils', () => {
   let originalWindow: typeof globalThis.window
   let originalPlatform: string
+  let originalUserAgent: string
+  let originalMaxTouchPoints: number
 
   beforeEach(() => {
     originalWindow = globalThis.window
     originalPlatform = navigator.platform
+    originalUserAgent = navigator.userAgent
+    originalMaxTouchPoints = navigator.maxTouchPoints
   })
 
   afterEach(() => {
@@ -27,6 +31,14 @@ describe('platform/utils', () => {
     }
     Object.defineProperty(navigator, 'platform', {
       value: originalPlatform,
+      configurable: true,
+    })
+    Object.defineProperty(navigator, 'userAgent', {
+      value: originalUserAgent,
+      configurable: true,
+    })
+    Object.defineProperty(navigator, 'maxTouchPoints', {
+      value: originalMaxTouchPoints,
       configurable: true,
     })
   })
@@ -70,6 +82,30 @@ describe('platform/utils', () => {
       const { isMlxSupported } = await import('../utils')
 
       expect(isMlxSupported()).toBe(false)
+    })
+  })
+
+  describe('getInferenceProfile', () => {
+    it('does not treat an iPad as a macOS MLX device', async () => {
+      Object.defineProperty(navigator, 'platform', { value: 'MacIntel', configurable: true })
+      Object.defineProperty(navigator, 'maxTouchPoints', { value: 5, configurable: true })
+      const { getInferenceProfile, isMlxSupported } = await import('../utils')
+      expect(getInferenceProfile()).toBe('api-only')
+      expect(isMlxSupported()).toBe(false)
+    })
+
+    it('uses API-only mode for Windows ARM64', async () => {
+      Object.defineProperty(navigator, 'platform', { value: 'Win32', configurable: true })
+      Object.defineProperty(navigator, 'userAgent', { value: 'Windows NT 10.0; ARM64', configurable: true })
+      const { getInferenceProfile } = await import('../utils')
+      expect(getInferenceProfile()).toBe('api-only')
+    })
+
+    it('keeps Windows x64 on the local llama.cpp profile', async () => {
+      Object.defineProperty(navigator, 'platform', { value: 'Win32', configurable: true })
+      Object.defineProperty(navigator, 'userAgent', { value: 'Windows NT 10.0; Win64; x64', configurable: true })
+      const { getInferenceProfile } = await import('../utils')
+      expect(getInferenceProfile()).toBe('windows-x64-local')
     })
   })
 

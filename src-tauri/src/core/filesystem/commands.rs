@@ -1,15 +1,20 @@
 // Filesystem commands retained for the current desktop bridge surface.
 // It's added to ensure the legacy implementation from frontend still functions before removal.
 use super::helpers::resolve_path;
-use super::models::{DialogOpenOptions, FileStat};
+#[cfg(desktop)]
+use super::models::DialogOpenOptions;
+use super::models::FileStat;
 use crate::core::state::AppState;
 use base64::Engine;
+#[cfg(desktop)]
 use rfd::AsyncFileDialog;
 use std::ffi::OsString;
 use std::fs;
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
-use tauri::{AppHandle, Manager, Runtime, State};
+#[cfg(desktop)]
+use tauri::{AppHandle, Manager};
+use tauri::{Runtime, State};
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(untagged)]
@@ -1387,6 +1392,7 @@ mod archive_budget_tests {
 }
 
 // rfd native file dialog
+#[cfg(desktop)]
 fn allow_selected_file<R: Runtime>(
     app: &AppHandle<R>,
     path: &std::path::Path,
@@ -1396,6 +1402,7 @@ fn allow_selected_file<R: Runtime>(
         .map_err(|error| format!("Failed to grant access to selected file: {error}"))
 }
 
+#[cfg(desktop)]
 fn allow_selected_directory<R: Runtime>(
     app: &AppHandle<R>,
     path: &std::path::Path,
@@ -1407,6 +1414,7 @@ fn allow_selected_directory<R: Runtime>(
 
 #[tauri::command]
 /// Open the native file or directory picker and return the selected path values.
+#[cfg(desktop)]
 pub async fn open_dialog<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, AppState>,
@@ -1492,6 +1500,7 @@ pub async fn open_dialog<R: Runtime>(
 
 #[tauri::command]
 /// Open the native save dialog and approve the returned path for a later write.
+#[cfg(desktop)]
 pub async fn save_dialog(
     state: State<'_, AppState>,
     options: Option<DialogOpenOptions>,

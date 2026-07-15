@@ -4,6 +4,7 @@ import { AppEvent, EngineManager, events, ModelManager } from '@ax-studio/core'
 import { PropsWithChildren, useCallback, useEffect, useMemo, useState } from 'react'
 import { withTimeout } from '@/lib/utils/async'
 import { useServiceHub } from '@/hooks/useServiceHub'
+import { isApiOnlyPlatform } from '@/lib/platform/utils'
 
 const EXTENSION_START_TIMEOUT_MS = 8000
 const EXTENSIONS_UPDATED_EVENT = 'extensions-updated'
@@ -28,6 +29,11 @@ export function ExtensionProvider({ children }: PropsWithChildren) {
   }, [])
 
   const setupExtensions = useCallback(async () => {
+    // iPad and Windows ARM64 are API/URL-only product targets. Do not load
+    // desktop extensions because they may spawn local inference processes or
+    // attempt to install platform-specific binaries.
+    if (isApiOnlyPlatform()) return
+
     const extensionManager = ExtensionManager.getInstance()
     extensionSetupWork ??= extensionManager
       .registerActive()
