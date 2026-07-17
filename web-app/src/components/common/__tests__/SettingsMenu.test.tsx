@@ -37,6 +37,7 @@ describe('SettingsMenu', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
     vi.mocked(useMatches).mockReturnValue(mockMatches)
   })
 
@@ -61,6 +62,7 @@ describe('SettingsMenu', () => {
     render(<SettingsMenu />)
     expect(screen.getByText('common:keyboardShortcuts')).toBeInTheDocument()
     expect(screen.getByText('common:hardware')).toBeInTheDocument()
+    expect(screen.getByText('common:engineSettings')).toBeInTheDocument()
     expect(screen.getByText('common:local_api_server')).toBeInTheDocument()
     expect(screen.getByText('common:https_proxy')).toBeInTheDocument()
     expect(screen.getByText('common:mcp-servers')).toBeInTheDocument()
@@ -76,6 +78,17 @@ describe('SettingsMenu', () => {
     expect(hrefs).toContain('/settings/interface')
     expect(hrefs).toContain('/settings/privacy')
     expect(hrefs).toContain('/settings/providers/')
+    expect(hrefs).toContain('/settings/engine-settings')
+  })
+
+  it('keeps engine settings visible when advanced settings start collapsed', () => {
+    localStorage.setItem('workspace-mode', 'simple-chat')
+    localStorage.setItem('settings-show-advanced', 'false')
+
+    render(<SettingsMenu />)
+
+    expect(screen.getByText('common:engineSettings')).toBeInTheDocument()
+    expect(screen.queryByText('common:hardware')).not.toBeInTheDocument()
   })
 
   it('renders group headers', () => {

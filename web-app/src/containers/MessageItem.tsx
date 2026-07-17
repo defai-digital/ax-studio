@@ -625,12 +625,18 @@ export const MessageItem = memo(
                 | Record<string, unknown>
                 | undefined
               const routing = meta?.routing as
-                | { modelId?: string; reason?: string; routed?: boolean }
+                | {
+                    modelId?: string
+                    providerId?: string
+                    reason?: string
+                    routed?: boolean
+                  }
                 | undefined
               if (routing?.routed && routing.modelId) {
                 return (
                   <RoutingBadge
                     modelId={routing.modelId}
+                    providerId={routing.providerId}
                     reason={routing.reason ?? ''}
                   />
                 )

@@ -1688,6 +1688,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       events.emit(ModelEvent.OnModelFail, {
         modelId,
         error: formatError(e),
+        provider: this.providerId,
       })
       throw e
     }
@@ -2300,7 +2301,10 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       // Check ax-serving sessions first
       const axSession = this.axServingSessions.get(sessionId)
       if (axSession) {
-        events.emit(ModelEvent.OnModelStop, { modelId: sessionId })
+        events.emit(ModelEvent.OnModelStop, {
+          modelId: sessionId,
+          provider: this.providerId,
+        })
         // Unload via ax-serving HTTP API
         try {
           const encodedId = encodeURIComponent(toAxServingModelId(sessionId))
@@ -2319,19 +2323,39 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         }
         this.axServingSessions.delete(sessionId)
         await this._syncLocalProviderRegistration()
-        events.emit(ModelEvent.OnModelStopped, { modelId: sessionId })
+        events.emit(ModelEvent.OnModelStopped, {
+          modelId: sessionId,
+          provider: this.providerId,
+        })
         return { success: true }
       }
 
       // Fallback: llamacpp process-based session
       const session = await findSessionByModel(sessionId)
       if (!session) {
+        await this._syncLocalProviderRegistration()
+        events.emit(ModelEvent.OnModelStopped, {
+          modelId: sessionId,
+          provider: this.providerId,
+        })
         return { success: true }
       }
-      events.emit(ModelEvent.OnModelStop, { modelId: sessionId })
-      const result = await unloadLlamaModel(session.pid)
+      events.emit(ModelEvent.OnModelStop, {
+        modelId: sessionId,
+        provider: this.providerId,
+      })
+      let result: UnloadResult
+      try {
+        result = await unloadLlamaModel(session.pid)
+      } catch (error: unknown) {
+        console.warn('[llamacpp] unload process cleanup failed:', error)
+        result = { success: false, error: formatError(error) }
+      }
       await this._syncLocalProviderRegistration()
-      events.emit(ModelEvent.OnModelStopped, { modelId: sessionId })
+      events.emit(ModelEvent.OnModelStopped, {
+        modelId: sessionId,
+        provider: this.providerId,
+      })
       return result
     } catch (e: unknown) {
       console.error('[llamacpp] unload error:', e)
@@ -2530,7 +2554,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         console.warn(`[llamacpp] Failed to unload crashed model ${modelId}:`, error)
       })
       throw new Error(
-        `Model "${modelId}" process crashed. Please reload the model.`
+        `Model "${modelId}" process crashed. On Windows with Vulkan/GPU offload, try reducing GPU layers, switching to CPU backend, using a smaller quantization, or loading a smaller model.`
       )
     }
 

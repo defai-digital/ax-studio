@@ -385,7 +385,7 @@
       "deviceListParseFailed": "Could not detect GPU devices. Falling back to CPU.",
       "invalidArgument": "Invalid model configuration. Check Engine Settings.",
       "contextExceeded": "Input exceeds context window. Reduce message history or increase context size.",
-      "processCrashed": "Model process crashed. Please reload the model.",
+      "processCrashed": "Model process crashed. On Windows with Vulkan/GPU offload, try reducing GPU layers, switching to CPU backend, using a smaller quantization, or loading a smaller model.",
       "sha256Mismatch": "Downloaded file is corrupted. Please try again.",
       "modelImported": "Model imported successfully",
       "modelValidationFailed": "Model validation failed — the file may be corrupted.",

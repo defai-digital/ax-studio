@@ -209,19 +209,28 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 
 vi.mock('@/components/ui/textarea', () => ({
   Textarea: ({
+    id,
     value,
     onChange,
     placeholder,
+    className,
+    'aria-describedby': ariaDescribedBy,
   }: {
+    id?: string
     value?: string
     onChange?: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
     placeholder?: string
+    className?: string
+    'aria-describedby'?: string
   }) => (
     <textarea
+      id={id}
       data-testid="textarea"
       value={value}
       onChange={onChange}
       placeholder={placeholder}
+      className={className}
+      aria-describedby={ariaDescribedBy}
     />
   ),
 }))
@@ -398,6 +407,22 @@ describe('General Settings Route', () => {
     })
 
     expect(screen.getByText('common:language')).toBeInTheDocument()
+  })
+
+  it('renders global default prompt as a full-width editor block', async () => {
+    const Component = GeneralRoute.component as React.ComponentType
+    await act(async () => {
+      render(<Component />)
+    })
+
+    const promptTextarea = screen.getByLabelText('Global Default Prompt')
+    expect(promptTextarea).toHaveClass('min-h-40')
+    expect(promptTextarea).toHaveAttribute(
+      'aria-describedby',
+      'global-default-prompt-description'
+    )
+    expect(screen.getByText('0 characters')).toBeInTheDocument()
+    expect(screen.getByText('Reset to Default')).toBeInTheDocument()
   })
 
   it('should render huggingface token input', async () => {

@@ -25,6 +25,11 @@ const HIGH_RISK_ENGINEERING_PATTERN =
   /\b(production|typescript|javascript|code|coding|debug|bug|test|tests|edge case|edge cases|architecture|architectural|refactor|security|reliability|stability|best practice|best practices|pr|pull request|review)\b/i
 const STRONG_CODING_MODEL_PATTERN =
   /\b(glm|zai|claude|sonnet|opus|gpt|o[1345]|gemini.*pro|deepseek|coder|coding|code)\b/i
+const CODING_SPECIALIZED_MODEL_PATTERN =
+  /\b(coder|coding|codestral|starcoder|devstral|code[-_\s]?instruct)\b/i
+const SIMPLE_GENERAL_QA_PATTERN =
+  /^(what|who|when|where|why|how|define|explain|tell me|give me|summarize)\b/i
+const SIMPLE_GENERAL_MAX_WORDS = 32
 
 /**
  * Build a flat list of available models for the router prompt.
@@ -90,6 +95,12 @@ function isStrongCodingCandidate(model: AvailableModelForRouter): boolean {
   )
 }
 
+function isCodingSpecializedCandidate(model: AvailableModelForRouter): boolean {
+  return CODING_SPECIALIZED_MODEL_PATTERN.test(
+    `${model.id} ${model.provider} ${model.displayName}`
+  )
+}
+
 function scoreStrongCodingCandidate(model: AvailableModelForRouter): number {
   const text =
     `${model.id} ${model.provider} ${model.displayName}`.toLowerCase()
@@ -137,6 +148,62 @@ function pickDirectEngineeringRoute(
     modelId: replacement.id,
     providerId: replacement.provider,
     reason: 'production coding',
+  }
+}
+
+function isSimpleGeneralQuestion(userMessage: string): boolean {
+  const trimmed = userMessage.trim()
+  if (!trimmed) return false
+  if (trimmed.includes('```')) return false
+  if (HIGH_RISK_ENGINEERING_PATTERN.test(trimmed)) return false
+  if (!SIMPLE_GENERAL_QA_PATTERN.test(trimmed)) return false
+
+  const words = trimmed.split(/\s+/).filter(Boolean)
+  return words.length <= SIMPLE_GENERAL_MAX_WORDS
+}
+
+function scoreSimpleGeneralCandidate(model: AvailableModelForRouter): number {
+  const text =
+    `${model.id} ${model.provider} ${model.displayName}`.toLowerCase()
+  let score = 0
+
+  if (isLocalRouterCandidate(model)) score += 60
+  if (/mini|small|lite|flash|haiku|nano|3b|4b|7b|8b/.test(text)) score += 40
+  if (/gpt-4o-mini|haiku|flash|gemini.*flash/.test(text)) score += 30
+  if (/instruct|chat|assistant/.test(text)) score += 10
+  if (/pro|opus|sonnet/.test(text)) score -= 15
+  if (isCodingSpecializedCandidate(model)) score -= 80
+
+  return score
+}
+
+function pickSimpleGeneralRoute(
+  userMessage: string,
+  availableModels: AvailableModelForRouter[]
+): { modelId: string; providerId: string; reason: string } | null {
+  if (!isSimpleGeneralQuestion(userMessage)) return null
+
+  const nonCodingModels = availableModels.filter(
+    (model) => !isCodingSpecializedCandidate(model)
+  )
+  const candidates =
+    nonCodingModels.length > 0 ? nonCodingModels : availableModels
+
+  const ranked = candidates
+    .map((model, index) => ({
+      model,
+      index,
+      score: scoreSimpleGeneralCandidate(model),
+    }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+
+  const selected = ranked[0]?.model
+  if (!selected) return null
+
+  return {
+    modelId: selected.id,
+    providerId: selected.provider,
+    reason: 'quick factual question',
   }
 }
 
@@ -359,6 +426,20 @@ export async function routeMessage(
       modelId: directEngineeringRoute.modelId,
       providerId: directEngineeringRoute.providerId,
       reason: directEngineeringRoute.reason,
+      routed: true,
+      latencyMs: performance.now() - startTime,
+    }
+  }
+
+  const simpleGeneralRoute = pickSimpleGeneralRoute(
+    userMessage,
+    availableModels
+  )
+  if (simpleGeneralRoute) {
+    return {
+      modelId: simpleGeneralRoute.modelId,
+      providerId: simpleGeneralRoute.providerId,
+      reason: simpleGeneralRoute.reason,
       routed: true,
       latencyMs: performance.now() - startTime,
     }

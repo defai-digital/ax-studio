@@ -286,6 +286,67 @@ describe('routeMessage', () => {
     expect(routerMocks.streamText).not.toHaveBeenCalled()
   })
 
+  it('routes simple general questions away from coder-specialized models when possible', async () => {
+    const result = await routeMessage(
+      [userMessage('what is agi ?')],
+      'mlx-community/Qwen3.5-9B-MLX-4bit',
+      'mlx',
+      [
+        {
+          id: 'qwen3-coder-next-4b',
+          provider: 'mlx',
+          displayName: 'Qwen3 Coder Next 4B',
+        },
+        {
+          id: 'llama-3.2-3b-instruct',
+          provider: 'llamacpp',
+          displayName: 'Llama 3.2 3B Instruct',
+        },
+      ],
+      'qwen3-coder-next-4b',
+      'mlx',
+      15000
+    )
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        modelId: 'llama-3.2-3b-instruct',
+        providerId: 'llamacpp',
+        reason: 'quick factual question',
+        routed: true,
+      })
+    )
+    expect(routerMocks.streamText).not.toHaveBeenCalled()
+  })
+
+  it('uses a coder-specialized model for simple questions only when no general model is available', async () => {
+    const result = await routeMessage(
+      [userMessage('what is agi ?')],
+      'mlx-community/Qwen3.5-9B-MLX-4bit',
+      'mlx',
+      [
+        {
+          id: 'qwen3-coder-next-4b',
+          provider: 'mlx',
+          displayName: 'Qwen3 Coder Next 4B',
+        },
+      ],
+      'qwen3-coder-next-4b',
+      'mlx',
+      15000
+    )
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        modelId: 'qwen3-coder-next-4b',
+        providerId: 'mlx',
+        reason: 'quick factual question',
+        routed: true,
+      })
+    )
+    expect(routerMocks.streamText).not.toHaveBeenCalled()
+  })
+
   it('falls back to the selected model when the router times out', async () => {
     vi.useFakeTimers()
     const warnSpy = vi
@@ -307,7 +368,7 @@ describe('routeMessage', () => {
 
     try {
       const resultPromise = routeMessage(
-        [userMessage('Tell me a fun fact')],
+        [userMessage('Compare three approaches for a product launch strategy')],
         'router-model',
         'router-provider',
         sampleModels,
@@ -521,6 +582,9 @@ describe('buildRouterPrompt', () => {
     expect(system).toContain(
       'Do not choose a local model for production software engineering'
     )
+    expect(system).toContain(
+      'Avoid coding-specialized models for simple factual/general Q&A'
+    )
   })
 
   it('adds routing traits to model entries', () => {
@@ -534,7 +598,16 @@ describe('buildRouterPrompt', () => {
     ])
 
     expect(user).toContain('glm-5.1 (zai-coding)')
-    expect(user).toContain('[remote, strong coding/reasoning]')
+    expect(user).toContain('[remote, strong coding/reasoning, coding-specialized]')
+    expect(
+      buildRouterPrompt('What is AGI?', [
+        {
+          id: 'qwen3-coder-next-4b',
+          provider: 'mlx',
+          displayName: 'Qwen3 Coder Next 4B',
+        },
+      ]).user
+    ).toContain('coding-specialized')
     expect(user).toContain('Qwen3_5-9B-IQ4_XS (llamacpp)')
     expect(user).toContain('[local/free')
   })

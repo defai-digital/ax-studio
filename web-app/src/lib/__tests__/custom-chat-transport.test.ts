@@ -535,18 +535,10 @@ describe('CustomChatTransport — LLM Router integration', () => {
       messageId: 'message-1',
     })
 
-    expect(mocks.fetch).toHaveBeenCalledWith(
-      'http://127.0.0.1:1337/v1/chat/completions',
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          'X-Ax-Provider': 'llamacpp',
-          'X-Ax-Request-Role': 'preflight',
-        }),
-      })
-    )
+    expect(mocks.fetch).not.toHaveBeenCalled()
     expect(
       vi.mocked(prepareProviderForChat).mock.invocationCallOrder[0]
-    ).toBeLessThan(mocks.fetch.mock.invocationCallOrder[0])
+    ).toBeLessThan(vi.mocked(ModelFactory.createModel).mock.invocationCallOrder[0])
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
       'llama-3.2-3b-local.gguf',
       expect.objectContaining({ provider: 'llamacpp' }),
@@ -573,9 +565,6 @@ describe('CustomChatTransport — LLM Router integration', () => {
       routed: true,
       latencyMs: 10,
     })
-    vi.mocked(prepareProviderForChat).mockImplementationOnce(
-      () => new Promise<void>(() => {})
-    )
 
     const transport = makeTransport({ threadId: 'thread-1' })
     await transport.sendMessages({
@@ -602,7 +591,7 @@ describe('CustomChatTransport — LLM Router integration', () => {
     )
   })
 
-  it('preflights a directly selected local model before final streaming', async () => {
+  it('skips proxy preflight when directly selected local model startup completes', async () => {
     mocks.selectedModel = { id: 'gemma-4-26b-a4b-it-4bit', capabilities: [] }
     mocks.selectedProvider = 'llamacpp'
 
@@ -621,19 +610,10 @@ describe('CustomChatTransport — LLM Router integration', () => {
       messageId: 'message-1',
     })
 
-    expect(mocks.fetch).toHaveBeenCalledWith(
-      'http://127.0.0.1:1337/v1/chat/completions',
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          'X-Ax-Provider': 'llamacpp',
-          'X-Ax-Request-Role': 'preflight',
-        }),
-        body: expect.stringContaining('"stream":false'),
-      })
-    )
+    expect(mocks.fetch).not.toHaveBeenCalled()
     expect(
       vi.mocked(prepareProviderForChat).mock.invocationCallOrder[0]
-    ).toBeLessThan(mocks.fetch.mock.invocationCallOrder[0])
+    ).toBeLessThan(vi.mocked(ModelFactory.createModel).mock.invocationCallOrder[0])
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
       'gemma-4-26b-a4b-it-4bit',
       expect.objectContaining({ provider: 'llamacpp' }),
@@ -642,7 +622,7 @@ describe('CustomChatTransport — LLM Router integration', () => {
     )
   })
 
-  it('uses proxy preflight when local model startup does not return', async () => {
+  it('waits for local proxy registration when local model startup does not return', async () => {
     mocks.selectedModel = { id: 'gemma-4-26b-a4b-it-4bit', capabilities: [] }
     mocks.selectedProvider = 'llamacpp'
 
@@ -668,6 +648,15 @@ describe('CustomChatTransport — LLM Router integration', () => {
     vi.mocked(prepareProviderForChat).mockImplementationOnce(
       () => new Promise<void>(() => {})
     )
+    mocks.fetch.mockResolvedValueOnce({
+      ok: true,
+      text: () =>
+        Promise.resolve(
+          JSON.stringify({
+            data: [{ id: 'gemma-4-26b-a4b-it-4bit' }],
+          })
+        ),
+    } as Response)
     vi.useFakeTimers()
 
     const sendPromise = transport.sendMessages({
@@ -693,9 +682,13 @@ describe('CustomChatTransport — LLM Router integration', () => {
     vi.useRealTimers()
 
     expect(mocks.fetch).toHaveBeenCalledWith(
-      'http://127.0.0.1:1337/v1/chat/completions',
+      'http://127.0.0.1:1337/v1/models',
       expect.objectContaining({
-        body: expect.stringContaining('"stream":false'),
+        method: 'GET',
+        headers: expect.objectContaining({
+          'X-Ax-Provider': 'llamacpp',
+          'X-Ax-Request-Role': 'preflight',
+        }),
       })
     )
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
@@ -712,10 +705,6 @@ describe('CustomChatTransport — LLM Router integration', () => {
       capabilities: [],
     }
     mocks.selectedProvider = 'mlx'
-
-    vi.mocked(prepareProviderForChat).mockImplementationOnce(
-      () => new Promise<void>(() => {})
-    )
 
     const transport = makeTransport({ threadId: 'thread-1' })
     await transport.sendMessages({
@@ -774,15 +763,7 @@ describe('CustomChatTransport — LLM Router integration', () => {
       }),
       'bootstrap-late-local.gguf'
     )
-    expect(mocks.fetch).toHaveBeenCalledWith(
-      'http://127.0.0.1:1337/v1/chat/completions',
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          'X-Ax-Provider': 'llamacpp',
-          'X-Ax-Request-Role': 'preflight',
-        }),
-      })
-    )
+    expect(mocks.fetch).not.toHaveBeenCalled()
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
       'bootstrap-late-local.gguf',
       expect.objectContaining({ provider: 'llamacpp' }),

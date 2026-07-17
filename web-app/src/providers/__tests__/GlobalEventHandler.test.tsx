@@ -225,6 +225,21 @@ describe('GlobalEventHandler', () => {
     })
   })
 
+  it('shows crash recovery guidance for Windows llama.dll failures', async () => {
+    render(<GlobalEventHandler />)
+
+    emit('OnModelFail', {
+      modelId: 'model-a',
+      error: 'llama.dll exited after Vulkan GPU offload process crashed',
+    })
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(
+        'settings:llamacpp.errors.processCrashed'
+      )
+    })
+  })
+
   it('shows success toast after model import without duplicating provider refresh', async () => {
     render(<GlobalEventHandler />)
 

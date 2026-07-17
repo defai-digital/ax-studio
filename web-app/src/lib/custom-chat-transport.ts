@@ -35,7 +35,7 @@ import { normalizeMcpResultForToolOutput } from './ax-bi/mcp-result'
 // incompatibility). Proxy accepts CORS from tauri:// origins on loopback.
 const httpFetch = globalThis.fetch
 
-// Cache preflight results so each model is only validated once.
+// Cache local/remote readiness results so each model is only validated once.
 // Successful models are cached for 10 minutes.
 // Failed models are cached for 2 minutes (to allow retry after transient errors).
 const PREFLIGHT_TTL_MS = 10 * 60 * 1000
@@ -45,6 +45,11 @@ const LOCAL_PREFLIGHT_RETRY_MS = 500
 const LOCAL_START_MODEL_UNBLOCK_MS = 2_000
 const DEFAULT_LOCAL_MAX_OUTPUT_TOKENS = 4096
 const preflightCache = new Map<string, { ok: boolean; ts: number }>()
+
+type ProviderPreparation = {
+  state: 'ready' | 'continued'
+  startup?: Promise<void>
+}
 
 function modelProviderKey(modelId: string, providerId: string): string {
   return `${providerId}::${modelId}`
@@ -131,19 +136,19 @@ async function prepareProviderForFinalChat(
   serviceHub: ServiceHub,
   provider: ProviderObject,
   modelId: string
-): Promise<'ready' | 'continued'> {
+): Promise<ProviderPreparation> {
   if (usesMlxIpc(provider.provider)) {
-    return 'ready'
+    return { state: 'ready' }
   }
 
   if (!isLocalProvider(provider)) {
     await prepareProviderForChat(serviceHub, provider, modelId)
-    return 'ready'
+    return { state: 'ready' }
   }
 
   if (shouldAwaitLocalStartup(provider, modelId)) {
     await prepareProviderForChat(serviceHub, provider, modelId)
-    return 'ready'
+    return { state: 'ready' }
   }
 
   const startup = prepareProviderForChat(serviceHub, provider, modelId)
@@ -161,14 +166,27 @@ async function prepareProviderForFinalChat(
     })
   }
 
-  return startupResult
+  return { state: startupResult, startup }
 }
 
-async function preflightLocalModelThroughProxy(
+function proxyModelListContains(body: string, modelId: string): boolean {
+  try {
+    const data = JSON.parse(body) as { data?: Array<{ id?: unknown }> }
+    return (
+      Array.isArray(data.data) &&
+      data.data.some((model) => model.id === modelId)
+    )
+  } catch {
+    return false
+  }
+}
+
+async function waitForLocalModelRegistration(
   modelId: string,
   providerId: string,
   abortSignal?: AbortSignal,
-  force = false
+  force = false,
+  startup?: Promise<void>
 ) {
   if (!force) {
     const cached = isModelPreflightCached(modelId, providerId)
@@ -196,31 +214,52 @@ async function preflightLocalModelThroughProxy(
     headers.Authorization = `Bearer ${localProxyKey}`
   }
 
-  logRouterTrace('waiting for local model readiness', {
+  logRouterTrace('waiting for local model registration', {
     modelId,
     providerId,
     proxyUrl,
   })
 
+  let startupComplete = false
+  let startupError: unknown
+  if (startup) {
+    void startup.then(
+      () => {
+        startupComplete = true
+      },
+      (error) => {
+        startupError = error
+      }
+    )
+  }
+
   let lastError = ''
   for (let attempt = 1; attempt <= LOCAL_PREFLIGHT_ATTEMPTS; attempt += 1) {
     if (abortSignal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    if (startupError) {
+      lastError = extractErrorMessage(startupError, String(startupError))
+      break
+    }
+    if (startupComplete) {
+      cachePreflightResult(modelId, providerId, true)
+      logRouterTrace('local model startup completed', {
+        modelId,
+        providerId,
+        attempt,
+      })
+      return
+    }
 
     try {
-      const preflight = await httpFetch(`${proxyUrl}/chat/completions`, {
-        method: 'POST',
+      const modelList = await httpFetch(`${proxyUrl}/models`, {
+        method: 'GET',
         headers,
         signal: abortSignal,
-        body: JSON.stringify({
-          model: modelId,
-          messages: [{ role: 'user', content: '.' }],
-          max_tokens: 1,
-          stream: false,
-        }),
       })
-      if (preflight.ok) {
+      const body = await modelList.text().catch(() => '')
+      if (modelList.ok && proxyModelListContains(body, modelId)) {
         cachePreflightResult(modelId, providerId, true)
-        logRouterTrace('local model readiness passed', {
+        logRouterTrace('local model registration found', {
           modelId,
           providerId,
           attempt,
@@ -228,9 +267,10 @@ async function preflightLocalModelThroughProxy(
         return
       }
 
-      const body = await preflight.text().catch(() => '')
-      lastError = `${preflight.status}: ${body.slice(0, 200)}`
-      if (!shouldRetryLocalPreflight(preflight.status)) break
+      lastError = modelList.ok
+        ? `model not registered yet`
+        : `${modelList.status}: ${body.slice(0, 200)}`
+      if (!modelList.ok && !shouldRetryLocalPreflight(modelList.status)) break
     } catch (error) {
       lastError = extractErrorMessage(error, String(error))
     }
@@ -241,7 +281,7 @@ async function preflightLocalModelThroughProxy(
   }
 
   cachePreflightResult(modelId, providerId, false)
-  logRouterTrace('local model readiness failed', {
+  logRouterTrace('local model registration failed', {
     modelId,
     providerId,
     lastError,
@@ -258,7 +298,7 @@ async function preflightLocalModelThroughProxy(
   }
 
   throw new Error(
-    `Local model "${modelId}" is not ready through AX Studio proxy: ${lastError}`
+    `Local model "${modelId}" was not registered with AX Studio proxy: ${lastError}`
   )
 }
 
@@ -567,27 +607,26 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
         throw new Error('ServiceHub not initialized or model/provider missing.')
       }
 
-      let forceLocalPreflight = false
+      let preparation: ProviderPreparation | undefined
       if (preparedForPreflightKey !== modelProviderKey(modelId, providerId)) {
-        const startupState = await prepareProviderForFinalChat(
+        preparation = await prepareProviderForFinalChat(
           serviceHub,
           provider,
           modelId
         )
-        if (startupState === 'continued') {
-          forceLocalPreflight = true
-        }
       }
       if (
         isLocalProvider(provider) &&
         !usesMlxIpc(providerId) &&
-        preparedForPreflightKey !== modelProviderKey(modelId, providerId)
+        preparedForPreflightKey !== modelProviderKey(modelId, providerId) &&
+        preparation?.state === 'continued'
       ) {
-        await preflightLocalModelThroughProxy(
+        await waitForLocalModelRegistration(
           modelId,
           providerId,
           options.abortSignal,
-          forceLocalPreflight
+          true,
+          preparation.startup
         )
         preparedForPreflightKey = modelProviderKey(modelId, providerId)
       }
@@ -681,20 +720,35 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
           }
           if (isLocalProvider(routedProvider) && !usesMlxIpc(finalProviderId)) {
             // Local routed models need to be started first so their localhost
-            // provider is registered with the proxy before preflight runs.
+            // provider is registered with the proxy before final streaming runs.
             logRouterTrace('starting local routed model before preflight', {
               modelId: finalModelId,
               providerId: finalProviderId,
             })
-            await prepareProviderForFinalChat(
+            const preparation = await prepareProviderForFinalChat(
               getServiceHub(),
               routedProvider,
               finalModelId
             )
+            if (preparation.state === 'continued') {
+              await waitForLocalModelRegistration(
+                finalModelId,
+                finalProviderId,
+                options.abortSignal,
+                true,
+                preparation.startup
+              )
+            }
+            cachePreflightResult(finalModelId, finalProviderId, true)
             preparedForPreflightKey = modelProviderKey(
               finalModelId,
               finalProviderId
             )
+            logRouterTrace('local routed model ready', {
+              modelId: finalModelId,
+              providerId: finalProviderId,
+            })
+            return executeWithModel(finalModelId, finalProviderId)
           }
 
           const {

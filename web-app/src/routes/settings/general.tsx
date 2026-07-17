@@ -178,33 +178,47 @@ function General() {
               </Card>
 
               <Card title="Custom System Prompts">
-                <CardItem
-                  title="Global Default Prompt"
-                  description="Used when thread/project overrides are empty."
-                  align="start"
-                  actions={
-                    <div className="w-full max-w-xl space-y-2">
-                      <Textarea
-                        value={safeGlobalDefaultPrompt}
-                        onChange={(event) =>
-                          setGlobalDefaultPrompt(event.target.value)
-                        }
-                        className="min-h-28"
-                        placeholder={fallbackDefaultPrompt}
-                      />
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>{safeGlobalDefaultPrompt.length} characters</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setGlobalDefaultPrompt('')}
-                        >
-                          Reset to Default
-                        </Button>
-                      </div>
+                <div className="border-b border-border/40 px-5 py-4">
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <label
+                        htmlFor="global-default-prompt"
+                        className="block font-medium text-foreground"
+                        style={{ fontSize: '13px' }}
+                      >
+                        Global Default Prompt
+                      </label>
+                      <p
+                        id="global-default-prompt-description"
+                        className="text-muted-foreground leading-relaxed"
+                        style={{ fontSize: '12px' }}
+                      >
+                        Used when thread/project overrides are empty.
+                      </p>
                     </div>
-                  }
-                />
+                    <Textarea
+                      id="global-default-prompt"
+                      aria-describedby="global-default-prompt-description"
+                      value={safeGlobalDefaultPrompt}
+                      onChange={(event) =>
+                        setGlobalDefaultPrompt(event.target.value)
+                      }
+                      className="min-h-40 resize-y leading-relaxed"
+                      placeholder={fallbackDefaultPrompt}
+                    />
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <span>{safeGlobalDefaultPrompt.length} characters</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setGlobalDefaultPrompt('')}
+                      >
+                        Reset to Default
+                      </Button>
+                    </div>
+                  </div>
+                </div>
                 <CardItem
                   title="Auto Tuning"
                   description="Automatically tune temperature, top_p and max tokens without changing prompt."

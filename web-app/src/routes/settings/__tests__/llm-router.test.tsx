@@ -362,6 +362,10 @@ describe('LLM Router settings route', () => {
     expect(
       screen.queryByText(/configured router model is no longer available/i)
     ).not.toBeInTheDocument()
+    expect(screen.getByText('Classification only:')).toBeInTheDocument()
+    expect(
+      screen.getByText(/This model only chooses the route/i)
+    ).toBeInTheDocument()
   })
 
   it('warns when the configured router model is no longer available', () => {

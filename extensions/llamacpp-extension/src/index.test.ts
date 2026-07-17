@@ -64,7 +64,7 @@ vi.mock('./backend', () => ({
 }))
 
 vi.mock('./provider-sync', () => ({
-  decideLocalProviderSync: vi.fn(() => null),
+  decideLocalProviderSync: vi.fn(() => ({ action: 'unregister' })),
 }))
 
 vi.mock('./util', async () => {
@@ -178,7 +178,12 @@ vi.mock('@ax-studio/core', () => ({
 
 import AxStudioLlamacppExtension from './index'
 import { configureBackends } from './backend'
-import { getLoadedModels, startAxServing } from '@ax-studio/tauri-plugin-llamacpp-api'
+import {
+  findSessionByModel,
+  getLoadedModels,
+  startAxServing,
+  unloadLlamaModel,
+} from '@ax-studio/tauri-plugin-llamacpp-api'
 
 describe('AxStudioLlamacppExtension', () => {
   let consoleDebugSpy: ReturnType<typeof vi.spyOn>
@@ -372,6 +377,55 @@ describe('AxStudioLlamacppExtension', () => {
     ])
 
     await expect(extension.getLoadedModels()).resolves.toEqual(['llama-model'])
+  })
+
+  it('reconciles provider state when unloading a missing llamacpp session', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    vi.mocked(findSessionByModel).mockResolvedValueOnce(null)
+    vi.mocked(getLoadedModels).mockResolvedValueOnce([])
+
+    await expect(extension.unload('crashed-model')).resolves.toEqual({
+      success: true,
+    })
+
+    expect(invoke).toHaveBeenCalledWith('unregister_provider_config', {
+      provider: 'llamacpp',
+    })
+    expect(mocks.emit).toHaveBeenCalledWith('OnModelStopped', {
+      modelId: 'crashed-model',
+      provider: 'llamacpp',
+    })
+  })
+
+  it('emits model stopped even when crashed process cleanup fails', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    vi.mocked(findSessionByModel).mockResolvedValueOnce({
+      pid: 4321,
+      port: 1234,
+      model_id: 'crashed-model',
+      model_path: '/app-data/llamacpp/models/crashed/model.gguf',
+      is_embedding: false,
+      api_key: 'key',
+    })
+    vi.mocked(unloadLlamaModel).mockRejectedValueOnce(new Error('process gone'))
+    vi.mocked(getLoadedModels).mockResolvedValueOnce([])
+
+    await expect(extension.unload('crashed-model')).resolves.toEqual({
+      success: false,
+      error: 'process gone',
+    })
+
+    expect(invoke).toHaveBeenCalledWith('unregister_provider_config', {
+      provider: 'llamacpp',
+    })
+    expect(mocks.emit).toHaveBeenCalledWith('OnModelStop', {
+      modelId: 'crashed-model',
+      provider: 'llamacpp',
+    })
+    expect(mocks.emit).toHaveBeenCalledWith('OnModelStopped', {
+      modelId: 'crashed-model',
+      provider: 'llamacpp',
+    })
   })
 
   it('waits for engine switch cleanup before loading through ax-serving', async () => {

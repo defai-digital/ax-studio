@@ -11,7 +11,6 @@ import {
   safeStorageSetItem,
 } from '@/lib/storage/storage'
 
-import { isPlatformTauri } from '@/lib/platform/utils'
 import {
   Settings,
   Palette,
@@ -187,10 +186,9 @@ export function SettingsMenu() {
     {
       title: 'common:engineSettings',
       route: route.settings.engine_settings,
-      isEnabled: isPlatformTauri(),
+      isEnabled: true,
       icon: <Cog className="size-3.5" />,
       group: 'Advanced',
-      advanced: true,
     },
     {
       title: 'common:local_api_server',

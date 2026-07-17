@@ -21,8 +21,10 @@ Routing policy:
 - For production code, TypeScript/JavaScript, debugging, tests, architecture, reliability, security, refactors, or requests mentioning best practices or edge cases, choose the strongest coding/reasoning model available.
 - Prefer remote strong coding/reasoning models for high-risk software engineering work.
 - Prefer local/free models for greetings, simple Q&A, light summarization, drafting, and low-risk edits.
+- Avoid coding-specialized models for simple factual/general Q&A when a general chat or lightweight model is available.
 - Do not choose a local model for production software engineering unless no stronger coding/reasoning model is available.
 - When model metadata labels a model as "strong coding/reasoning", treat that as a strong signal for complex engineering tasks.
+- When model metadata labels a model as "coding-specialized", reserve it for coding tasks unless it is the only eligible option.
 
 Respond with ONLY a JSON object, no markdown, no code fences, no other text:
 {"model": "<model_id>", "provider": "<provider_name>", "reason": "<brief reason>"}
@@ -58,6 +60,14 @@ function inferModelTraits(model: AvailableModelForRouter): string[] {
     )
   ) {
     traits.push('strong coding/reasoning')
+  }
+
+  if (
+    /coder|coding|codestral|starcoder|devstral|code[-_\s]?instruct/.test(
+      haystack
+    )
+  ) {
+    traits.push('coding-specialized')
   }
 
   if (/mini|small|lite|flash|haiku|3b|7b/.test(haystack)) {

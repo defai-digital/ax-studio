@@ -20,6 +20,7 @@ const ERROR_CODE_MAP: Record<string, string> = {
   MULTIMODAL_PROJECTOR_LOAD_FAILED: 'multimodalProjectorLoadFailed',
   DEVICE_LIST_PARSE_FAILED: 'deviceListParseFailed',
   INVALID_ARGUMENT: 'invalidArgument',
+  LLAMA_CPP_PROCESS_ERROR: 'processCrashed',
 }
 
 /**
@@ -169,11 +170,12 @@ export function GlobalEventHandler() {
   useEffect(() => {
     /**
      * OnModelFail — the llamacpp extension emits this when a model fails to load.
-     * Payload: { modelId: string; error: string }
+     * Payload: { modelId: string; error: string; provider?: string }
      * The error string may contain an error code from ERROR_CODE_MAP.
      */
     const handleModelFail = (payload: { modelId?: string; error?: string }) => {
       const error = payload?.error ?? ''
+      const normalizedError = error.toLowerCase()
 
       // Detect known error codes
       const matchedCode = Object.keys(ERROR_CODE_MAP).find((code) =>
@@ -186,12 +188,25 @@ export function GlobalEventHandler() {
 
       const isOOM =
         messageKey === 'outOfMemory' ||
-        error.toLowerCase().includes('out of memory') ||
-        error.toLowerCase().includes('oom') ||
-        error.toLowerCase().includes('failed to allocate')
+        normalizedError.includes('out of memory') ||
+        normalizedError.includes('oom') ||
+        normalizedError.includes('failed to allocate')
+
+      const isProcessCrash =
+        messageKey === 'processCrashed' ||
+        normalizedError.includes('process crashed') ||
+        normalizedError.includes('llama.dll') ||
+        normalizedError.includes('vulkan') ||
+        normalizedError.includes('gpu offload')
+
+      const resolvedMessageKey = isOOM
+        ? 'outOfMemory'
+        : isProcessCrash
+          ? 'processCrashed'
+          : messageKey
 
       const userMessage = t(
-        `settings:llamacpp.errors.${isOOM ? 'outOfMemory' : messageKey}` as Parameters<typeof t>[0]
+        `settings:llamacpp.errors.${resolvedMessageKey}` as Parameters<typeof t>[0]
       )
 
       const isContextExceeded =
