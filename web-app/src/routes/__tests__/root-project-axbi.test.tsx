@@ -31,6 +31,7 @@ vi.mock('@/constants/routes', () => ({
 }))
 
 vi.mock('motion/react', () => ({
+  useReducedMotion: () => false,
   motion: {
     div: ({ children }: { children: React.ReactNode }) => (
       <div data-testid="motion-page">{children}</div>

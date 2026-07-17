@@ -91,15 +91,32 @@ describe('ChatInputAttachments — Phase 3', () => {
       },
       { type: 'document' as const, name: 'b.pdf', fileType: 'pdf' },
     ]
-    const { container } = render(
+    render(
       <ChatInputAttachments attachments={attachments} onRemove={onRemove} />
     )
-    // Find remove buttons (bg-destructive)
-    const removeButtons = container.querySelectorAll('.bg-destructive')
+    const removeButtons = screen.getAllByRole('button', { name: /Remove / })
     expect(removeButtons).toHaveLength(2)
 
     fireEvent.click(removeButtons[1])
     expect(onRemove).toHaveBeenCalledWith(1)
+  })
+
+  it('remove controls expose accessible names', () => {
+    render(
+      <ChatInputAttachments
+        attachments={[
+          {
+            type: 'document' as const,
+            name: 'notes.md',
+            fileType: 'md',
+          },
+        ]}
+        onRemove={vi.fn()}
+      />
+    )
+    expect(
+      screen.getByRole('button', { name: 'Remove notes.md' })
+    ).toBeInTheDocument()
   })
 
   // Empty state: returns null

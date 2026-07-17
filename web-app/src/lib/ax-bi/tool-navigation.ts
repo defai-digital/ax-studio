@@ -1,52 +1,30 @@
 import type { MCPTool } from '@/types/mcp'
-import { isRecord, parseJsonMcpResult } from './mcp-result'
+import { AX_BI_SERVER, DEFAULT_AX_BI_WEB_URL } from './endpoints'
+import { parseJsonMcpResult } from './mcp-result'
 
 export type AxBiToolResult = {
   success?: boolean
   url?: string
   explore_url?: string
   dashboard_url?: string
-  remote_navigation_queued?: boolean
-  remote_navigation_url?: string | null
-  live_update_attempted?: boolean
-  live_update_command_id?: string | null
-  live_update_url?: string | null
+  preview_url?: string
   error?: unknown
 }
 
-const AX_BI_SERVER = 'ax-bi'
 const AUTO_OPEN_RESULT_TOOLS = new Set([
   'add_chart_to_existing_dashboard',
+  'add_dashboard_filter',
+  'compose_dashboard',
+  'create_chart_from_intent',
   'generate_chart',
   'generate_dashboard',
   'generate_explore_link',
   'open_sql_lab_with_context',
-  'remote_navigate',
+  'prompt_to_dashboard',
   'update_chart',
   'update_chart_preview',
+  'update_dashboard',
 ])
-
-function getSchemaProperties(
-  schema: unknown
-): Record<string, unknown> | undefined {
-  if (!isRecord(schema)) return undefined
-  const properties = schema.properties
-  return isRecord(properties) ? properties : undefined
-}
-
-function getRequestSchema(tool: MCPTool): Record<string, unknown> | undefined {
-  const properties = getSchemaProperties(tool.inputSchema)
-  const request = properties?.request
-  return isRecord(request) ? request : undefined
-}
-
-function supportsTopLevelAutoNavigate(tool: MCPTool): boolean {
-  return Boolean(getSchemaProperties(tool.inputSchema)?.auto_navigate)
-}
-
-function supportsRequestAutoNavigate(tool: MCPTool): boolean {
-  return Boolean(getSchemaProperties(getRequestSchema(tool))?.auto_navigate)
-}
 
 export function findAxBiTool(
   tools: MCPTool[],
@@ -55,35 +33,6 @@ export function findAxBiTool(
   return tools.find(
     (tool) => tool.server === AX_BI_SERVER && tool.name === toolName
   )
-}
-
-export function withAxBiAutoNavigate(
-  tools: MCPTool[],
-  toolName: string,
-  input: Record<string, unknown>
-): Record<string, unknown> {
-  const tool = findAxBiTool(tools, toolName)
-  if (!tool) return input
-
-  if (supportsRequestAutoNavigate(tool)) {
-    const request = isRecord(input.request) ? input.request : {}
-    return {
-      ...input,
-      request: {
-        ...request,
-        auto_navigate: true,
-      },
-    }
-  }
-
-  if (supportsTopLevelAutoNavigate(tool)) {
-    return {
-      ...input,
-      auto_navigate: true,
-    }
-  }
-
-  return input
 }
 
 export function parseAxBiToolResult(result: {
@@ -96,16 +45,56 @@ export function parseAxBiToolResult(result: {
   ) as AxBiToolResult | null
 }
 
+function isTrustedAxBiHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase()
+  if (host === 'localhost' || host === '127.0.0.1') return true
+  try {
+    return host === new URL(DEFAULT_AX_BI_WEB_URL).hostname.toLowerCase()
+  } catch {
+    return false
+  }
+}
+
+export function normalizeAxBiResultUrl(value: string): string | undefined {
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  // Protocol-relative URLs (`//evil.example/...`) resolve against the default
+  // BI base and become absolute attacker hosts while still passing http(s).
+  if (trimmed.startsWith('//')) return undefined
+
+  let url: URL
+  try {
+    url = new URL(trimmed, DEFAULT_AX_BI_WEB_URL)
+  } catch {
+    return undefined
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined
+  // Auto-open only trusted local/default BI hosts — absolute https://evil/… must not open.
+  if (!isTrustedAxBiHostname(url.hostname)) return undefined
+
+  if (/^\/superset\/dashboard(?:\/|$)/i.test(url.pathname)) {
+    url.pathname = url.pathname.replace(
+      /^\/superset\/dashboard/i,
+      '/ax-bi/dashboard'
+    )
+  } else if (/^\/dashboard(?:\/|$)/i.test(url.pathname)) {
+    url.pathname = url.pathname.replace(/^\/dashboard/i, '/ax-bi/dashboard')
+  } else if (/^\/superset\/explore(?:\/|$)/i.test(url.pathname)) {
+    url.pathname = url.pathname.replace(/^\/superset\/explore/i, '/explore')
+  }
+
+  return url.toString()
+}
+
 export function getAxBiResultUrl(
   toolName: string,
   result: AxBiToolResult
 ): string | undefined {
   if (!AUTO_OPEN_RESULT_TOOLS.has(toolName)) return undefined
-  return result.explore_url ?? result.dashboard_url ?? result.url ?? undefined
-}
-
-export function didAxBiQueueLiveUpdate(result: AxBiToolResult): boolean {
-  return Boolean(
-    result.remote_navigation_queued === true || result.live_update_command_id
-  )
+  const resultUrl =
+    result.explore_url ??
+    result.dashboard_url ??
+    result.preview_url ??
+    result.url
+  return resultUrl ? normalizeAxBiResultUrl(resultUrl) : undefined
 }

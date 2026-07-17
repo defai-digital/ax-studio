@@ -6,9 +6,8 @@ import { type Thread as CoreThread } from '@ax-studio/core'
 import type { ThreadsService } from './types'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 import {
-  getConversationalExtension,
-  getNativeApi,
-  runFirstSuccessful,
+  hasConversationalStorage,
+  runConversationalStorageMethod,
 } from '../conversation-storage'
 
 export class DefaultThreadsService implements ThreadsService {
@@ -22,52 +21,17 @@ export class DefaultThreadsService implements ThreadsService {
 
     if (!listThreads) return []
 
-    return (
-      listThreads()
-        .then((threads) => {
-          if (!Array.isArray(threads)) return []
+    try {
+      const threads = await listThreads()
+      if (!Array.isArray(threads)) return []
 
-          // Filter out temporary threads from the list
-          const filteredThreads = threads.filter(
-            (e) => e.id !== TEMPORARY_CHAT_ID
-          )
-
-          return filteredThreads.map((e) => {
-            // Model is always stored in assistants[0].model
-            const model = e.assistants?.[0]?.model
-              ? {
-                  id: e.assistants[0].model.id,
-                  provider: e.assistants[0].model.engine,
-                }
-              : undefined
-
-            // Check if this is a "real" assistant (has instructions) or just model storage
-            const assistants = e.assistants
-
-            return {
-              ...e,
-              updated:
-                typeof e.updated === 'number' && e.updated > 1e12
-                  ? Math.floor(e.updated / 1000)
-                  : (e.updated ?? 0),
-              order: e.metadata?.order,
-              isFavorite: e.metadata?.is_favorite,
-              model,
-              assistants,
-              metadata: {
-                ...e.metadata,
-                // Override extracted fields to avoid duplication
-                order: e.metadata?.order,
-                is_favorite: e.metadata?.is_favorite,
-              },
-            } as Thread
-          })
-        })
-        ?.catch((e) => {
-          console.error('Error fetching threads:', e)
-          return [] // Fallback: empty thread list allows app to load
-        })
-    )
+      return threads
+        .filter((thread) => thread.id !== TEMPORARY_CHAT_ID)
+        .map(normalizeStoredThread)
+    } catch (e) {
+      console.error('Error fetching threads:', e)
+      return [] // Fallback: empty thread list allows app to load
+    }
   }
 
   async createThread(thread: Thread): Promise<Thread> {
@@ -85,10 +49,7 @@ export class DefaultThreadsService implements ThreadsService {
       ? [
           {
             ...firstAssistant,
-            model: {
-              id: thread.model?.id ?? '*',
-              engine: thread.model?.provider ?? 'ax-studio',
-            },
+            model: buildStoredModelRef(thread),
           },
         ]
       : [
@@ -96,15 +57,10 @@ export class DefaultThreadsService implements ThreadsService {
             // Minimal entry just to store model info
             id: 'model-only',
             name: 'Model',
-            model: {
-              id: thread.model?.id ?? '*',
-              engine: thread.model?.provider ?? 'ax-studio',
-            },
+            model: buildStoredModelRef(thread),
           },
         ]
 
-    const extension = getConversationalExtension()
-    const nativeApi = getNativeApi()
     const payload = {
       ...thread,
       assistants: assistantsPayload,
@@ -114,23 +70,14 @@ export class DefaultThreadsService implements ThreadsService {
       },
     } as Partial<CoreThread>
 
-    const e = await runFirstSuccessful(
-      [
-        extension ? () => extension.createThread(payload) : undefined,
-        nativeApi?.createThread
-          ? () => nativeApi.createThread!({ thread: payload }) as Promise<CoreThread>
-          : undefined,
-      ],
-      'Conversational storage is not available',
+    const e = await runConversationalStorageMethod(
+      'createThread',
+      [payload],
+      [{ thread: payload }],
       (error) => console.warn(`Failed to create thread ${thread.id}:`, error)
     )
 
-    const model = e.assistants?.[0]?.model
-      ? {
-          id: e.assistants[0].model.id,
-          provider: e.assistants[0].model.engine,
-        }
-      : thread.model
+    const model = normalizeThreadModelFromStorage(e, thread.model)
 
     return {
       ...e,
@@ -147,16 +94,11 @@ export class DefaultThreadsService implements ThreadsService {
       return
     }
 
-    const extension = getConversationalExtension()
-    const nativeApi = getNativeApi()
     const payload = {
       ...thread,
       assistants: thread.assistants?.map((e) => {
         return {
-          model: {
-            id: thread.model?.id ?? '*',
-            engine: thread.model?.provider ?? 'ax-studio',
-          },
+          model: buildStoredModelRef(thread),
           id: e.id,
           name: e.name,
           instructions: e.instructions,
@@ -164,12 +106,9 @@ export class DefaultThreadsService implements ThreadsService {
         }
       }) ?? [
         {
-          model: {
-            id: thread.model?.id ?? '*',
-            engine: thread.model?.provider ?? 'ax-studio',
-          },
+          model: buildStoredModelRef(thread),
           id: 'ax-studio',
-          name: 'Ax-Studio',
+          name: 'AX Studio',
           instructions: '',
           tools: [],
         },
@@ -179,18 +118,14 @@ export class DefaultThreadsService implements ThreadsService {
         is_favorite: thread.isFavorite,
         order: thread.order,
       },
-      created: Math.floor(Date.now() / 1000),
+      created: thread.created ?? Math.floor(Date.now() / 1000),
       updated: Math.floor(Date.now() / 1000),
     } as CoreThread
 
-    await runFirstSuccessful(
-      [
-        extension ? () => extension.modifyThread(payload) : undefined,
-        nativeApi?.modifyThread
-          ? () => nativeApi.modifyThread!({ thread: payload }) as Promise<void>
-          : undefined,
-      ],
-      'Conversational storage is not available',
+    await runConversationalStorageMethod(
+      'modifyThread',
+      [payload],
+      [{ thread: payload }],
       (error) => console.warn(`Failed to update thread ${thread.id}:`, error)
     )
   }
@@ -201,36 +136,74 @@ export class DefaultThreadsService implements ThreadsService {
       return
     }
 
-    const extension = getConversationalExtension()
-    const nativeApi = getNativeApi()
-
-    await runFirstSuccessful(
-      [
-        extension ? () => extension.deleteThread(threadId) : undefined,
-        nativeApi?.deleteThread
-          ? () => nativeApi.deleteThread!({ threadId }) as Promise<void>
-          : undefined,
-      ],
-      'Conversational storage is not available',
+    await runConversationalStorageMethod(
+      'deleteThread',
+      [threadId],
+      [{ threadId }],
       (error) => console.warn(`Failed to delete thread ${threadId}:`, error)
     )
   }
 }
 
-function getListThreads(): (() => Promise<CoreThread[]>) | undefined {
-  const extension = getConversationalExtension()
-  const nativeApi = getNativeApi()
-  const readers = [
-    extension ? () => extension.listThreads() : undefined,
-    nativeApi?.listThreads ? () => nativeApi.listThreads!() as Promise<CoreThread[]> : undefined,
-  ]
+function normalizeStoredThread(thread: CoreThread): Thread {
+  const metadata = thread.metadata ?? {}
+  const order =
+    typeof metadata.order === 'number' ? metadata.order : undefined
+  const isFavorite =
+    typeof metadata.is_favorite === 'boolean'
+      ? metadata.is_favorite
+      : undefined
+  const model = normalizeThreadModelFromStorage(thread)
+  return {
+    ...thread,
+    updated:
+      typeof thread.updated === 'number' && thread.updated > 1e12
+        ? Math.floor(thread.updated / 1000)
+        : (thread.updated ?? 0),
+    order,
+    isFavorite,
+    model,
+    metadata: {
+      ...metadata,
+      order,
+      is_favorite: isFavorite,
+    },
+  }
+}
 
-  if (!readers.some(Boolean)) return undefined
+function normalizeThreadModelFromStorage(
+  thread: Pick<CoreThread, 'assistants'>,
+  fallbackModel?: Thread['model']
+): Thread['model'] {
+  const storedModel = thread.assistants?.[0]?.model
+  if (!storedModel) return fallbackModel
+
+  const provider = storedModel.engine?.trim() || fallbackModel?.provider
+  if (!provider) return fallbackModel
+
+  return {
+    id: storedModel.id,
+    provider,
+  }
+}
+
+function buildStoredModelRef(thread: Thread): { id: string; engine: string } {
+  return {
+    id: thread.model?.id ?? '*',
+    engine: thread.model?.provider ?? 'ax-studio',
+  }
+}
+
+function getListThreads(): (() => Promise<CoreThread[]>) | undefined {
+  if (!hasConversationalStorage()) {
+    return undefined
+  }
 
   return () =>
-    runFirstSuccessful(
-      readers,
-      'Conversational storage is not available',
-      (error) => console.warn('Failed to list threads:', error)
+    runConversationalStorageMethod(
+      'listThreads',
+      [],
+      [],
+      (error) => console.warn('Failed to list threads:', error),
     )
 }

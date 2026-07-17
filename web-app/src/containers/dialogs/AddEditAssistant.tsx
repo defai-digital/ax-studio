@@ -463,6 +463,12 @@ export function AddEditAssistant({
               <Button
                 variant="ghost"
                 size="icon-xs"
+                aria-label={t('assistants:addParameter', {
+                  defaultValue: 'Add parameter',
+                })}
+                title={t('assistants:addParameter', {
+                  defaultValue: 'Add parameter',
+                })}
                 onClick={handleAddParameter}
               >
                 <Plus size={18} className="text-muted-foreground" />
@@ -598,6 +604,12 @@ export function AddEditAssistant({
                   <Button
                     variant="ghost"
                     size="icon-sm"
+                    aria-label={t('assistants:removeParameter', {
+                      defaultValue: 'Remove parameter',
+                    })}
+                    title={t('assistants:removeParameter', {
+                      defaultValue: 'Remove parameter',
+                    })}
                     onClick={() => handleRemoveParameter(index)}
                   >
                     <Trash2 size={18} className="text-destructive" />

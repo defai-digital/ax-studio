@@ -26,9 +26,13 @@ src-tauri/resources/bin
 src-tauri/tauri.bundle.windows.nsis.template
 
 # Helper tools
+.gitleaks.toml
 .opencode
+AGENTS.md
+CLAUDE.md
 OpenCode.md
 Claude.md
+ax-code.json
 archive/
 .cache/
 
@@ -86,8 +90,13 @@ agent-teams/
 
 # Generated reports
 report/
+outputs/
+/.scannerwork/
+/app-stability-cleanliness-test-report.html
+/manager-quality-summary.html
 
 # Local planning docs
+/.internal/
 /ADRS/
 /BUGS/
 /PRDS/

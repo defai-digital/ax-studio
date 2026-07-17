@@ -86,6 +86,35 @@ pub async fn cleanup_all_stale_locks<R: Runtime>(app: &AppHandle<R>) -> Result<(
     Ok(())
 }
 
+pub fn cleanup_own_locks<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    // Propagate instead of panicking so a missing/inaccessible app data dir
+    // bubbles up as a cleanup error the caller can log.
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+
+    let pattern = app_data_dir.join("mcp_lock_*.json");
+    let pattern_str = pattern.to_string_lossy();
+    let current_pid = std::process::id();
+
+    for path in glob::glob(&pattern_str)
+        .map_err(|e| format!("Glob error: {}", e))?
+        .flatten()
+    {
+        if let Ok(content) = fs::read_to_string(&path) {
+            if let Ok(lock) = serde_json::from_str::<McpLockFile>(&content) {
+                if lock.pid == current_pid {
+                    fs::remove_file(&path).ok();
+                    log::debug!("Removed own lock file: {:?}", path);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -135,44 +164,17 @@ mod tests {
     #[test]
     fn test_is_process_alive_dead_process() {
         // Spawn a process and wait for it to finish, then check it's dead
-        let child = std::process::Command::new("true")
+        #[cfg(unix)]
+        let mut child = std::process::Command::new("true")
+            .spawn()
+            .expect("failed to spawn test process");
+        #[cfg(windows)]
+        let mut child = std::process::Command::new("cmd")
+            .args(["/C", "exit", "0"])
             .spawn()
             .expect("failed to spawn test process");
         let pid = child.id();
-        // Wait for process to exit
-        let _ = std::process::Command::new("true").status();
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        // After the process exits, it may or may not still be alive depending on
-        // reaping. Instead, just verify the function returns a bool without panicking.
-        let _ = is_process_alive(pid);
+        child.wait().expect("failed to reap test process");
+        assert!(!is_process_alive(pid));
     }
-}
-
-pub fn cleanup_own_locks<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
-    // Propagate instead of panicking so a missing/inaccessible app data dir
-    // bubbles up as a cleanup error the caller can log.
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
-
-    let pattern = app_data_dir.join("mcp_lock_*.json");
-    let pattern_str = pattern.to_string_lossy();
-    let current_pid = std::process::id();
-
-    for path in glob::glob(&pattern_str)
-        .map_err(|e| format!("Glob error: {}", e))?
-        .flatten()
-    {
-        if let Ok(content) = fs::read_to_string(&path) {
-            if let Ok(lock) = serde_json::from_str::<McpLockFile>(&content) {
-                if lock.pid == current_pid {
-                    fs::remove_file(&path).ok();
-                    log::debug!("Removed own lock file: {:?}", path);
-                }
-            }
-        }
-    }
-
-    Ok(())
 }

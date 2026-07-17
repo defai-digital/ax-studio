@@ -29,6 +29,7 @@ import { normalizeFileSize } from '@/lib/attachments/size'
 import { extractErrorMessage } from '@/lib/utils/error'
 import { basename, fileExtension } from '@/lib/utils'
 import { withTimeout } from '@/lib/utils/async'
+import { getMcpToolFailureMessage } from '@/lib/ax-bi/mcp-result'
 
 const ATTACHMENT_AUTO_INLINE_FALLBACK_BYTES = 512 * 1024
 const ATTACHMENT_MODEL_READY_TIMEOUT_MS = 5_000
@@ -497,7 +498,8 @@ export function useDocumentAttachmentHandler({
             },
           })
 
-          if (!searchResult.error) {
+          // Honor MCP isError/is_error as well as top-level error strings.
+          if (!getMcpToolFailureMessage(searchResult)) {
             const text = searchResult.content?.[0]?.text
             if (text) {
               try {

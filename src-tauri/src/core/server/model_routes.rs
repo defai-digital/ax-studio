@@ -19,6 +19,7 @@ use crate::core::state::{AppState, ProviderConfig, ProviderCustomHeader, Provide
 
 const MODEL_LOAD_RETRY_ATTEMPTS: usize = 10;
 const MODEL_LOAD_RETRY_DELAY: Duration = Duration::from_millis(500);
+const UPSTREAM_DNS_LOOKUP_TIMEOUT: Duration = Duration::from_secs(5);
 /// Guard against unbounded memory from malformed SSE (missing newlines) in the passthrough stream.
 const MAX_SSE_LINE_BUFFER: usize = 1_048_576; // 1 MB
 
@@ -29,6 +30,7 @@ pub(super) struct ProviderResolution {
     pub provider_custom_headers: Vec<ProviderCustomHeader>,
     pub is_anthropic_messages: bool,
     pub buffered_body: Bytes,
+    pub allow_internal: bool,
 }
 
 #[derive(Clone)]
@@ -37,6 +39,14 @@ struct ResolvedProviderConfig {
     session_api_key: Option<String>,
     provider_custom_headers: Vec<ProviderCustomHeader>,
     allow_chat_template_kwargs: bool,
+    allow_internal: bool,
+}
+
+fn provider_allows_internal_network(provider: &str) -> bool {
+    matches!(
+        provider,
+        "llamacpp" | "ollama" | "lmstudio" | "mlx" | "ax-engine"
+    )
 }
 
 fn is_reserved_upstream_custom_header(name: &str) -> bool {
@@ -333,6 +343,7 @@ fn resolve_provider_config_from_map(
         session_api_key: provider_cfg.api_key.clone(),
         provider_custom_headers: provider_cfg.custom_headers.clone(),
         allow_chat_template_kwargs: provider_name == "llamacpp",
+        allow_internal: provider_allows_internal_network(&provider_name),
     }))
 }
 
@@ -364,6 +375,7 @@ async fn resolve_active_ax_serving_fallback<R: tauri::Runtime>(
         session_api_key: None,
         provider_custom_headers: Vec::new(),
         allow_chat_template_kwargs: true,
+        allow_internal: true,
     })
 }
 
@@ -507,6 +519,7 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
                         session_api_key: cfg.api_key.clone(),
                         provider_custom_headers: cfg.custom_headers.clone(),
                         allow_chat_template_kwargs: hint == "llamacpp",
+                        allow_internal: provider_allows_internal_network(hint),
                     }))
                 } else {
                     // Provider is registered but has no base_url — fall through to
@@ -605,6 +618,7 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
                 provider_custom_headers: resolved.provider_custom_headers,
                 is_anthropic_messages,
                 buffered_body: normalized_body,
+                allow_internal: resolved.allow_internal,
             })
         }
         Ok(None) => {
@@ -913,46 +927,82 @@ fn build_streaming_response(
 /// Per-request SSRF guard: re-resolves the upstream URL host and rejects private IPs.
 /// This defends against DNS rebinding attacks where a domain validated at registration
 /// time later resolves to an internal address.
-async fn check_upstream_not_ssrf(url: &str) -> Result<(), String> {
+fn upstream_ip_is_forbidden(ip: std::net::IpAddr, allow_internal: bool) -> bool {
+    match ip {
+        std::net::IpAddr::V4(ip) => {
+            ip.is_unspecified()
+                || ip.is_link_local()
+                || ip.is_multicast()
+                || (!allow_internal && is_private_ip(ip.into()))
+        }
+        std::net::IpAddr::V6(ip) => {
+            ip.is_unspecified()
+                || (ip.segments()[0] & 0xffc0) == 0xfe80
+                || ip.is_multicast()
+                || (!allow_internal && is_private_ip(ip.into()))
+        }
+    }
+}
+
+async fn check_upstream_not_ssrf(url: &str, allow_internal: bool) -> Result<(), String> {
     let parsed = match url::Url::parse(url) {
         Ok(u) => u,
-        Err(_) => return Ok(()),
+        Err(error) => return Err(format!("Invalid upstream URL: {error}")),
     };
+    if !matches!(parsed.scheme(), "http" | "https")
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+    {
+        return Err("Upstream URL has an unsafe scheme or embedded credentials".to_string());
+    }
     let port = parsed.port_or_known_default().unwrap_or(80);
     match parsed.host() {
         Some(url::Host::Ipv4(ip)) => {
             let addr = std::net::IpAddr::V4(ip);
-            if !addr.is_loopback() && is_private_ip(addr) {
+            if upstream_ip_is_forbidden(addr, allow_internal) {
                 return Err(format!(
-                    "Upstream URL points to a private address ({ip}); request blocked"
+                    "Upstream URL points to a forbidden address ({ip}); request blocked"
                 ));
             }
         }
         Some(url::Host::Ipv6(ip)) => {
             let addr = std::net::IpAddr::V6(ip);
-            if !addr.is_loopback() && is_private_ip(addr) {
+            if upstream_ip_is_forbidden(addr, allow_internal) {
                 return Err(format!(
-                    "Upstream URL points to a private address ({ip}); request blocked"
+                    "Upstream URL points to a forbidden address ({ip}); request blocked"
                 ));
             }
         }
         Some(url::Host::Domain(domain)) => {
             if domain == "localhost" {
-                return Ok(());
+                return if allow_internal {
+                    Ok(())
+                } else {
+                    Err("Upstream URL must not point to localhost".to_string())
+                };
             }
-            let addrs = tokio::net::lookup_host((domain, port))
-                .await
-                .map_err(|e| format!("Failed to resolve upstream host '{domain}': {e}"))?;
-            for addr in addrs {
+            let mut addrs = tokio::time::timeout(
+                UPSTREAM_DNS_LOOKUP_TIMEOUT,
+                tokio::net::lookup_host((domain, port)),
+            )
+            .await
+            .map_err(|_| format!("Timed out resolving upstream host '{domain}'"))?
+            .map_err(|e| format!("Failed to resolve upstream host '{domain}': {e}"))?;
+            let mut resolved_any = false;
+            for addr in &mut addrs {
+                resolved_any = true;
                 let ip = addr.ip();
-                if !ip.is_loopback() && is_private_ip(ip) {
-                    return Err("Upstream URL resolves to an internal or private address; \
-                         request blocked (possible DNS rebinding)"
-                        .to_string());
+                if upstream_ip_is_forbidden(ip, allow_internal) {
+                    return Err(
+                        "Upstream URL resolves to a forbidden address; request blocked".to_string(),
+                    );
                 }
             }
+            if !resolved_any {
+                return Err(format!("Upstream host '{domain}' did not resolve"));
+            }
         }
-        None => {}
+        None => return Err("Upstream URL has no host".to_string()),
     }
     Ok(())
 }
@@ -1002,7 +1052,7 @@ pub(super) async fn dispatch_to_upstream<R: tauri::Runtime>(
         None
     };
 
-    if let Err(e) = check_upstream_not_ssrf(&upstream_url).await {
+    if let Err(e) = check_upstream_not_ssrf(&upstream_url, resolution.allow_internal).await {
         log::warn!("Per-request SSRF check blocked upstream: {e}");
         if let Some(ref sid) = stream_id {
             let state = app_handle.state::<crate::core::state::AppState>();
@@ -1582,5 +1632,23 @@ mod tests {
             "/models",
             r#"{"detail":"model test not loaded; loaded=[]"}"#,
         ));
+    }
+
+    #[tokio::test]
+    async fn upstream_ssrf_guard_only_allows_loopback_for_local_providers() {
+        assert!(check_upstream_not_ssrf("http://127.0.0.1:11434/v1", false)
+            .await
+            .is_err());
+        assert!(check_upstream_not_ssrf("http://127.0.0.1:11434/v1", true)
+            .await
+            .is_ok());
+        assert!(
+            check_upstream_not_ssrf("http://169.254.169.254/latest", true)
+                .await
+                .is_err()
+        );
+        assert!(check_upstream_not_ssrf("file:///etc/passwd", false)
+            .await
+            .is_err());
     }
 }

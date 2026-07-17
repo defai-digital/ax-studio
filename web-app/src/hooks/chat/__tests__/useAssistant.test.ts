@@ -62,7 +62,7 @@ describe('useAssistant', () => {
 
     const updatedAssistant = {
       ...defaultAssistant,
-      name: 'Updated Ax-Studio',
+      name: 'Updated AX Studio',
       description: 'Updated description',
     }
 
@@ -70,7 +70,7 @@ describe('useAssistant', () => {
       result.current.updateAssistant(updatedAssistant)
     })
 
-    expect(result.current.assistants[0].name).toBe('Updated Ax-Studio')
+    expect(result.current.assistants[0].name).toBe('Updated AX Studio')
     expect(result.current.assistants[0].description).toBe('Updated description')
   })
 
@@ -192,7 +192,7 @@ describe('useAssistant', () => {
     const { result } = renderHook(() => useAssistant())
 
     expect(result.current.currentAssistant.id).toBe('ax-studio')
-    expect(result.current.currentAssistant.name).toBe('Ax-Studio')
+    expect(result.current.currentAssistant.name).toBe('AX Studio')
     expect(result.current.currentAssistant.avatar).toBe('🧵')
     expect(result.current.currentAssistant.instructions).toContain(
       'Before engaging any tools, articulate your complete thought process in natural language'
@@ -216,13 +216,13 @@ describe('useAssistant', () => {
 
     const updatedDefaultAssistant = {
       ...defaultAssistant,
-      name: 'Updated Ax-Studio Name',
+      name: 'Updated AX Studio Name',
     }
 
     act(() => {
       result.current.updateAssistant(updatedDefaultAssistant)
     })
 
-    expect(result.current.currentAssistant.name).toBe('Updated Ax-Studio Name')
+    expect(result.current.currentAssistant.name).toBe('Updated AX Studio Name')
   })
 })

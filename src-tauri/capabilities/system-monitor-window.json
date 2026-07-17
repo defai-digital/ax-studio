@@ -16,18 +16,6 @@
     "core:window:allow-set-focus",
     "hardware:allow-get-system-info",
     "hardware:allow-get-system-usage",
-    "deep-link:allow-get-current",
-    {
-      "identifier": "http:default",
-      "allow": [
-        {
-          "url": "https://*:*"
-        },
-        {
-          "url": "http://*:*"
-        }
-      ],
-      "deny": []
-    }
+    "deep-link:allow-get-current"
   ]
 }

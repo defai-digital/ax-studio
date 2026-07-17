@@ -1,5 +1,5 @@
 use std::fs::{self, File};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
 
 // For async file write serialization
@@ -8,7 +8,28 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 use tokio::sync::Mutex;
 
-use super::models::{MessageRecord, ThreadRecord};
+use super::models::{MessageRecord, ThreadRecord, MAX_MESSAGE_RECORD_BYTES};
+
+const MAX_MESSAGES_FILE_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_MESSAGES_PER_THREAD: usize = 1_000_000;
+
+fn read_bounded_json_line<R: BufRead>(reader: &mut R) -> Result<Option<String>, String> {
+    let mut line = String::new();
+    let maximum_with_newline = MAX_MESSAGE_RECORD_BYTES + 1;
+    let bytes_read = reader
+        .take((maximum_with_newline + 1) as u64)
+        .read_line(&mut line)
+        .map_err(|error| error.to_string())?;
+    if bytes_read == 0 {
+        return Ok(None);
+    }
+    if bytes_read > maximum_with_newline {
+        return Err(format!(
+            "Message record exceeds the {MAX_MESSAGE_RECORD_BYTES}-byte limit"
+        ));
+    }
+    Ok(Some(line))
+}
 
 // Global per-thread locks for message file writes
 pub static MESSAGE_LOCKS: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> = OnceLock::new();
@@ -50,9 +71,18 @@ pub async fn prune_unused_message_locks() {
     }
 }
 
-pub fn read_messages_from_path(path: &Path) -> Result<Vec<MessageRecord>, String> {
+pub fn read_messages_from_path(
+    path: &Path,
+    expected_thread_id: &str,
+) -> Result<Vec<MessageRecord>, String> {
     if !path.exists() {
         return Ok(vec![]);
+    }
+
+    if fs::metadata(path).map_err(|error| error.to_string())?.len() > MAX_MESSAGES_FILE_BYTES {
+        return Err(format!(
+            "Messages file exceeds the {MAX_MESSAGES_FILE_BYTES}-byte limit"
+        ));
     }
 
     let file = File::open(path).map_err(|e| {
@@ -63,20 +93,33 @@ pub fn read_messages_from_path(path: &Path) -> Result<Vec<MessageRecord>, String
 
     let mut messages = Vec::new();
     let mut skipped = 0u32;
-    for line in reader.lines() {
-        let line = line.map_err(|e| {
-            log::error!("Error reading line from file {}: {}", path.display(), e);
-            e.to_string()
-        })?;
+    let mut reader = reader;
+    while let Some(line) = read_bounded_json_line(&mut reader)? {
         if line.trim().is_empty() {
             continue;
         }
         match serde_json::from_str::<MessageRecord>(&line) {
-            Ok(message) => messages.push(message),
+            Ok(message)
+                if message.validate().is_ok() && message.thread_id == expected_thread_id =>
+            {
+                if messages.len() >= MAX_MESSAGES_PER_THREAD {
+                    return Err(format!(
+                        "Thread contains more than {MAX_MESSAGES_PER_THREAD} messages"
+                    ));
+                }
+                messages.push(message);
+            }
             Err(e) => {
                 skipped += 1;
                 log::warn!(
                     "Skipping malformed message record in {}: {e}",
+                    path.display()
+                );
+            }
+            Ok(_) => {
+                skipped += 1;
+                log::warn!(
+                    "Skipping invalid or mismatched message record in {}",
                     path.display()
                 );
             }
@@ -114,18 +157,31 @@ where
     if !path.exists() {
         return Ok(false);
     }
+    if fs::metadata(path).map_err(|error| error.to_string())?.len() > MAX_MESSAGES_FILE_BYTES {
+        return Err(format!(
+            "Messages file exceeds the {MAX_MESSAGES_FILE_BYTES}-byte limit"
+        ));
+    }
 
     let tmp_path = path.with_extension("jsonl.tmp");
     let input = File::open(path).map_err(|e| e.to_string())?;
-    let reader = BufReader::new(input);
+    let mut reader = BufReader::new(input);
     let mut output = File::create(&tmp_path).map_err(|e| e.to_string())?;
     let mut changed = false;
 
-    for line in reader.lines() {
-        let line = line.map_err(|e| e.to_string())?;
+    let mut records = 0usize;
+    while let Some(line) = read_bounded_json_line(&mut reader)? {
+        records += 1;
+        if records > MAX_MESSAGES_PER_THREAD {
+            return Err(format!(
+                "Thread contains more than {MAX_MESSAGES_PER_THREAD} messages"
+            ));
+        }
         let message: MessageRecord = serde_json::from_str(&line).map_err(|e| e.to_string())?;
+        message.validate()?;
         match transform(message.clone()) {
             Some(next) => {
+                next.validate()?;
                 if next != message {
                     changed = true;
                 }

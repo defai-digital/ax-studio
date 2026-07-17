@@ -118,6 +118,7 @@ function AssistantContent() {
                         variant="ghost"
                         size="icon-sm"
                         title={t('assistants:editAssistant')}
+                        aria-label={t('assistants:editAssistant')}
                         onClick={() => {
                           setEditingKey(assistant.id)
                           setOpen(true)
@@ -129,6 +130,7 @@ function AssistantContent() {
                         variant="ghost"
                         size="icon-sm"
                         title={t('assistants:deleteAssistant')}
+                        aria-label={t('assistants:deleteAssistant')}
                         onClick={() => handleDelete(assistant.id)}
                       >
                         <Trash2 className="text-destructive size-4" />

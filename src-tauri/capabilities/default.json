@@ -15,16 +15,15 @@
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
-    "shell:allow-spawn",
-    "shell:allow-open",
     "core:app:allow-set-app-theme",
     "core:window:allow-set-focus",
     "os:default",
-    "opener:default",
     "log:default",
     "core:webview:allow-create-webview-window",
-    "opener:allow-open-url",
+    "opener:allow-reveal-item-in-dir",
     "store:default",
+    "updater:allow-check",
+    "updater:allow-download-and-install",
     "hardware:default",
     "llamacpp:default",
     "deep-link:default",
@@ -65,10 +64,6 @@
       "deny": []
     },
     {
-      "identifier": "shell:allow-execute",
-      "allow": []
-    },
-    {
       "identifier": "opener:allow-open-url",
       "description": "opens the default permissions for the core module",
       "windows": ["*"],
@@ -78,6 +73,9 @@
         },
         {
           "url": "http://127.0.0.1:*"
+        },
+        {
+          "url": "http://localhost:*"
         }
       ]
     }

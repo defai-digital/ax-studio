@@ -1,85 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import type { MCPTool } from '@/types/mcp'
 import {
-  didAxBiQueueLiveUpdate,
   getAxBiResultUrl,
+  normalizeAxBiResultUrl,
   parseAxBiToolResult,
-  withAxBiAutoNavigate,
 } from '../tool-navigation'
 
-function makeTool(inputSchema: Record<string, unknown>): MCPTool {
-  return {
-    server: 'ax-bi',
-    name: 'generate_explore_link',
-    inputSchema,
-  }
-}
-
-describe('AX-BI tool navigation helpers', () => {
-  it('injects auto_navigate under request when the tool schema supports it', () => {
-    const tools = [
-      makeTool({
-        type: 'object',
-        properties: {
-          request: {
-            type: 'object',
-            properties: {
-              dataset_id: { type: 'number' },
-              auto_navigate: { type: 'boolean' },
-            },
-          },
-        },
-      }),
-    ]
-
-    expect(
-      withAxBiAutoNavigate(tools, 'generate_explore_link', {
-        request: {
-          dataset_id: 20,
-          auto_navigate: false,
-          config: { chart_type: 'xy' },
-        },
-      })
-    ).toEqual({
-      request: {
-        dataset_id: 20,
-        auto_navigate: true,
-        config: { chart_type: 'xy' },
-      },
-    })
-  })
-
-  it('does not inject auto_navigate for non-AX-BI tools', () => {
-    const tools: MCPTool[] = [
-      {
-        server: 'other',
-        name: 'generate_explore_link',
-        inputSchema: {
-          properties: {
-            request: {
-              properties: {
-                auto_navigate: { type: 'boolean' },
-              },
-            },
-          },
-        },
-      },
-    ]
-
-    const input = { request: { dataset_id: 20 } }
-    expect(withAxBiAutoNavigate(tools, 'generate_explore_link', input)).toBe(
-      input
-    )
-  })
-
-  it('parses structured AX-BI JSON results from MCP text content', () => {
+describe('AX BI tool navigation helpers', () => {
+  it('parses structured AX BI JSON results from MCP text content', () => {
     const parsed = parseAxBiToolResult({
       content: [
         {
           text: JSON.stringify({
             success: true,
             explore_url: 'http://127.0.0.1:8088/explore/p/abc/',
-            remote_navigation_queued: false,
           }),
         },
       ],
@@ -88,7 +21,6 @@ describe('AX-BI tool navigation helpers', () => {
     expect(parsed).toEqual({
       success: true,
       explore_url: 'http://127.0.0.1:8088/explore/p/abc/',
-      remote_navigation_queued: false,
     })
     expect(getAxBiResultUrl('generate_chart', parsed!)).toBe(
       'http://127.0.0.1:8088/explore/p/abc/'
@@ -104,23 +36,59 @@ describe('AX-BI tool navigation helpers', () => {
     ).toBeUndefined()
   })
 
-  it('uses dashboard URLs for dashboard-producing tools', () => {
+  it('opens prompt-to-dashboard results', () => {
     expect(
-      getAxBiResultUrl('generate_dashboard', {
-        success: true,
-        dashboard_url: 'http://127.0.0.1:8088/superset/dashboard/12/',
+      getAxBiResultUrl('prompt_to_dashboard', {
+        dashboard_url: 'http://127.0.0.1:8088/ax-bi/dashboard/12/',
       })
-    ).toBe('http://127.0.0.1:8088/superset/dashboard/12/')
+    ).toBe('http://127.0.0.1:8088/ax-bi/dashboard/12/')
   })
 
-  it('detects queued live updates from new response metadata', () => {
+  it('rewrites retired Superset dashboard routes to AX BI routes', () => {
     expect(
-      didAxBiQueueLiveUpdate({
-        success: true,
-        live_update_attempted: true,
-        live_update_command_id: 'abc123',
-        live_update_url: '/superset/explore/p/abc/',
-      })
-    ).toBe(true)
+      normalizeAxBiResultUrl(
+        'http://127.0.0.1:8088/superset/dashboard/8/?native_filters_key=abc#top'
+      )
+    ).toBe(
+      'http://127.0.0.1:8088/ax-bi/dashboard/8/?native_filters_key=abc#top'
+    )
+    expect(normalizeAxBiResultUrl('/dashboard/12/')).toBe(
+      'http://127.0.0.1:8088/ax-bi/dashboard/12/'
+    )
+  })
+
+  it('keeps current explore routes and upgrades retired Superset explore routes', () => {
+    expect(normalizeAxBiResultUrl('/explore/?slice_id=12')).toBe(
+      'http://127.0.0.1:8088/explore/?slice_id=12'
+    )
+    expect(normalizeAxBiResultUrl('/superset/explore/?slice_id=12')).toBe(
+      'http://127.0.0.1:8088/explore/?slice_id=12'
+    )
+  })
+
+  it('preserves localhost hosts so AX BI session cookies stay valid', () => {
+    expect(
+      normalizeAxBiResultUrl('http://localhost:8088/explore/?slice_id=1')
+    ).toBe('http://localhost:8088/explore/?slice_id=1')
+  })
+
+  it('rejects non-HTTP result URLs', () => {
+    expect(normalizeAxBiResultUrl('javascript:alert(1)')).toBeUndefined()
+  })
+
+  it('rejects protocol-relative URLs that hijack the host via base resolution', () => {
+    expect(normalizeAxBiResultUrl('//evil.example/phish')).toBeUndefined()
+    expect(
+      normalizeAxBiResultUrl('//evil.example/ax-bi/dashboard/1/')
+    ).toBeUndefined()
+  })
+
+  it('rejects absolute http(s) URLs on untrusted hosts for auto-open', () => {
+    expect(
+      normalizeAxBiResultUrl('https://evil.example/ax-bi/dashboard/1/')
+    ).toBeUndefined()
+    expect(
+      normalizeAxBiResultUrl('http://attacker.example/explore/?slice_id=1')
+    ).toBeUndefined()
   })
 })

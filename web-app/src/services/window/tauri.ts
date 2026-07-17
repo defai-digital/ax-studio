@@ -7,6 +7,30 @@ import type { WindowConfig, WebviewWindowInstance, WindowService } from './types
 import { themeStorageSchema } from '@/schemas/window.schema'
 import { safeStorageGetItem } from '@/lib/storage/storage'
 
+function createWindowInstance(
+  label: string,
+  webviewWindow: WebviewWindow
+): WebviewWindowInstance {
+  return {
+    label,
+    async close() {
+      await webviewWindow.close()
+    },
+    async show() {
+      await webviewWindow.show()
+    },
+    async hide() {
+      await webviewWindow.hide()
+    },
+    async focus() {
+      await webviewWindow.setFocus()
+    },
+    async setTitle(title: string) {
+      await webviewWindow.setTitle(title)
+    },
+  }
+}
+
 export class TauriWindowService implements WindowService {
   async createWebviewWindow(
     config: WindowConfig
@@ -57,24 +81,7 @@ export class TauriWindowService implements WindowService {
       // Setup theme listener for this window
       this.setupThemeListenerForWindow(webviewWindow)
 
-      return {
-        label: config.label,
-        async close() {
-          await webviewWindow.close()
-        },
-        async show() {
-          await webviewWindow.show()
-        },
-        async hide() {
-          await webviewWindow.hide()
-        },
-        async focus() {
-          await webviewWindow.setFocus()
-        },
-        async setTitle(title: string) {
-          await webviewWindow.setTitle(title)
-        },
-      }
+      return createWindowInstance(config.label, webviewWindow)
     } catch (error) {
       console.error('Error creating Tauri window:', error)
       throw error
@@ -88,24 +95,7 @@ export class TauriWindowService implements WindowService {
       const existingWindow = await WebviewWindow.getByLabel(label)
 
       if (existingWindow) {
-        return {
-          label: label,
-          async close() {
-            await existingWindow.close()
-          },
-          async show() {
-            await existingWindow.show()
-          },
-          async hide() {
-            await existingWindow.hide()
-          },
-          async focus() {
-            await existingWindow.setFocus()
-          },
-          async setTitle(title: string) {
-            await existingWindow.setTitle(title)
-          },
-        }
+        return createWindowInstance(label, existingWindow)
       }
 
       return null
@@ -126,58 +116,61 @@ export class TauriWindowService implements WindowService {
     }
   }
 
-  async openLogsWindow(): Promise<void> {
+  private async openWindowWithLogging(
+    config: WindowConfig,
+    logLabel: string
+  ): Promise<void> {
     try {
-      await this.openWindow({
-        url: '/logs',
-        label: 'logs-app-window',
-        title: 'App Logs - Ax-Studio',
-        width: 800,
-        height: 600,
-        resizable: true,
-        center: true,
-      })
+      await this.openWindow(config)
     } catch (error) {
-      console.error('Error opening logs window in Tauri:', error)
+      console.error(`Error opening ${logLabel} in Tauri:`, error)
       throw error
     }
   }
 
+  async openLogsWindow(): Promise<void> {
+    return this.openWindowWithLogging(
+      {
+        url: '/logs',
+        label: 'logs-app-window',
+        title: 'App Logs - AX Studio',
+        width: 800,
+        height: 600,
+        resizable: true,
+        center: true,
+      },
+      'logs window'
+    )
+  }
+
   async openSystemMonitorWindow(): Promise<void> {
-    try {
-      await this.openWindow({
+    return this.openWindowWithLogging(
+      {
         url: '/system-monitor',
         label: 'system-monitor-window',
-        title: 'System Monitor - Ax-Studio',
+        title: 'System Monitor - AX Studio',
         width: 1000,
         height: 700,
         resizable: true,
         center: true,
-      })
-    } catch (error) {
-      console.error('Error opening system monitor window in Tauri:', error)
-      throw error
-    }
+      },
+      'system monitor window'
+    )
   }
 
   async openLocalApiServerLogsWindow(): Promise<void> {
-    try {
-      await this.openWindow({
+    return this.openWindowWithLogging(
+      {
         url: '/local-api-server/logs',
         label: 'logs-window-local-api-server',
-        title: 'Local API Server Logs - Ax-Studio',
+        title: 'Local API Server Logs - AX Studio',
         width: 800,
         height: 600,
         resizable: true,
         center: true,
-      })
-    } catch (error) {
-      console.error(
-        'Error opening local API server logs window in Tauri:',
-        error
-      )
-      throw error
-    }
+      },
+      'local API server logs window'
+    )
   }
 
   private setupThemeListenerForWindow(window: WebviewWindow): void {

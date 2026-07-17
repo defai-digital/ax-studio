@@ -76,13 +76,14 @@ export function ToolApproval() {
         </div>
 
         <div className="flex items-center justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={handleDeny}>
+          {/* Safer default: focus Deny so Enter does not grant lasting tool access. */}
+          <Button variant="outline" size="sm" onClick={handleDeny} autoFocus>
             {t('tools:toolApproval.deny')}
           </Button>
-          <Button variant="outline" size="sm" onClick={handleAllowOnce}>
+          <Button size="sm" onClick={handleAllowOnce}>
             {t('tools:toolApproval.allowOnce')}
           </Button>
-          <Button size="sm" onClick={handleAllow} autoFocus>
+          <Button variant="outline" size="sm" onClick={handleAllow}>
             {t('tools:toolApproval.alwaysAllow')}
           </Button>
         </div>

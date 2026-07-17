@@ -460,7 +460,10 @@ export function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
                 </span>
               )}
               <button
-                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+                type="button"
+                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={t('common:delete')}
+                title={t('common:delete')}
                 onClick={() => handleDeleteFile(file.id)}
               >
                 <X className="size-3" />

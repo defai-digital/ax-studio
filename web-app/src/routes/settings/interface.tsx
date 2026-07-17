@@ -68,10 +68,13 @@ function AccentColorPicker() {
         return (
           <button
             key={color.value}
+            type="button"
             title={color.name}
+            aria-label={color.name}
+            aria-pressed={isSelected}
             onClick={() => setAccentColor(color.value)}
             className={cn(
-              'size-6 rounded-full border-2 transition-all duration-200 cursor-pointer hover:scale-110 flex items-center justify-center',
+              'size-7 rounded-full border-2 transition-all duration-200 cursor-pointer hover:scale-110 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
               isSelected
                 ? 'ring-2 ring-offset-2 ring-primary border-transparent'
                 : 'border-border/50'
@@ -133,8 +136,13 @@ function InterfaceSettings() {
                   actions={<FontSizeSwitcher />}
                 />
                 <CardItem
-                  title="Accent color"
-                  description="Customize the accent color of the application."
+                  title={t('settings:interface.accent', {
+                    defaultValue: 'Accent color',
+                  })}
+                  description={t('settings:interface.accentDesc', {
+                    defaultValue:
+                      'Customize the accent color of the application.',
+                  })}
                   className="flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-y-2"
                   actions={<AccentColorPicker />}
                 />

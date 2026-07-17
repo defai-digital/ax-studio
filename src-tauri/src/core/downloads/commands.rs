@@ -1,4 +1,7 @@
-use super::helpers::{_download_files_internal, err_to_string, resolve_download_save_path};
+use super::helpers::{
+    _download_files_internal, download_destination_keys, err_to_string,
+    resolve_download_destinations, validate_download_request,
+};
 use super::models::DownloadItem;
 use crate::core::state::AppState;
 use std::collections::HashMap;
@@ -13,24 +16,19 @@ pub async fn download_files<R: Runtime>(
     task_id: &str,
     headers: HashMap<String, String>,
 ) -> Result<(), String> {
-    // insert cancel tokens
+    // Validate the entire untrusted IPC payload before allocating task state or
+    // touching the network. The browser extension performs friendly validation,
+    // but the Rust command is the actual privilege boundary.
+    validate_download_request(&items, task_id, &headers)?;
+    let destination_keys = resolve_download_destinations(&app, &items)?
+        .iter()
+        .flat_map(|path| download_destination_keys(path))
+        .collect();
+
     let cancel_token = CancellationToken::new();
     let generation = {
         let mut download_manager = state.download_manager.lock().await;
-        if let Some(existing_task) = download_manager.cancel_tokens.remove(task_id) {
-            log::info!("Cancelling existing download task: {task_id}");
-            existing_task.token.cancel();
-        }
-        download_manager.next_generation += 1;
-        let generation = download_manager.next_generation;
-        download_manager.cancel_tokens.insert(
-            task_id.to_string(),
-            super::models::DownloadTaskState {
-                token: cancel_token.clone(),
-                generation,
-            },
-        );
-        generation
+        download_manager.register_task(task_id, cancel_token.clone(), destination_keys)?
     };
     // Resume is handled in helpers via .tmp/.url sidecar files.
     let result = _download_files_internal(
@@ -43,37 +41,21 @@ pub async fn download_files<R: Runtime>(
     )
     .await;
 
-    let should_cleanup_cancelled_outputs = {
+    {
         let mut download_manager = state.download_manager.lock().await;
-        match download_manager.cancel_tokens.get(task_id) {
-            Some(task) if task.generation == generation => {
-                let should_cleanup = task.token.is_cancelled();
-                download_manager.cancel_tokens.remove(task_id);
-                should_cleanup
-            }
-            _ => false,
-        }
-    };
-
-    // delete files if cancelled
-    if should_cleanup_cancelled_outputs {
-        for item in items {
-            match resolve_download_save_path(&app, &item.save_path) {
-                Ok(save_path) => {
-                    let _ = tokio::fs::remove_file(&save_path).await;
-                }
-                Err(error) => {
-                    log::warn!("Skipped unsafe cleanup path after cancelled download: {error}");
-                }
-            }
-        }
+        download_manager.finish_task(task_id, generation);
     }
+
+    // Partial-file cleanup is owned by download_single_file. Never remove the
+    // final destination here: it may be a previously verified model that this
+    // cancelled generation never replaced.
 
     result.map_err(err_to_string)
 }
 
 #[tauri::command]
 pub async fn cancel_download_task(state: State<'_, AppState>, task_id: &str) -> Result<(), String> {
+    super::helpers::validate_download_task_id(task_id)?;
     let token = {
         let download_manager = state.download_manager.lock().await;
         download_manager

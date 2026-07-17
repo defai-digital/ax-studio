@@ -91,9 +91,18 @@ export const DialogDeleteModel = ({
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <div className="size-6 cursor-pointer flex items-center justify-center rounded transition-all duration-200 ease-in-out">
+        <button
+          type="button"
+          className="size-6 cursor-pointer flex items-center justify-center rounded transition-all duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={t('providers:deleteModel.title', {
+            modelId: selectedModel.id,
+          })}
+          title={t('providers:deleteModel.title', {
+            modelId: selectedModel.id,
+          })}
+        >
           <Trash2 size={18} className="text-muted-foreground" />
-        </div>
+        </button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -106,13 +115,14 @@ export const DialogDeleteModel = ({
         </DialogHeader>
 
         <DialogFooter className="mt-2">
+          {/* Focus Cancel by default so Enter does not confirm deletion. */}
           <DialogClose asChild>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" autoFocus>
               {t('providers:deleteModel.cancel')}
             </Button>
           </DialogClose>
           <DialogClose asChild>
-            <Button variant="destructive" size="sm" onClick={removeModel} autoFocus>
+            <Button variant="destructive" size="sm" onClick={removeModel}>
               {t('providers:deleteModel.delete')}
             </Button>
           </DialogClose>

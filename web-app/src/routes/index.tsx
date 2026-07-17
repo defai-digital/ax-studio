@@ -59,6 +59,7 @@ import { usePrompt } from '@/hooks/ui/usePrompt'
 import { motion } from 'motion/react'
 import { WorkflowSelector } from '@/components/smart-start/WorkflowSelector'
 import { toast } from 'sonner'
+import { useTranslation } from '@/i18n/react-i18next-compat'
 
 export const Route = createFileRoute(route.home)({
   component: Index,
@@ -66,14 +67,15 @@ export const Route = createFileRoute(route.home)({
     homeSearchSchema.parse(search),
 })
 
-const capabilityBadges = [
-  { icon: Cpu, label: 'Local models' },
-  { icon: Bolt, label: 'Lightning fast' },
-  { icon: Shield, label: 'Private & local' },
-  { icon: Wrench, label: 'Tool use & MCP' },
-]
+const capabilityBadgeDefs = [
+  { icon: Cpu, labelKey: 'common:capabilityLocalModels' },
+  { icon: Bolt, labelKey: 'common:capabilityLightningFast' },
+  { icon: Shield, labelKey: 'common:capabilityPrivateLocal' },
+  { icon: Wrench, labelKey: 'common:capabilityToolsMcp' },
+] as const
 
 function Index() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const {
     providers,
@@ -219,7 +221,7 @@ function Index() {
             className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] opacity-[0.06] dark:opacity-[0.04]"
             style={{
               background:
-                'radial-gradient(ellipse, #6366f1 0%, transparent 70%)',
+                'radial-gradient(ellipse, var(--primary) 0%, transparent 70%)',
             }}
           />
         </div>
@@ -237,9 +239,9 @@ function Index() {
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-                className="mx-auto mb-4 size-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20"
+                className="mx-auto mb-4 size-16 rounded-2xl bg-brand-gradient flex items-center justify-center shadow-brand"
               >
-                <Zap className="size-7 text-white" strokeWidth={2} />
+                <Zap className="size-7 text-primary-foreground" strokeWidth={2} />
               </motion.div>
               <motion.h1
                 initial={{ opacity: 0, y: 8 }}
@@ -247,7 +249,7 @@ function Index() {
                 transition={{ delay: 0.05, duration: 0.4 }}
                 className="text-2xl sm:text-[30px] font-bold leading-tight"
               >
-                What can I help you with?
+                {t('common:homeHeroTitle')}
               </motion.h1>
               <motion.p
                 initial={{ opacity: 0, y: 8 }}
@@ -255,7 +257,7 @@ function Index() {
                 transition={{ delay: 0.1, duration: 0.4 }}
                 className="text-muted-foreground text-sm mt-2"
               >
-                Ask anything, build with AI, or explore what&apos;s possible.
+                {t('common:homeHeroSubtitle')}
               </motion.p>
             </div>
 
@@ -294,15 +296,15 @@ function Index() {
               transition={{ delay: 0.4, duration: 0.5 }}
               className="flex flex-wrap items-center justify-center gap-3 mb-6"
             >
-              {capabilityBadges.map((badge) => {
+              {capabilityBadgeDefs.map((badge) => {
                 const Icon = badge.icon
                 return (
                   <div
-                    key={badge.label}
+                    key={badge.labelKey}
                     className="flex items-center gap-1.5 text-xs text-muted-foreground"
                   >
                     <Icon className="size-3.5" />
-                    <span>{badge.label}</span>
+                    <span>{t(badge.labelKey)}</span>
                   </div>
                 )
               })}

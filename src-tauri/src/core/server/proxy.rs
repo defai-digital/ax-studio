@@ -29,7 +29,7 @@ fn lock_auth_map() -> std::sync::MutexGuard<'static, HashMap<String, (usize, Ins
 
 fn is_rate_limited(client_id: &str) -> bool {
     let mut map = lock_auth_map();
-    evict_stale_entries(&mut map);
+    purge_stale_entries(&mut map);
     if let Some((count, first_failure)) = map.get(client_id) {
         if *count >= MAX_AUTH_FAILURES && first_failure.elapsed().as_secs() < AUTH_LOCKOUT_SECS {
             return true;
@@ -43,7 +43,10 @@ fn is_rate_limited(client_id: &str) -> bool {
 
 fn record_auth_failure(client_id: &str) {
     let mut map = lock_auth_map();
-    evict_stale_entries(&mut map);
+    purge_stale_entries(&mut map);
+    if !map.contains_key(client_id) && map.len() >= AUTH_MAX_ENTRIES {
+        evict_oldest_entry(&mut map);
+    }
     let entry = map
         .entry(client_id.to_string())
         .or_insert_with(|| (0, Instant::now()));
@@ -55,26 +58,17 @@ fn clear_auth_failure(client_id: &str) {
     map.remove(client_id);
 }
 
-fn evict_stale_entries(map: &mut HashMap<String, (usize, Instant)>) {
-    if map.len() <= AUTH_MAX_ENTRIES {
-        return;
-    }
+fn purge_stale_entries(map: &mut HashMap<String, (usize, Instant)>) {
     map.retain(|_, (_, first_failure)| first_failure.elapsed().as_secs() < AUTH_LOCKOUT_SECS);
-    if map.len() > AUTH_MAX_ENTRIES {
-        let to_remove: Vec<String> = map
-            .iter()
-            .filter_map(|(k, (_, t))| {
-                if t.elapsed().as_secs() >= AUTH_LOCKOUT_SECS {
-                    Some(k.clone())
-                } else {
-                    None
-                }
-            })
-            .take(map.len() - AUTH_MAX_ENTRIES / 2)
-            .collect();
-        for key in to_remove {
-            map.remove(&key);
-        }
+}
+
+fn evict_oldest_entry(map: &mut HashMap<String, (usize, Instant)>) {
+    if let Some(oldest_key) = map
+        .iter()
+        .min_by_key(|(_, (_, first_failure))| *first_failure)
+        .map(|(key, _)| key.clone())
+    {
+        map.remove(&oldest_key);
     }
 }
 
@@ -128,6 +122,7 @@ pub struct ProxyConfig {
     pub proxy_api_key: String,
     pub trusted_hosts: Vec<Vec<String>>,
     pub cors_enabled: bool,
+    pub verbose_logs: bool,
     pub host: String,
 }
 
@@ -290,6 +285,7 @@ fn validate_request(
     origin_header: &str,
     headers: &hyper::HeaderMap,
     config: &ProxyConfig,
+    client_id: &str,
 ) -> Option<Response<Body>> {
     let is_whitelisted_path = WHITELISTED_PATHS.contains(&path);
 
@@ -328,12 +324,6 @@ fn validate_request(
     }
 
     if !is_whitelisted_path && !config.proxy_api_key.is_empty() {
-        let client_id = if host_header.is_empty() {
-            "unknown"
-        } else {
-            host_header
-        };
-
         if is_rate_limited(client_id) {
             let mut error_response = Response::builder().status(StatusCode::TOO_MANY_REQUESTS);
             error_response = add_cors_headers_with_host_and_origin(
@@ -418,6 +408,7 @@ pub(super) async fn proxy_request<R: tauri::Runtime>(
     req: Request<Body>,
     client: Client,
     config: ProxyConfig,
+    client_id: String,
     app_handle: tauri::AppHandle<R>,
 ) -> Result<Response<Body>, hyper::Error> {
     // CORS preflight
@@ -444,8 +435,19 @@ pub(super) async fn proxy_request<R: tauri::Runtime>(
     let path = get_destination_path(parts.uri.path(), &config.prefix);
     let method = parts.method.clone();
 
+    if config.verbose_logs {
+        log::info!("Local API request: {method} {path}");
+    }
+
     // Host / auth / config validation
-    if let Some(resp) = validate_request(&path, &host_header, &origin_header, &headers, &config) {
+    if let Some(resp) = validate_request(
+        &path,
+        &host_header,
+        &origin_header,
+        &headers,
+        &config,
+        &client_id,
+    ) {
         return Ok(resp);
     }
 
@@ -521,6 +523,7 @@ mod tests {
             proxy_api_key: api_key.to_string(),
             trusted_hosts: vec![vec!["localhost".to_string(), "1337".to_string()]],
             cors_enabled,
+            verbose_logs: false,
             host: "localhost".to_string(),
         }
     }
@@ -690,7 +693,7 @@ mod tests {
     fn test_validate_request_whitelisted_path_bypasses_all() {
         let config = test_config(false, "secret-key");
         let headers = hyper::HeaderMap::new();
-        let result = validate_request("/favicon.ico", "", "", &headers, &config);
+        let result = validate_request("/favicon.ico", "", "", &headers, &config, "client-a");
         assert!(result.is_none());
     }
 
@@ -698,7 +701,7 @@ mod tests {
     fn test_validate_request_missing_host_returns_bad_request() {
         let config = test_config(false, "");
         let headers = hyper::HeaderMap::new();
-        let result = validate_request("/chat/completions", "", "", &headers, &config);
+        let result = validate_request("/chat/completions", "", "", &headers, &config, "client-b");
         assert!(result.is_some());
         if let Some(resp) = result {
             assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
@@ -709,7 +712,14 @@ mod tests {
     fn test_validate_request_untrusted_host_returns_forbidden() {
         let config = test_config(false, "");
         let headers = hyper::HeaderMap::new();
-        let result = validate_request("/chat/completions", "evil.com", "", &headers, &config);
+        let result = validate_request(
+            "/chat/completions",
+            "evil.com",
+            "",
+            &headers,
+            &config,
+            "client-c",
+        );
         assert!(result.is_some());
         if let Some(resp) = result {
             assert_eq!(resp.status(), StatusCode::FORBIDDEN);
@@ -725,7 +735,14 @@ mod tests {
             hyper::header::AUTHORIZATION,
             "Bearer my-secret".parse().unwrap(),
         );
-        let result = validate_request("/configs", "localhost:1337", "", &headers, &config);
+        let result = validate_request(
+            "/configs",
+            "localhost:1337",
+            "",
+            &headers,
+            &config,
+            "client-d",
+        );
         assert!(result.is_some());
         if let Some(resp) = result {
             assert_eq!(resp.status(), StatusCode::NOT_FOUND);
@@ -747,6 +764,7 @@ mod tests {
             "",
             &headers,
             &config,
+            "client-e",
         );
         assert!(result.is_some());
         if let Some(resp) = result {
@@ -762,7 +780,14 @@ mod tests {
             hyper::header::AUTHORIZATION,
             "Bearer my-secret".parse().unwrap(),
         );
-        let result = validate_request("/chat/completions", "localhost:1337", "", &headers, &config);
+        let result = validate_request(
+            "/chat/completions",
+            "localhost:1337",
+            "",
+            &headers,
+            &config,
+            "client-f",
+        );
         assert!(result.is_none());
     }
 
@@ -771,7 +796,14 @@ mod tests {
         let config = test_config(false, "my-secret");
         let mut headers = hyper::HeaderMap::new();
         headers.insert("X-Api-Key", "my-secret".parse().unwrap());
-        let result = validate_request("/chat/completions", "localhost:1337", "", &headers, &config);
+        let result = validate_request(
+            "/chat/completions",
+            "localhost:1337",
+            "",
+            &headers,
+            &config,
+            "client-g",
+        );
         assert!(result.is_none());
     }
 
@@ -783,7 +815,14 @@ mod tests {
             hyper::header::AUTHORIZATION,
             "Bearer wrong-key".parse().unwrap(),
         );
-        let result = validate_request("/chat/completions", "localhost:1337", "", &headers, &config);
+        let result = validate_request(
+            "/chat/completions",
+            "localhost:1337",
+            "",
+            &headers,
+            &config,
+            "client-h",
+        );
         assert!(result.is_some());
         if let Some(resp) = result {
             assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
@@ -799,7 +838,14 @@ mod tests {
         // upstream provider key is still injected from provider_configs.
         let config = test_config(false, "");
         let headers = hyper::HeaderMap::new();
-        let result = validate_request("/chat/completions", "localhost:1337", "", &headers, &config);
+        let result = validate_request(
+            "/chat/completions",
+            "localhost:1337",
+            "",
+            &headers,
+            &config,
+            "client-i",
+        );
         assert!(
             result.is_none(),
             "validate_request must bypass auth when proxy_api_key is empty"
@@ -817,11 +863,56 @@ mod tests {
             hyper::header::AUTHORIZATION,
             "Bearer some-arbitrary-key".parse().unwrap(),
         );
-        let result = validate_request("/chat/completions", "localhost:1337", "", &headers, &config);
+        let result = validate_request(
+            "/chat/completions",
+            "localhost:1337",
+            "",
+            &headers,
+            &config,
+            "client-j",
+        );
         assert!(
             result.is_none(),
             "validate_request must bypass auth when proxy_api_key is empty, even if a token is supplied"
         );
+    }
+
+    #[test]
+    fn test_auth_rate_limit_is_scoped_to_client_address() {
+        let blocked_client = "rate-limit-test-blocked";
+        let other_client = "rate-limit-test-other";
+        clear_auth_failure(blocked_client);
+        clear_auth_failure(other_client);
+
+        for _ in 0..MAX_AUTH_FAILURES {
+            record_auth_failure(blocked_client);
+        }
+
+        assert!(is_rate_limited(blocked_client));
+        assert!(!is_rate_limited(other_client));
+
+        clear_auth_failure(blocked_client);
+        clear_auth_failure(other_client);
+    }
+
+    #[test]
+    fn test_auth_map_eviction_removes_oldest_entry() {
+        let now = Instant::now();
+        let mut map = HashMap::from([
+            (
+                "oldest".to_string(),
+                (1, now - std::time::Duration::from_secs(2)),
+            ),
+            (
+                "newest".to_string(),
+                (1, now - std::time::Duration::from_secs(1)),
+            ),
+        ]);
+
+        evict_oldest_entry(&mut map);
+
+        assert!(!map.contains_key("oldest"));
+        assert!(map.contains_key("newest"));
     }
 
     // --- get_destination_path tests (additional coverage beyond tests.rs) ---

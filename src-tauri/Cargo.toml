@@ -1,8 +1,8 @@
 [package]
 name = "ax-studio"
 version = "1.5.0"
-description = "Ax-Studio — AI desktop application powered by your own backend services."
-authors = ["Ax-Studio"]
+description = "AX Studio — AI desktop application powered by your own backend services."
+authors = ["AX Studio"]
 license = "Apache-2.0"
 homepage = "https://github.com/defai-digital/ax-studio"
 repository = "https://github.com/defai-digital/ax-studio"
@@ -106,7 +106,6 @@ tauri-plugin-http = { version = "2", features = ["unsafe-headers"] }
 tauri-plugin-log = "2.0.0-rc"
 tauri-plugin-opener = "2.2.7"
 tauri-plugin-os = "2.2.1"
-tauri-plugin-shell = "2.2.0"
 tauri-plugin-store = "2"
 thiserror = { workspace = true }
 tokio = { workspace = true }
@@ -126,21 +125,22 @@ subtle = "2.6"
 regex = "1"
 base64 = "0.22"
 semver = "1"
+tempfile = "3.20.0"
 
 [dependencies.tauri]
 workspace = true
 features = ["protocol-asset", "test"]
 
-[target.'cfg(windows)'.dev-dependencies]
-tempfile = "3.20.0"
-
-
 [target.'cfg(unix)'.dependencies]
 nix = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6.3", default-features = false, features = ["linux-native-sync-persistent", "crypto-rust"] }
 
 [target.'cfg(windows)'.dependencies]
 libc = { workspace = true }
 windows-sys = { version = "0.60.2", features = ["Win32_Storage_FileSystem"] }
+keyring = { version = "3.6.3", default-features = false, features = ["windows-native"] }
 
 # ── In-process AX Engine SDK (macOS-only native MLX runtime) ─────────────────
 # Linking ax-engine-sdk with the `mlx-native` feature pulls in ax-engine-mlx
@@ -151,9 +151,16 @@ windows-sys = { version = "0.60.2", features = ["Win32_Storage_FileSystem"] }
 # `rev` deliberately to the peeled commit for the release tag we validated —
 # do NOT use `branch = "main"`, which would silently auto-pull every new
 # commit and could break our integration without notice.
+#
+# Integration review (2026-07-12): HEAD of ax-engine was ~422 commits ahead
+# (mostly TUI/benchmarks). Studio worker uses EngineSessionConfig fields
+# (mlx_model_artifacts_dir/source, mlx_disable_ngram_acceleration) and
+# GenerateRequest/GenerateStreamEvent shapes that still match this pin; keep
+# the pin until a Metal-validated bump is performed.
 [target.'cfg(target_os = "macos")'.dependencies]
 ax-engine-core = { git = "https://github.com/defai-digital/ax-engine", rev = "a55ac03df228d4b0343d4dfbf6f1ccef4fba419b" }
 ax-engine-sdk = { git = "https://github.com/defai-digital/ax-engine", rev = "a55ac03df228d4b0343d4dfbf6f1ccef4fba419b", features = ["mlx-native", "tokenizer"] }
+keyring = { version = "3.6.3", default-features = false, features = ["apple-native"] }
 objc2-app-kit = { version = "0.3.2", features = ["NSWindow"] }
 # Direct `tokenizers` dep so we can decode generated token ids back to text —
 # EngineTokenizer (from ax-engine-sdk) only exposes `encode`. The SDK already

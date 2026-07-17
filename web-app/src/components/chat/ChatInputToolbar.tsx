@@ -163,6 +163,8 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                   variant="secondary"
                   size="icon-sm"
                   className="rounded-full mr-2 mb-1"
+                  aria-label={t('common:attach')}
+                  title={t('common:attach')}
                 >
                   <PlusIcon size={18} className="text-muted-foreground" />
                 </Button>
@@ -302,6 +304,8 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                     <Button
                       variant="ghost"
                       size="icon-xs"
+                      aria-label={t('tools')}
+                      title={t('tools')}
                       onClick={(e) => {
                         setDropdownToolsAvailable(false)
                         e.stopPropagation()
@@ -341,6 +345,17 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                 <Button
                   variant="ghost"
                   size="icon-xs"
+                  aria-label={
+                    isLocalKnowledgeEnabled
+                      ? t('common:localKnowledgeActive')
+                      : t('common:localKnowledge')
+                  }
+                  aria-pressed={isLocalKnowledgeEnabled}
+                  title={
+                    isLocalKnowledgeEnabled
+                      ? t('common:localKnowledgeActive')
+                      : t('common:localKnowledge')
+                  }
                   onClick={toggleLocalKnowledge}
                 >
                   <Database
@@ -355,7 +370,9 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
               </TooltipTrigger>
               <TooltipContent>
                 <p>
-                  Local Knowledge{isLocalKnowledgeEnabled ? ' (active)' : ''}
+                  {isLocalKnowledgeEnabled
+                    ? t('common:localKnowledgeActive')
+                    : t('common:localKnowledge')}
                 </p>
               </TooltipContent>
             </Tooltip>
@@ -372,9 +389,9 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
 
         {/* Right: keyboard hints + token counter + send/stop */}
         <div className="flex items-center gap-2">
-          <div className="hidden sm:flex items-center gap-2 text-[10px] text-muted-foreground/50 mr-1">
-            <span>⏎ Send</span>
-            <span>⇧⏎ Newline</span>
+          <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground/70 mr-1">
+            <span>{t('common:sendHint')}</span>
+            <span>{t('common:newlineHint')}</span>
           </div>
 
           {tokenCounterCompact &&
@@ -390,6 +407,8 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
               variant="destructive"
               size="icon-sm"
               className="rounded-full mr-1 mb-1"
+              aria-label={t('common:stop')}
+              title={t('common:stop')}
               onClick={() => {
                 if (effectiveThreadId) stopStreaming(effectiveThreadId)
               }}
@@ -402,6 +421,8 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
               size="icon-sm"
               disabled={ingestingDocs}
               data-test-id="send-message-button"
+              aria-label={t('common:sendMessage')}
+              title={t('common:sendMessage')}
               onClick={() => {
                 if (submitCurrentPrompt) {
                   submitCurrentPrompt()
@@ -409,9 +430,9 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                   void handleSendMessage(prompt)
                 }
               }}
-              className="rounded-full mr-1 mb-1 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white border-0 shadow-sm"
+              className="rounded-full mr-1 mb-1 bg-brand-gradient text-primary-foreground border-0 shadow-sm hover:opacity-90"
             >
-              <ArrowUp className="text-white" />
+              <ArrowUp className="text-primary-foreground" />
             </Button>
           )}
         </div>

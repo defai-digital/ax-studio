@@ -8,6 +8,7 @@ type Thread = {
   id: string
   title: string
   isFavorite?: boolean
+  created?: number
 
   model?: ThreadModel
   updated: number

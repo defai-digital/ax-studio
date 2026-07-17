@@ -19,6 +19,27 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
 }
 
+/**
+ * MCP CallToolResult marks failure with `isError` / `is_error` and often puts
+ * the message only in content text — not a top-level `error` string.
+ * Treat any of those as a tool failure.
+ */
+export function getMcpToolFailureMessage(
+  result: Pick<AxBiMcpResult, 'error' | 'content' | 'isError' | 'is_error'>
+): string | undefined {
+  const errorText =
+    typeof result.error === 'string' && result.error.trim().length > 0
+      ? result.error.trim()
+      : undefined
+  const flagged = result.isError === true || result.is_error === true
+  if (!flagged && !errorText) return undefined
+  return (
+    errorText ??
+    getFirstMcpText(result) ??
+    'MCP tool returned an error'
+  )
+}
+
 export function parseJsonMcpResult<T extends Record<string, unknown>>(
   result: Pick<
     AxBiMcpResult,
@@ -54,7 +75,8 @@ export function normalizeMcpResultForToolOutput(
   result: AxBiMcpResult,
   fallbackMessage: string
 ): AxBiNormalizedResult {
-  if (result.error) return { error: result.error }
+  const failure = getMcpToolFailureMessage(result)
+  if (failure) return { error: failure }
 
   const parsed = parseJsonMcpResult<Record<string, unknown>>(result)
   if (parsed) return parsed

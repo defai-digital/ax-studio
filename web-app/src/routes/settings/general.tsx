@@ -33,7 +33,6 @@ import {
 import { fallbackDefaultPrompt } from '@/lib/prompts/system-prompt'
 import { useGeneralSettingsPage } from '@/hooks/settings/useGeneralSettingsPage'
 import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
-import { useAxBiLiveNavigation } from '@/hooks/settings/useAxBiLiveNavigation'
 
 const LANGUAGES = [{ value: 'en', label: 'English' }]
 
@@ -103,12 +102,6 @@ function General() {
   } = useGeneralSetting()
 
   const safeGlobalDefaultPrompt = globalDefaultPrompt ?? ''
-  const axBiLiveNavigationEnabled = useAxBiLiveNavigation(
-    (state) => state.enabled
-  )
-  const setAxBiLiveNavigationEnabled = useAxBiLiveNavigation(
-    (state) => state.setEnabled
-  )
 
   const {
     appDataFolder,
@@ -181,21 +174,6 @@ function General() {
                 <CardItem
                   title={t('common:language')}
                   actions={<LanguageSwitcher />}
-                />
-              </Card>
-
-              <Card title="AX-BI">
-                <CardItem
-                  title="Live Navigation"
-                  description="Send AX-BI links to an already open local AX-BI tab before opening a new browser tab."
-                  actions={
-                    <Switch
-                      checked={axBiLiveNavigationEnabled}
-                      onCheckedChange={(value) =>
-                        setAxBiLiveNavigationEnabled(value)
-                      }
-                    />
-                  }
                 />
               </Card>
 

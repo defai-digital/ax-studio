@@ -33,17 +33,116 @@ pub struct ProviderConfig {
     pub models: Vec<String>,
 }
 
+fn is_reserved_provider_header(name: &str) -> bool {
+    matches!(
+        name,
+        "accept-encoding"
+            | "authorization"
+            | "connection"
+            | "content-length"
+            | "cookie"
+            | "forwarded"
+            | "host"
+            | "origin"
+            | "proxy-authorization"
+            | "proxy-connection"
+            | "referer"
+            | "te"
+            | "trailer"
+            | "transfer-encoding"
+            | "upgrade"
+            | "x-api-key"
+            | "x-forwarded-for"
+            | "x-forwarded-host"
+            | "x-forwarded-proto"
+    ) || name.starts_with("proxy-")
+        || name.starts_with("sec-")
+}
+
 impl ProviderConfig {
     pub fn validate(&self) -> Result<(), String> {
-        if self.provider.trim().is_empty() {
-            return Err("Provider name must not be empty".to_string());
+        const MAX_PROVIDER_NAME_BYTES: usize = 128;
+        const MAX_PROVIDER_URL_BYTES: usize = 4 * 1024;
+        const MAX_PROVIDER_SECRET_BYTES: usize = 16 * 1024;
+        const MAX_PROVIDER_HEADERS: usize = 64;
+        const MAX_HEADER_NAME_BYTES: usize = 256;
+        const MAX_HEADER_VALUE_BYTES: usize = 16 * 1024;
+        const MAX_PROVIDER_MODELS: usize = 4_096;
+        const MAX_MODEL_NAME_BYTES: usize = 512;
+
+        if self.provider.trim().is_empty()
+            || self.provider.len() > MAX_PROVIDER_NAME_BYTES
+            || self.provider.chars().any(char::is_control)
+        {
+            return Err(format!(
+                "Provider name must contain between 1 and {MAX_PROVIDER_NAME_BYTES} non-control bytes"
+            ));
+        }
+        if self
+            .api_key
+            .as_ref()
+            .is_some_and(|key| key.len() > MAX_PROVIDER_SECRET_BYTES || key.contains('\0'))
+        {
+            return Err(format!(
+                "Provider API key exceeds the {MAX_PROVIDER_SECRET_BYTES}-byte limit or contains NUL"
+            ));
         }
         if let Some(ref url) = self.base_url {
+            if url.len() > MAX_PROVIDER_URL_BYTES || url.chars().any(char::is_control) {
+                return Err(format!(
+                    "Provider URL exceeds the {MAX_PROVIDER_URL_BYTES}-byte limit or contains control characters"
+                ));
+            }
             if !url.trim().is_empty() && url::Url::parse(url).is_err() {
                 return Err(format!(
                     "Invalid base_url for provider '{}': {}",
                     self.provider, url
                 ));
+            }
+        }
+        if self.custom_headers.len() > MAX_PROVIDER_HEADERS {
+            return Err(format!(
+                "Provider has more than {MAX_PROVIDER_HEADERS} custom headers"
+            ));
+        }
+        let mut header_names = HashSet::new();
+        for header in &self.custom_headers {
+            if header.header.is_empty()
+                || header.header.len() > MAX_HEADER_NAME_BYTES
+                || header.value.len() > MAX_HEADER_VALUE_BYTES
+                || http::header::HeaderName::from_bytes(header.header.as_bytes()).is_err()
+                || http::header::HeaderValue::from_str(&header.value).is_err()
+            {
+                return Err("Provider contains an invalid custom header".to_string());
+            }
+            let normalized = header.header.to_ascii_lowercase();
+            if is_reserved_provider_header(&normalized) {
+                return Err(format!(
+                    "Provider custom header '{}' is reserved",
+                    header.header
+                ));
+            }
+            if !header_names.insert(normalized) {
+                return Err("Provider contains duplicate custom header names".to_string());
+            }
+        }
+        if self.models.len() > MAX_PROVIDER_MODELS {
+            return Err(format!(
+                "Provider has more than {MAX_PROVIDER_MODELS} models"
+            ));
+        }
+        let mut model_names = HashSet::new();
+        for model in &self.models {
+            if model.trim().is_empty()
+                || model.len() > MAX_MODEL_NAME_BYTES
+                || model.chars().any(char::is_control)
+            {
+                return Err(format!(
+                    "Model names must contain between 1 and {MAX_MODEL_NAME_BYTES} non-control bytes"
+                ));
+            }
+            if !model_names.insert(model) {
+                return Err("Provider contains duplicate model names".to_string());
             }
         }
         Ok(())
@@ -108,6 +207,9 @@ pub struct AppState {
     pub provider_state: Arc<Mutex<ProviderState>>,
     /// One-time write targets approved via native save dialog
     pub approved_save_paths: Arc<Mutex<HashSet<PathBuf>>>,
+    /// Files and directories explicitly selected through the native open dialog.
+    pub approved_read_files: Arc<Mutex<HashSet<PathBuf>>>,
+    pub approved_read_directories: Arc<Mutex<HashSet<PathBuf>>>,
     pub factory_reset_lock: Arc<Mutex<()>>,
     pub active_streams: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
 }
@@ -234,5 +336,40 @@ mod tests {
         assert_eq!(config.provider, cloned.provider);
         assert_eq!(config.api_key, cloned.api_key);
         assert_eq!(config.custom_headers.len(), cloned.custom_headers.len());
+    }
+
+    #[test]
+    fn provider_config_rejects_reserved_headers_duplicates_and_invalid_models() {
+        let base = ProviderConfig {
+            provider: "openai".to_string(),
+            api_key: None,
+            base_url: Some("https://api.example.com/v1".to_string()),
+            custom_headers: vec![],
+            models: vec!["model-a".to_string()],
+        };
+
+        let mut reserved = base.clone();
+        reserved.custom_headers.push(ProviderCustomHeader {
+            header: "Authorization".to_string(),
+            value: "override".to_string(),
+        });
+        assert!(reserved.validate().is_err());
+
+        let mut duplicate = base.clone();
+        duplicate.custom_headers = vec![
+            ProviderCustomHeader {
+                header: "X-Test".to_string(),
+                value: "one".to_string(),
+            },
+            ProviderCustomHeader {
+                header: "x-test".to_string(),
+                value: "two".to_string(),
+            },
+        ];
+        assert!(duplicate.validate().is_err());
+
+        let mut duplicate_model = base;
+        duplicate_model.models.push("model-a".to_string());
+        assert!(duplicate_model.validate().is_err());
     }
 }

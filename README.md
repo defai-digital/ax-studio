@@ -40,7 +40,7 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 | --- | --- | --- |
 | macOS Apple Silicon | Active support | Homebrew cask or GitHub release assets |
 | Windows x64 | Active support | GitHub release installer |
-| Windows ARM64 | Active support target | Use the x64 installer unless the latest release includes a native ARM64 installer |
+| Windows ARM64 | Active support | GitHub release installer |
 | Linux desktop | Not active support | Source builds only, without release/SLA expectations |
 
 Linux users should use AX Serving, OpenAI-compatible endpoints, or source builds
@@ -62,7 +62,7 @@ when they need AX workflows outside the supported desktop release targets.
 brew tap defai-digital/ax-studio
 brew trust defai-digital/ax-studio
 brew install --cask defai-digital/ax-studio/ax-studio
-open -a Ax-Studio
+open -a "AX Studio"
 ```
 
 Already have Homebrew? Start from step 2. The `brew trust` command supports
@@ -75,22 +75,44 @@ downloads are available from GitHub Releases if you prefer not to use Homebrew.
 
 **Windows**
 
-Download the latest `Ax-Studio_*_x64-setup.exe` from
+Download AX Studio only from the official
 [GitHub Releases](https://github.com/defai-digital/ax-studio/releases/latest)
-and run the installer.
+page:
 
-Windows ARM64 is a supported release target, but not every release includes a
-native ARM64 installer. If the latest release does not include
-`Ax-Studio_*_arm64-setup.exe`, install the x64 build.
+- Windows on Intel or AMD: use `AX.Studio_*_x64-setup.exe`.
+- Windows on ARM: use `AX.Studio_*_arm64-setup.exe`.
+- The setup installer is recommended for normal use. Portable builds are for
+  users who specifically need a no-install package.
+
+Windows executables are Authenticode-signed by **DEFAI Private Limited** and
+timestamped by DigiCert. Before installing, open
+**Properties -> Digital Signatures** and confirm that the signature is valid
+and the signer is `DEFAI Private Limited`. Do not continue if Windows reports
+**Unknown publisher**, the signature is missing or invalid, or the file came
+from an unofficial source.
+
+To verify a download with PowerShell:
+
+```powershell
+Get-AuthenticodeSignature ".\AX.Studio_*_x64-setup.exe" |
+  Format-List Status, StatusMessage, SignerCertificate
+```
+
+The expected status is `Valid`, and the certificate subject must identify
+`DEFAI Private Limited`.
 
 **Manual download**
 
 All release assets are published on the
 [AX Studio releases page](https://github.com/defai-digital/ax-studio/releases).
+Every stable release asset includes a detached `.minisig` signature. The
+verification key and command are documented in
+[`docs/ax-studio.minisign.pub`](docs/ax-studio.minisign.pub) and
+[`docs/release.md`](docs/release.md).
 
 ### First Launch
 
-1. Open **Ax-Studio**.
+1. Open **AX Studio**.
 2. Go to **Settings -> Providers**.
 3. Add an API key for one provider, or configure a local provider.
 4. Start a new thread from **Chat** or choose a Smart Start workflow.
@@ -149,9 +171,8 @@ Tool calls and results are shown in the workspace so you can inspect what ran.
 
 - macOS Apple Silicon: use Homebrew unless you specifically need the release
   asset.
-- Windows x64: use `Ax-Studio_*_x64-setup.exe`.
-- Windows ARM64: use the native ARM64 setup only when it exists on the latest
-  release page; otherwise use the x64 setup.
+- Windows x64: use `AX.Studio_*_x64-setup.exe`.
+- Windows ARM64: use `AX.Studio_*_arm64-setup.exe`.
 - Linux: there is no active desktop release target. Use source builds, AX
   Serving, or another OpenAI-compatible endpoint.
 
@@ -196,8 +217,8 @@ brew upgrade --cask ax-studio
 
 Download and run the latest x64 or ARM64 installer from
 [GitHub Releases](https://github.com/defai-digital/ax-studio/releases/latest).
-If the latest release does not include an ARM64 installer yet, use the x64
-installer or wait for the next ARM64 release asset.
+Confirm that its Authenticode signature is valid and identifies
+`DEFAI Private Limited` before installing the update.
 
 ### Uninstall
 

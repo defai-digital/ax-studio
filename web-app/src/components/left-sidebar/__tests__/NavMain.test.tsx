@@ -12,7 +12,7 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
         'common:newChat': 'New Chat',
         'common:search': 'Search',
         'common:hub': 'Hub',
-        'common:axBi': 'Ax-BI',
+        'common:axBi': 'AX BI',
       }
       return map[key] ?? key
     },
@@ -106,9 +106,9 @@ describe('NavMain', () => {
     expect(screen.getByText('Hub')).toBeInTheDocument()
   })
 
-  it('renders Ax-BI link', () => {
+  it('renders AX BI link', () => {
     render(<NavMain />)
-    const link = screen.getByText('Ax-BI').closest('a')
+    const link = screen.getByText('AX BI').closest('a')
     expect(link).toHaveAttribute('href', '/ax-bi')
   })
 
@@ -124,9 +124,15 @@ describe('NavMain', () => {
 
   it('shows keyboard shortcut hints', () => {
     render(<NavMain />)
-    // New chat shortcut
-    expect(screen.getByText('⌘N')).toBeInTheDocument()
-    // Search shortcut
-    expect(screen.getByText('⌘K')).toBeInTheDocument()
+
+    const modifier = navigator.userAgent.toUpperCase().includes('MAC')
+      ? '⌘'
+      : 'Ctrl'
+    expect(
+      screen.getByText((_, element) => element?.textContent === `${modifier}N`)
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText((_, element) => element?.textContent === `${modifier}K`)
+    ).toBeInTheDocument()
   })
 })

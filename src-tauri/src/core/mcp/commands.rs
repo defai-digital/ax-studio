@@ -572,6 +572,28 @@ fn parse_mcp_settings(value: Option<&Value>) -> Result<McpSettings, String> {
     }
 }
 
+fn migrate_legacy_ax_bi_mcp_url(mcp_servers: &mut Map<String, Value>) -> bool {
+    let Some(url) = mcp_servers
+        .get_mut("ax-bi")
+        .and_then(Value::as_object_mut)
+        .and_then(|server| server.get_mut("url"))
+    else {
+        return false;
+    };
+
+    let replacement = match url.as_str() {
+        Some("http://127.0.0.1:8088/mcp") => Some("http://127.0.0.1:5008/mcp"),
+        Some("http://localhost:8088/mcp") => Some("http://localhost:5008/mcp"),
+        _ => None,
+    };
+    let Some(replacement) = replacement else {
+        return false;
+    };
+
+    *url = Value::String(replacement.to_string());
+    true
+}
+
 #[tauri::command]
 pub async fn get_mcp_configs<R: Runtime>(app: AppHandle<R>) -> Result<String, String> {
     let mut path = get_app_data_folder_path(app.clone());
@@ -641,10 +663,20 @@ pub async fn get_mcp_configs<R: Runtime>(app: AppHandle<R>) -> Result<String, St
         .ok_or("mcpServers is not an object")?;
 
     // Remove deprecated MCP servers if present (features removed)
-    for key in &["Ax-Studio Browser MCP", "browsermcp", "fetch", "serper"] {
+    for key in &[
+        "AX Studio Browser MCP",
+        "Ax-Studio Browser MCP",
+        "browsermcp",
+        "fetch",
+        "serper",
+    ] {
         if mcp_servers.remove(*key).is_some() {
             mutated = true;
         }
+    }
+
+    if migrate_legacy_ax_bi_mcp_url(mcp_servers) {
+        mutated = true;
     }
 
     // Persist any mutations back to disk
@@ -725,5 +757,39 @@ async fn remove_tool_cancellation_token(
     if let Some(token) = cancellation_token {
         let mut cancellations = state.tool_call_cancellations.lock().await;
         cancellations.remove(token);
+    }
+}
+
+#[cfg(test)]
+mod ax_bi_migration_tests {
+    use super::migrate_legacy_ax_bi_mcp_url;
+    use serde_json::json;
+
+    #[test]
+    fn migrates_the_former_local_ax_bi_mcp_endpoint() {
+        let mut config = json!({
+            "ax-bi": {
+                "type": "http",
+                "url": "http://127.0.0.1:8088/mcp"
+            }
+        });
+        let servers = config.as_object_mut().unwrap();
+
+        assert!(migrate_legacy_ax_bi_mcp_url(servers));
+        assert_eq!(servers["ax-bi"]["url"], "http://127.0.0.1:5008/mcp");
+    }
+
+    #[test]
+    fn preserves_custom_ax_bi_mcp_endpoints() {
+        let mut config = json!({
+            "ax-bi": {
+                "type": "http",
+                "url": "https://bi.example.com/mcp"
+            }
+        });
+        let servers = config.as_object_mut().unwrap();
+
+        assert!(!migrate_legacy_ax_bi_mcp_url(servers));
+        assert_eq!(servers["ax-bi"]["url"], "https://bi.example.com/mcp");
     }
 }

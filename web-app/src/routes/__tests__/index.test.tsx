@@ -42,6 +42,23 @@ vi.mock('@/hooks/settings/useGeneralSetting', () => ({
   }),
 }))
 
+vi.mock('@/i18n/react-i18next-compat', () => ({
+  useTranslation: () => ({
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        'common:homeHeroTitle': 'What can I help you with?',
+        'common:homeHeroSubtitle':
+          "Ask anything, build with AI, or explore what's possible.",
+        'common:capabilityLocalModels': 'Local models',
+        'common:capabilityLightningFast': 'Lightning fast',
+        'common:capabilityPrivateLocal': 'Private & local',
+        'common:capabilityToolsMcp': 'Tool use & MCP',
+      }
+      return translations[key] ?? key
+    },
+  }),
+}))
+
 vi.mock('@/hooks/tools/useTools', () => ({
   useTools: vi.fn(),
 }))

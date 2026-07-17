@@ -107,6 +107,12 @@ describe('bootstrapLocalApi', () => {
     const input = makeInput({ serviceHub: makeServiceHub(false) })
     const result = await bootstrapLocalApi(input)
     expect(result).toEqual({ ok: true })
+    expect((globalThis as any).window.core.api.startServer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isCorsEnabled: false,
+        isVerboseEnabled: false,
+      })
+    )
     expect(input.setServerStatus).toHaveBeenCalledWith('pending')
     expect(input.setServerStatus).toHaveBeenCalledWith('running')
   })

@@ -151,8 +151,8 @@ export function AxBiWorkspace() {
     }
 
     const workflowPrompt = submittedSource
-      ? `Use AX-BI MCP with dataset ${submittedSource}. ${submittedPrompt}`
-      : `Use AX-BI to ${submittedPrompt}`
+      ? `Use AX BI MCP with dataset ${submittedSource}. ${submittedPrompt}`
+      : `Use AX BI to ${submittedPrompt}`
 
     updateSession(activeSession.id, { status: 'running' })
 
@@ -175,12 +175,16 @@ export function AxBiWorkspace() {
         prompt: workflowPrompt,
         serviceHub,
       })
+      const workflowFailed =
+        planResult.handled &&
+        (planResult.status === 'failed' || planResult.status === 'blocked')
       recordRun(activeSession.id, {
-        status: planResult.handled ? 'ready' : 'error',
+        status: planResult.handled && !workflowFailed ? 'ready' : 'error',
         message: planResult.handled
           ? planResult.message
-          : 'No AX-BI workflow matched this request.',
+          : 'No AX BI workflow matched this request.',
         prompt: submittedPrompt,
+        url: planResult.handled ? planResult.dashboardUrl : undefined,
       })
     } catch (error) {
       recordRun(activeSession.id, {
@@ -197,10 +201,10 @@ export function AxBiWorkspace() {
         <div className="flex h-14 items-center justify-between border-b border-border px-4">
           <div className="flex min-w-0 items-center gap-2">
             <BarChart3 className="size-4 text-primary" />
-            <h1 className="truncate text-sm font-semibold">Ax-BI</h1>
+            <h1 className="truncate text-sm font-semibold">AX BI</h1>
           </div>
           <Button
-            aria-label="New Ax-BI session"
+            aria-label="New AX BI session"
             size="icon-sm"
             variant="ghost"
             onClick={() => createSession({ title: 'Untitled analysis' })}
@@ -247,7 +251,7 @@ export function AxBiWorkspace() {
           <div className="flex min-w-0 items-center gap-2">
             <LineChart className="size-4 text-primary" />
             <Input
-              aria-label="Ax-BI session title"
+              aria-label="AX BI session title"
               value={activeSession.title}
               onChange={(event) =>
                 updateSession(activeSession.id, { title: event.target.value })
@@ -256,7 +260,7 @@ export function AxBiWorkspace() {
             />
           </div>
           <Button
-            aria-label="Delete Ax-BI session"
+            aria-label="Delete AX BI session"
             size="icon-sm"
             variant="ghost"
             disabled={sessionList.length <= 1}
@@ -361,7 +365,7 @@ export function AxBiWorkspace() {
                         <span className="block truncate text-xs text-muted-foreground">
                           {[dataset.schema, dataset.databaseName]
                             .filter(Boolean)
-                            .join(' / ') || 'AX-BI dataset'}
+                            .join(' / ') || 'AX BI dataset'}
                         </span>
                       </span>
                       {dataset.id != null ? (
@@ -451,9 +455,14 @@ export function AxBiWorkspace() {
                         {run.url ? (
                           <a
                             href={run.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
                             className="text-primary hover:underline"
+                            onClick={(event) => {
+                              // Tauri webviews do not honor target=_blank for
+                              // external BI URLs; open via the opener plugin so
+                              // localhost/127.0.0.1 chart links actually launch.
+                              event.preventDefault()
+                              void serviceHub.opener().openUrl(run.url!)
+                            }}
                           >
                             Open result
                           </a>

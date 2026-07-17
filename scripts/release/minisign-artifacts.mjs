@@ -8,16 +8,22 @@ import path from 'node:path'
 const repoRoot = path.resolve(import.meta.dirname, '..', '..')
 const args = new Map()
 const files = []
+const booleanArgs = new Set(['verify-only', 'force'])
 
 for (let index = 2; index < process.argv.length; index += 1) {
   const arg = process.argv[index]
 
   if (arg.startsWith('--')) {
+    const name = arg.slice(2)
+    if (booleanArgs.has(name)) {
+      args.set(name, 'true')
+      continue
+    }
     const value = process.argv[index + 1]
     if (value === undefined || value.startsWith('--')) {
-      args.set(arg.slice(2), 'true')
+      args.set(name, 'true')
     } else {
-      args.set(arg.slice(2), value)
+      args.set(name, value)
       index += 1
     }
   } else {

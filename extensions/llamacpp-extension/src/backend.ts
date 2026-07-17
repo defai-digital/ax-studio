@@ -506,9 +506,7 @@ export async function downloadBackend(
 
   const backendsDir = await getBackendsDir()
   const destDir = await getBackendDir(version, backend)
-  // Save temp file INSIDE destDir so that Rust's cancel cleanup
-  // (remove_dir_all on parent) only removes the specific backend dir,
-  // not the entire backends directory.
+  // Keep the temporary archive inside the backend-specific destination.
   const tempFile = await joinPath([destDir, `_tmp_${filename}`])
 
   // Ensure destination dirs exist
@@ -520,7 +518,7 @@ export async function downloadBackend(
   )
   if (!downloadExt) throw new Error('Download extension not available')
 
-  const proxy = getProxyConfig()
+  const proxy = await getProxyConfig()
   const proxyArg = buildProxyArg(proxy)
 
   // Use a unique task_id (with timestamp) to prevent concurrent

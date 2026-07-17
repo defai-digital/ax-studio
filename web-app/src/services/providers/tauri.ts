@@ -4,7 +4,7 @@
 
 import { models as providerModels } from 'token.js'
 import { predefinedProviders } from '@/constants/providers'
-import { EngineManager, SettingComponentProps } from '@ax-studio/core'
+import { EngineManager } from '@ax-studio/core'
 import { ModelCapabilities } from '@/types/models'
 import { modelSettings } from '@/lib/predefined'
 import { ExtensionManager } from '@/lib/extension'
@@ -14,6 +14,11 @@ import { getModelCapabilities } from '@/lib/models'
 import { providerModelsResponseSchema } from '@/schemas/providers.schema'
 import { withTimeout } from '@/lib/utils/async'
 import { extractErrorMessage } from '@/lib/utils/error'
+import {
+  buildRuntimeModelSettings,
+  cloneProviderSettings,
+  toSettingComponentPropsList,
+} from './settings-mapper'
 
 const PROVIDER_LIST_TIMEOUT_MS = 8_000
 const PROVIDER_SETTINGS_TIMEOUT_MS = 8_000
@@ -21,18 +26,6 @@ const PROVIDER_TOOL_CHECK_TIMEOUT_MS = 3_000
 
 type RuntimeModel = Model & {
   runtimeProviderName: string
-}
-
-function mapRuntimeSettings(settings: SettingComponentProps[]): ProviderSetting[] {
-  return settings.map((setting) => {
-    return {
-      key: setting.key,
-      title: setting.title,
-      description: setting.description,
-      controller_type: setting.controllerType as unknown,
-      controller_props: setting.controllerProps as unknown,
-    }
-  }) as ProviderSetting[]
 }
 
 function runtimeBaseUrl(value: unknown): string {
@@ -261,6 +254,9 @@ export class TauriProvidersService implements ProvidersService {
     const runtimeProviderPromises = Array.from(
       EngineManager.instance().engines.entries()
     ).map(async ([providerName, value]) => {
+      const runtimeDefaultSettings = buildRuntimeModelSettings(
+        Object.values(modelSettings)
+      )
       const models = await withProviderTimeout(
         providerName,
         'listing models',
@@ -315,23 +311,7 @@ export class TauriProvidersService implements ProvidersService {
             capabilities,
             embedding: model.embedding,
             runtimeProviderName,
-            settings: Object.values(modelSettings).reduce(
-              (acc, setting) => {
-                let value = setting.controller_props.value
-                if (setting.key === 'ctx_len') {
-                  value = 8192
-                }
-                acc[setting.key] = {
-                  ...setting,
-                  controller_props: {
-                    ...setting.controller_props,
-                    value,
-                  },
-                }
-                return acc
-              },
-              {} as Record<string, ProviderSetting>
-            ),
+            settings: cloneProviderSettings(runtimeDefaultSettings),
           } as RuntimeModel
         })
       ).catch((error: unknown) => {
@@ -363,7 +343,7 @@ export class TauriProvidersService implements ProvidersService {
         return null
       }
 
-      const mappedSettings = mapRuntimeSettings(settings)
+      const mappedSettings = buildRuntimeModelSettings(settings)
       return Array.from(groupedModels.entries()).map(
         ([runtimeProviderName, models]) =>
           ({
@@ -535,21 +515,12 @@ export class TauriProvidersService implements ProvidersService {
     settings: ProviderSetting[]
   ): Promise<void> {
     try {
-      return ExtensionManager.getInstance()
-        .getEngine(providerName)
-        ?.updateSettings(
-          settings.map((setting) => ({
-            ...setting,
-            controllerProps: {
-              ...setting.controller_props,
-              value:
-                setting.controller_props.value !== undefined
-                  ? setting.controller_props.value
-                  : '',
-            },
-            controllerType: setting.controller_type,
-          })) as SettingComponentProps[]
-        )
+      const engine = ExtensionManager.getInstance().getEngine(providerName)
+      if (!engine) {
+        return
+      }
+
+      await engine.updateSettings(toSettingComponentPropsList(settings))
     } catch (error) {
       console.error('Error updating settings in Tauri:', error)
       throw error

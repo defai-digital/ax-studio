@@ -7,15 +7,46 @@ import { MCPTool } from '@/types/mcp'
 import { DEFAULT_MCP_SETTINGS } from '@/hooks/tools/useMCPServers'
 import type { MCPServerConfig, MCPServers, MCPSettings } from '@/hooks/tools/useMCPServers'
 import type { MCPConfig, MCPService, ToolCallWithCancellationResult } from './types'
-import { mcpServersSchema, mcpSettingsSchema } from '@/schemas/mcp.schema'
+import {
+  mcpSettingsSchema,
+  parseMcpServersRecord,
+} from '@/schemas/mcp.schema'
 import { extractErrorMessage, toError } from '@/lib/utils/error'
 
-const getCoreApi = () => {
+const DEFAULT_UNAVAILABLE_TOOL_ERROR = 'MCP service unavailable'
+const DEFAULT_UNAVAILABLE_TOOL_ERROR_AFTER_RESTART =
+  'MCP service unavailable after restart'
+
+type MCPToolCallResult = Awaited<ReturnType<MCPService['callTool']>>
+
+type MCPNativeApi = {
+  callTool(args: {
+    toolName: string
+    serverName?: string
+    arguments: object
+    cancellationToken?: string
+  }): Promise<MCPToolCallResult | null | undefined>
+  cancelToolCall(args: { cancellationToken: string }): Promise<void>
+  getConnectedServers(): Promise<string[] | null | undefined>
+  getMcpConfigs(): Promise<string | null | undefined>
+  getTools(): Promise<MCPTool[] | null | undefined>
+  restartMcpServers(): Promise<void>
+  saveMcpConfigs(args: { configs: string }): Promise<void>
+}
+
+function createUnavailableToolResult(errorMessage: string): MCPToolCallResult {
+  return {
+    error: errorMessage,
+    content: [],
+  }
+}
+
+const getCoreApi = (): MCPNativeApi => {
   if (!window.core?.api) {
     throw new Error('MCP API is unavailable')
   }
 
-  return window.core.api
+  return window.core.api as unknown as MCPNativeApi
 }
 
 function getErrorMessage(error: unknown): string {
@@ -32,10 +63,47 @@ function isRecoverableMCPError(error: unknown): boolean {
   )
 }
 
-const unavailableToolResult = (error: unknown) => ({
+const fallbackToolCallResult = (error: unknown): MCPToolCallResult => ({
   error: getErrorMessage(error),
   content: [],
 })
+
+function createToolCall(
+  api: ReturnType<typeof getCoreApi>,
+  args: {
+    toolName: string
+    serverName?: string
+    arguments: object
+    cancellationToken?: string
+  },
+  unavailableMessage: string
+): () => Promise<MCPToolCallResult> {
+  return () =>
+    api.callTool(args).then((result) => result ?? createUnavailableToolResult(unavailableMessage))
+}
+
+async function executeToolCallWithRetry<T>(
+  call: () => Promise<T>,
+  retry: () => Promise<T>,
+  fallback: (error: unknown) => T
+): Promise<T> {
+  try {
+    return await call()
+  } catch (error) {
+    if (!isRecoverableMCPError(error)) {
+      return fallback(error)
+    }
+
+    console.warn('MCP tool call failed, restarting MCP servers and retrying once:', error)
+    try {
+      const api = getCoreApi()
+      await api.restartMcpServers()
+      return await retry()
+    } catch (retryError) {
+      return fallback(retryError)
+    }
+  }
+}
 
 export class TauriMCPService implements MCPService {
   async updateMCPConfig(configs: string): Promise<void> {
@@ -74,15 +142,15 @@ export class TauriMCPService implements MCPService {
     const { mcpServers, mcpSettings, ...legacyServers } = parsed
     const hasLegacyServers = Object.keys(legacyServers).length > 0
 
-    // Try the explicit mcpServers field first, fall back to legacy top-level keys
-    let serversParsed = mcpServersSchema.safeParse(mcpServers)
-    if (!serversParsed.success && hasLegacyServers) {
-      serversParsed = mcpServersSchema.safeParse(legacyServers)
+    // Parse entry-by-entry so one invalid server cannot wipe valid siblings.
+    // Prefer explicit mcpServers; fall back to legacy top-level keys.
+    let normalizedServers: MCPServers = parseMcpServersRecord(mcpServers)
+    if (
+      Object.keys(normalizedServers).length === 0 &&
+      hasLegacyServers
+    ) {
+      normalizedServers = parseMcpServersRecord(legacyServers)
     }
-    if (!serversParsed.success) {
-      console.warn('MCP servers config did not match expected schema:', serversParsed.error.message)
-    }
-    const normalizedServers: MCPServers = (serversParsed.success ? serversParsed.data : {}) as MCPServers
 
     const settingsParsed = mcpSettingsSchema.safeParse(mcpSettings)
     const normalizedSettings: MCPSettings = {
@@ -110,27 +178,12 @@ export class TauriMCPService implements MCPService {
     arguments: object
   }): Promise<{ error: string; content: { text: string }[] }> {
     const api = getCoreApi()
-    try {
-      return ((await api.callTool(args)) as { error: string; content: { text: string }[] }) ?? {
-        error: 'MCP service unavailable',
-        content: [],
-      }
-    } catch (error) {
-      if (!isRecoverableMCPError(error)) {
-        return unavailableToolResult(error)
-      }
 
-      console.warn('MCP tool call failed, restarting MCP servers and retrying once:', error)
-      try {
-        await api.restartMcpServers()
-        return ((await api.callTool(args)) as { error: string; content: { text: string }[] }) ?? {
-          error: 'MCP service unavailable after restart',
-          content: [],
-        }
-      } catch (retryError) {
-        return unavailableToolResult(retryError)
-      }
-    }
+    return executeToolCallWithRetry(
+      () => createToolCall(api, args, DEFAULT_UNAVAILABLE_TOOL_ERROR)(),
+      () => createToolCall(api, args, DEFAULT_UNAVAILABLE_TOOL_ERROR_AFTER_RESTART)(),
+      fallbackToolCallResult
+    )
   }
 
   callToolWithCancellation(args: {
@@ -144,28 +197,21 @@ export class TauriMCPService implements MCPService {
     // IIFE so any synchronous throw from getCoreApi() becomes a rejected promise,
     // and transport errors are recovered with the same restart+retry as callTool().
     const promise = (async () => {
-      try {
-        const api = getCoreApi()
-        return ((await api.callTool({ ...args, cancellationToken: token })) as { error: string; content: { text: string }[] }) ?? {
-          error: 'MCP service unavailable',
-          content: [],
-        }
-      } catch (error) {
-        if (!isRecoverableMCPError(error)) {
-          return unavailableToolResult(error)
-        }
-        console.warn('MCP tool call failed, restarting MCP servers and retrying once:', error)
-        try {
-          const api = getCoreApi()
-          await api.restartMcpServers()
-          return ((await api.callTool({ ...args, cancellationToken: token })) as { error: string; content: { text: string }[] }) ?? {
-            error: 'MCP service unavailable after restart',
-            content: [],
-          }
-        } catch (retryError) {
-          return unavailableToolResult(retryError)
-        }
-      }
+      return executeToolCallWithRetry(
+        () =>
+          createToolCall(
+            getCoreApi(),
+            { ...args, cancellationToken: token },
+            DEFAULT_UNAVAILABLE_TOOL_ERROR
+          )(),
+        () =>
+          createToolCall(
+            getCoreApi(),
+            { ...args, cancellationToken: token },
+            DEFAULT_UNAVAILABLE_TOOL_ERROR_AFTER_RESTART
+          )(),
+        fallbackToolCallResult
+      )
     })()
 
     const cancel = async () => {

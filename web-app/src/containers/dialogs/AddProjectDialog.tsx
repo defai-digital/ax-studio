@@ -129,6 +129,13 @@ export function AddProjectDialog({
       : undefined
     const trimmedProjectPrompt = projectPrompt.trim()
 
+    if (trimmedLogo && !normalizedLogo) {
+      toast.error(
+        t('common:invalidImageUrl', { defaultValue: 'Invalid image URL.' })
+      )
+      return
+    }
+
     // Check for duplicate names (excluding current project when editing)
     const isDuplicate = folders.some(
       (folder) =>

@@ -2,10 +2,23 @@ import { fs } from '@ax-studio/core'
 import type { ServiceHub } from '@/services'
 import type { Attachment } from '@/types/attachment'
 import type { MCPTool, MCPToolCallResult } from '@ax-studio/core'
-import { getFirstMcpText, isRecord, parseJsonMcpResult } from './mcp-result'
-import { AxBI, type DashboardPlan } from './sdk'
-
-const AX_BI_SERVER = 'ax-bi'
+import {
+  getFirstMcpText,
+  getMcpToolFailureMessage,
+  isRecord,
+  parseJsonMcpResult,
+} from './mcp-result'
+import {
+  AxBI,
+  type DashboardPlan,
+  type PromptToDashboardResult,
+} from './sdk'
+import {
+  AX_BI_SERVER,
+  DEFAULT_AX_BI_WEB_URL,
+} from './endpoints'
+import { getConfiguredAxBiMcpUrl } from './datasets'
+import { normalizeAxBiResultUrl } from './tool-navigation'
 const SUPPORTED_DATA_TYPES = new Set([
   'csv',
   'tsv',
@@ -17,7 +30,7 @@ const SUPPORTED_DATA_TYPES = new Set([
 const PRESENTATION_TYPES = new Set(['ppt', 'pptx'])
 
 const DASHBOARD_INTENT =
-  /\b(ax-?bi|dashboard|chart|charts|visuali[sz]e|graph|graphs|report|bi)\b/i
+  /\b(ax(?:-|\s*)bi|dashboard|chart|charts|visuali[sz]e|graph|graphs|report|bi)\b/i
 const ATTACHED_FILE_INTENT =
   /\b(this|attached|uploaded|selected|current)\s+(file|csv|excel|spreadsheet|workbook|dataset|data)\b|\bfrom\s+(this|the)\s+(file|attachment|uploaded\s+file|selected\s+file)\b|\bfrom\s+the\s+attached\b/i
 
@@ -88,9 +101,17 @@ export type AxBiChartIntentWorkflowResult =
 
 export type AxBiSdkPromptWorkflowResult =
   | { handled: false }
-  | { handled: true; message: string; plan: DashboardPlan }
+  | {
+      handled: true
+      message: string
+      plan: DashboardPlan | null
+      dashboardUrl?: string
+      status: NonNullable<PromptToDashboardResult['status']>
+    }
 
-type AxBiSdkClient = Pick<AxBI, 'ai'>
+type AxBiSdkClient = {
+  ai: Pick<AxBI['ai'], 'planDashboard' | 'promptToDashboard'>
+}
 
 export type AxBiChartMetric =
   | { type: 'count' }
@@ -242,17 +263,16 @@ export type AxBiChartIntentExtractor = (
 ) => Promise<AxBiChartIntentDraft | null>
 
 function parseJsonToolResult<T>(result: MCPToolCallResult): T {
+  // Failure flags must win over structured/JSON content so error payloads
+  // like `{ "status": "failed" }` are never treated as chart/dashboard data.
+  const failure = getMcpToolFailureMessage(result)
+  if (failure) throw new Error(failure)
+
   const parsedJson = parseJsonMcpResult<Record<string, unknown>>(result)
   if (parsedJson) return parsedJson as T
 
-  const isError = result.isError ?? result.is_error
-  const textError = getFirstMcpText(result)
   throw new Error(
-    result.error ||
-      textError ||
-      (isError
-        ? 'AX-BI MCP returned an error response without details'
-        : 'AX-BI MCP returned an empty response')
+    getFirstMcpText(result) || 'AX BI MCP returned an empty response'
   )
 }
 
@@ -424,7 +444,10 @@ function extractPromptChartOptions(prompt: string): AxBiChartOptions | undefined
     [/\blyft\s+(?:colors?|colours?|palette|scheme)\b/i, 'lyftColors'],
     [/\bgoogle\s+(?:colors?|colours?|palette|scheme)\b/i, 'googleCategory10c'],
     [/\bd3\s+(?:colors?|colours?|palette|scheme)\b/i, 'd3Category10'],
-    [/\b(?:superset|default|ax-?bi)\s+(?:colors?|colours?|palette|scheme)\b/i, 'supersetColors'],
+    [
+      /\b(?:japandi|default|ax(?:-|\s*)bi)\s+(?:colors?|colours?|palette|scheme)\b/i,
+      'japandiColors',
+    ],
   ]
   const matchedScheme = colorSchemes.find(([pattern]) => pattern.test(prompt))
   if (matchedScheme) {
@@ -841,7 +864,7 @@ function normalizeChartIntentDraft(
 function parseExistingDatasetChartIntent(
   prompt: string
 ): ExistingDatasetChartIntent | null {
-  const explicitAxBiMcp = /\bax-?bi\s+mcp\b/i.test(prompt)
+  const explicitAxBiMcp = /\bax(?:-|\s*)bi\s+mcp\b/i.test(prompt)
   const explicitSavedDatasetRequest =
     /\b(?:create|make|build|generate|save)\s+(?:a\s+|an\s+)?(?:saved\s+)?(?:(?:interactive|ag-?grid)\s+table|stacked\s+bar\s+chart|area\s+chart|bar\s+chart|column\s+chart|horizontal\s+bar\s+chart|line\s+chart|pie\s+chart|donut\s+chart|scatter\s+chart|pivot\s+table|mixed\s+time(?:series|\s+series)\s+chart|handlebars\s+chart|big\s+number|kpi|chart|table)\s+from\s+[A-Za-z0-9_][A-Za-z0-9_.-]*/i.test(
       prompt
@@ -1149,7 +1172,7 @@ function parseExistingDatasetDashboardIntent(
     datasetName,
     dashboardTitle:
       extractRequestedChartName(prompt) ??
-      (datasetName ? `${humanize(datasetName)} Dashboard` : 'AX-BI Dashboard'),
+      (datasetName ? `${humanize(datasetName)} Dashboard` : 'AX BI Dashboard'),
   }
 }
 
@@ -1434,7 +1457,7 @@ function chartMatchesExplicitName(
 
 function isAxBiChartCandidate(prompt: string): boolean {
   return (
-    /\bax-?bi\s+mcp\b/i.test(prompt) &&
+    /\bax(?:-|\s*)bi\s+mcp\b/i.test(prompt) &&
     /\b(chart|charts|bar|scatter|graph|plot|visuali[sz]e|table)\b/i.test(
       prompt
     )
@@ -1460,7 +1483,7 @@ function isAxBiDashboardRequest(
 
 function isAxBiSdkPromptRequest(prompt: string): boolean {
   return (
-    /\b(?:ax-?bi|axbi)\b/i.test(prompt) &&
+    /\bax(?:-|\s*)bi\b/i.test(prompt) &&
     /\b(?:prompt|plan|dashboard|chart|charts|analytics|report|visuali[sz]e|business intelligence)\b/i.test(
       prompt
     )
@@ -1575,7 +1598,7 @@ function buildChartPlans(dataset: DatasetInfo): ChartPlan[] {
           kind: 'bar',
           orientation: 'vertical',
           show_value: true,
-          color_scheme: 'supersetColors',
+          color_scheme: 'japandiColors',
         },
       })
     }
@@ -1597,7 +1620,7 @@ function buildChartPlans(dataset: DatasetInfo): ChartPlan[] {
           kind: 'line',
           time_grain: 'P1M',
           show_value: false,
-          color_scheme: 'supersetColors',
+          color_scheme: 'japandiColors',
         },
       })
     }
@@ -1623,80 +1646,131 @@ function chartIdFromResult(result: ChartResult): number | undefined {
 }
 
 function dashboardUrlFromResult(result: DashboardResult): string | undefined {
-  return result.dashboard_url || result.url || result.dashboard?.url || undefined
-}
-
-function getServerUrlFromMcpConfig(config: unknown): string | undefined {
-  if (!isRecord(config)) return undefined
-  const mcpServers = config.mcpServers
-  if (!isRecord(mcpServers)) return undefined
-  const axBi = mcpServers[AX_BI_SERVER]
-  if (!isRecord(axBi) || typeof axBi.url !== 'string') return undefined
-  return axBi.url
+  const resultUrl =
+    result.dashboard_url || result.url || result.dashboard?.url || undefined
+  return resultUrl ? normalizeAxBiResultUrl(resultUrl) : undefined
 }
 
 async function createAxBiSdkClient(serviceHub: ServiceHub): Promise<AxBI> {
-  const configuredMcpUrl = getServerUrlFromMcpConfig(
-    await serviceHub
-      .mcp()
-      .getMCPConfig()
-      .catch(() => null)
-  )
-  const baseUrl = configuredMcpUrl
-    ? configuredMcpUrl.replace(/\/mcp\/?$/i, '').replace(/\/+$/, '')
-    : 'http://127.0.0.1:8088'
+  const mcpUrl = await getConfiguredAxBiMcpUrl(serviceHub)
 
   return new AxBI({
-    baseUrl,
-    mcpUrl: baseUrl,
+    baseUrl: DEFAULT_AX_BI_WEB_URL,
+    mcpUrl,
     auth: { type: 'token', accessToken: '' },
   })
 }
 
-function formatDashboardPlan(plan: DashboardPlan): string {
-  const lines = [
-    `AX-BI generated a dashboard plan: ${plan.title || 'Untitled dashboard'}`,
-  ]
-  if (plan.description) lines.push('', plan.description)
+function firstString(value: unknown): string | undefined {
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  if (!Array.isArray(value)) return undefined
+  return value.find(
+    (item): item is string => typeof item === 'string' && item.trim().length > 0
+  )
+}
 
-  const sections = Array.isArray(plan.sections) ? plan.sections : []
+function formatPlanChartIntent(chart: Record<string, unknown>): string {
+  const chartType = firstString(chart.chart_type) ?? firstString(chart.kind)
+  const metric = firstString(chart.metric) ?? firstString(chart.metrics)
+  const dimension =
+    firstString(chart.dimension) ?? firstString(chart.dimensions)
+  const label = metric ?? firstString(chart.purpose) ?? 'Chart'
+  return `${chartType ?? 'chart'}: ${label}${dimension ? ` by ${dimension}` : ''}`
+}
+
+function dashboardTitleFromWorkflow(
+  result: PromptToDashboardResult
+): string {
+  if (result.plan?.title) return result.plan.title
+  const dashboard = result.dashboard
+  if (isRecord(dashboard)) {
+    for (const key of ['dashboard_title', 'title', 'name']) {
+      const value = dashboard[key]
+      if (typeof value === 'string' && value.trim()) return value.trim()
+    }
+  }
+  return 'Untitled dashboard'
+}
+
+function workflowStatus(
+  result: PromptToDashboardResult
+): NonNullable<PromptToDashboardResult['status']> {
+  if (result.status) return result.status
+  if (result.error) return 'failed'
+  if (result.dashboard_url) return 'completed'
+  return 'partial'
+}
+
+function formatPromptToDashboardResult(
+  result: PromptToDashboardResult,
+  status: NonNullable<PromptToDashboardResult['status']>,
+  dashboardUrl?: string
+): string {
+  const title = dashboardTitleFromWorkflow(result)
+  const heading = {
+    completed: `AX BI created dashboard "${title}".`,
+    partial: `AX BI partially created dashboard "${title}".`,
+    blocked: `AX BI needs more information before creating "${title}".`,
+    failed: `AX BI could not create dashboard "${title}".`,
+    dry_run: `AX BI completed a dry run for dashboard "${title}".`,
+  }[status]
+  const lines = [heading]
+
+  if (dashboardUrl) lines.push('', `Dashboard URL: ${dashboardUrl}`)
+  if (result.plan?.description) lines.push('', result.plan.description)
+
+  const sections = result.plan?.sections ?? []
   if (sections.length > 0) {
     lines.push('', 'Sections:')
     for (const section of sections) {
       lines.push(`- ${section.title || 'Untitled section'}`)
-      const chartIntents = Array.isArray(section.chart_intents)
-        ? section.chart_intents
-        : []
-      for (const chart of chartIntents.slice(0, 4)) {
-        const dimension = chart.dimension ? ` by ${chart.dimension}` : ''
-        lines.push(`  - ${chart.chart_type}: ${chart.metric}${dimension}`)
+      for (const chart of section.chart_intents.slice(0, 4)) {
+        lines.push(`  - ${formatPlanChartIntent(chart)}`)
       }
     }
   }
 
-  if (plan.assumptions?.length) {
+  if (result.charts_succeeded != null || result.charts_failed != null) {
+    lines.push(
+      '',
+      `Charts: ${result.charts_succeeded ?? 0} succeeded, ${result.charts_failed ?? 0} failed`
+    )
+  }
+  if (result.steps?.length) {
+    lines.push(
+      '',
+      'Workflow:',
+      ...result.steps.map(
+        (step) =>
+          `- ${step.name}: ${step.status}${step.detail ? ` — ${step.detail}` : ''}`
+      )
+    )
+  }
+  if (result.plan?.assumptions?.length) {
     lines.push(
       '',
       'Assumptions:',
-      ...plan.assumptions.map((item) => `- ${item}`)
+      ...result.plan.assumptions.map((item) => `- ${item}`)
     )
   }
-
-  if (plan.clarifying_questions?.length) {
+  if (result.plan?.clarifying_questions?.length) {
     lines.push(
       '',
       'Clarifying questions:',
-      ...plan.clarifying_questions.map((item) => `- ${item}`)
+      ...result.plan.clarifying_questions.map((item) => `- ${item}`)
     )
   }
-
-  if (typeof plan.confidence_score === 'number') {
+  if (typeof result.plan?.confidence === 'number') {
     const confidence =
-      plan.confidence_score <= 1
-        ? plan.confidence_score * 100
-        : plan.confidence_score
+      result.plan.confidence <= 1
+        ? result.plan.confidence * 100
+        : result.plan.confidence
     lines.push('', `Confidence: ${Math.round(confidence)}%`)
   }
+  if (result.warnings?.length) {
+    lines.push('', 'Warnings:', ...result.warnings.map((item) => `- ${item}`))
+  }
+  if (result.error) lines.push('', `Error: ${result.error}`)
 
   return lines.join('\n')
 }
@@ -1713,12 +1787,27 @@ export async function runAxBiSdkPromptWorkflow({
   if (!isAxBiSdkPromptRequest(prompt)) return { handled: false }
 
   const axbi = client ?? (await createAxBiSdkClient(serviceHub))
-  const plan = await axbi.ai.planDashboard({ prompt })
+  const planOnly =
+    /\b(?:plan|dry[-\s]?run)\b/i.test(prompt) &&
+    !/\b(?:build|create|generate|make)\b/i.test(prompt)
+  const result: PromptToDashboardResult = planOnly
+    ? await axbi.ai.planDashboard({ prompt }).then((envelope) => ({
+        plan: envelope.plan,
+        warnings: envelope.warnings,
+        status: 'dry_run',
+      }))
+    : await axbi.ai.promptToDashboard({ prompt })
+  const status = workflowStatus(result)
+  const dashboardUrl = result.dashboard_url
+    ? normalizeAxBiResultUrl(result.dashboard_url)
+    : undefined
 
   return {
     handled: true,
-    plan,
-    message: formatDashboardPlan(plan),
+    plan: result.plan ?? null,
+    dashboardUrl,
+    status,
+    message: formatPromptToDashboardResult(result, status, dashboardUrl),
   }
 }
 
@@ -2313,7 +2402,7 @@ function buildExistingDatasetChartConfig(
       y_secondary: [secondaryMetric],
       secondary_kind: intent.secondaryKind ?? 'bar',
       show_legend: true,
-      color_scheme: 'supersetColors',
+      color_scheme: 'japandiColors',
     }
     applyChartFilters(config, intent.filters)
     applyCommonChartOptions(config, intent.options, {
@@ -2365,7 +2454,7 @@ function buildExistingDatasetChartConfig(
       kind: 'scatter',
       x_axis: { title: humanize(intent.xColumn) },
       y_axis: { title: humanize(intent.yColumn) },
-      color_scheme: 'supersetColors',
+      color_scheme: 'japandiColors',
     }
     if (intent.groupBy) {
       config.group_by = [{ name: intent.groupBy }]
@@ -2389,7 +2478,7 @@ function buildExistingDatasetChartConfig(
       show_labels: true,
       label_type: 'key_value_percent',
       show_legend: true,
-      color_scheme: 'supersetColors',
+      color_scheme: 'japandiColors',
     }
     applyChartFilters(config, intent.filters)
     applyCommonChartOptions(config, intent.options, {
@@ -2483,7 +2572,7 @@ async function callAxBiTool({
   }
 
   throw new Error(
-    `AX-BI MCP is connected, but neither "${toolName}" nor the "call_tool" proxy is available. Please restart the AX-BI MCP service and reconnect it in Ax Studio.`
+    `AX BI MCP is connected, but neither "${toolName}" nor the "call_tool" proxy is available. Please restart the AX BI MCP service and reconnect it in AX Studio.`
   )
 }
 
@@ -2538,7 +2627,7 @@ async function findSavedDashboardChartIds({
         },
       })
     } catch (error) {
-      console.warn('[AX-BI] list_charts failed for dashboard search', error)
+      console.warn('[AX BI] list_charts failed for dashboard search', error)
       continue
     }
 
@@ -2576,7 +2665,7 @@ async function findSavedDashboardChartIds({
         chartIds.push(chartId)
       }
     } catch (error) {
-      console.warn('[AX-BI] Could not parse list_charts response', error)
+      console.warn('[AX BI] Could not parse list_charts response', error)
     }
   }
 
@@ -2627,7 +2716,7 @@ async function findSavedDashboard({
         },
       })
     } catch (error) {
-      console.warn('[AX-BI] list_dashboards failed', error)
+      console.warn('[AX BI] list_dashboards failed', error)
       continue
     }
 
@@ -2660,7 +2749,7 @@ async function findSavedDashboard({
       )
       if (fuzzy) return fuzzy
     } catch (error) {
-      console.warn('[AX-BI] Could not parse list_dashboards response', error)
+      console.warn('[AX BI] Could not parse list_dashboards response', error)
     }
   }
 
@@ -2669,13 +2758,13 @@ async function findSavedDashboard({
 
 function chartUrlFromResult(result: ChartResult): string | undefined {
   const chart = result.chart ?? undefined
-  if (result.chart_url) return result.chart_url
-  if (result.explore_url) return result.explore_url
+  if (result.chart_url) return normalizeAxBiResultUrl(result.chart_url)
+  if (result.explore_url) return normalizeAxBiResultUrl(result.explore_url)
   const chartRecord: Record<string, unknown> | undefined =
     chart && isRecord(chart) ? (chart as Record<string, unknown>) : undefined
   const chartUrl =
     typeof chartRecord?.url === 'string' ? chartRecord.url : undefined
-  if (chartUrl) return chartUrl
+  if (chartUrl) return normalizeAxBiResultUrl(chartUrl)
 
   const id =
     result.slice_id ??
@@ -2684,7 +2773,7 @@ function chartUrlFromResult(result: ChartResult): string | undefined {
     result.id ??
     chart?.id
   return id != null
-    ? `http://127.0.0.1:8080/explore/?slice_id=${id}`
+    ? `${DEFAULT_AX_BI_WEB_URL}/explore/?slice_id=${id}`
     : undefined
 }
 
@@ -2721,7 +2810,7 @@ export async function runAxBiExistingDatasetChartWorkflow({
   for (const required of requiredTools) {
     if (!canCallAxBiTool(toolNames, required)) {
       throw new Error(
-        `AX-BI MCP is connected, but the required tool "${required}" is not available directly or through the "call_tool" proxy. Please restart the AX-BI MCP service and reconnect it in Ax Studio.`
+        `AX BI MCP is connected, but the required tool "${required}" is not available directly or through the "call_tool" proxy. Please restart the AX BI MCP service and reconnect it in AX Studio.`
       )
     }
   }
@@ -2736,7 +2825,7 @@ export async function runAxBiExistingDatasetChartWorkflow({
     if (!dashboard || dashboardId == null) {
       return {
         handled: true,
-        message: `AX-BI could not find dashboard "${addChartToDashboardIntent.dashboardTitle}". Please confirm the dashboard name and retry.`,
+        message: `AX BI could not find dashboard "${addChartToDashboardIntent.dashboardTitle}". Please confirm the dashboard name and retry.`,
       }
     }
 
@@ -2751,7 +2840,7 @@ export async function runAxBiExistingDatasetChartWorkflow({
     if (existingChartLookup.missingExplicitNames.length > 0) {
       return {
         handled: true,
-        message: `AX-BI could not find these saved chart(s): ${existingChartLookup.missingExplicitNames.join(', ')}. Please confirm the chart names or open the AX-BI Charts page and retry.`,
+        message: `AX BI could not find these saved chart(s): ${existingChartLookup.missingExplicitNames.join(', ')}. Please confirm the chart names or open the AX BI Charts page and retry.`,
       }
     }
 
@@ -2792,7 +2881,7 @@ export async function runAxBiExistingDatasetChartWorkflow({
     }
 
     if (!dashboardUrl) {
-      dashboardUrl = `http://127.0.0.1:8080/ax-bi/dashboard/${dashboardId}/`
+      dashboardUrl = `${DEFAULT_AX_BI_WEB_URL}/ax-bi/dashboard/${dashboardId}/`
     }
 
     const statusParts = []
@@ -2810,7 +2899,7 @@ export async function runAxBiExistingDatasetChartWorkflow({
     return {
       handled: true,
       chartUrl: dashboardUrl,
-      message: `Updated AX-BI dashboard "${savedDashboardTitle(dashboard) ?? addChartToDashboardIntent.dashboardTitle}" (${statusParts.join(', ') || 'no changes needed'}).\n\nDashboard URL: ${dashboardUrl}`,
+      message: `Updated AX BI dashboard "${savedDashboardTitle(dashboard) ?? addChartToDashboardIntent.dashboardTitle}" (${statusParts.join(', ') || 'no changes needed'}).\n\nDashboard URL: ${dashboardUrl}`,
     }
   }
 
@@ -2827,7 +2916,7 @@ export async function runAxBiExistingDatasetChartWorkflow({
     if (existingChartLookup.missingExplicitNames.length > 0) {
       return {
         handled: true,
-        message: `AX-BI could not find these saved chart(s): ${existingChartLookup.missingExplicitNames.join(', ')}. Please confirm the chart names or open the AX-BI Charts page and retry.`,
+        message: `AX BI could not find these saved chart(s): ${existingChartLookup.missingExplicitNames.join(', ')}. Please confirm the chart names or open the AX BI Charts page and retry.`,
       }
     }
 
@@ -2835,7 +2924,7 @@ export async function runAxBiExistingDatasetChartWorkflow({
       return {
         handled: true,
         message:
-          'AX-BI could not find any saved charts matching this dashboard request. Please include exact chart names or specify a dataset.',
+          'AX BI could not find any saved charts matching this dashboard request. Please include exact chart names or specify a dataset.',
       }
     }
 
@@ -2857,7 +2946,7 @@ export async function runAxBiExistingDatasetChartWorkflow({
       throw new Error(
         typeof dashboardResult.error === 'string'
           ? dashboardResult.error
-          : 'AX-BI dashboard creation failed'
+          : 'AX BI dashboard creation failed'
       )
     }
 
@@ -2866,8 +2955,8 @@ export async function runAxBiExistingDatasetChartWorkflow({
       handled: true,
       chartUrl: dashboardUrl,
       message: dashboardUrl
-        ? `Created AX-BI dashboard "${dashboardIntent.dashboardTitle}" with ${existingChartIds.length} existing saved chart${existingChartIds.length === 1 ? '' : 's'}.\n\nDashboard URL: ${dashboardUrl}`
-        : `Created AX-BI dashboard "${dashboardIntent.dashboardTitle}" with ${existingChartIds.length} existing saved chart${existingChartIds.length === 1 ? '' : 's'}, but AX-BI did not return a dashboard URL.`,
+        ? `Created AX BI dashboard "${dashboardIntent.dashboardTitle}" with ${existingChartIds.length} existing saved chart${existingChartIds.length === 1 ? '' : 's'}.\n\nDashboard URL: ${dashboardUrl}`
+        : `Created AX BI dashboard "${dashboardIntent.dashboardTitle}" with ${existingChartIds.length} existing saved chart${existingChartIds.length === 1 ? '' : 's'}, but AX BI did not return a dashboard URL.`,
     }
   }
 
@@ -2894,7 +2983,7 @@ export async function runAxBiExistingDatasetChartWorkflow({
       ? rawDatasetId
       : undefined
   if (datasetId == null) {
-    throw new Error(`Could not find AX-BI dataset "${datasetName}".`)
+    throw new Error(`Could not find AX BI dataset "${datasetName}".`)
   }
 
   const datasetInfoResult = await callAxBiTool({
@@ -2912,7 +3001,7 @@ export async function runAxBiExistingDatasetChartWorkflow({
   const columns = datasetColumnsFromResult(parsedDatasetInfo)
   if (columns.length === 0) {
     throw new Error(
-      `Could not read columns for AX-BI dataset "${datasetName}".`
+      `Could not read columns for AX BI dataset "${datasetName}".`
     )
   }
 
@@ -2936,7 +3025,7 @@ export async function runAxBiExistingDatasetChartWorkflow({
     ) {
       return {
         handled: true,
-        message: `AX-BI found dataset "${dashboardIntent.datasetName}", but could not find these saved chart(s): ${existingChartLookup.missingExplicitNames.join(', ')}. Please confirm the chart names or open the AX-BI Charts page and retry.`,
+        message: `AX BI found dataset "${dashboardIntent.datasetName}", but could not find these saved chart(s): ${existingChartLookup.missingExplicitNames.join(', ')}. Please confirm the chart names or open the AX BI Charts page and retry.`,
       }
     }
 
@@ -2959,7 +3048,7 @@ export async function runAxBiExistingDatasetChartWorkflow({
         throw new Error(
           typeof dashboardResult.error === 'string'
             ? dashboardResult.error
-            : 'AX-BI dashboard creation failed'
+            : 'AX BI dashboard creation failed'
         )
       }
 
@@ -2968,8 +3057,8 @@ export async function runAxBiExistingDatasetChartWorkflow({
         handled: true,
         chartUrl: dashboardUrl,
         message: dashboardUrl
-          ? `Created AX-BI dashboard "${dashboardIntent.dashboardTitle}" with ${existingChartIds.length} existing saved chart${existingChartIds.length === 1 ? '' : 's'}.\n\nDashboard URL: ${dashboardUrl}`
-          : `Created AX-BI dashboard "${dashboardIntent.dashboardTitle}" with ${existingChartIds.length} existing saved chart${existingChartIds.length === 1 ? '' : 's'}, but AX-BI did not return a dashboard URL.`,
+          ? `Created AX BI dashboard "${dashboardIntent.dashboardTitle}" with ${existingChartIds.length} existing saved chart${existingChartIds.length === 1 ? '' : 's'}.\n\nDashboard URL: ${dashboardUrl}`
+          : `Created AX BI dashboard "${dashboardIntent.dashboardTitle}" with ${existingChartIds.length} existing saved chart${existingChartIds.length === 1 ? '' : 's'}, but AX BI did not return a dashboard URL.`,
       }
     }
 
@@ -2981,7 +3070,7 @@ export async function runAxBiExistingDatasetChartWorkflow({
     if (chartPlans.length === 0) {
       return {
         handled: true,
-        message: `AX-BI found dataset "${dashboardIntent.datasetName}", but I could not identify usable columns for dashboard charts.`,
+        message: `AX BI found dataset "${dashboardIntent.datasetName}", but I could not identify usable columns for dashboard charts.`,
       }
     }
 
@@ -3004,7 +3093,7 @@ export async function runAxBiExistingDatasetChartWorkflow({
       const chartResult = parseJsonToolResult<ChartResult>(chart)
       if (chartResult.error) {
         console.warn(
-          '[AX-BI] Dashboard chart generation failed',
+          '[AX BI] Dashboard chart generation failed',
           plan.name,
           chartResult.error
         )
@@ -3027,7 +3116,7 @@ export async function runAxBiExistingDatasetChartWorkflow({
             },
           })
         } catch (error) {
-          console.warn('[AX-BI] update_chart failed for chart', chartId, error)
+          console.warn('[AX BI] update_chart failed for chart', chartId, error)
         }
       }
 
@@ -3035,7 +3124,7 @@ export async function runAxBiExistingDatasetChartWorkflow({
     }
 
     if (chartIds.length === 0) {
-      throw new Error('AX-BI found the dataset, but no dashboard charts could be saved.')
+      throw new Error('AX BI found the dataset, but no dashboard charts could be saved.')
     }
 
     const dashboard = await callAxBiTool({
@@ -3056,7 +3145,7 @@ export async function runAxBiExistingDatasetChartWorkflow({
       throw new Error(
         typeof dashboardResult.error === 'string'
           ? dashboardResult.error
-          : 'AX-BI dashboard creation failed'
+          : 'AX BI dashboard creation failed'
       )
     }
 
@@ -3065,8 +3154,8 @@ export async function runAxBiExistingDatasetChartWorkflow({
       handled: true,
       chartUrl: dashboardUrl,
       message: dashboardUrl
-        ? `Created AX-BI dashboard "${dashboardIntent.dashboardTitle}" with ${chartIds.length} saved chart${chartIds.length === 1 ? '' : 's'}.\n\nDashboard URL: ${dashboardUrl}`
-        : `Created AX-BI dashboard "${dashboardIntent.dashboardTitle}" with ${chartIds.length} saved chart${chartIds.length === 1 ? '' : 's'}, but AX-BI did not return a dashboard URL.`,
+        ? `Created AX BI dashboard "${dashboardIntent.dashboardTitle}" with ${chartIds.length} saved chart${chartIds.length === 1 ? '' : 's'}.\n\nDashboard URL: ${dashboardUrl}`
+        : `Created AX BI dashboard "${dashboardIntent.dashboardTitle}" with ${chartIds.length} saved chart${chartIds.length === 1 ? '' : 's'}, but AX BI did not return a dashboard URL.`,
     }
   }
 
@@ -3092,11 +3181,11 @@ export async function runAxBiExistingDatasetChartWorkflow({
     throw new Error(
       typeof parsedChartResult.error === 'string'
         ? parsedChartResult.error
-        : 'AX-BI chart creation failed'
+        : 'AX BI chart creation failed'
     )
   }
 
-  // AX-BI's generate_chart may ignore the config parameter and create
+  // AX BI's generate_chart may ignore the config parameter and create
   // a default chart. Apply the config explicitly via update_chart.
   const chartId = chartIdFromResult(parsedChartResult)
   if (chartId && toolNames.has('update_chart')) {
@@ -3113,7 +3202,7 @@ export async function runAxBiExistingDatasetChartWorkflow({
         },
       })
     } catch (error) {
-      console.warn('[AX-BI] update_chart failed for chart', chartId, error)
+      console.warn('[AX BI] update_chart failed for chart', chartId, error)
     }
   }
 
@@ -3122,8 +3211,8 @@ export async function runAxBiExistingDatasetChartWorkflow({
     handled: true,
     chartUrl,
     message: chartUrl
-      ? `Created saved AX-BI chart "${resolvedIntent.chartName}".\n\nChart URL: ${chartUrl}`
-      : `Created saved AX-BI chart "${resolvedIntent.chartName}", but AX-BI did not return a chart URL.`,
+      ? `Created saved AX BI chart "${resolvedIntent.chartName}".\n\nChart URL: ${chartUrl}`
+      : `Created saved AX BI chart "${resolvedIntent.chartName}", but AX BI did not return a chart URL.`,
   }
 }
 
@@ -3146,14 +3235,14 @@ export async function runAxBiDashboardWorkflow({
     return {
       handled: true,
       message:
-        'AX-BI dashboard generation needs structured data. PPT/PPTX support is limited to extracted tables, which is not wired yet in this MVP. Please attach CSV or Excel for now.',
+        'AX BI dashboard generation needs structured data. PPT/PPTX support is limited to extracted tables, which is not wired yet in this MVP. Please attach CSV or Excel for now.',
     }
   }
 
   if (!attachment.path) {
     return {
       handled: true,
-      message: `I could not upload ${attachment.name} to AX-BI because the attachment path is missing.`,
+      message: `I could not upload ${attachment.name} to AX BI because the attachment path is missing.`,
     }
   }
 
@@ -3171,7 +3260,7 @@ export async function runAxBiDashboardWorkflow({
     if (!toolNames.has(required)) {
       return {
         handled: true,
-        message: `AX-BI MCP is connected, but the required tool "${required}" is not available. Please restart the AX-BI MCP service and reconnect it in Ax Studio.`,
+        message: `AX BI MCP is connected, but the required tool "${required}" is not available. Please restart the AX BI MCP service and reconnect it in AX Studio.`,
       }
     }
   }
@@ -3192,7 +3281,7 @@ export async function runAxBiDashboardWorkflow({
     throw new Error(
       typeof dataset.error === 'string'
         ? dataset.error
-        : `AX-BI could not create a dataset from ${attachment.name}`
+        : `AX BI could not create a dataset from ${attachment.name}`
     )
   }
 
@@ -3200,7 +3289,7 @@ export async function runAxBiDashboardWorkflow({
   if (chartPlans.length === 0) {
     return {
       handled: true,
-      message: `AX-BI created a dataset from ${attachment.name}, but I could not identify usable columns for charts. Dataset URL: ${dataset.url ?? 'not returned'}`,
+      message: `AX BI created a dataset from ${attachment.name}, but I could not identify usable columns for charts. Dataset URL: ${dataset.url ?? 'not returned'}`,
     }
   }
 
@@ -3223,7 +3312,7 @@ export async function runAxBiDashboardWorkflow({
     const chartResult = parseJsonToolResult<ChartResult>(chart)
     if (chartResult.error) {
       console.warn(
-        '[AX-BI] Chart generation failed',
+        '[AX BI] Chart generation failed',
         plan.name,
         chartResult.error
       )
@@ -3232,7 +3321,7 @@ export async function runAxBiDashboardWorkflow({
     const chartId = chartIdFromResult(chartResult)
     if (!chartId) continue
 
-    // AX-BI's generate_chart may ignore the config parameter and create
+    // AX BI's generate_chart may ignore the config parameter and create
     // a default chart. Apply the config explicitly via update_chart.
     if (toolNames.has('update_chart')) {
       try {
@@ -3247,7 +3336,7 @@ export async function runAxBiDashboardWorkflow({
           },
         })
       } catch (error) {
-        console.warn('[AX-BI] update_chart failed for chart', chartId, error)
+        console.warn('[AX BI] update_chart failed for chart', chartId, error)
       }
     }
 
@@ -3255,7 +3344,7 @@ export async function runAxBiDashboardWorkflow({
   }
 
   if (chartIds.length === 0) {
-    throw new Error('AX-BI created the dataset, but no charts could be saved.')
+    throw new Error('AX BI created the dataset, but no charts could be saved.')
   }
 
   const dashboardTitle = `${humanize(attachment.name.replace(/\.[^.]+$/, ''))} Dashboard`
@@ -3266,7 +3355,7 @@ export async function runAxBiDashboardWorkflow({
       request: {
         chart_ids: chartIds,
         dashboard_title: dashboardTitle,
-        description: `Generated from ${attachment.name} via Ax Studio.`,
+        description: `Generated from ${attachment.name} via AX Studio.`,
         published: true,
       },
     },
@@ -3276,7 +3365,7 @@ export async function runAxBiDashboardWorkflow({
     throw new Error(
       typeof dashboardResult.error === 'string'
         ? dashboardResult.error
-        : 'AX-BI dashboard creation failed'
+        : 'AX BI dashboard creation failed'
     )
   }
 
@@ -3285,7 +3374,7 @@ export async function runAxBiDashboardWorkflow({
     handled: true,
     dashboardUrl,
     message: dashboardUrl
-      ? `Created an AX-BI dashboard from ${attachment.name} with ${chartIds.length} saved chart${chartIds.length === 1 ? '' : 's'}.\n\nDashboard URL: ${dashboardUrl}`
-      : `Created an AX-BI dashboard from ${attachment.name} with ${chartIds.length} saved chart${chartIds.length === 1 ? '' : 's'}, but AX-BI did not return a dashboard URL.`,
+      ? `Created an AX BI dashboard from ${attachment.name} with ${chartIds.length} saved chart${chartIds.length === 1 ? '' : 's'}.\n\nDashboard URL: ${dashboardUrl}`
+      : `Created an AX BI dashboard from ${attachment.name} with ${chartIds.length} saved chart${chartIds.length === 1 ? '' : 's'}, but AX BI did not return a dashboard URL.`,
   }
 }

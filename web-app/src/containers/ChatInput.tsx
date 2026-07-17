@@ -337,7 +337,7 @@ const ChatInput = memo(function ChatInput({
                 className="absolute inset-0 streaming-glow-spin"
                 style={{
                   background:
-                    'conic-gradient(from 0deg, transparent 0%, #6366f1 20%, #8b5cf6 40%, transparent 60%)',
+                    'conic-gradient(from 0deg, transparent 0%, var(--primary) 20%, var(--brand-to) 40%, transparent 60%)',
                 }}
               />
               <div className="absolute inset-[1.5px] rounded-[14px] bg-white dark:bg-zinc-900" />
@@ -436,13 +436,20 @@ const ChatInput = memo(function ChatInput({
       </div>
 
       {message && (
-        <div className="-mt-0.5 mx-2 pb-2 px-3 pt-1.5 rounded-b-lg text-xs text-destructive transition-all duration-200 ease-in-out">
+        <div
+          role="alert"
+          className="-mt-0.5 mx-2 pb-2 px-3 pt-1.5 rounded-b-lg text-xs text-destructive transition-all duration-200 ease-in-out"
+        >
           <div className="flex items-center gap-1 justify-between">
             {message}
-            <X
-              className="size-3 text-muted-foreground cursor-pointer"
+            <button
+              type="button"
+              className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label={t('common:close')}
               onClick={() => setMessage('')}
-            />
+            >
+              <X className="size-3.5" />
+            </button>
           </div>
         </div>
       )}

@@ -495,6 +495,9 @@ export function ModelCombobox({
             variant="ghost"
             size="icon-xs"
             disabled={disabled}
+            aria-label={open ? 'Close model list' : 'Open model list'}
+            aria-expanded={open}
+            title={open ? 'Close model list' : 'Open model list'}
             onMouseDown={(e) => e.preventDefault()}
             onClick={handleDropdownToggle}
           >

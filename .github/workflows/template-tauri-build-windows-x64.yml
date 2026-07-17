@@ -36,18 +36,20 @@ on:
       DELTA_AWS_SECRET_ACCESS_KEY:
         required: false
       AZURE_KEY_VAULT_URI:
-        required: false
+        required: true
       AZURE_CLIENT_ID:
-        required: false
+        required: true
       AZURE_TENANT_ID:
-        required: false
+        required: true
       AZURE_CLIENT_SECRET:
-        required: false
+        required: true
       AZURE_CERT_NAME:
-        required: false
+        required: true
       TAURI_SIGNING_PRIVATE_KEY:
         required: false
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
+        required: false
+      TAURI_UPDATER_PUBKEY:
         required: false
       AX_STUDIO_SIGNING_KEY:
         required: false
@@ -63,9 +65,13 @@ on:
       PORTABLE_FILE_NAME:
         value: ${{ jobs.build-windows-x64.outputs.PORTABLE_FILE_NAME }}
 
+permissions:
+  contents: read
+
 jobs:
   build-windows-x64:
     runs-on: windows-latest
+    timeout-minutes: 45
     outputs:
       WIN_SIG: ${{ steps.metadata.outputs.WIN_SIG }}
       FILE_NAME: ${{ steps.metadata.outputs.FILE_NAME }}
@@ -75,7 +81,7 @@ jobs:
       contents: write
     steps:
       - name: Getting the repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
 
@@ -86,137 +92,64 @@ jobs:
           cp .github/scripts/icon-${{ inputs.channel }}.png src-tauri/icons/icon.png
 
       - name: Installing node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20.19'
+
+      - name: Enable long paths
+        run: git config --global core.longpaths true
 
       - name: Install jq
         uses: dcarbone/install-jq-action@v2.0.1
 
-      - name: Install ctoml
-        run: |
-          cargo install ctoml
-
-      - name: Update app version base on tag
-        id: version_update
+      - name: Update app version from release tag
+        env:
+          VERSION: ${{ inputs.new_version }}
+          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
         shell: bash
         run: |
-          echo "Version: ${{ inputs.new_version }}"
-          # Update tauri.conf.json
-          jq --arg version "${{ inputs.new_version }}" '.version = $version | .bundle.createUpdaterArtifacts = true' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
-          mv /tmp/tauri.conf.json ./src-tauri/tauri.conf.json
-          jq '.bundle.windows.nsis.template = "tauri.bundle.windows.nsis.template"' ./src-tauri/tauri.windows.conf.json > /tmp/tauri.windows.conf.json
-          mv /tmp/tauri.windows.conf.json ./src-tauri/tauri.windows.conf.json
-          jq --arg version "${{ inputs.new_version }}" '.version = $version' web-app/package.json > /tmp/package.json
-          mv /tmp/package.json web-app/package.json
+          node scripts/release/set-version.mjs \
+            --version "$VERSION" \
+            --channel "${{ inputs.channel }}" \
+            ${TAURI_UPDATER_PUBKEY:+--updater-pubkey "$TAURI_UPDATER_PUBKEY"} \
+            --windows-sign-command
 
-          # Add sign commands to tauri.windows.conf.json
-          jq '.bundle.windows.signCommand = "powershell -ExecutionPolicy Bypass -File ./sign.ps1 %1"' ./src-tauri/tauri.windows.conf.json > /tmp/tauri.windows.conf.json
-          mv /tmp/tauri.windows.conf.json ./src-tauri/tauri.windows.conf.json
-
-          # Update tauri plugin versions
-
-          jq --arg version "${{ inputs.new_version }}" '.version = $version' ./src-tauri/plugins/tauri-plugin-hardware/package.json > /tmp/package.json
-          mv /tmp/package.json ./src-tauri/plugins/tauri-plugin-hardware/package.json
-          
-          echo "---------./src-tauri/plugins/tauri-plugin-hardware/package.json---------"
-          cat ./src-tauri/plugins/tauri-plugin-hardware/package.json
-
-          jq --arg version "${{ inputs.new_version }}" '.version = $version' ./src-tauri/plugins/tauri-plugin-llamacpp/package.json > /tmp/package.json
-          mv /tmp/package.json ./src-tauri/plugins/tauri-plugin-llamacpp/package.json
-
-          echo "---------./src-tauri/plugins/tauri-plugin-llamacpp/package.json---------"
-          cat ./src-tauri/plugins/tauri-plugin-llamacpp/package.json
-
-          ctoml ./src-tauri/plugins/tauri-plugin-hardware/Cargo.toml package.version "${{ inputs.new_version }}"
-          echo "---------./src-tauri/plugins/tauri-plugin-hardware/Cargo.toml---------"
-          cat ./src-tauri/plugins/tauri-plugin-hardware/Cargo.toml
-          
-          ctoml ./src-tauri/plugins/tauri-plugin-llamacpp/Cargo.toml package.version "${{ inputs.new_version }}"
-          echo "---------./src-tauri/plugins/tauri-plugin-llamacpp/Cargo.toml---------"
-          cat ./src-tauri/plugins/tauri-plugin-llamacpp/Cargo.toml
-
-          ctoml ./src-tauri/Cargo.toml package.version "${{ inputs.new_version }}"
-          echo "---------./src-tauri/Cargo.toml---------"
-          cat ./src-tauri/Cargo.toml
-
-          generate_build_version() {
-              ### Example
-              ### input 0.5.6 output will be 0.5.6 and 0.5.6.0
-              ### input 0.5.6-rc2-beta output will be 0.5.6 and 0.5.6.2
-              ### input 0.5.6-1213 output will be 0.5.6 and and 0.5.6.1213
-              local new_version="$1"
-              local base_version
-              local t_value
-              # Check if it has a "-"
-              if [[ "$new_version" == *-* ]]; then
-                  base_version="${new_version%%-*}" # part before -
-                  suffix="${new_version#*-}"         # part after -
-                  # Check if it is rcX-beta
-                  if [[ "$suffix" =~ ^rc([0-9]+)-beta$ ]]; then
-                      t_value="${BASH_REMATCH[1]}"
-                  else
-                      t_value="$suffix"
-                  fi
-              else
-                  base_version="$new_version"
-                  t_value="0"
-              fi
-              # Export two values
-              new_base_version="$base_version"
-              new_build_version="${base_version}.${t_value}"
-          }
-          generate_build_version ${{ inputs.new_version }}
-          sed -i "s/ax_studio_version/$new_base_version/g" ./src-tauri/tauri.bundle.windows.nsis.template
-          sed -i "s/ax_studio_build/$new_build_version/g" ./src-tauri/tauri.bundle.windows.nsis.template
-          
-          echo "---------tauri.windows.conf.json---------"
-          cat ./src-tauri/tauri.windows.conf.json
-
-          # Temporarily enable devtool on prod build
-          ctoml ./src-tauri/Cargo.toml dependencies.tauri.features[] "devtools"
-          cat ./src-tauri/Cargo.toml
-
-          # Change app name for beta and nightly builds
-          if [ "${{ inputs.channel }}" != "stable" ]; then
-            if [[ "${{ inputs.channel }}" == "nightly" ]]; then
-              jq '.plugins.updater.endpoints = ["https://apps-nightly.axstudio.ai/update-check", "https://delta.axstudio.ai/${{ inputs.channel }}/latest.json"]' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
-            else
-              jq '.plugins.updater.endpoints = ["https://delta.axstudio.ai/${{ inputs.channel }}/latest.json"]' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
-            fi
-            mv /tmp/tauri.conf.json ./src-tauri/tauri.conf.json
-            
-            # Update product name
-            jq --arg name "Ax-Studio-${{ inputs.channel }}" '.productName = $name' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
-            mv /tmp/tauri.conf.json ./src-tauri/tauri.conf.json
-
-            chmod +x .github/scripts/rename-tauri-app.sh
-            .github/scripts/rename-tauri-app.sh ./src-tauri/tauri.conf.json ${{ inputs.channel }}
-
-            echo "---------tauri.conf.json---------"
-            cat ./src-tauri/tauri.conf.json
-
-            # Update Cargo.toml
-            ctoml ./src-tauri/Cargo.toml package.name "Ax-Studio-${{ inputs.channel }}"
-            ctoml ./src-tauri/Cargo.toml dependencies.tauri.features[] "devtools"
-            echo "------------------"
-            cat ./src-tauri/Cargo.toml
-
-            chmod +x .github/scripts/rename-workspace.sh
-            .github/scripts/rename-workspace.sh ./package.json ${{ inputs.channel }}
-            cat ./package.json
-            sed -i "s/ax_studio_productname/Ax-Studio-${{ inputs.channel }}/g" ./src-tauri/tauri.bundle.windows.nsis.template
-            sed -i "s/ax_studio_mainbinaryname/ax-studio-${{ inputs.channel }}/g" ./src-tauri/tauri.bundle.windows.nsis.template
+      - name: Configure channel-specific settings
+        if: inputs.channel != 'stable'
+        shell: bash
+        run: |
+          if [[ "${{ inputs.channel }}" == "nightly" ]]; then
+            jq '.plugins.updater.endpoints = ["https://apps-nightly.axstudio.ai/update-check", "https://delta.axstudio.ai/${{ inputs.channel }}/latest.json"]' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
           else
-            sed -i "s/ax_studio_productname/Ax-Studio/g" ./src-tauri/tauri.bundle.windows.nsis.template
-            sed -i "s/ax_studio_mainbinaryname/ax-studio/g" ./src-tauri/tauri.bundle.windows.nsis.template
+            jq '.plugins.updater.endpoints = ["https://delta.axstudio.ai/${{ inputs.channel }}/latest.json"]' ./src-tauri/tauri.conf.json > /tmp/tauri.conf.json
           fi
-          echo "---------nsis.template---------"
-          cat ./src-tauri/tauri.bundle.windows.nsis.template
+          mv /tmp/tauri.conf.json ./src-tauri/tauri.conf.json
+
+          chmod +x .github/scripts/rename-tauri-app.sh
+          .github/scripts/rename-tauri-app.sh ./src-tauri/tauri.conf.json ${{ inputs.channel }}
+
+          chmod +x .github/scripts/rename-workspace.sh
+          .github/scripts/rename-workspace.sh ./package.json ${{ inputs.channel }}
 
       - name: Install AzureSignTool
         run: |
           dotnet tool install --global --version 6.0.0 AzureSignTool
+
+      - name: Validate Windows signing configuration
+        shell: pwsh
+        env:
+          AZURE_KEY_VAULT_URI: ${{ secrets.AZURE_KEY_VAULT_URI }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_CERT_NAME: ${{ secrets.AZURE_CERT_NAME }}
+        run: |
+          $required = @('AZURE_KEY_VAULT_URI', 'AZURE_CLIENT_ID', 'AZURE_TENANT_ID', 'AZURE_CLIENT_SECRET', 'AZURE_CERT_NAME')
+          $missing = @($required | Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) })
+          if ($missing.Count -gt 0) {
+            throw "Windows code signing secrets are missing: $($missing -join ', ')"
+          }
+          AzureSignTool.exe --version
 
       - name: Config Yarn
         run: |
@@ -242,59 +175,74 @@ jobs:
           AWS_MAX_ATTEMPTS: '5'
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_SIGNING_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
           AX_STUDIO_SIGNING_KEY: ${{ secrets.AX_STUDIO_SIGNING_KEY }}
 
       - name: Upload NSIS Installer Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ax-studio-windows-exe-${{ inputs.new_version }}
+          retention-days: 14
           path: |
             ./src-tauri/target/release/bundle/nsis/*.exe
       - name: Upload MSI Installer Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ax-studio-windows-msi-${{ inputs.new_version }}
+          retention-days: 14
           path: |
             ./src-tauri/target/release/bundle/msi/*.msi
-      
+
       - name: Upload Portable Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ax-studio-windows-portable-${{ inputs.new_version }}
+          retention-days: 14
           path: |
-            ./src-tauri/target/release/Ax-Studio*.exe
+            ./src-tauri/target/release/AX Studio*.exe
+            ./src-tauri/target/release/ax-studio.exe
 
       ## Set output filename for windows
       - name: Set output filename for windows
         shell: bash
+        env:
+          VERSION: ${{ inputs.new_version }}
         run: |
-          cd ./src-tauri/target/release/bundle/nsis
+          set -euo pipefail
+          TARGET_DIR="./src-tauri/target/release"
+          NSIS_DIR="${TARGET_DIR}/bundle/nsis"
           if [ "${{ inputs.channel }}" != "stable" ]; then
-            FILE_NAME=Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}_x64-setup.exe
-            WIN_SIG=$(cat Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}_x64-setup.exe.sig)
-
-            MSI_FILE="Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}_x64_en-US.msi"
-            PORTABLE_FILE_NAME="Ax-Studio-${{ inputs.channel }}_${{ inputs.new_version }}_x64-portable.exe"
+            RAW_FILE_NAME="AX Studio-${{ inputs.channel }}_${VERSION}_x64-setup.exe"
+            FILE_NAME="AX.Studio-${{ inputs.channel }}_${VERSION}_x64-setup.exe"
+            MSI_FILE="AX Studio-${{ inputs.channel }}_${VERSION}_x64_en-US.msi"
+            PORTABLE_FILE_NAME="AX.Studio-${{ inputs.channel }}_${VERSION}_x64-portable.exe"
           else
-            FILE_NAME=Ax-Studio_${{ inputs.new_version }}_x64-setup.exe
-            WIN_SIG=$(cat Ax-Studio_${{ inputs.new_version }}_x64-setup.exe.sig)
-            
-            MSI_FILE="Ax-Studio_${{ inputs.new_version }}_x64_en-US.msi"
-            PORTABLE_FILE_NAME="Ax-Studio_${{ inputs.new_version }}_x64-portable.exe"
+            RAW_FILE_NAME="AX Studio_${VERSION}_x64-setup.exe"
+            FILE_NAME="AX.Studio_${VERSION}_x64-setup.exe"
+            MSI_FILE="AX Studio_${VERSION}_x64_en-US.msi"
+            PORTABLE_FILE_NAME="AX.Studio_${VERSION}_x64-portable.exe"
           fi
-          # go to ./src-tauri/target/release
-          cd ../..
 
-          # find the actual portable exe produced by the build
-          PORTABLE_SRC=$(find . -maxdepth 1 -type f -name 'Ax-Studio*.exe' -print -quit)
-          if [ -z "$PORTABLE_SRC" ] || [ ! -f "$PORTABLE_SRC" ]; then
-            echo "Error: portable exe matching 'Ax-Studio*.exe' not found in $(pwd)" >&2
-            exit 1
+          if [ -f "${NSIS_DIR}/${RAW_FILE_NAME}" ]; then
+            mv "${NSIS_DIR}/${RAW_FILE_NAME}" "${NSIS_DIR}/${FILE_NAME}"
           fi
-          PORTABLE_SRC=${PORTABLE_SRC#./}
-          # copy to deterministic versioned filename
-          cp "$PORTABLE_SRC" "$PORTABLE_FILE_NAME"
-          echo "Portable exe: $PORTABLE_SRC -> $PORTABLE_FILE_NAME"
+          if [ -f "${NSIS_DIR}/${RAW_FILE_NAME}.sig" ]; then
+            mv "${NSIS_DIR}/${RAW_FILE_NAME}.sig" "${NSIS_DIR}/${FILE_NAME}.sig"
+          fi
+          test -f "${NSIS_DIR}/${FILE_NAME}"
+
+          WIN_SIG=""
+          if [ -f "${NSIS_DIR}/${FILE_NAME}.sig" ]; then
+            WIN_SIG=$(cat "${NSIS_DIR}/${FILE_NAME}.sig")
+          fi
+
+          PORTABLE_SRC=$(find "$TARGET_DIR" -maxdepth 1 -type f \( -name "AX Studio*.exe" -o -name "ax-studio.exe" \) -print -quit || true)
+          if [ -n "$PORTABLE_SRC" ] && [ -f "$PORTABLE_SRC" ]; then
+            cp "$PORTABLE_SRC" "${TARGET_DIR}/${PORTABLE_FILE_NAME}"
+            echo "Portable exe: $PORTABLE_SRC -> ${TARGET_DIR}/${PORTABLE_FILE_NAME}"
+          else
+            echo "::notice::Portable Windows x64 exe not found; continuing with NSIS installer only."
+          fi
 
           {
             echo "WIN_SIG=${WIN_SIG}"
@@ -325,9 +273,10 @@ jobs:
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.new_version }}
         run: |
-          gh release upload "${{ github.ref_name }}" \
-            "./src-tauri/target/release/bundle/nsis/${{ steps.metadata.outputs.FILE_NAME }}" \
-            "./src-tauri/target/release/${{ steps.metadata.outputs.PORTABLE_FILE_NAME }}" \
-            --clobber \
-            --repo "$GITHUB_REPOSITORY"
+          NSIS_DIR="./src-tauri/target/release/bundle/nsis"
+          FILES=("$NSIS_DIR/${{ steps.metadata.outputs.FILE_NAME }}")
+          PORTABLE="./src-tauri/target/release/${{ steps.metadata.outputs.PORTABLE_FILE_NAME }}"
+          [ -f "$PORTABLE" ] && FILES+=("$PORTABLE")
+          gh release upload "v${VERSION}" "${FILES[@]}" --clobber --repo "$GITHUB_REPOSITORY"

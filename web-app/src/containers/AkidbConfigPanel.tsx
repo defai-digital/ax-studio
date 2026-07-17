@@ -256,7 +256,7 @@ export function AkidbConfigPanel() {
       {/* Embedding model row */}
       <CardItem
         title="Embedding Model"
-        description="Model used for generating embeddings. Uses Ax-Studio's proxy so your existing API keys work automatically."
+        description="Model used for generating embeddings. Uses AX Studio's proxy so your existing API keys work automatically."
         actions={
           <select
             value={embeddingModel}

@@ -145,6 +145,12 @@ export const APIs = {
                   : typeof raw.cors_enabled === 'boolean'
                     ? raw.cors_enabled
                     : undefined,
+              verbose_logs:
+                typeof raw.isVerboseEnabled === 'boolean'
+                  ? raw.isVerboseEnabled
+                  : typeof raw.verbose_logs === 'boolean'
+                    ? raw.verbose_logs
+                    : undefined,
               proxy_timeout: pickNumber(raw, ['proxy_timeout', 'proxyTimeout']),
             }
             return getServiceHub().core().invoke(command, { config })

@@ -26,7 +26,7 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "test:module:audit": "node scripts/testing/module-coverage-audit.mjs --out-dir report/testing",
-    "test:module:gate": "node scripts/testing/module-coverage-gate.mjs --audit report/testing/module-coverage-audit.json --thresholds scripts/testing/module-thresholds.json --mode advisory",
+    "test:module:gate": "node scripts/testing/module-coverage-gate.mjs --audit report/testing/module-coverage-audit.json --thresholds scripts/testing/module-thresholds.json --mode blocking",
     "test:module:gate:blocking": "node scripts/testing/module-coverage-gate.mjs --audit report/testing/module-coverage-audit.json --thresholds scripts/testing/module-thresholds.json --mode blocking",
     "test:quality:gates": "bash scripts/testing/run-quality-gates.sh",
     "test:quality:gates:blocking": "COVERAGE_GATE_MODE=blocking bash scripts/testing/run-quality-gates.sh",
@@ -43,7 +43,7 @@
     "build:icon": "tauri icon ./src-tauri/icons/icon.png",
     "build:core": "cd core && yarn build && yarn pack",
     "build:web": "yarn workspace @ax-studio/web-app build",
-    "build:extensions": "mkdir -p ./pre-install && rimraf ./pre-install/*.tgz || true && yarn build:core && cd extensions && yarn install && yarn workspaces foreach -Apt run build:publish",
+    "build:extensions": "mkdir -p ./pre-install && rimraf ./pre-install/*.tgz || true && yarn build:core && cd extensions && yarn install --no-immutable && yarn workspaces foreach -Apt run build:publish",
     "prepare": "husky"
   },
   "devDependencies": {
@@ -51,6 +51,7 @@
     "@vitest/coverage-v8": "3.2.6",
     "husky": "^9.1.5",
     "jsdom": "^29.1.1",
+    "lint-staged": "^15.4.3",
     "rimraf": "^6.0.1",
     "tar": "^7.5.16",
     "unzipper": "^0.12.3",
@@ -89,5 +90,13 @@
     "vite@npm:^5.0.0 || ^6.0.0 || ^7.0.0-0": "7.3.5",
     "ws@npm:^8.18.0": "8.21.0"
   },
-  "packageManager": "yarn@4.5.3"
+  "packageManager": "yarn@4.5.3",
+  "lint-staged": {
+    "core/**/*.{ts,tsx}": [
+      "yarn workspace @ax-studio/core lint --fix"
+    ],
+    "web-app/**/*.{ts,tsx,js,jsx}": [
+      "yarn workspace @ax-studio/web-app lint --fix"
+    ]
+  }
 }

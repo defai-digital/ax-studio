@@ -36,7 +36,8 @@ fn test_validate_proxy_config() {
     };
     assert!(validate_proxy_config(&config).is_ok());
 
-    // Valid SOCKS5 proxy
+    // SOCKS is not enabled in the native HTTP client; reject it at validation
+    // instead of accepting configuration that will fail only at download time.
     let config = ProxyConfig {
         url: "socks5://proxy.example.com:1080".to_string(),
         username: None,
@@ -44,7 +45,7 @@ fn test_validate_proxy_config() {
         no_proxy: None,
         ignore_ssl: None,
     };
-    assert!(validate_proxy_config(&config).is_ok());
+    assert!(validate_proxy_config(&config).is_err());
 
     // Invalid URL
     let config = create_test_proxy_config("invalid-url");
@@ -263,14 +264,11 @@ fn test_proxy_config_with_http_and_ssl_settings() {
 
 #[test]
 fn test_proxy_config_with_socks_and_ssl_settings() {
-    // Test that SSL settings work with SOCKS proxy
+    // Unsupported proxy schemes fail consistently at the boundary.
     let mut config = create_test_proxy_config("socks5://proxy.example.com:1080");
     config.ignore_ssl = Some(false);
 
-    assert!(validate_proxy_config(&config).is_ok());
-
-    // SOCKS proxies are not supported by reqwest::Proxy::all()
-    // This test should expect an error for SOCKS proxies
+    assert!(validate_proxy_config(&config).is_err());
     let result = create_proxy_from_config(&config);
     assert!(result.is_err());
 

@@ -5,15 +5,14 @@
 */
 
 export function mergeButtonRefs<T extends HTMLButtonElement>(
-  refs: Array<React.MutableRefObject<T> | React.LegacyRef<T>>
+  refs: Array<React.Ref<T> | React.LegacyRef<T> | null | undefined>
 ): React.RefCallback<T> {
   return (value) => {
     for (const ref of refs) {
       if (typeof ref === 'function') {
         ref(value)
-      } else if (ref != null) {
-        const mutableRef = ref as React.MutableRefObject<T | null>
-        mutableRef.current = value
+      } else if (typeof ref === 'object' && ref !== null && 'current' in ref) {
+        ref.current = value
       }
     }
   }

@@ -23,33 +23,36 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
 const hasGetDevices = (value: unknown): value is LlamacppDeviceExtension =>
   isPlainObject(value) && typeof value.getDevices === 'function'
 
-export class TauriHardwareService implements HardwareService {
-  async getHardwareInfo(): Promise<HardwareData | null> {
-    try {
-      const raw = await invoke<unknown>('plugin:hardware|get_system_info')
-      if (!isPlainObject(raw)) {
-        console.warn('[TauriHardwareService] get_system_info returned unexpected shape:', raw)
-        return null
-      }
-      return raw as unknown as HardwareData
-    } catch (error) {
-      console.error('[TauriHardwareService] get_system_info failed:', error)
+async function fetchPluginObject<T>(
+  command: string,
+  label: string
+): Promise<T | null> {
+  try {
+    const raw = await invoke<unknown>(command)
+    if (!isPlainObject(raw)) {
+      console.warn(`[TauriHardwareService] ${label} returned unexpected shape:`, raw)
       return null
     }
+    return raw as T
+  } catch (error) {
+    console.error(`[TauriHardwareService] ${label} failed:`, error)
+    return null
+  }
+}
+
+export class TauriHardwareService implements HardwareService {
+  async getHardwareInfo(): Promise<HardwareData | null> {
+    return fetchPluginObject<HardwareData>(
+      'plugin:hardware|get_system_info',
+      'get_system_info'
+    )
   }
 
   async getSystemUsage(): Promise<SystemUsage | null> {
-    try {
-      const raw = await invoke<unknown>('plugin:hardware|get_system_usage')
-      if (!isPlainObject(raw)) {
-        console.warn('[TauriHardwareService] get_system_usage returned unexpected shape:', raw)
-        return null
-      }
-      return raw as unknown as SystemUsage
-    } catch (error) {
-      console.error('[TauriHardwareService] get_system_usage failed:', error)
-      return null
-    }
+    return fetchPluginObject<SystemUsage>(
+      'plugin:hardware|get_system_usage',
+      'get_system_usage'
+    )
   }
 
   async getLlamacppDevices(): Promise<DeviceList[]> {

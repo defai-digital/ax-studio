@@ -5,6 +5,7 @@
 import { invoke, convertFileSrc } from '@tauri-apps/api/core'
 import type { ExtensionManifest } from '@/lib/extension'
 import type { InvokeArgs, CoreService } from './types'
+import { withTauriFallback, withTauriFallbackSync } from '../tauri-guard'
 
 export class TauriCoreService implements CoreService {
   async invoke<T = unknown>(command: string, args?: InvokeArgs): Promise<T> {
@@ -17,22 +18,20 @@ export class TauriCoreService implements CoreService {
   }
 
   convertFileSrc(filePath: string, protocol?: string): string {
-    try {
-      return convertFileSrc(filePath, protocol)
-    } catch (error) {
-      console.error('Error converting file src in Tauri:', error)
-      return filePath
-    }
+    return withTauriFallbackSync(
+      () => convertFileSrc(filePath, protocol),
+      'Error converting file src in Tauri:',
+      filePath
+    )
   }
 
   // Extension management - using invoke
   async getActiveExtensions(): Promise<ExtensionManifest[]> {
-    try {
-      return await this.invoke<ExtensionManifest[]>('get_active_extensions')
-    } catch (error) {
-      console.error('Error getting active extensions in Tauri:', error)
-      return []
-    }
+    return withTauriFallback(
+      () => this.invoke<ExtensionManifest[]>('get_active_extensions'),
+      'Error getting active extensions in Tauri:',
+      () => []
+    )
   }
 
   async installExtensions(): Promise<void> {
@@ -45,20 +44,18 @@ export class TauriCoreService implements CoreService {
   }
 
   async installExtension(extensions: ExtensionManifest[]): Promise<ExtensionManifest[]> {
-    try {
-      return await this.invoke<ExtensionManifest[]>('install_extension', { extensions })
-    } catch (error) {
-      console.error('Error installing extension in Tauri:', error)
-      return []
-    }
+    return withTauriFallback(
+      () => this.invoke<ExtensionManifest[]>('install_extension', { extensions }),
+      'Error installing extension in Tauri:',
+      () => []
+    )
   }
 
   async uninstallExtension(extensions: string[], reload = true): Promise<boolean> {
-    try {
-      return await this.invoke<boolean>('uninstall_extension', { extensions, reload })
-    } catch (error) {
-      console.error('Error uninstalling extension in Tauri:', error)
-      return false
-    }
+    return withTauriFallback(
+      () => this.invoke<boolean>('uninstall_extension', { extensions, reload }),
+      'Error uninstalling extension in Tauri:',
+      () => false
+    )
   }
 }

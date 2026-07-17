@@ -428,6 +428,9 @@ fn resolve_ax_fabric_mcp_config() -> serde_json::Value {
     })
 }
 
+// Migration tests are colocated with the migration definitions; setup/runtime
+// wiring follows below and intentionally remains separate from migration logic.
+#[allow(clippy::items_after_test_module)]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -676,6 +679,10 @@ fn patch_ax_studio_sqlite_flag(app_handle: tauri::AppHandle) -> Result<(), Strin
 fn migrate_exa_to_http(app_handle: tauri::AppHandle) -> Result<(), String> {
     let config_path = get_app_data_folder_path(app_handle).join("mcp_config.json");
 
+    if !config_path.exists() {
+        return Ok(());
+    }
+
     let config_str =
         fs::read_to_string(&config_path).map_err(|e| format!("Failed to read MCP config: {e}"))?;
 
@@ -767,7 +774,7 @@ pub fn setup_mcp<R: Runtime>(app: &App<R>) {
 
 #[cfg(desktop)]
 pub fn setup_tray(app: &App) -> tauri::Result<TrayIcon> {
-    let show_i = MenuItem::with_id(app.handle(), "open", "Open Ax-Studio", true, None::<&str>)?;
+    let show_i = MenuItem::with_id(app.handle(), "open", "Open AX Studio", true, None::<&str>)?;
     let quit_i = MenuItem::with_id(app.handle(), "quit", "Quit", true, None::<&str>)?;
     let separator_i = PredefinedMenuItem::separator(app.handle())?;
     let menu = Menu::with_items(app.handle(), &[&show_i, &separator_i, &quit_i])?;
@@ -885,6 +892,12 @@ fn should_prevent_exit_for_tray(code: Option<i32>, tray_enabled: bool) -> bool {
 
 /// Tauri `.setup()` callback — runs once after the app is built.
 pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
+    // Extension modules are the only application-managed files loaded through
+    // the asset protocol. User-selected files are granted individually by the
+    // native dialog command.
+    app.asset_protocol_scope()
+        .allow_directory(get_app_extensions_path(app.handle().clone()), true)?;
+
     app.handle().plugin(
         tauri_plugin_log::Builder::default()
             .level(log::LevelFilter::Debug)

@@ -38,10 +38,24 @@ export function evaluateCoverageGate(audit, thresholds) {
   for (const [moduleName, limits] of Object.entries(thresholds.modules)) {
     const data = audit.modules[moduleName]
 
-    if (!data) {
+    if (!data || data.fileCount === 0) {
       warnings.push(
-        `  ${moduleName}: no coverage data found (module may have no source files yet)`
+        `  ${moduleName}: no covered source files matched this module`
       )
+
+      for (const metric of METRICS) {
+        const threshold = limits[metric]
+        if (threshold == null) continue
+        rows.push({
+          moduleName,
+          metric,
+          actual: 0,
+          threshold,
+          status: 'FAIL',
+          icon: 'FAIL',
+        })
+        failures.push({ moduleName, metric, actual: 0, threshold })
+      }
       continue
     }
 

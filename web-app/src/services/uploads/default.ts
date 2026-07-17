@@ -51,13 +51,24 @@ async function ensureAkidbAvailable(mcp: MCPService): Promise<void> {
 function parsePipelineMetrics(result: {
   error?: string
   content?: Array<{ text?: string }>
+  isError?: boolean
+  is_error?: boolean
 }): {
   filesSucceeded: number
   totalChunksGenerated: number
   errors: Array<{ path: string; message: string }>
 } {
-  if (result.error) {
-    throw new Error(`fabric_ingest_run failed: ${result.error}`)
+  const flagged = result.isError === true || result.is_error === true
+  const errorText =
+    typeof result.error === 'string' && result.error.trim()
+      ? result.error.trim()
+      : undefined
+  if (flagged || errorText) {
+    const detail =
+      errorText ??
+      result.content?.find((item) => item.text?.trim())?.text?.trim() ??
+      'unknown error'
+    throw new Error(`fabric_ingest_run failed: ${detail}`)
   }
   const text = result.content?.[0]?.text
   if (!text) {
@@ -226,17 +237,24 @@ export class DefaultUploadsService implements UploadsService {
       throw new Error(`Document indexing failed: ${errorMsg}`)
     }
 
-    const fileId = ulid()
+    // Re-use the registry file_id when the same path is re-ingested so callers
+    // do not keep orphan attachment ids that no longer match the registry.
+    const path = attachment.path!
+    const existing = useFileRegistry
+      .getState()
+      .listFiles(collectionId)
+      .find((file) => file.file_path === path)
+    const fileId = existing?.file_id ?? ulid()
 
     useFileRegistry.getState().addFile(collectionId, {
       file_id: fileId,
       file_name: attachment.name,
-      file_path: attachment.path!,
+      file_path: path,
       file_type: attachment.fileType,
       file_size: attachment.size,
       chunk_count: metrics.totalChunksGenerated,
       collection_id: collectionId,
-      created_at: new Date().toISOString(),
+      created_at: existing?.created_at ?? new Date().toISOString(),
     })
 
     return {

@@ -7,9 +7,11 @@ import {
 import { AES, enc } from 'crypto-js'
 import { localStorageKey } from '@/constants/localStorage'
 import {
-  encrypt as cryptoEncrypt,
-  decrypt as cryptoDecrypt,
-} from '@/lib/storage/crypto'
+  deleteSecureSecret,
+  getSecureSecret,
+  PROXY_PASSWORD_SECRET,
+  setSecureSecret,
+} from '@/lib/storage/secure-secret'
 import {
   safeStorageGetItem,
   safeStorageRemoveItem,
@@ -27,7 +29,7 @@ const tryLegacyDecrypt = (value: string): string | null => {
   }
 }
 
-const encryptedStorage = {
+export const proxyConfigStorage = {
   getItem: async (
     name: string
   ): Promise<StorageValue<ProxyConfigState> | null> => {
@@ -46,16 +48,34 @@ const encryptedStorage = {
     const stateObj = parsed.state
     const rawPassword = stateObj.proxyPassword
     let proxyPassword = ''
-    if (typeof rawPassword === 'string' && rawPassword.length > 0) {
-      // Try the new Web Crypto path first, then fall back to the legacy
-      // hardcoded-AES path so existing installations keep working.
-      const viaNewCrypto = await cryptoDecrypt(rawPassword)
-      if (viaNewCrypto && viaNewCrypto !== rawPassword) {
-        proxyPassword = viaNewCrypto
-      } else {
-        proxyPassword = tryLegacyDecrypt(rawPassword) ?? viaNewCrypto
+    try {
+      proxyPassword = (await getSecureSecret(PROXY_PASSWORD_SECRET)) ?? ''
+    } catch (error) {
+      console.error('Unable to read the proxy password securely:', error)
+    }
+
+    if (!proxyPassword && typeof rawPassword === 'string' && rawPassword) {
+      const legacyPassword = tryLegacyDecrypt(rawPassword)
+      if (legacyPassword) {
+        proxyPassword = legacyPassword
+        try {
+          await setSecureSecret(PROXY_PASSWORD_SECRET, legacyPassword)
+        } catch (error) {
+          console.error('Unable to migrate the proxy password securely:', error)
+        }
       }
     }
+
+    // Remove all historical password material from browser storage immediately.
+    safeStorageSetItem(
+      localStorage,
+      name,
+      JSON.stringify({
+        ...parsed,
+        state: { ...stateObj, proxyPassword: '' },
+      }),
+      'useProxyConfig'
+    )
 
     return {
       ...parsed,
@@ -72,14 +92,11 @@ const encryptedStorage = {
     const stateObj = value.state
     const plainPassword =
       typeof stateObj.proxyPassword === 'string' ? stateObj.proxyPassword : ''
-    const encryptedPassword = plainPassword
-      ? await cryptoEncrypt(plainPassword)
-      : ''
     const payload = {
       ...value,
       state: {
         ...stateObj,
-        proxyPassword: encryptedPassword,
+        proxyPassword: '',
       },
     }
     safeStorageSetItem(
@@ -88,9 +105,16 @@ const encryptedStorage = {
       JSON.stringify(payload),
       'useProxyConfig'
     )
+
+    if (plainPassword) {
+      await setSecureSecret(PROXY_PASSWORD_SECRET, plainPassword)
+    } else {
+      await deleteSecureSecret(PROXY_PASSWORD_SECRET)
+    }
   },
-  removeItem: (name: string) => {
+  removeItem: async (name: string) => {
     safeStorageRemoveItem(localStorage, name, 'useProxyConfig')
+    await deleteSecureSecret(PROXY_PASSWORD_SECRET)
   },
 } satisfies PersistStorage<ProxyConfigState>
 
@@ -149,7 +173,7 @@ export const useProxyConfig = create<ProxyConfigState>()(
     }),
     {
       name: localStorageKey.settingProxyConfig,
-      storage: encryptedStorage,
+      storage: proxyConfigStorage,
     }
   )
 )

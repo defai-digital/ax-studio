@@ -26,7 +26,7 @@ describe('GlobalError Component', () => {
     render(<GlobalError error={error} />)
 
     expect(screen.getByText('Oops! Unexpected error occurred.')).toBeDefined()
-    expect(screen.getAllByText('String error message')).toHaveLength(2)
+    expect(screen.getByText('String error message')).toBeDefined()
   })
 
   it('should show truncated stack trace initially', () => {
@@ -78,7 +78,10 @@ describe('GlobalError Component', () => {
     render(<GlobalError error={error} />)
 
     const contactLink = screen.getByText('contact us')
-    expect(contactLink).toHaveAttribute('href', 'https://discord.gg/FTk2MvZwJH')
+    expect(contactLink).toHaveAttribute(
+      'href',
+      'https://discord.gg/cd5AD5zY6U'
+    )
     expect(contactLink).toHaveAttribute('target', '_blank')
     expect(contactLink).toHaveAttribute('rel', 'noopener noreferrer')
   })
@@ -99,15 +102,10 @@ describe('GlobalError Component', () => {
     expect(errorContainer).toHaveClass(
       'mt-5',
       'w-full',
-      'md:w-4/5',
-      'mx-auto',
-      'rounded',
+      'rounded-lg',
       'border',
-      'border-red-400',
-      'bg-red-100',
-      'px-4',
-      'py-3',
-      'text-red-700'
+      'border-destructive/30',
+      'bg-destructive/5'
     )
   })
 })

@@ -72,7 +72,7 @@ pub async fn get_model_size(path: String) -> Result<u64, String> {
                 .parse::<u64>()
                 .map_err(|e| format!("Failed to parse content-length: {}", e))
         } else {
-            Ok(0)
+            Err("Server did not return content-length header".to_string())
         }
     } else {
         // Handle local file using standard fs

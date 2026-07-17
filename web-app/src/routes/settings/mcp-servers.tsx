@@ -507,6 +507,7 @@ function MCPServersDesktop() {
                           <Button
                             onClick={() => handleOpenJsonEditor()}
                             title={t('mcp-servers:editAllJson')}
+                            aria-label={t('mcp-servers:editAllJson')}
                             size="icon-xs"
                             variant="ghost"
                           >
@@ -590,7 +591,7 @@ function MCPServersDesktop() {
                               <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs bg-secondary border rounded-sm">
                                 <img
                                   src="/images/ax-studio-logo.png"
-                                  alt="Ax-Studio"
+                                  alt="AX Studio"
                                   className="w-3 h-3 object-contain"
                                 />
                                 <span>Official</span>
@@ -679,6 +680,9 @@ function MCPServersDesktop() {
                               title={t('mcp-servers:editJson.title', {
                                 serverName: key,
                               })}
+                              aria-label={t('mcp-servers:editJson.title', {
+                                serverName: key,
+                              })}
                             >
                               <Code
                                 size={18}
@@ -690,6 +694,7 @@ function MCPServersDesktop() {
                               variant="ghost"
                               onClick={() => handleEdit(key)}
                               title={t('mcp-servers:editServer')}
+                              aria-label={t('mcp-servers:editServer')}
                             >
                               <Pencil
                                 size={18}
@@ -701,6 +706,7 @@ function MCPServersDesktop() {
                               variant="ghost"
                               onClick={() => handleDeleteClick(key)}
                               title={t('mcp-servers:deleteServer.title')}
+                              aria-label={t('mcp-servers:deleteServer.title')}
                             >
                               <Trash2
                                 size={18}

@@ -21,11 +21,12 @@ import { toast } from 'sonner'
 import {
   findAxBiTool,
   getAxBiResultUrl,
-  didAxBiQueueLiveUpdate,
   parseAxBiToolResult,
-  withAxBiAutoNavigate,
 } from '@/lib/ax-bi/tool-navigation'
-import { normalizeMcpResultForToolOutput } from '@/lib/ax-bi/mcp-result'
+import {
+  getMcpToolFailureMessage,
+  normalizeMcpResultForToolOutput,
+} from '@/lib/ax-bi/mcp-result'
 
 export type AddToolOutputFn = (...args: unknown[]) => unknown
 
@@ -98,7 +99,8 @@ function shouldExtractSourceForQuery(query: string): boolean {
   return /\b(author|hiring|hired|outcome|achieve|achieved|company|role|job|real-world|specific|exact)\b/i.test(query)
 }
 
-async function extractRelevantSourceResult({
+/** Exported for unit tests — production path is fabric_search post-processing. */
+export async function extractRelevantSourceResult({
   serviceHub,
   result,
   query,
@@ -120,8 +122,13 @@ async function extractRelevantSourceResult({
     const extracted = await serviceHub.mcp().callTool({
       toolName: 'fabric_extract',
       arguments: { file_path: source },
-    }) as { error?: string; content?: ToolResultContent }
-    if (extracted.error) return null
+    }) as {
+      error?: string
+      content?: ToolResultContent
+      isError?: boolean
+      is_error?: boolean
+    }
+    if (getMcpToolFailureMessage(extracted)) return null
 
     const text = extracted.content?.find((part) => part?.type === 'text' && part.text)?.text
     if (!text) return null
@@ -400,7 +407,7 @@ export function useThreadTools({
           try {
             const toolName = toolCall.toolName
             const rawToolInput = toolCall.input as Record<string, unknown>
-            const toolInput = withAxBiAutoNavigate(mcpTools, toolName, rawToolInput)
+            const toolInput = rawToolInput
 
             // Reject duplicate fabric_search calls — return the instruction to answer
             if (toolName === 'fabric_search' && fabricSearchUsedInTurn.current) {
@@ -441,7 +448,7 @@ export function useThreadTools({
             } else if (mcpToolNames.has(toolName)) {
               result = await serviceHub.mcp().callTool({ toolName, arguments: toolInput })
             } else if (toolName === 'process_file_for_bi') {
-              // Custom tool: read file as base64 and upload to AX-BI
+              // Custom tool: read file as base64 and upload to AX BI
               try {
                 const { fs } = await import('@ax-studio/core')
                 const input = toolCall.input as { file_path: string; filename: string }
@@ -464,8 +471,10 @@ export function useThreadTools({
               result = { error: `Tool '${toolName}' not found in any service` }
             }
 
-            // Mark fabric_search as called
-            if (toolName === 'fabric_search' && !result.error) {
+            const toolFailure = getMcpToolFailureMessage(result)
+
+            // Mark fabric_search as called only on successful results
+            if (toolName === 'fabric_search' && !toolFailure) {
               fabricSearchUsedInTurn.current = true
             }
 
@@ -477,31 +486,34 @@ export function useThreadTools({
               })
             }
 
-            const axBiToolResult = findAxBiTool(mcpTools, toolName)
-              ? parseAxBiToolResult(result)
-              : null
-            if (axBiToolResult?.success === false) {
-              toast.error('AX-BI tool failed', {
-                description:
-                  typeof axBiToolResult.error === 'string'
-                    ? axBiToolResult.error
-                    : 'The AX-BI tool returned an error.',
-              })
-            } else if (axBiToolResult && didAxBiQueueLiveUpdate(axBiToolResult)) {
-              toast.success('AX-BI updated')
-            } else if (axBiToolResult) {
-              const url = getAxBiResultUrl(toolName, axBiToolResult)
-              if (url) {
-                await serviceHub.opener().openUrl(url)
+            // Re-evaluate after fabric retry (may clear or set failure)
+            const finalFailure = getMcpToolFailureMessage(result)
+
+            if (!finalFailure) {
+              const axBiToolResult = findAxBiTool(mcpTools, toolName)
+                ? parseAxBiToolResult(result)
+                : null
+              if (axBiToolResult?.success === false) {
+                toast.error('AX BI tool failed', {
+                  description:
+                    typeof axBiToolResult.error === 'string'
+                      ? axBiToolResult.error
+                      : 'The AX BI tool returned an error.',
+                })
+              } else if (axBiToolResult) {
+                const url = getAxBiResultUrl(toolName, axBiToolResult)
+                if (url) {
+                  await serviceHub.opener().openUrl(url)
+                }
               }
             }
 
-            if (result.error) {
+            if (finalFailure) {
               addToolOutput({
                 state: 'output-error',
                 tool: toolCall.toolName,
                 toolCallId: toolCall.toolCallId,
-                errorText: `Error: ${result.error}`,
+                errorText: `Error: ${finalFailure}`,
               })
             } else {
               // For fabric_search, append an instruction to the tool result so the model

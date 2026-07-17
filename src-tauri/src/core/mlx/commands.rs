@@ -68,7 +68,7 @@ pub fn mlx_runtime_probe() -> Result<MlxRuntimeProbe, String> {
 }
 
 /// Load an MLX model into the in-process worker. If `model_dir` is omitted,
-/// resolves `model_id` against Ax Studio's app-data downloads first, then the
+/// resolves `model_id` against AX Studio's app-data downloads first, then the
 /// HuggingFace cache
 /// (`mlx-community/X-4bit` → `~/.cache/huggingface/hub/models--mlx-community--X-4bit/snapshots/<commit>/`)
 /// so the chat frontend can load by HF model id without knowing FS paths.
@@ -85,7 +85,7 @@ pub async fn mlx_load_model<R: Runtime>(
         None => {
             resolve_downloaded_or_cached_model_dir(&app_handle, &model_id).ok_or_else(|| {
                 format!(
-                    "could not resolve Ax Studio download or HF cache snapshot for '{model_id}'"
+                    "could not resolve AX Studio download or HF cache snapshot for '{model_id}'"
                 )
             })?
         }
@@ -114,7 +114,7 @@ pub fn mlx_resolve_model_dir<R: Runtime>(
     }
 
     let path = resolve_downloaded_or_cached_model_dir(&app_handle, &model_id).ok_or_else(|| {
-        format!("could not resolve Ax Studio download or HF cache snapshot for '{model_id}'")
+        format!("could not resolve AX Studio download or HF cache snapshot for '{model_id}'")
     })?;
 
     Ok(path.to_string_lossy().to_string())

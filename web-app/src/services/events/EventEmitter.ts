@@ -1,5 +1,5 @@
 /**
- * EventEmitter class - matches Ax-Studio event emitter interface
+ * EventEmitter class - matches AX Studio event emitter interface
  * Used by ExtensionProvider to set window.core.events
  */
 
@@ -37,15 +37,19 @@ export class EventEmitter {
   }
 
   public off(eventName: string, handler: EventHandler): void {
-    if (!this.handlers.has(eventName)) {
+    const handlers = this.handlers.get(eventName)
+    if (!handlers) return
+
+    const index = handlers.indexOf(handler)
+
+    if (index === -1) {
       return
     }
 
-    const handlers = this.handlers.get(eventName)
-    const index = handlers?.indexOf(handler)
+    handlers.splice(index, 1)
 
-    if (index !== undefined && index !== -1) {
-      handlers?.splice(index, 1)
+    if (handlers.length === 0) {
+      this.handlers.delete(eventName)
     }
   }
 

@@ -1,4 +1,106 @@
+use crate::core::network_security::{validate_public_url_dns, PublicDnsResolver};
+use futures_util::StreamExt;
 use scraper::{Html, Selector};
+use std::sync::Arc;
+
+const MAX_SCRAPE_REDIRECTS: usize = 5;
+const MAX_SCRAPE_BODY_BYTES: usize = 2 * 1024 * 1024;
+
+fn validate_scrape_url(url: &str) -> Result<url::Url, String> {
+    let parsed = url::Url::parse(url).map_err(|_| "Invalid research URL".to_string())?;
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err("Research URL must not contain embedded credentials".to_string());
+    }
+    if ax_studio_utils::is_internal_url(url) {
+        return Err("URL points to forbidden internal network".to_string());
+    }
+    Ok(parsed)
+}
+
+fn append_bounded_body(body: &mut Vec<u8>, chunk: &[u8]) -> Result<(), String> {
+    if body.len().saturating_add(chunk.len()) > MAX_SCRAPE_BODY_BYTES {
+        return Err(format!(
+            "Research response exceeds the {MAX_SCRAPE_BODY_BYTES}-byte limit"
+        ));
+    }
+    body.extend_from_slice(chunk);
+    Ok(())
+}
+
+async fn fetch_public_html(
+    client: &reqwest::Client,
+    initial_url: url::Url,
+) -> Result<String, String> {
+    let mut current_url = initial_url;
+
+    for redirect_count in 0..=MAX_SCRAPE_REDIRECTS {
+        validate_scrape_url(current_url.as_str())?;
+        validate_public_url_dns(&current_url).await?;
+
+        let response = client
+            .get(current_url.clone())
+            .send()
+            .await
+            .map_err(|error| format!("Request failed: {}", error.without_url()))?;
+
+        if matches!(
+            response.status(),
+            reqwest::StatusCode::MOVED_PERMANENTLY
+                | reqwest::StatusCode::FOUND
+                | reqwest::StatusCode::SEE_OTHER
+                | reqwest::StatusCode::TEMPORARY_REDIRECT
+                | reqwest::StatusCode::PERMANENT_REDIRECT
+        ) {
+            if redirect_count == MAX_SCRAPE_REDIRECTS {
+                return Err(format!(
+                    "Research URL exceeded the {MAX_SCRAPE_REDIRECTS}-redirect limit"
+                ));
+            }
+            let location = response
+                .headers()
+                .get(reqwest::header::LOCATION)
+                .ok_or_else(|| "Research redirect is missing a Location header".to_string())?
+                .to_str()
+                .map_err(|_| "Research redirect Location is invalid".to_string())?;
+            let next_url = current_url
+                .join(location)
+                .map_err(|_| "Research redirect Location is invalid".to_string())?;
+            if current_url.scheme() == "https" && next_url.scheme() != "https" {
+                return Err("Refusing to follow an HTTPS research redirect to HTTP".to_string());
+            }
+            validate_scrape_url(next_url.as_str())?;
+            current_url = next_url;
+            continue;
+        }
+
+        if !response.status().is_success() {
+            return Err(format!("HTTP {}", response.status()));
+        }
+        if response
+            .content_length()
+            .is_some_and(|length| length > MAX_SCRAPE_BODY_BYTES as u64)
+        {
+            return Err(format!(
+                "Research response exceeds the {MAX_SCRAPE_BODY_BYTES}-byte limit"
+            ));
+        }
+
+        let initial_capacity = response
+            .content_length()
+            .unwrap_or(0)
+            .min(MAX_SCRAPE_BODY_BYTES as u64) as usize;
+        let mut body = Vec::with_capacity(initial_capacity);
+        let mut stream = response.bytes_stream();
+        while let Some(chunk) = stream.next().await {
+            let chunk =
+                chunk.map_err(|error| format!("Failed to read body: {}", error.without_url()))?;
+            append_bounded_body(&mut body, &chunk)?;
+        }
+        return Ok(String::from_utf8_lossy(&body).into_owned());
+    }
+
+    Err("Research redirect handling failed unexpectedly".to_string())
+}
 
 /// Fetch a URL and extract its main text content.
 ///
@@ -6,30 +108,12 @@ use scraper::{Html, Selector};
 /// On any error (network, timeout, parse) an Err is returned so the caller
 /// can fall back to the Exa-supplied snippet.
 pub async fn scrape_url(url: &str) -> Result<String, String> {
-    let parsed = url::Url::parse(url).map_err(|_| "URL points to forbidden internal network")?;
-
-    if ax_studio_utils::is_internal_url(url) {
-        return Err("URL points to forbidden internal network".to_string());
-    }
-
-    let host = parsed
-        .host_str()
-        .ok_or_else(|| format!("URL has no host: {url}"))?
-        .to_string();
-    let port = parsed.port_or_known_default().unwrap_or(80);
-
-    let resolved_addrs = tokio::net::lookup_host((&*host, port))
-        .await
-        .map_err(|_| format!("DNS resolution failed for {host}"))?;
-
-    for addr in resolved_addrs {
-        if ax_studio_utils::is_private_ip(addr.ip()) {
-            return Err("URL resolves to forbidden internal network".to_string());
-        }
-    }
+    let parsed = validate_scrape_url(url)?;
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
+        .redirect(reqwest::redirect::Policy::none())
+        .dns_resolver(Arc::new(PublicDnsResolver::default()))
         .user_agent(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
              AppleWebKit/537.36 (KHTML, like Gecko) \
@@ -38,20 +122,7 @@ pub async fn scrape_url(url: &str) -> Result<String, String> {
         .build()
         .map_err(|e| format!("HTTP client error: {e}"))?;
 
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| format!("Request failed: {e}"))?;
-
-    if !response.status().is_success() {
-        return Err(format!("HTTP {}", response.status()));
-    }
-
-    let html = response
-        .text()
-        .await
-        .map_err(|e| format!("Failed to read body: {e}"))?;
+    let html = fetch_public_html(&client, parsed).await?;
 
     // HTML parsing is CPU-bound; offload to thread pool to keep the async runtime healthy.
     tokio::task::spawn_blocking(move || extract_text(&html))
@@ -115,20 +186,8 @@ fn extract_text(html: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::net::IpAddr;
-
-    async fn resolves_to_forbidden_ip(url: &url::Url) -> bool {
-        let host = match url.host_str() {
-            Some(h) => h,
-            None => return true,
-        };
-        let port = url.port_or_known_default().unwrap_or(80);
-        match tokio::net::lookup_host((&*host.to_string(), port)).await {
-            Ok(mut addrs) => addrs.any(|addr| ax_studio_utils::is_private_ip(addr.ip())),
-            Err(_) => true,
-        }
-    }
     use super::*;
+    use std::net::IpAddr;
 
     #[test]
     fn test_extract_text_basic_html() {
@@ -293,9 +352,18 @@ mod tests {
         )));
     }
 
-    #[tokio::test]
-    async fn test_resolves_to_forbidden_ip_blocks_localhost() {
-        let parsed = url::Url::parse("http://localhost").unwrap();
-        assert!(resolves_to_forbidden_ip(&parsed).await);
+    #[test]
+    fn test_scrape_url_boundary_rejects_credentials_and_internal_hosts() {
+        assert!(validate_scrape_url("https://user:secret@example.com").is_err());
+        assert!(validate_scrape_url("http://localhost./admin").is_err());
+        assert!(validate_scrape_url("http://[::ffff:127.0.0.1]/admin").is_err());
+        assert!(validate_scrape_url("https://example.com/article").is_ok());
+    }
+
+    #[test]
+    fn test_scrape_body_limit_is_enforced_incrementally() {
+        let mut body = vec![0; MAX_SCRAPE_BODY_BYTES - 1];
+        assert!(append_bounded_body(&mut body, &[1]).is_ok());
+        assert!(append_bounded_body(&mut body, &[2]).is_err());
     }
 }

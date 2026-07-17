@@ -46,7 +46,7 @@ function StatusDot({ status }: { status: 'active' | 'idle' | 'loading' }) {
   const colors = {
     active: '#22c55e',
     idle: '#f59e0b',
-    loading: '#6366f1',
+    loading: 'var(--primary)',
   }
   return (
     <span className="relative flex items-center justify-center size-2">

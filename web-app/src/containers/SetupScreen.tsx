@@ -1,5 +1,5 @@
 /**
- * Ax-Studio Setup / Onboarding Screen
+ * AX Studio Setup / Onboarding Screen
  *
  * 6-step onboarding wizard shown on first launch.
  */
@@ -43,56 +43,46 @@ type WorkspaceModeId =
   | 'knowledge-workspace'
   | 'controlled-workspace'
 
-type WorkspaceMode = {
-  id: WorkspaceModeId
-  icon: typeof MessageSquare
-  label: string
-  description: string
-}
-
 const TOTAL_STEPS = 6
 const DEFAULT_WORKSPACE_MODE: WorkspaceModeId = 'developer-agent'
 
-const workspaceModes: WorkspaceMode[] = [
+const workspaceModeDefs: {
+  id: WorkspaceModeId
+  icon: typeof MessageSquare
+  labelKey: string
+  descKey: string
+}[] = [
   {
     id: 'simple-chat',
     icon: MessageSquare,
-    label: 'Simple Chat',
-    description: 'A familiar assistant for everyday conversations',
+    labelKey: 'setup:modeSimpleChat',
+    descKey: 'setup:modeSimpleChatDesc',
   },
   {
     id: 'local-private-ai',
     icon: LockKeyhole,
-    label: 'Local Private AI',
-    description: 'Prioritize local models and private runtime control',
+    labelKey: 'setup:modeLocalPrivate',
+    descKey: 'setup:modeLocalPrivateDesc',
   },
   {
     id: 'developer-agent',
     icon: Wrench,
-    label: 'Developer Agent',
-    description: 'Use projects, coding workflows, MCP tools, and approvals',
+    labelKey: 'setup:modeDeveloperAgent',
+    descKey: 'setup:modeDeveloperAgentDesc',
   },
   {
     id: 'knowledge-workspace',
     icon: Database,
-    label: 'Knowledge Workspace',
-    description: 'Work with files, memory, retrieval, and reusable context',
+    labelKey: 'setup:modeKnowledge',
+    descKey: 'setup:modeKnowledgeDesc',
   },
   {
     id: 'controlled-workspace',
     icon: Building2,
-    label: 'Controlled Workspace',
-    description: 'Prepare for policies, approvals, audit, and team control',
+    labelKey: 'setup:modeControlled',
+    descKey: 'setup:modeControlledDesc',
   },
 ]
-
-function getWorkspaceMode(modeId: WorkspaceModeId): WorkspaceMode {
-  return (
-    workspaceModes.find((mode) => mode.id === modeId) ??
-    workspaceModes.find((mode) => mode.id === DEFAULT_WORKSPACE_MODE) ??
-    workspaceModes[0]!
-  )
-}
 
 export function SetupScreen({ onComplete }: SetupScreenProps) {
   const { t } = useTranslation()
@@ -137,12 +127,23 @@ export function SetupScreen({ onComplete }: SetupScreenProps) {
       <HeaderPage />
       <div className="flex-1 flex flex-col items-center justify-center px-6 overflow-y-auto">
         <div className="w-full max-w-lg">
-          {/* Progress dots */}
-          <div className="flex items-center justify-center gap-2 mb-8">
+          {/* Progress indicator */}
+          <div
+            className="flex items-center justify-center gap-2 mb-8"
+            role="progressbar"
+            aria-valuenow={step + 1}
+            aria-valuemin={1}
+            aria-valuemax={TOTAL_STEPS}
+            aria-label={t('setup:stepOf', {
+              current: step + 1,
+              total: TOTAL_STEPS,
+            })}
+          >
             {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
               <motion.div
                 key={i}
                 className="rounded-full"
+                aria-hidden="true"
                 animate={{
                   width: i === step ? 24 : 8,
                   height: 8,
@@ -210,7 +211,7 @@ export function SetupScreen({ onComplete }: SetupScreenProps) {
                 </Button>
               ) : (
                 <Button size="sm" onClick={handleGetStarted}>
-                  {t('setup:getStarted', { defaultValue: 'Get Started' })}
+                  {t('setup:getStarted')}
                   <Sparkles className="size-4 ml-1" />
                 </Button>
               )}
@@ -230,23 +231,23 @@ function StepWelcome() {
   const features = [
     {
       icon: Cpu,
-      title: 'Local AI Models',
-      desc: 'Run models on your hardware — no cloud needed',
+      titleKey: 'setup:featureLocalModels',
+      descKey: 'setup:featureLocalModelsDesc',
     },
     {
       icon: Zap,
-      title: 'Lightning Fast',
-      desc: 'Optimized inference for instant responses',
+      titleKey: 'setup:featureLightningFast',
+      descKey: 'setup:featureLightningFastDesc',
     },
     {
       icon: Shield,
-      title: 'Private & Secure',
-      desc: 'Your data never leaves your machine',
+      titleKey: 'setup:featurePrivateSecure',
+      descKey: 'setup:featurePrivateSecureDesc',
     },
     {
       icon: Wrench,
-      title: 'Tool Use & MCP',
-      desc: 'Connect to external tools and services',
+      titleKey: 'setup:featureToolUse',
+      descKey: 'setup:featureToolUseDesc',
     },
   ]
 
@@ -256,30 +257,26 @@ function StepWelcome() {
         initial={{ scale: 0.8 }}
         animate={{ scale: 1 }}
         transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-        className="mx-auto mb-5 size-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20"
+        className="mx-auto mb-5 size-16 rounded-2xl bg-brand-gradient flex items-center justify-center shadow-brand"
       >
-        <Zap className="size-7 text-white" strokeWidth={2} />
+        <Zap className="size-7 text-primary-foreground" strokeWidth={2} />
       </motion.div>
-      <h2 className="text-xl font-bold mb-2">
-        {t('setup:welcome', { defaultValue: 'Welcome to Ax-Studio' })}
-      </h2>
+      <h2 className="text-xl font-bold mb-2">{t('setup:welcome')}</h2>
       <p className="text-sm text-muted-foreground mb-6">
-        {t('setup:getStartedDescription', {
-          defaultValue: "Your AI desktop app is ready. Let's get you set up.",
-        })}
+        {t('setup:getStartedDescription')}
       </p>
       <div className="grid grid-cols-2 gap-3">
         {features.map((f) => {
           const Icon = f.icon
           return (
             <div
-              key={f.title}
+              key={f.titleKey}
               className="rounded-xl border bg-card/50 p-3 text-left"
             >
               <Icon className="size-4 text-primary mb-2" />
-              <div className="text-sm font-medium">{f.title}</div>
+              <div className="text-sm font-medium">{t(f.titleKey)}</div>
               <div className="text-xs text-muted-foreground mt-0.5">
-                {f.desc}
+                {t(f.descKey)}
               </div>
             </div>
           )
@@ -300,21 +297,24 @@ function StepWorkspaceMode({
   selectedMode,
   onSelectMode,
 }: StepWorkspaceModeProps) {
+  const { t } = useTranslation()
+
   return (
     <div className="text-center">
-      <h2 className="text-xl font-bold mb-2">Choose your workspace mode</h2>
+      <h2 className="text-xl font-bold mb-2">{t('setup:workspaceModeTitle')}</h2>
       <p className="text-sm text-muted-foreground mb-6">
-        AX Studio can start simple or lean into local agents, tools, knowledge,
-        and control.
+        {t('setup:workspaceModeDesc')}
       </p>
-      <div className="space-y-2">
-        {workspaceModes.map((mode) => {
+      <div className="space-y-2" role="listbox" aria-label={t('setup:workspaceModeTitle')}>
+        {workspaceModeDefs.map((mode) => {
           const Icon = mode.icon
           const isActive = selectedMode === mode.id
           return (
             <button
               key={mode.id}
               type="button"
+              role="option"
+              aria-selected={isActive}
               aria-pressed={isActive}
               onClick={() => onSelectMode(mode.id)}
               className={`w-full flex items-center gap-3 rounded-xl border p-3 transition-all text-left ${
@@ -334,15 +334,15 @@ function StepWorkspaceMode({
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">{mode.label}</span>
+                  <span className="text-sm font-medium">{t(mode.labelKey)}</span>
                   {mode.id === DEFAULT_WORKSPACE_MODE && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-medium">
-                      Recommended
+                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-medium">
+                      {t('setup:recommended')}
                     </span>
                   )}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {mode.description}
+                  {t(mode.descKey)}
                 </div>
               </div>
               {isActive && <Check className="size-4 text-primary shrink-0" />}
@@ -516,7 +516,7 @@ function StepPrivacy() {
       </motion.div>
       <h2 className="text-xl font-bold mb-2">Your privacy matters</h2>
       <p className="text-sm text-muted-foreground mb-6">
-        Ax-Studio is built with privacy at its core.
+        AX Studio is built with privacy at its core.
       </p>
       <div className="space-y-3">
         {privacyPoints.map((point) => (
@@ -541,13 +541,17 @@ function StepPrivacy() {
 /* ── Step 5: Ready ────────────────────────────────── */
 
 function StepReady({ selectedMode }: { selectedMode: WorkspaceModeId }) {
-  const mode = getWorkspaceMode(selectedMode)
+  const { t } = useTranslation()
+  const mode =
+    workspaceModeDefs.find((m) => m.id === selectedMode) ??
+    workspaceModeDefs.find((m) => m.id === DEFAULT_WORKSPACE_MODE) ??
+    workspaceModeDefs[0]!
   const Icon = mode.icon
   const shortcuts = [
-    { keys: '⌘ N', desc: 'New chat' },
-    { keys: '⌘ K', desc: 'Search' },
-    { keys: '⌘ P', desc: 'New project' },
-    { keys: '⌘ B', desc: 'Toggle sidebar' },
+    { key: 'N', desc: t('common:newChat') },
+    { key: 'K', desc: t('common:search') },
+    { key: 'P', desc: t('settings:shortcuts.newProject') },
+    { key: 'B', desc: t('settings:shortcuts.toggleSidebar') },
   ]
 
   return (
@@ -556,9 +560,9 @@ function StepReady({ selectedMode }: { selectedMode: WorkspaceModeId }) {
         initial={{ scale: 0.8 }}
         animate={{ scale: 1 }}
         transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-        className="mx-auto mb-5 size-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20"
+        className="mx-auto mb-5 size-14 rounded-2xl bg-brand-gradient flex items-center justify-center shadow-brand"
       >
-        <Sparkles className="size-7 text-white" />
+        <Sparkles className="size-7 text-primary-foreground" />
       </motion.div>
       <h2 className="text-xl font-bold mb-2">You&apos;re all set!</h2>
       <p className="text-sm text-muted-foreground mb-6">
@@ -569,16 +573,14 @@ function StepReady({ selectedMode }: { selectedMode: WorkspaceModeId }) {
           <Icon className="size-4 text-primary" />
         </div>
         <div>
-          <div className="text-sm font-medium">{mode.label}</div>
-          <div className="text-xs text-muted-foreground">
-            {mode.description}
-          </div>
+          <div className="text-sm font-medium">{t(mode.labelKey)}</div>
+          <div className="text-xs text-muted-foreground">{t(mode.descKey)}</div>
         </div>
       </div>
       <div className="rounded-xl border bg-card/50 overflow-hidden">
         {shortcuts.map((s, i) => (
           <div
-            key={s.keys}
+            key={s.key}
             className={`flex items-center justify-between px-4 py-2.5 ${
               i < shortcuts.length - 1 ? 'border-b' : ''
             }`}
@@ -587,7 +589,7 @@ function StepReady({ selectedMode }: { selectedMode: WorkspaceModeId }) {
             <div className="flex items-center gap-1">
               <Keyboard className="size-3 text-muted-foreground/50 mr-1" />
               <kbd className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">
-                {s.keys}
+                ⌘ {s.key}
               </kbd>
             </div>
           </div>

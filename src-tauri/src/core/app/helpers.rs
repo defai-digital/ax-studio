@@ -1,35 +1,113 @@
-use std::{fs, io, path::PathBuf};
+use std::{fs, io, path::Path};
 
-/// Recursively copy a directory from src to dst, excluding specified directories
-pub fn copy_dir_recursive(
-    src: &PathBuf,
-    dst: &PathBuf,
+#[cfg(test)]
+use std::path::PathBuf;
+
+const MAX_COPY_DEPTH: usize = 128;
+const MAX_COPY_ENTRIES: usize = 1_000_000;
+
+fn invalid_copy_data(message: impl Into<String>) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, message.into())
+}
+
+fn copy_dir_recursive_inner(
+    source_root: &std::path::Path,
+    src: &std::path::Path,
+    dst: &std::path::Path,
     exclude_dirs: &[&str],
+    depth: usize,
+    copied_entries: &mut usize,
 ) -> Result<(), io::Error> {
+    if depth > MAX_COPY_DEPTH {
+        return Err(invalid_copy_data(format!(
+            "Directory tree exceeds the maximum depth of {MAX_COPY_DEPTH}"
+        )));
+    }
     if !dst.exists() {
         fs::create_dir_all(dst)?;
     }
 
     for entry in fs::read_dir(src)? {
         let entry = entry?;
+        *copied_entries = copied_entries
+            .checked_add(1)
+            .filter(|count| *count <= MAX_COPY_ENTRIES)
+            .ok_or_else(|| {
+                invalid_copy_data(format!(
+                    "Directory tree exceeds the maximum of {MAX_COPY_ENTRIES} entries"
+                ))
+            })?;
+
         let file_type = entry.file_type()?;
         let src_path = entry.path();
         let dst_path = dst.join(entry.file_name());
 
         if file_type.is_dir() {
-            // Skip excluded directories
-            if let Some(dir_name) = entry.file_name().to_str() {
-                if exclude_dirs.contains(&dir_name) {
-                    continue;
-                }
+            if entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| exclude_dirs.contains(&name))
+            {
+                continue;
             }
-            copy_dir_recursive(&src_path, &dst_path, exclude_dirs)?;
-        } else {
+            copy_dir_recursive_inner(
+                source_root,
+                &src_path,
+                &dst_path,
+                exclude_dirs,
+                depth + 1,
+                copied_entries,
+            )?;
+        } else if file_type.is_file() {
             fs::copy(&src_path, &dst_path)?;
+        } else if file_type.is_symlink() {
+            // Dereference internal file symlinks so relocation works on every
+            // platform without requiring symlink privileges. Never follow a
+            // link outside the managed source tree or a directory link that
+            // could introduce cycles.
+            let target = fs::canonicalize(&src_path)?;
+            if !target.starts_with(source_root) {
+                return Err(invalid_copy_data(format!(
+                    "Refusing to copy symlink outside the data folder: {}",
+                    src_path.display()
+                )));
+            }
+            if !target.is_file() {
+                return Err(invalid_copy_data(format!(
+                    "Refusing to copy non-file symlink: {}",
+                    src_path.display()
+                )));
+            }
+            fs::copy(target, &dst_path)?;
+        } else {
+            return Err(invalid_copy_data(format!(
+                "Refusing to copy special filesystem entry: {}",
+                src_path.display()
+            )));
         }
     }
 
     Ok(())
+}
+
+/// Recursively copy a directory from src to dst, excluding specified directories
+pub fn copy_dir_recursive(src: &Path, dst: &Path, exclude_dirs: &[&str]) -> Result<(), io::Error> {
+    let source_root = fs::canonicalize(src)?;
+    if !source_root.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Copy source is not a directory",
+        ));
+    }
+    let mut copied_entries = 0;
+    copy_dir_recursive_inner(
+        &source_root,
+        &source_root,
+        dst,
+        exclude_dirs,
+        0,
+        &mut copied_entries,
+    )
 }
 
 #[cfg(test)]
@@ -155,6 +233,51 @@ mod tests {
 
         let result = copy_dir_recursive(&src, &dst, &[]);
         assert!(result.is_err());
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_copy_dir_recursive_rejects_external_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = make_temp_dir("external_symlink");
+        let src = tmp.join("src");
+        let dst = tmp.join("dst");
+        let outside = tmp.join("outside.txt");
+        fs::create_dir_all(&src).unwrap();
+        fs::write(&outside, "private").unwrap();
+        symlink(&outside, src.join("linked.txt")).unwrap();
+
+        let error = copy_dir_recursive(&src, &dst, &[]).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(!dst.join("linked.txt").exists());
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_copy_dir_recursive_dereferences_internal_file_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = make_temp_dir("internal_symlink");
+        let src = tmp.join("src");
+        let dst = tmp.join("dst");
+        fs::create_dir_all(&src).unwrap();
+        fs::write(src.join("target.txt"), "content").unwrap();
+        symlink("target.txt", src.join("linked.txt")).unwrap();
+
+        copy_dir_recursive(&src, &dst, &[]).unwrap();
+        assert_eq!(
+            fs::read_to_string(dst.join("linked.txt")).unwrap(),
+            "content"
+        );
+        assert!(!fs::symlink_metadata(dst.join("linked.txt"))
+            .unwrap()
+            .file_type()
+            .is_symlink());
 
         let _ = fs::remove_dir_all(&tmp);
     }

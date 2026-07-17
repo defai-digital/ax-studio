@@ -2,9 +2,22 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
+import { WINDOWS_SIGN_COMMAND } from './set-version.mjs'
 
 const repoRoot = path.resolve(import.meta.dirname, '..', '..')
 const stablePlatforms = ['darwin-aarch64', 'windows-x86_64', 'windows-aarch64']
+const releaseWorkflowPaths = [
+  '.github/workflows/template-tauri-build-macos.yml',
+  '.github/workflows/template-tauri-build-windows-x64.yml',
+  '.github/workflows/template-tauri-build-windows-arm64.yml',
+]
+const customNsisTemplatePath = 'src-tauri/tauri.bundle.windows.nsis.template'
+const expectedWindowsSignCommand = 'powershell -ExecutionPolicy Bypass -File ./sign.ps1 %1'
+const windowsLongPathsCommand = 'git config --global core.longpaths true'
+const requiredUpdaterPermissions = [
+  'updater:allow-check',
+  'updater:allow-download-and-install',
+]
 
 function readJson(relativePath) {
   return JSON.parse(fs.readFileSync(path.join(repoRoot, relativePath), 'utf8'))
@@ -27,8 +40,8 @@ function assertArrayEqual(name, actual, expected) {
 const tauriConfig = readJson('src-tauri/tauri.conf.json')
 const latestTemplate = readJson('src-tauri/latest.json.template')
 
-if (tauriConfig.productName !== 'Ax-Studio') {
-  fail(`src-tauri/tauri.conf.json productName must be Ax-Studio, got ${tauriConfig.productName}`)
+if (tauriConfig.productName !== 'AX Studio') {
+  fail(`src-tauri/tauri.conf.json productName must be AX Studio, got ${tauriConfig.productName}`)
 }
 
 if (tauriConfig.identifier !== 'ai.axstudio.app') {
@@ -48,6 +61,38 @@ if (!Array.isArray(endpoints) || endpoints.length === 0) {
   fail('src-tauri/tauri.conf.json must configure updater endpoints')
 }
 
+const activeCapabilityIds = tauriConfig.app?.security?.capabilities
+if (!Array.isArray(activeCapabilityIds) || activeCapabilityIds.length === 0) {
+  fail('src-tauri/tauri.conf.json must activate at least one capability')
+} else {
+  const mainWindowPermissions = new Set()
+  for (const capabilityId of activeCapabilityIds) {
+    if (typeof capabilityId !== 'string') continue
+
+    const capabilityPath = `src-tauri/capabilities/${capabilityId}.json`
+    if (!fs.existsSync(path.join(repoRoot, capabilityPath))) {
+      fail(`active capability ${capabilityId} is missing ${capabilityPath}`)
+      continue
+    }
+
+    const capability = readJson(capabilityPath)
+    const windows = capability.windows ?? []
+    if (!windows.includes('main') && !windows.includes('*')) continue
+
+    for (const permission of capability.permissions ?? []) {
+      const identifier =
+        typeof permission === 'string' ? permission : permission?.identifier
+      if (identifier) mainWindowPermissions.add(identifier)
+    }
+  }
+
+  for (const permission of requiredUpdaterPermissions) {
+    if (!mainWindowPermissions.has(permission)) {
+      fail(`active main-window capabilities must grant ${permission}`)
+    }
+  }
+}
+
 const platforms = Object.keys(latestTemplate.platforms ?? {})
 assertArrayEqual('src-tauri/latest.json.template platforms', platforms, stablePlatforms)
 
@@ -56,6 +101,43 @@ for (const platform of stablePlatforms) {
   if (!entry || typeof entry.signature !== 'string' || typeof entry.url !== 'string') {
     fail(`src-tauri/latest.json.template platform ${platform} must have signature and url string fields`)
   }
+}
+
+if (!fs.existsSync(path.join(repoRoot, customNsisTemplatePath))) {
+  for (const workflowPath of releaseWorkflowPaths) {
+    const workflow = fs.readFileSync(path.join(repoRoot, workflowPath), 'utf8')
+    if (workflow.includes(customNsisTemplatePath)) {
+      fail(`${workflowPath} references missing file ${customNsisTemplatePath}`)
+    }
+  }
+}
+
+for (const workflowPath of releaseWorkflowPaths) {
+  const workflow = fs.readFileSync(path.join(repoRoot, workflowPath), 'utf8')
+  if (workflow.includes('ctoml') || workflow.includes('cargo-bins/cargo-binstall@main')) {
+    fail(`${workflowPath} must not install mutable manifest-editing tools during a release`)
+  }
+}
+
+for (const workflowPath of releaseWorkflowPaths.filter((workflowPath) => workflowPath.includes('windows'))) {
+  const workflow = fs.readFileSync(path.join(repoRoot, workflowPath), 'utf8')
+  if (!workflow.includes(windowsLongPathsCommand)) {
+    fail(`${workflowPath} must enable Git long-path support with: ${windowsLongPathsCommand}`)
+  }
+  if (!workflow.includes('-name "ax-studio.exe"')) {
+    fail(`${workflowPath} must recognize the raw Tauri portable binary ax-studio.exe`)
+  }
+}
+
+const setVersionScript = fs.readFileSync(path.join(repoRoot, 'scripts/release/set-version.mjs'), 'utf8')
+const cargoManifest = fs.readFileSync(path.join(repoRoot, 'src-tauri/Cargo.toml'), 'utf8')
+if (/['"]devtools['"]/.test(cargoManifest) || /['"]devtools['"]/.test(setVersionScript)) {
+  fail('production release configuration must not enable or inject the Tauri devtools feature')
+}
+if (WINDOWS_SIGN_COMMAND !== expectedWindowsSignCommand) {
+  fail(
+    `scripts/release/set-version.mjs Windows sign command must be ${expectedWindowsSignCommand}, got ${WINDOWS_SIGN_COMMAND}`,
+  )
 }
 
 if (process.exitCode) {

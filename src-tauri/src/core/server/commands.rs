@@ -12,6 +12,8 @@ pub struct StartServerConfig {
     pub trusted_hosts: Vec<String>,
     #[serde(default)]
     pub cors_enabled: bool,
+    #[serde(default)]
+    pub verbose_logs: bool,
     pub proxy_timeout: u64,
 }
 
@@ -38,6 +40,7 @@ pub async fn start_server<R: Runtime>(
         api_key,
         trusted_hosts,
         cors_enabled,
+        verbose_logs,
         proxy_timeout,
     } = config;
 
@@ -65,6 +68,7 @@ pub async fn start_server<R: Runtime>(
         api_key,
         vec![trusted_hosts],
         cors_enabled,
+        verbose_logs,
         proxy_timeout,
         app_handle,
     )
@@ -102,6 +106,8 @@ mod tests {
             mcp_server_pids: Arc::new(Mutex::new(HashMap::new())),
             provider_state: Arc::new(Mutex::new(ProviderState::default())),
             approved_save_paths: Arc::new(Mutex::new(HashSet::new())),
+            approved_read_files: Arc::new(Mutex::new(HashSet::new())),
+            approved_read_directories: Arc::new(Mutex::new(HashSet::new())),
             factory_reset_lock: Arc::new(Mutex::new(())),
             active_streams: Arc::new(Mutex::new(HashMap::new())),
         }
@@ -116,6 +122,7 @@ mod tests {
             api_key: "test-key".to_string(),
             trusted_hosts: vec!["localhost".to_string()],
             cors_enabled: false,
+            verbose_logs: false,
             proxy_timeout: 30,
         };
 
@@ -161,6 +168,7 @@ mod tests {
                 api_key: "   ".to_string(),
                 trusted_hosts: vec!["localhost".to_string()],
                 cors_enabled: true,
+                verbose_logs: false,
                 proxy_timeout: 30,
             },
         )

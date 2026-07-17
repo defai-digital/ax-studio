@@ -11,15 +11,12 @@
     "core:webview:allow-set-webview-zoom",
     "core:window:allow-start-dragging",
     "core:window:allow-set-theme",
-    "shell:allow-spawn",
-    "shell:allow-open",
     "core:app:allow-set-app-theme",
     "core:window:allow-set-focus",
     "os:default",
-    "opener:default",
     "log:default",
     "core:webview:allow-create-webview-window",
-    "opener:allow-open-url",
+    "opener:allow-reveal-item-in-dir",
     "store:default",
     {
       "identifier": "http:default",
@@ -56,10 +53,6 @@
         }
       ],
       "deny": []
-    },
-    {
-      "identifier": "shell:allow-execute",
-      "allow": []
     },
     {
       "identifier": "opener:allow-open-url",

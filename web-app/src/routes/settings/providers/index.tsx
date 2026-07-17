@@ -82,7 +82,7 @@ function ModelProviders() {
             <div
               className="size-7 rounded-lg flex items-center justify-center"
               style={{
-                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                background: 'var(--brand-gradient)',
               }}
             >
               <Plug className="size-3.5 text-white" strokeWidth={2.5} />
@@ -190,6 +190,8 @@ function ModelProviders() {
                             variant="ghost"
                             size="icon"
                             className="rounded-lg size-8 hover:bg-muted"
+                            aria-label={`Configure ${getProviderTitle(provider.provider)}`}
+                            title={`Configure ${getProviderTitle(provider.provider)}`}
                             onClick={() => {
                               navigate({
                                 to: route.settings.providers,

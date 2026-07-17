@@ -34,7 +34,6 @@ macro_rules! desktop_handlers {
             // App configuration commands
             crate::core::app::commands::get_app_configurations,
             crate::core::app::commands::get_user_home_path,
-            crate::core::app::commands::update_app_configuration,
             crate::core::app::commands::get_app_data_folder_path,
             crate::core::app::commands::get_configuration_file_path,
             crate::core::app::commands::default_data_folder_path,
@@ -55,6 +54,10 @@ macro_rules! desktop_handlers {
             crate::core::system::commands::open_file_explorer,
             crate::core::system::commands::factory_reset,
             crate::core::system::commands::read_logs,
+            // OS-backed credential storage (allowlisted keys only)
+            crate::core::secrets::get_secret,
+            crate::core::secrets::set_secret,
+            crate::core::secrets::delete_secret,
             // Server commands
             crate::core::server::commands::start_server,
             crate::core::server::commands::stop_server,

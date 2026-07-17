@@ -30,9 +30,15 @@ fn test_app_state() -> AppState {
         mcp_server_pids: Arc::new(Mutex::new(std::collections::HashMap::new())),
         provider_state: Arc::new(Mutex::new(ProviderState::default())),
         approved_save_paths: Arc::new(Mutex::new(HashSet::new())),
+        approved_read_files: Arc::new(Mutex::new(HashSet::new())),
+        approved_read_directories: Arc::new(Mutex::new(HashSet::new())),
         factory_reset_lock: Arc::new(Mutex::new(())),
         active_streams: Arc::new(Mutex::new(std::collections::HashMap::new())),
     }
+}
+
+fn approved_read_path(path: &Path) -> PathBuf {
+    ax_studio_utils::normalize_path(&path.canonicalize().unwrap())
 }
 
 #[test]
@@ -121,6 +127,68 @@ fn test_read_file_sync() {
     let result = read_file_sync(app.handle().clone(), request).unwrap();
     assert_eq!(result, "test content".to_string());
     fs::remove_file(file_path).unwrap();
+}
+
+#[tokio::test]
+async fn test_read_file_base64_requires_app_data_or_picker_approval() {
+    use base64::Engine;
+
+    let app = mock_app();
+    app.manage(test_app_state());
+    let state = app.state::<AppState>();
+
+    let app_data_file = get_app_data_folder_path(app.handle().clone()).join("approved-read.txt");
+    fs::write(&app_data_file, b"app data").unwrap();
+    let encoded = read_file_base64(
+        app.handle().clone(),
+        state.clone(),
+        SinglePathRequest::Typed {
+            path: app_data_file.to_string_lossy().into_owned(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .unwrap(),
+        b"app data"
+    );
+
+    let outside = tempfile::tempdir().unwrap();
+    let outside_file = outside.path().join("private.txt");
+    fs::write(&outside_file, b"selected").unwrap();
+    let denied = read_file_base64(
+        app.handle().clone(),
+        state.clone(),
+        SinglePathRequest::Typed {
+            path: outside_file.to_string_lossy().into_owned(),
+        },
+    )
+    .await
+    .unwrap_err();
+    assert!(denied.contains("not approved"));
+
+    state
+        .approved_read_files
+        .lock()
+        .await
+        .insert(approved_read_path(&outside_file));
+    let encoded = read_file_base64(
+        app.handle().clone(),
+        state,
+        SinglePathRequest::Typed {
+            path: outside_file.to_string_lossy().into_owned(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .unwrap(),
+        b"selected"
+    );
 }
 
 #[test]
@@ -303,9 +371,10 @@ fn test_mv_moves_file_within_app_data_folder() {
     );
 }
 
-#[test]
-fn test_copy_file_copies_absolute_source_into_app_data() {
+#[tokio::test]
+async fn test_copy_file_copies_picker_approved_source_into_app_data() {
     let app = mock_app();
+    app.manage(test_app_state());
     let app_data = get_app_data_folder_path(app.handle().clone());
     fs::create_dir_all(&app_data).unwrap();
     fs::create_dir_all(app_data.join("copied")).unwrap();
@@ -315,9 +384,30 @@ fn test_copy_file_copies_absolute_source_into_app_data() {
     fs::create_dir_all(&source_dir).unwrap();
     let source_path = source_dir.join("source.gguf");
     fs::write(&source_path, "model bytes").unwrap();
+    let denied = copy_file(
+        app.handle().clone(),
+        app.state(),
+        PathPairRequest::Typed {
+            source: source_path.to_string_lossy().into_owned(),
+            destination: app_data
+                .join("copied")
+                .join("denied.gguf")
+                .to_string_lossy()
+                .into_owned(),
+        },
+    )
+    .await
+    .unwrap_err();
+    assert!(denied.contains("not approved"));
+    app.state::<AppState>()
+        .approved_read_files
+        .lock()
+        .await
+        .insert(approved_read_path(&source_path));
 
     copy_file(
         app.handle().clone(),
+        app.state(),
         PathPairRequest::Typed {
             source: source_path.to_string_lossy().to_string(),
             destination: app_data
@@ -327,6 +417,7 @@ fn test_copy_file_copies_absolute_source_into_app_data() {
                 .to_string(),
         },
     )
+    .await
     .unwrap();
 
     assert_eq!(
@@ -338,9 +429,10 @@ fn test_copy_file_copies_absolute_source_into_app_data() {
     let _ = fs::remove_dir_all(app_data.join("copied"));
 }
 
-#[test]
-fn test_copy_file_accepts_file_url_destination_in_app_data() {
+#[tokio::test]
+async fn test_copy_file_accepts_file_url_destination_in_app_data() {
     let app = mock_app();
+    app.manage(test_app_state());
     let app_data = get_app_data_folder_path(app.handle().clone());
 
     let source_dir =
@@ -348,14 +440,21 @@ fn test_copy_file_accepts_file_url_destination_in_app_data() {
     fs::create_dir_all(&source_dir).unwrap();
     let source_path = source_dir.join("source.gguf");
     fs::write(&source_path, "model bytes").unwrap();
+    app.state::<AppState>()
+        .approved_read_files
+        .lock()
+        .await
+        .insert(approved_read_path(&source_path));
 
     copy_file(
         app.handle().clone(),
+        app.state(),
         PathPairRequest::Typed {
             source: source_path.to_string_lossy().to_string(),
             destination: "file://copied-url/model.gguf".to_string(),
         },
     )
+    .await
     .unwrap();
 
     assert_eq!(
@@ -367,9 +466,10 @@ fn test_copy_file_accepts_file_url_destination_in_app_data() {
     let _ = fs::remove_dir_all(app_data.join("copied-url"));
 }
 
-#[test]
-fn test_copy_file_rejects_destination_outside_app_data() {
+#[tokio::test]
+async fn test_copy_file_rejects_destination_outside_app_data() {
     let app = mock_app();
+    app.manage(test_app_state());
     let source_dir = std::env::temp_dir().join(format!(
         "ax-studio-copy-source-outside-{}",
         std::process::id()
@@ -380,6 +480,7 @@ fn test_copy_file_rejects_destination_outside_app_data() {
 
     let error = copy_file(
         app.handle().clone(),
+        app.state(),
         PathPairRequest::Typed {
             source: source_path.to_string_lossy().to_string(),
             destination: source_dir
@@ -388,6 +489,7 @@ fn test_copy_file_rejects_destination_outside_app_data() {
                 .to_string(),
         },
     )
+    .await
     .unwrap_err();
 
     assert!(error.contains("outside app data folder"));
@@ -459,8 +561,8 @@ fn test_file_stat_accepts_legacy_and_typed_requests() {
     fs::remove_file(file_path).unwrap();
 }
 
-#[test]
-fn test_decompress_extracts_zip_archive_within_app_data_folder() {
+#[tokio::test]
+async fn test_decompress_extracts_zip_archive_within_app_data_folder() {
     let app = mock_app();
     let app_data = get_app_data_folder_path(app.handle().clone());
     fs::create_dir_all(&app_data).unwrap();
@@ -485,14 +587,15 @@ fn test_decompress_extracts_zip_archive_within_app_data_folder() {
             output_dir: "unzipped".to_string(),
         }),
     )
+    .await
     .unwrap();
 
     let extracted = app_data.join("unzipped").join("nested").join("example.txt");
     assert_eq!(fs::read_to_string(extracted).unwrap(), "hello from zip");
 }
 
-#[test]
-fn test_decompress_rejects_zip_path_traversal_entries() {
+#[tokio::test]
+async fn test_decompress_rejects_zip_path_traversal_entries() {
     let app = mock_app();
     let app_data = get_app_data_folder_path(app.handle().clone());
     fs::create_dir_all(&app_data).unwrap();
@@ -517,9 +620,55 @@ fn test_decompress_rejects_zip_path_traversal_entries() {
             output_dir: "unzipped".to_string(),
         }),
     )
+    .await
     .unwrap_err();
 
     assert!(error.contains("Invalid zip entry path"));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn test_decompress_rejects_existing_symlink_directory_escape() {
+    use std::os::unix::fs::symlink;
+
+    let app = mock_app();
+    let app_data = get_app_data_folder_path(app.handle().clone());
+    let output = app_data.join("symlink-output");
+    let outside = tempfile::tempdir().unwrap();
+    fs::create_dir_all(&output).unwrap();
+    symlink(outside.path(), output.join("nested")).unwrap();
+
+    let archive_path = app_data.join("symlink-escape.zip");
+    {
+        let file = File::create(&archive_path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        zip.start_file(
+            "nested/escaped.txt",
+            zip::write::SimpleFileOptions::default(),
+        )
+        .unwrap();
+        zip.write_all(b"must stay contained").unwrap();
+        zip.finish().unwrap();
+    }
+
+    let error = decompress(
+        app.handle().clone(),
+        None,
+        None,
+        None,
+        Some(DecompressRequest::Typed {
+            path: "symlink-escape.zip".to_string(),
+            output_dir: "symlink-output".to_string(),
+        }),
+    )
+    .await
+    .unwrap_err();
+    assert!(error.contains("symlink directory"));
+    assert!(!outside.path().join("escaped.txt").exists());
+
+    let _ = fs::remove_file(output.join("nested"));
+    let _ = fs::remove_dir_all(output);
+    let _ = fs::remove_file(archive_path);
 }
 
 #[tokio::test]
@@ -623,85 +772,39 @@ fn test_write_yaml_accepts_typed_request() {
     let _ = fs::remove_file(get_app_data_folder_path(app.handle().clone()).join(path));
 }
 
-// ─── resolve_path URL branch (SSRF protection) ─────────────────────────────
-//
-// resolve_path accepts http/https URLs as a special case (used for model
-// download URLs that don't live in app_data). The implementation MUST reject
-// any URL pointing at the host's internal networks so a malicious config
-// can't trick the app into fetching from localhost / private LAN.
-
+// Network URLs must never pass through the local-filesystem resolver. Treating
+// them as PathBuf values lets mutating commands create `https:` directories in
+// the process working directory, outside app data.
 #[test]
-fn test_resolve_path_accepts_clean_external_https_url() {
+fn test_resolve_path_rejects_all_network_urls() {
     let app = mock_app();
-    let url = "https://huggingface.co/some/model.gguf";
-    let result = resolve_path(app.handle().clone(), url).unwrap();
-    // External URLs pass through unchanged (no canonicalize, no
-    // app_data prefix).
-    assert_eq!(result, PathBuf::from(url));
+    for url in [
+        "https://huggingface.co/some/model.gguf",
+        "http://example.com/file.bin",
+        "http://localhost/foo",
+        "http://127.0.0.1:9999/foo",
+        "http://",
+    ] {
+        assert!(resolve_path(app.handle().clone(), url).is_err(), "{url}");
+    }
 }
 
+#[cfg(unix)]
 #[test]
-fn test_resolve_path_accepts_clean_external_http_url() {
-    let app = mock_app();
-    let url = "http://example.com/file.bin";
-    let result = resolve_path(app.handle().clone(), url).unwrap();
-    assert_eq!(result, PathBuf::from(url));
-}
+fn test_resolve_path_rejects_escape_through_deep_symlink_ancestor() {
+    use std::os::unix::fs::symlink;
 
-#[test]
-fn test_resolve_path_rejects_localhost_domain() {
     let app = mock_app();
-    let result = resolve_path(app.handle().clone(), "http://localhost/foo");
-    assert!(result.is_err(), "localhost domain must be rejected");
-    let err = result.unwrap_err();
-    assert!(
-        err.contains("localhost"),
-        "error should mention localhost, got: {err}"
-    );
-}
+    let app_data = get_app_data_folder_path(app.handle().clone());
+    let outside = tempfile::tempdir().unwrap();
+    let link = app_data.join("escape-link");
+    let _ = fs::remove_file(&link);
+    symlink(outside.path(), &link).unwrap();
 
-#[test]
-fn test_resolve_path_rejects_ipv4_loopback() {
-    let app = mock_app();
-    let result = resolve_path(app.handle().clone(), "http://127.0.0.1:9999/foo");
-    assert!(result.is_err(), "127.0.0.1 must be rejected");
-    assert!(result.unwrap_err().contains("internal networks"));
-}
+    let escaped = link.join("missing").join("file.txt");
+    assert!(resolve_path(app.handle().clone(), &escaped.to_string_lossy()).is_err());
 
-#[test]
-fn test_resolve_path_rejects_ipv4_private_10_dot() {
-    let app = mock_app();
-    let result = resolve_path(app.handle().clone(), "http://10.0.0.1/foo");
-    assert!(result.is_err(), "10.x private range must be rejected");
-}
-
-#[test]
-fn test_resolve_path_rejects_ipv4_private_192_168() {
-    let app = mock_app();
-    let result = resolve_path(app.handle().clone(), "http://192.168.1.1/foo");
-    assert!(result.is_err(), "192.168.x private range must be rejected");
-}
-
-#[test]
-fn test_resolve_path_rejects_ipv4_private_172_16() {
-    let app = mock_app();
-    let result = resolve_path(app.handle().clone(), "http://172.16.0.1/foo");
-    assert!(result.is_err(), "172.16/12 private range must be rejected");
-}
-
-#[test]
-fn test_resolve_path_rejects_unspecified_address() {
-    let app = mock_app();
-    let result = resolve_path(app.handle().clone(), "http://0.0.0.0/foo");
-    assert!(result.is_err(), "0.0.0.0 unspecified must be rejected");
-}
-
-#[test]
-fn test_resolve_path_rejects_invalid_url() {
-    let app = mock_app();
-    // Starts with "http://" so it takes the URL branch, but isn't a valid URL.
-    let result = resolve_path(app.handle().clone(), "http://");
-    assert!(result.is_err(), "malformed URL must be rejected");
+    let _ = fs::remove_file(link);
 }
 
 // ─── decompress: tar.gz extraction safety ───────────────────────────────────
@@ -730,8 +833,8 @@ fn make_tar_gz_with_file(entry_path: &str, contents: &[u8]) -> Vec<u8> {
     encoder.finish().unwrap()
 }
 
-#[test]
-fn test_decompress_extracts_targz_within_app_data_folder() {
+#[tokio::test]
+async fn test_decompress_extracts_targz_within_app_data_folder() {
     let app = mock_app();
     let app_data = get_app_data_folder_path(app.handle().clone());
 
@@ -751,7 +854,9 @@ fn test_decompress_extracts_targz_within_app_data_folder() {
         path: archive_rel.to_string(),
         output_dir: output_rel.to_string(),
     };
-    decompress(app.handle().clone(), None, None, None, Some(request)).unwrap();
+    decompress(app.handle().clone(), None, None, None, Some(request))
+        .await
+        .unwrap();
 
     let extracted = app_data.join(output_rel).join("payload.txt");
     assert!(
@@ -777,8 +882,8 @@ fn test_decompress_extracts_targz_within_app_data_folder() {
 // is outside the scope of a unit test. The path-traversal LOGIC is
 // shared with the zip path and covered there.
 
-#[test]
-fn test_decompress_rejects_unsupported_format() {
+#[tokio::test]
+async fn test_decompress_rejects_unsupported_format() {
     let app = mock_app();
     let app_data = get_app_data_folder_path(app.handle().clone());
 
@@ -795,7 +900,7 @@ fn test_decompress_rejects_unsupported_format() {
         path: archive_rel.to_string(),
         output_dir: output_rel.to_string(),
     };
-    let result = decompress(app.handle().clone(), None, None, None, Some(request));
+    let result = decompress(app.handle().clone(), None, None, None, Some(request)).await;
 
     assert!(result.is_err(), ".7z must be rejected as unsupported");
     assert!(result.unwrap_err().contains("Unsupported file format"));
@@ -803,8 +908,8 @@ fn test_decompress_rejects_unsupported_format() {
     let _ = fs::remove_dir_all(app_data.join("test_bad_format"));
 }
 
-#[test]
-fn test_decompress_rejects_archive_path_outside_app_data() {
+#[tokio::test]
+async fn test_decompress_rejects_archive_path_outside_app_data() {
     let app = mock_app();
 
     // Archive path resolves outside the app data folder via .. — must be blocked
@@ -813,7 +918,7 @@ fn test_decompress_rejects_archive_path_outside_app_data() {
         path: "../../etc/passwd.tar.gz".to_string(),
         output_dir: "outdir".to_string(),
     };
-    let result = decompress(app.handle().clone(), None, None, None, Some(request));
+    let result = decompress(app.handle().clone(), None, None, None, Some(request)).await;
     assert!(
         result.is_err(),
         "archive path outside app_data must be rejected"

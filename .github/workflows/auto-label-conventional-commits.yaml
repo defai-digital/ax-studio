@@ -4,6 +4,10 @@ on:
     types:
       - reopened
       - opened
+
+permissions:
+  contents: read
+
 jobs:
   label_prs:
     if: github.event.pull_request.head.repo.full_name == github.repository
@@ -12,10 +16,10 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Label PRs
         run: |
-          ISSUE_TITLE=$(gh issue view ${{ github.event.number }} --json title -q ".title")
+          ISSUE_TITLE=$(gh pr view ${{ github.event.number }} --json title -q ".title")
           case "$ISSUE_TITLE" in
             chore:*) LABEL="type: chore" ;;
             feat:*) LABEL="type: feature request" ;;
@@ -30,7 +34,7 @@ jobs:
             *) LABEL="" ;;
           esac
           if [ -n "$LABEL" ]; then
-            gh issue edit ${{ github.event.number }} --add-label "$LABEL"
+            gh pr edit ${{ github.event.number }} --add-label "$LABEL"
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

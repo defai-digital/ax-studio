@@ -88,4 +88,19 @@ describe('formatCompactNumber', () => {
     expect(formatCompactNumber(128_000, 0)).toBe('128K')
     expect(formatCompactNumber(2_000_000, 0)).toBe('2M')
   })
+
+  it('promotes to the next unit when rounding would print 1000 of the current unit', () => {
+    // 999_999 / 1000 = 999.999 → toFixed(1) would be "1000.0K" without promotion
+    expect(formatCompactNumber(999_999)).toBe('1.0M')
+    expect(formatCompactNumber(999_500, 0)).toBe('1M')
+    expect(formatCompactNumber(999_999_999)).toBe('1.0B')
+    expect(formatCompactNumber(999_500_000, 0)).toBe('1B')
+  })
+
+  it('formats billions and non-finite values', () => {
+    expect(formatCompactNumber(1_000_000_000)).toBe('1.0B')
+    expect(formatCompactNumber(2_500_000_000, 0)).toBe('3B')
+    expect(formatCompactNumber(Number.NaN)).toBe('0')
+    expect(formatCompactNumber(Number.POSITIVE_INFINITY)).toBe('0')
+  })
 })

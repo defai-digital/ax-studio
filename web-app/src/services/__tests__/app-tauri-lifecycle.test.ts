@@ -111,7 +111,7 @@ describe('TauriAppService lifecycle paths', () => {
     await expect(service.getAppDataFolder()).resolves.toBeUndefined()
 
     expect(errorSpy).toHaveBeenCalledWith(
-      'Failed to get Ax-Studio data folder:',
+      'Failed to get AX Studio data folder:',
       expect.any(Error)
     )
     errorSpy.mockRestore()

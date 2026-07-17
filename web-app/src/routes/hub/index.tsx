@@ -774,7 +774,7 @@ function HubContent() {
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-[12px] font-medium shadow-sm transition-all hover:shadow-md"
                                   style={{
                                     background:
-                                      'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                                      'var(--brand-gradient)',
                                     boxShadow:
                                       '0 2px 6px rgba(99,102,241,0.25)',
                                   }}

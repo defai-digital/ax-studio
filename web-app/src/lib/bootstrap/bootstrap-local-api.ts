@@ -70,7 +70,7 @@ async function startLocalApiServer(
     prefix: config.prefix,
     apiKey,
     trustedHosts: config.trustedHosts,
-    isCorsEnabled: true,
+    isCorsEnabled: config.corsEnabled,
     isVerboseEnabled: config.verboseLogs,
     proxyTimeout: config.proxyTimeout,
   })
@@ -175,8 +175,6 @@ export async function bootstrapLocalApi(
         setServerStatus('pending')
       }
 
-      // CORS must be enabled so the webview can reach the proxy via native fetch.
-      // Force it on to survive users with persisted `false` from old defaults.
       const actualPort = await startLocalApiServerWithPortFallback(
         config,
         effectiveApiKey

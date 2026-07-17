@@ -116,6 +116,34 @@ describe('DefaultUploadsService', () => {
       expect(result.chunkCount).toBe(12)
     })
 
+    it('re-ingesting the same path returns the same registry file_id', async () => {
+      const metrics = {
+        filesSucceeded: 1,
+        totalChunksGenerated: 4,
+        errors: [],
+      }
+      const hub = makeServiceHub({
+        error: '',
+        content: [{ text: JSON.stringify(metrics) }],
+      })
+      service.setMcpService(hub.mcp())
+
+      const first = await service.ingestFileAttachment(
+        't1',
+        makeDocAttachment({ path: '/tmp/report.pdf', name: 'report.pdf' })
+      )
+      const second = await service.ingestFileAttachment(
+        't1',
+        makeDocAttachment({ path: '/tmp/report.pdf', name: 'report.pdf' })
+      )
+
+      expect(second.id).toBe(first.id)
+      expect(useFileRegistry.getState().listFiles('thread_t1')).toHaveLength(1)
+      expect(useFileRegistry.getState().listFiles('thread_t1')[0].file_id).toBe(
+        first.id
+      )
+    })
+
     it('accepts snake_case pipeline metric aliases from fabric_ingest_run', async () => {
       const hub = makeServiceHub({
         error: '',
@@ -291,6 +319,19 @@ describe('DefaultUploadsService', () => {
       await expect(
         service.ingestFileAttachment('t1', makeDocAttachment())
       ).rejects.toThrow('pipeline crashed')
+    })
+
+    it('throws when fabric_ingest_run sets isError without a top-level error string', async () => {
+      const hub = makeServiceHub({
+        error: '',
+        isError: true,
+        content: [{ text: 'ingest rejected by server' }],
+      })
+      service.setMcpService(hub.mcp())
+
+      await expect(
+        service.ingestFileAttachment('t1', makeDocAttachment())
+      ).rejects.toThrow('ingest rejected by server')
     })
 
     it('throws when filesSucceeded is 0', async () => {

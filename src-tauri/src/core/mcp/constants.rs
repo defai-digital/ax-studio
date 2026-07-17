@@ -21,7 +21,7 @@ pub const DEFAULT_MCP_CONFIG: &str = r#"{
     },
     "ax-bi": {
       "type": "http",
-      "url": "http://127.0.0.1:8088/mcp",
+      "url": "http://127.0.0.1:5008/mcp",
       "command": "",
       "args": [],
       "env": {},

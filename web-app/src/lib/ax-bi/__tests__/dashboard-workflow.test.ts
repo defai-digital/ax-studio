@@ -15,7 +15,7 @@ const csvAttachment: Attachment = {
   id: 'file-1',
 }
 
-describe('AX-BI dashboard workflow', () => {
+describe('AX BI dashboard workflow', () => {
   it('handles dashboard requests with supported data attachments', async () => {
     const result = await runAxBiDashboardWorkflow({
       prompt: 'Can you create a dashboard from this file?',
@@ -53,10 +53,10 @@ describe('AX-BI dashboard workflow', () => {
     expect(result).toEqual({ handled: false })
   })
 
-  it('does not intercept existing AX-BI dataset chart requests', async () => {
+  it('does not intercept existing AX BI dataset chart requests', async () => {
     const result = await runAxBiDashboardWorkflow({
       prompt:
-        'Use AX-BI MCP. Create a saved bar chart from palmer_penguins showing count of records by species.',
+        'Use AX BI MCP. Create a saved bar chart from palmer_penguins showing count of records by species.',
       attachments: [csvAttachment],
       serviceHub: {} as never,
     })
@@ -64,64 +64,111 @@ describe('AX-BI dashboard workflow', () => {
     expect(result).toEqual({ handled: false })
   })
 
-  it('plans an AX-BI dashboard through the SDK client', async () => {
+  it('plans an AX BI dashboard through the SDK client', async () => {
     const planDashboard = vi.fn().mockResolvedValue({
-      title: 'Revenue Dashboard',
-      description: 'Revenue and region performance.',
-      sections: [
-        {
-          title: 'Revenue',
-          chart_intents: [
-            {
-              metric: 'revenue',
-              dimension: 'region',
-              chart_type: 'bar',
-            },
-          ],
-        },
-      ],
-      assumptions: ['Using certified datasets first.'],
-      clarifying_questions: ['Which fiscal period should be used?'],
-      confidence_score: 0.82,
+      plan: {
+        plan_id: 'plan-1',
+        title: 'Revenue Dashboard',
+        description: 'Revenue and region performance.',
+        sections: [
+          {
+            title: 'Revenue',
+            chart_intents: [
+              {
+                metric: 'revenue',
+                dimension: 'region',
+                chart_type: 'bar',
+              },
+            ],
+          },
+        ],
+        assumptions: ['Using certified datasets first.'],
+        clarifying_questions: ['Which fiscal period should be used?'],
+        confidence: 0.82,
+      },
+      warnings: [],
     })
+    const promptToDashboard = vi.fn()
 
     const result = await runAxBiSdkPromptWorkflow({
-      prompt: 'Prompt AX-BI to plan a revenue dashboard by region',
+      prompt: 'Prompt AX BI to plan a revenue dashboard by region',
       serviceHub: {} as never,
       client: {
-        ai: { planDashboard },
+        ai: { planDashboard, promptToDashboard },
       },
     })
 
     expect(planDashboard).toHaveBeenCalledWith({
-      prompt: 'Prompt AX-BI to plan a revenue dashboard by region',
+      prompt: 'Prompt AX BI to plan a revenue dashboard by region',
     })
     expect(result).toMatchObject({
       handled: true,
       message: expect.stringContaining('Revenue Dashboard'),
     })
     if (result.handled) {
+      expect(result.status).toBe('dry_run')
       expect(result.message).toContain('bar: revenue by region')
       expect(result.message).toContain('Confidence: 82%')
     }
+    expect(promptToDashboard).not.toHaveBeenCalled()
+  })
+
+  it('creates an AX BI dashboard through the current one-call SDK workflow', async () => {
+    const planDashboard = vi.fn()
+    const promptToDashboard = vi.fn().mockResolvedValue({
+      status: 'partial',
+      dashboard_url:
+        'http://127.0.0.1:8088/superset/dashboard/8/?native_filters_key=abc',
+      plan: {
+        plan_id: 'plan-2',
+        title: 'Sales Overview',
+        sections: [],
+      },
+      charts_succeeded: 3,
+      charts_failed: 1,
+      warnings: ['One chart could not be generated.'],
+      steps: [
+        { name: 'plan', status: 'succeeded' },
+        { name: 'compose', status: 'succeeded' },
+      ],
+    })
+
+    const result = await runAxBiSdkPromptWorkflow({
+      prompt: 'Use AX BI to build a sales dashboard',
+      serviceHub: {} as never,
+      client: { ai: { planDashboard, promptToDashboard } },
+    })
+
+    expect(promptToDashboard).toHaveBeenCalledWith({
+      prompt: 'Use AX BI to build a sales dashboard',
+    })
+    expect(result).toMatchObject({
+      handled: true,
+      status: 'partial',
+      dashboardUrl:
+        'http://127.0.0.1:8088/ax-bi/dashboard/8/?native_filters_key=abc',
+      message: expect.stringContaining('3 succeeded, 1 failed'),
+    })
   })
 
   it('does not intercept ordinary prompts through the SDK workflow', async () => {
     const planDashboard = vi.fn()
+    const promptToDashboard = vi.fn()
 
     const result = await runAxBiSdkPromptWorkflow({
       prompt: 'Summarize this note',
       serviceHub: {} as never,
       client: {
-        ai: { planDashboard },
+        ai: { planDashboard, promptToDashboard },
       },
     })
 
     expect(result).toEqual({ handled: false })
     expect(planDashboard).not.toHaveBeenCalled()
+    expect(promptToDashboard).not.toHaveBeenCalled()
   })
 
-  it('creates an existing-dataset count bar chart through AX-BI MCP directly', async () => {
+  it('creates an existing-dataset count bar chart through AX BI MCP directly', async () => {
     const calls: Array<{ toolName: string; arguments: object }> = []
     const serviceHub = {
       mcp: () => ({
@@ -191,7 +238,7 @@ describe('AX-BI dashboard workflow', () => {
 
     const result = await runAxBiExistingDatasetChartWorkflow({
       prompt:
-        'Use AX-BI MCP only. Find dataset palmer_penguins. Create a saved bar chart showing COUNT(*) by species. Name it Test - Penguins Count by Species.',
+        'Use AX BI MCP only. Find dataset palmer_penguins. Create a saved bar chart showing COUNT(*) by species. Name it Test - Penguins Count by Species.',
       serviceHub: serviceHub as never,
     })
 
@@ -221,7 +268,7 @@ describe('AX-BI dashboard workflow', () => {
     })
   })
 
-  it('creates an existing-dataset average bar chart through AX-BI MCP directly', async () => {
+  it('creates an existing-dataset average bar chart through AX BI MCP directly', async () => {
     const calls: Array<{ toolName: string; arguments: object }> = []
     const serviceHub = {
       mcp: () => ({
@@ -291,7 +338,7 @@ describe('AX-BI dashboard workflow', () => {
 
     const result = await runAxBiExistingDatasetChartWorkflow({
       prompt:
-        'Use AX-BI MCP. Create a saved bar chart from palmer_penguins showing average body_mass_g by species. Name it Test - Avg Body Mass by Species.',
+        'Use AX BI MCP. Create a saved bar chart from palmer_penguins showing average body_mass_g by species. Name it Test - Avg Body Mass by Species.',
       serviceHub: serviceHub as never,
     })
 
@@ -383,7 +430,7 @@ describe('AX-BI dashboard workflow', () => {
 
     const result = await runAxBiExistingDatasetChartWorkflow({
       prompt:
-        'Use AX-BI MCP. Create a saved bar chart from upload_restaurant_tips_f0d2d2 showing SUM(total_bill) by day. Name it Tips - Total Bill by Day.',
+        'Use AX BI MCP. Create a saved bar chart from upload_restaurant_tips_f0d2d2 showing SUM(total_bill) by day. Name it Tips - Total Bill by Day.',
       serviceHub: serviceHub as never,
     })
 
@@ -408,11 +455,11 @@ describe('AX-BI dashboard workflow', () => {
     })
   })
 
-  it('maps requested pie, line, and horizontal bar chart types to AX-BI configs', async () => {
+  it('maps requested pie, line, and horizontal bar chart types to AX BI configs', async () => {
     const prompts = [
       {
         prompt:
-          'Use AX-BI MCP. Create a saved pie chart from restaurant_tips showing count of records by smoker. Name it Tips - Smoker Split.',
+          'Use AX BI MCP. Create a saved pie chart from restaurant_tips showing count of records by smoker. Name it Tips - Smoker Split.',
         expectedConfig: {
           chart_type: 'pie',
           dimension: { name: 'smoker' },
@@ -421,7 +468,7 @@ describe('AX-BI dashboard workflow', () => {
       },
       {
         prompt:
-          'Use AX-BI MCP. Create a saved line chart from restaurant_tips showing average total bill by table size. Name it Tips - Avg Bill by Party Size.',
+          'Use AX BI MCP. Create a saved line chart from restaurant_tips showing average total bill by table size. Name it Tips - Avg Bill by Party Size.',
         expectedConfig: {
           chart_type: 'xy',
           kind: 'line',
@@ -431,7 +478,7 @@ describe('AX-BI dashboard workflow', () => {
       },
       {
         prompt:
-          'Use AX-BI MCP. Create a saved horizontal bar chart from restaurant_tips showing average tip by time. Name it Tips - Average Tip by Meal Time.',
+          'Use AX BI MCP. Create a saved horizontal bar chart from restaurant_tips showing average tip by time. Name it Tips - Average Tip by Meal Time.',
         expectedConfig: {
           chart_type: 'xy',
           kind: 'bar',
@@ -1635,7 +1682,7 @@ describe('AX-BI dashboard workflow', () => {
     })
   })
 
-  it('maps common prompt options to supported AX-BI chart config fields', async () => {
+  it('maps common prompt options to supported AX BI chart config fields', async () => {
     const prompts = [
       {
         prompt:
@@ -1757,7 +1804,7 @@ describe('AX-BI dashboard workflow', () => {
     }
   })
 
-  it('maps simple filter phrases to AX-BI structured chart filters', async () => {
+  it('maps simple filter phrases to AX BI structured chart filters', async () => {
     const prompts = [
       {
         prompt:
@@ -1890,7 +1937,7 @@ describe('AX-BI dashboard workflow', () => {
     }
   })
 
-  it('creates a dashboard from an existing AX-BI dataset prompt', async () => {
+  it('creates a dashboard from an existing AX BI dataset prompt', async () => {
     const calls: Array<{ toolName: string; arguments: object }> = []
     let nextChartId = 210
     const serviceHub = {
@@ -1975,13 +2022,13 @@ describe('AX-BI dashboard workflow', () => {
 
     const result = await runAxBiExistingDatasetChartWorkflow({
       prompt:
-        'Create an AX-BI dashboard from restaurant_tips. Name it Tips Overview Dashboard.',
+        'Create an AX BI dashboard from restaurant_tips. Name it Tips Overview Dashboard.',
       serviceHub: serviceHub as never,
     })
 
     expect(result).toMatchObject({
       handled: true,
-      chartUrl: 'http://127.0.0.1:8080/dashboard/55/',
+      chartUrl: 'http://127.0.0.1:8080/ax-bi/dashboard/55/',
     })
     expect(
       calls.filter((call) => call.toolName === 'generate_chart')
@@ -2103,7 +2150,7 @@ describe('AX-BI dashboard workflow', () => {
 
     const result = await runAxBiExistingDatasetChartWorkflow({
       prompt:
-        'Create an AX-BI dashboard from california_housing. Name it Housing Overview Dashboard. which includes all the charts regarding housing which we created',
+        'Create an AX BI dashboard from california_housing. Name it Housing Overview Dashboard. which includes all the charts regarding housing which we created',
       serviceHub: serviceHub as never,
     })
 
@@ -2229,7 +2276,7 @@ describe('AX-BI dashboard workflow', () => {
 
     const result = await runAxBiExistingDatasetChartWorkflow({
       prompt:
-        'Use AX-BI MCP with dataset upload_california_housing_b074e1. Create dashboard named house dash using these charts Housing - Record Count KPI Housing - Avg Income by Age Housing - Location by Value Housing - Income vs Value Housing - Detail Table',
+        'Use AX BI MCP with dataset upload_california_housing_b074e1. Create dashboard named house dash using these charts Housing - Record Count KPI Housing - Avg Income by Age Housing - Location by Value Housing - Income vs Value Housing - Detail Table',
       serviceHub: serviceHub as never,
     })
 
@@ -2340,7 +2387,7 @@ describe('AX-BI dashboard workflow', () => {
 
     const result = await runAxBiExistingDatasetChartWorkflow({
       prompt:
-        'Create an AX-BI dashboard from california_housing. Name it Housing Custom Dashboard. Include "Housing - Detail Table" and "Housing - Income vs Value".',
+        'Create an AX BI dashboard from california_housing. Name it Housing Custom Dashboard. Include "Housing - Detail Table" and "Housing - Income vs Value".',
       serviceHub: serviceHub as never,
     })
 
@@ -2605,7 +2652,7 @@ describe('AX-BI dashboard workflow', () => {
 
     const result = await runAxBiExistingDatasetChartWorkflow({
       prompt:
-        'Use AX-BI MCP. Build me a saved chart for palmer_penguins with mean body mass grouped per species and call it Test - Mean Body Mass by Species.',
+        'Use AX BI MCP. Build me a saved chart for palmer_penguins with mean body mass grouped per species and call it Test - Mean Body Mass by Species.',
       serviceHub: serviceHub as never,
       intentExtractor,
     })
@@ -2715,7 +2762,7 @@ describe('AX-BI dashboard workflow', () => {
 
     const result = await runAxBiExistingDatasetChartWorkflow({
       prompt:
-        'Use AX-BI MCP. Create a saved scatter chart from palmer_penguins with bill_length_mm on x-axis and flipper_length_mm on y-axis, grouped by species. Name it Test - Bill vs Flipper by Species.',
+        'Use AX BI MCP. Create a saved scatter chart from palmer_penguins with bill_length_mm on x-axis and flipper_length_mm on y-axis, grouped by species. Name it Test - Bill vs Flipper by Species.',
       serviceHub: serviceHub as never,
       intentExtractor,
     })
@@ -2815,7 +2862,7 @@ describe('AX-BI dashboard workflow', () => {
 
     const result = await runAxBiExistingDatasetChartWorkflow({
       prompt:
-        'Use AX-BI MCP. Create a saved scatter chart from palmer_penguins with bill_length_mm on x-axis and flipper_length_mm on y-axis, grouped by species. Name it Test - Bill vs Flipper by Species.',
+        'Use AX BI MCP. Create a saved scatter chart from palmer_penguins with bill_length_mm on x-axis and flipper_length_mm on y-axis, grouped by species. Name it Test - Bill vs Flipper by Species.',
       serviceHub: serviceHub as never,
       intentExtractor,
     })
@@ -2843,7 +2890,7 @@ describe('AX-BI dashboard workflow', () => {
     })
   })
 
-  it('creates an existing-dataset chart through the AX-BI call_tool proxy', async () => {
+  it('creates an existing-dataset chart through the AX BI call_tool proxy', async () => {
     const calls: Array<{
       toolName: string
       arguments: Record<string, unknown>
@@ -2915,7 +2962,7 @@ describe('AX-BI dashboard workflow', () => {
 
     const result = await runAxBiExistingDatasetChartWorkflow({
       prompt:
-        'Use AX-BI MCP only. Find dataset palmer_penguins. Create a saved bar chart showing COUNT(*) by species. Name it Test - Penguins Count by Species.',
+        'Use AX BI MCP only. Find dataset palmer_penguins. Create a saved bar chart showing COUNT(*) by species. Name it Test - Penguins Count by Species.',
       serviceHub: serviceHub as never,
     })
 
@@ -2951,7 +2998,7 @@ describe('AX-BI dashboard workflow', () => {
     })
   })
 
-  it('parses structured-only AX-BI chart responses', async () => {
+  it('parses structured-only AX BI chart responses', async () => {
     const serviceHub = {
       mcp: () => ({
         getTools: async () => [
@@ -3010,7 +3057,7 @@ describe('AX-BI dashboard workflow', () => {
 
     const result = await runAxBiExistingDatasetChartWorkflow({
       prompt:
-        'Use AX-BI MCP only. Find dataset palmer_penguins. Create a saved bar chart showing COUNT(*) by species. Name it Test - Penguins Count by Species.',
+        'Use AX BI MCP only. Find dataset palmer_penguins. Create a saved bar chart showing COUNT(*) by species. Name it Test - Penguins Count by Species.',
       serviceHub: serviceHub as never,
     })
 
@@ -3020,7 +3067,7 @@ describe('AX-BI dashboard workflow', () => {
     })
   })
 
-  it('falls back to direct AX-BI tool calls when the proxy returns empty content', async () => {
+  it('falls back to direct AX BI tool calls when the proxy returns empty content', async () => {
     const calls: string[] = []
     const serviceHub = {
       mcp: () => ({
@@ -3086,7 +3133,7 @@ describe('AX-BI dashboard workflow', () => {
 
     const result = await runAxBiExistingDatasetChartWorkflow({
       prompt:
-        'Use AX-BI MCP only. Find dataset palmer_penguins. Create a saved bar chart showing COUNT(*) by species. Name it Test - Penguins Count by Species.',
+        'Use AX BI MCP only. Find dataset palmer_penguins. Create a saved bar chart showing COUNT(*) by species. Name it Test - Penguins Count by Species.',
       serviceHub: serviceHub as never,
     })
 
@@ -3102,5 +3149,85 @@ describe('AX-BI dashboard workflow', () => {
       handled: true,
       chartUrl: 'http://127.0.0.1:8080/explore/?slice_id=99',
     })
+  })
+
+  it('fails the chart workflow when generate_chart returns isError JSON without top-level error', async () => {
+    const serviceHub = {
+      mcp: () => ({
+        getTools: async () => [
+          {
+            server: 'ax-bi',
+            name: 'list_datasets',
+            description: '',
+            inputSchema: {},
+          },
+          {
+            server: 'ax-bi',
+            name: 'get_dataset_info',
+            description: '',
+            inputSchema: {},
+          },
+          {
+            server: 'ax-bi',
+            name: 'generate_chart',
+            description: '',
+            inputSchema: {},
+          },
+        ],
+        callTool: async (args: { toolName: string; arguments: object }) => {
+          if (args.toolName === 'list_datasets') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    result: [{ id: 12, table_name: 'palmer_penguins' }],
+                  }),
+                },
+              ],
+            }
+          }
+          if (args.toolName === 'get_dataset_info') {
+            return {
+              error: '',
+              content: [
+                {
+                  text: JSON.stringify({
+                    columns: [
+                      { name: 'species', type: 'TEXT' },
+                      { name: 'body_mass_g', type: 'FLOAT' },
+                    ],
+                  }),
+                },
+              ],
+            }
+          }
+          // MCP-style failure: isError + JSON body, empty top-level error
+          return {
+            error: '',
+            isError: true,
+            content: [
+              {
+                text: JSON.stringify({
+                  status: 'failed',
+                  detail: 'permission denied for dataset',
+                }),
+              },
+            ],
+          }
+        },
+      }),
+    }
+
+    // Before the fail-first fix, parseJsonToolResult returned the error JSON as
+    // a ChartResult and the workflow reported a false success without a URL.
+    // Now isError forces a hard failure that must not be treated as a chart.
+    await expect(
+      runAxBiExistingDatasetChartWorkflow({
+        prompt:
+          'Use AX BI MCP only. Find dataset palmer_penguins. Create a saved bar chart showing COUNT(*) by species. Name it Test - Penguins Count by Species.',
+        serviceHub: serviceHub as never,
+      })
+    ).rejects.toThrow(/permission denied|failed/i)
   })
 })

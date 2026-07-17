@@ -7,6 +7,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { useTranslation } from '@/i18n/react-i18next-compat'
+import { PlatformMetaKey } from '@/components/common/PlatformMetaKey'
 
 import { Link } from '@tanstack/react-router'
 import { useRef } from 'react'
@@ -35,22 +36,21 @@ export function NavMain() {
         <div className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
           <Link
             to={route.home}
-            className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-white font-medium shadow-sm overflow-hidden whitespace-nowrap group-data-[collapsible=icon]:hidden"
-            style={{
-              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-              fontSize: '13px',
-              boxShadow: '0 2px 8px rgba(99,102,241,0.3)',
-            }}
+            className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-primary-foreground font-medium shadow-brand overflow-hidden whitespace-nowrap group-data-[collapsible=icon]:hidden bg-brand-gradient"
+            style={{ fontSize: '13px' }}
           >
             <Plus className="size-3.5 shrink-0" strokeWidth={2.5} />
             <span>{t('common:newChat')}</span>
-            <span className="ml-auto text-[10px] text-white/50">⌘N</span>
+            <span className="ml-auto text-xs text-primary-foreground/50">
+              <PlatformMetaKey />N
+            </span>
           </Link>
           {/* Collapsed: icon-only with tooltip */}
           <Tooltip>
             <TooltipTrigger asChild>
               <Link
                 to={route.home}
+                aria-label={t('common:newChat')}
                 className="hidden group-data-[collapsible=icon]:flex p-2.5 rounded-lg bg-sidebar-primary/20 hover:bg-sidebar-primary/30 transition-colors text-sidebar-primary mb-1"
               >
                 <Plus className="size-4" strokeWidth={2.5} />
@@ -63,28 +63,31 @@ export function NavMain() {
         {/* Search — secondary search bar */}
         <div className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
           <button
+            type="button"
             onClick={() => setSearchOpen(true)}
             className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition-colors text-sidebar-foreground/50 hover:text-sidebar-foreground overflow-hidden whitespace-nowrap group-data-[collapsible=icon]:hidden"
             style={{ fontSize: '13px' }}
           >
             <Search className="size-3.5 shrink-0" />
             <span className="flex-1 text-left">{t('common:search')}...</span>
-            <kbd className="text-[10px] bg-sidebar-accent border border-sidebar-border px-1.5 py-0.5 rounded text-sidebar-foreground/30">
-              ⌘K
+            <kbd className="text-xs bg-sidebar-accent border border-sidebar-border px-1.5 py-0.5 rounded text-sidebar-foreground/50">
+              <PlatformMetaKey />K
             </kbd>
           </button>
           {/* Collapsed: icon-only with tooltip */}
           <Tooltip>
             <TooltipTrigger asChild>
               <button
+                type="button"
                 onClick={() => setSearchOpen(true)}
+                aria-label={t('common:search')}
                 className="hidden group-data-[collapsible=icon]:flex p-2.5 rounded-lg hover:bg-sidebar-accent transition-colors text-sidebar-foreground/50 hover:text-sidebar-foreground"
               >
                 <Search className="size-4" />
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">
-              {t('common:search')} (⌘K)
+              {t('common:search')} (<PlatformMetaKey />K)
             </TooltipContent>
           </Tooltip>
         </div>

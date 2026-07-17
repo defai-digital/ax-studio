@@ -128,6 +128,22 @@ describe('EventEmitter', () => {
       // splice removes only first match, so one remains
       expect(handler).toHaveBeenCalledTimes(1)
     })
+
+    it('should remove the event bucket when the final handler is removed', () => {
+      const handler = vi.fn()
+      const internalEmitter = eventEmitter as {
+        handlers: Map<string, Array<(...args: unknown[]) => void>>
+      }
+
+      eventEmitter.on('test-event', handler)
+      expect(internalEmitter.handlers.has('test-event')).toBe(true)
+
+      eventEmitter.off('test-event', handler)
+      expect(internalEmitter.handlers.has('test-event')).toBe(false)
+
+      eventEmitter.emit('test-event', 'data')
+      expect(handler).not.toHaveBeenCalled()
+    })
   })
 
   describe('emit method', () => {

@@ -4,26 +4,24 @@
 
 import { emit, listen } from '@tauri-apps/api/event'
 import type { EventOptions, UnlistenFn, EventsService } from './types'
+import { withTauriFallback } from '../tauri-guard'
 
 export class TauriEventsService implements EventsService {
    
   async emit<T>(event: string, payload?: T, _options?: EventOptions): Promise<void> {
-    try {
-      await emit(event, payload)
-    } catch (error) {
-      console.error('Error emitting Tauri event:', error)
-      throw error
-    }
+    return withTauriFallback(
+      () => emit(event, payload),
+      'Error emitting Tauri event:',
+      () => undefined
+    )
   }
 
    
   async listen<T>(event: string, handler: (event: { payload: T }) => void, _options?: EventOptions): Promise<UnlistenFn> {
-    try {
-      const unlisten = await listen<T>(event, handler)
-      return unlisten
-    } catch (error) {
-      console.error('Error listening to Tauri event:', error)
-      return () => {}
-    }
+    return withTauriFallback(
+      () => listen<T>(event, handler),
+      'Error listening to Tauri event:',
+      () => () => {}
+    )
   }
 }

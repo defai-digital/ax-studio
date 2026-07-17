@@ -26,6 +26,7 @@ import { useRef } from 'react'
 import { Link } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { useTranslation } from '@/i18n/react-i18next-compat'
+import { PlatformMetaKey } from '@/components/common/PlatformMetaKey'
 
 export function LeftSidebar() {
   const { t } = useTranslation()
@@ -40,20 +41,20 @@ export function LeftSidebar() {
         >
           {/* Collapsed: logo icon only */}
           <div className="hidden group-data-[collapsible=icon]:flex justify-center mb-1">
-            <div className="size-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-md shadow-indigo-500/20">
-              <Zap className="size-3.5 text-white" strokeWidth={2.5} />
+            <div className="size-7 rounded-lg bg-brand-gradient flex items-center justify-center shadow-brand">
+              <Zap className="size-3.5 text-primary-foreground" strokeWidth={2.5} />
             </div>
           </div>
           {/* Expanded: logo + title + actions */}
           <div className="flex items-center w-full justify-between group-data-[collapsible=icon]:hidden">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="size-6 shrink-0 rounded-md bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
-                <Zap className="size-3 text-white" strokeWidth={2.5} />
+              <div className="size-6 shrink-0 rounded-md bg-brand-gradient flex items-center justify-center">
+                <Zap className="size-3 text-primary-foreground" strokeWidth={2.5} />
               </div>
               <span className="text-sidebar-foreground font-semibold tracking-tight whitespace-nowrap text-[13px]">
-                Ax Studio
+                AX Studio
               </span>
-              <span className="text-[9px] px-1 py-0.5 rounded bg-sidebar-primary/20 text-sidebar-primary shrink-0">
+              <span className="text-xs px-1 py-0.5 rounded bg-sidebar-primary/20 text-sidebar-primary shrink-0">
                 v{VERSION}
               </span>
             </div>
@@ -99,8 +100,8 @@ export function LeftSidebar() {
                   <span className="group-data-[collapsible=icon]:hidden">
                     {t('common:settings')}
                   </span>
-                  <span className="ml-auto text-[10px] text-sidebar-foreground/20 group-data-[collapsible=icon]:hidden">
-                    ⌘,
+                  <span className="ml-auto text-xs text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden">
+                    <PlatformMetaKey />,
                   </span>
                 </Link>
               </SidebarMenuButton>
@@ -116,7 +117,7 @@ export function LeftSidebar() {
               className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all"
             >
               <MessageCircle size={16} className="shrink-0" />
-              <span>Share Feedback</span>
+              <span>{t('common:shareFeedback')}</span>
             </a>
           </div>
         </SidebarFooter>

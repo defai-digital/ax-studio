@@ -32,6 +32,9 @@ function cleanupThreadResources(threadId: string) {
     arguments: { collection_id: colId },
   }).catch(() => {})
 }
+
+/** Shared in-flight create so concurrent callers await the same new thread. */
+let createThreadInFlightPromise: Promise<Thread> | null = null
 type ThreadState = {
   threads: Record<string, Thread>
   currentThreadId?: string
@@ -259,50 +262,54 @@ export const useThreads = create<ThreadState>()((set, get) => ({
     projectMetadata,
     isTemporary
   ) => {
-    // Dedup guard: prevent concurrent duplicate thread creation (e.g., double-click)
-    if (get()._createThreadInFlight && !isTemporary) {
-      const currentThreadId = get().currentThreadId
-      const currentThread = currentThreadId ? get().threads[currentThreadId] : undefined
-      if (currentThread) return currentThread
-    }
-    set({ _createThreadInFlight: true })
-    const generalSettings = useGeneralSetting.getState()
-    const shouldSnapshotGlobalPrompt =
-      generalSettings.applyMode === 'new_chats_only' &&
-      Boolean(generalSettings.globalDefaultPrompt.trim()) &&
-      !projectMetadata?.projectPrompt
-
-    const baseMetadata = {
-      ...(projectMetadata && { project: projectMetadata }),
-      ...(shouldSnapshotGlobalPrompt && {
-        threadPrompt: generalSettings.globalDefaultPrompt.trim(),
-      }),
+    // Concurrent non-temporary creates must share one promise. Returning the
+    // previous currentThread while create is in flight caused double-send from
+    // home to write the pending message onto the wrong (old) thread.
+    if (!isTemporary && createThreadInFlightPromise) {
+      return createThreadInFlightPromise
     }
 
-    const newThread: Thread = {
-      id: isTemporary ? TEMPORARY_CHAT_ID : ulid(),
-      title: title ?? (isTemporary ? 'Temporary Chat' : 'New Thread'),
-      model,
-      updated: Math.floor(Date.now() / 1000),
-      assistants: assistant ? [assistant] : [],
-      ...(projectMetadata &&
-        !isTemporary && {
-          metadata: baseMetadata,
-        }),
-      ...(isTemporary && {
-        metadata: {
-          isTemporary: true,
-          ...baseMetadata,
-        },
-      }),
-      ...(!projectMetadata &&
-        !isTemporary &&
-        Object.keys(baseMetadata).length > 0 && { metadata: baseMetadata }),
-    }
-    return await getServiceHub()
-      .threads()
-      .createThread(newThread)
-      .then((createdThread) => {
+    const run = async (): Promise<Thread> => {
+      set({ _createThreadInFlight: true })
+      try {
+        const generalSettings = useGeneralSetting.getState()
+        const shouldSnapshotGlobalPrompt =
+          generalSettings.applyMode === 'new_chats_only' &&
+          Boolean(generalSettings.globalDefaultPrompt.trim()) &&
+          !projectMetadata?.projectPrompt
+
+        const baseMetadata = {
+          ...(projectMetadata && { project: projectMetadata }),
+          ...(shouldSnapshotGlobalPrompt && {
+            threadPrompt: generalSettings.globalDefaultPrompt.trim(),
+          }),
+        }
+
+        const newThread: Thread = {
+          id: isTemporary ? TEMPORARY_CHAT_ID : ulid(),
+          title: title ?? (isTemporary ? 'Temporary Chat' : 'New Thread'),
+          model,
+          updated: Math.floor(Date.now() / 1000),
+          assistants: assistant ? [assistant] : [],
+          ...(projectMetadata &&
+            !isTemporary && {
+              metadata: baseMetadata,
+            }),
+          ...(isTemporary && {
+            metadata: {
+              isTemporary: true,
+              ...baseMetadata,
+            },
+          }),
+          ...(!projectMetadata &&
+            !isTemporary &&
+            Object.keys(baseMetadata).length > 0 && { metadata: baseMetadata }),
+        }
+
+        const createdThread = await getServiceHub()
+          .threads()
+          .createThread(newThread)
+
         set((state) => {
           const existingThreads = Object.values(state.threads)
           const reorderedThreads = [createdThread, ...existingThreads]
@@ -327,8 +334,17 @@ export const useThreads = create<ThreadState>()((set, get) => ({
           }
         })
         return createdThread
-      })
-      .finally(() => set({ _createThreadInFlight: false }))
+      } finally {
+        if (!isTemporary) createThreadInFlightPromise = null
+        set({ _createThreadInFlight: false })
+      }
+    }
+
+    if (!isTemporary) {
+      createThreadInFlightPromise = run()
+      return createThreadInFlightPromise
+    }
+    return run()
   },
   updateCurrentThreadAssistant: (assistant) => {
     set((state) => {

@@ -331,6 +331,65 @@ describe('useThreads', () => {
     })
   })
 
+  it('shares one in-flight create so concurrent callers do not get the previous thread', async () => {
+    const { getServiceHub } = await import('@/hooks/useServiceHub')
+    let resolveCreate!: (value: { id: string; messages: never[] }) => void
+    const createPromise = new Promise<{ id: string; messages: never[] }>(
+      (resolve) => {
+        resolveCreate = resolve
+      }
+    )
+    const createThread = vi.fn().mockReturnValue(createPromise)
+    const hub = getServiceHub() as {
+      threads: (...args: unknown[]) => Record<string, unknown>
+    }
+    const originalThreads = hub.threads
+    hub.threads = () => ({
+      createThread,
+      deleteThread: vi.fn(),
+      updateThread: vi.fn(),
+    })
+
+    try {
+      const { result } = renderHook(() => useThreads())
+
+      act(() => {
+        result.current.setThreads([
+          { id: 'old-thread', title: 'Old', messages: [] },
+        ])
+        result.current.setCurrentThreadId('old-thread')
+      })
+
+      let first!: Promise<unknown>
+      let second!: Promise<unknown>
+      act(() => {
+        first = result.current.createThread({
+          provider: 'provider',
+          id: 'model',
+        })
+        second = result.current.createThread({
+          provider: 'provider',
+          id: 'model',
+        })
+      })
+
+      // Only one native create should start while the first is pending
+      expect(createThread).toHaveBeenCalledTimes(1)
+
+      await act(async () => {
+        resolveCreate({ id: 'new-thread', messages: [] })
+        const [a, b] = await Promise.all([first, second])
+        expect(a).toEqual({ id: 'new-thread', messages: [] })
+        expect(b).toEqual({ id: 'new-thread', messages: [] })
+      })
+
+      expect(result.current.currentThreadId).toBe('new-thread')
+      expect(createThread).toHaveBeenCalledTimes(1)
+    } finally {
+      hub.threads = originalThreads
+    }
+  })
+
   it('updates the active thread assistant and model', () => {
     const { result } = renderHook(() => useThreads())
 

@@ -67,7 +67,10 @@ pub fn normalize_path(path: &Path) -> PathBuf {
 
 /// Removes file:/ and file:\ prefixes from file paths
 pub fn normalize_file_path(path: &str) -> String {
-    path.replace("file:/", "").replace("file:\\", "")
+    path.strip_prefix("file:/")
+        .or_else(|| path.strip_prefix("file:\\"))
+        .unwrap_or(path)
+        .to_string()
 }
 
 /// Removes prefix from path string with proper formatting
@@ -126,15 +129,15 @@ mod tests {
     #[test]
     fn test_normalize_path_strips_verbatim_disk_prefix() {
         let base = super::normalize_path(std::path::Path::new(
-            r"\\?\C:\Users\devop\AppData\Roaming\Ax-Studio\data",
+            r"\\?\C:\Users\devop\AppData\Roaming\AX Studio\data",
         ));
         let candidate = super::normalize_path(std::path::Path::new(
-            r"\\?\C:\Users\devop\AppData\Roaming\Ax-Studio\data\llamacpp\models",
+            r"\\?\C:\Users\devop\AppData\Roaming\AX Studio\data\llamacpp\models",
         ));
 
         assert_eq!(
             base,
-            std::path::PathBuf::from(r"C:\Users\devop\AppData\Roaming\Ax-Studio\data")
+            std::path::PathBuf::from(r"C:\Users\devop\AppData\Roaming\AX Studio\data")
         );
         assert!(candidate.starts_with(&base));
     }

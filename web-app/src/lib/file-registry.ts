@@ -164,9 +164,28 @@ export const useFileRegistry = create<FileRegistryState>()(
           if (!normalizedEntry) return state
 
           const existing = state.files[normalizedCollectionId] ?? []
-          // Prevent duplicates by path within the same collection
-          if (existing.some((f) => f.file_path === normalizedEntry.file_path)) {
-            return state
+          // Same path: update metadata in place and keep the original file_id so
+          // re-ingest does not mint orphan IDs for callers that always generate
+          // a new ULID before calling addFile.
+          const existingIndex = existing.findIndex(
+            (f) => f.file_path === normalizedEntry.file_path
+          )
+          if (existingIndex >= 0) {
+            const previous = existing[existingIndex]
+            const updated = [...existing]
+            updated[existingIndex] = {
+              ...previous,
+              ...normalizedEntry,
+              // Preserve stable identity for list/remove/get_chunks consumers.
+              file_id: previous.file_id,
+              collection_id: normalizedCollectionId,
+            }
+            return {
+              files: {
+                ...state.files,
+                [normalizedCollectionId]: updated,
+              },
+            }
           }
           return {
             files: {

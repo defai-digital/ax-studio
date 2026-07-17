@@ -98,6 +98,12 @@
   --sidebar-accent-foreground: oklch(0.145 0.005 286); /* #09090b */
   --sidebar-border: oklch(0 0 0 / 8%); /* rgba(0,0,0,0.08) */
   --sidebar-ring: oklch(0.5468 0.2117 264.05); /* #6366f1 */
+
+  /* Brand gradient — derived from --primary so accent settings apply app-wide */
+  --brand-from: var(--primary);
+  --brand-to: color-mix(in oklch, var(--primary) 55%, oklch(0.5 0.22 300));
+  --brand-gradient: linear-gradient(135deg, var(--brand-from), var(--brand-to));
+  --brand-shadow: color-mix(in oklch, var(--primary) 30%, transparent);
 }
 
 .dark {
@@ -134,6 +140,11 @@
   --sidebar-accent-foreground: oklch(0.918 0.003 286); /* #e4e4e7 */
   --sidebar-border: oklch(1 0 0 / 5%); /* rgba(255,255,255,0.05) */
   --sidebar-ring: oklch(0.6496 0.1647 266.57); /* #818cf8 */
+
+  --brand-from: var(--primary);
+  --brand-to: color-mix(in oklch, var(--primary) 55%, oklch(0.55 0.2 300));
+  --brand-gradient: linear-gradient(135deg, var(--brand-from), var(--brand-to));
+  --brand-shadow: color-mix(in oklch, var(--primary) 30%, transparent);
 }
 
 @property --angle {
@@ -154,6 +165,15 @@
 
 .streaming-glow-spin {
   animation: streaming-spin 3s linear infinite;
+}
+
+/* Tokenized brand surfaces — prefer these over hardcoded indigo/violet */
+.bg-brand-gradient {
+  background-image: var(--brand-gradient);
+}
+
+.shadow-brand {
+  box-shadow: 0 2px 8px var(--brand-shadow);
 }
 
 /* Performance monitor pulse animation */
@@ -464,4 +484,31 @@
 
 .overflow-x-auto foreignObject {
   overflow: visible;
+}
+
+/* Respect reduced-motion preferences (WCAG 2.2) */
+@media (prefers-reduced-motion: reduce) {
+  .streaming-glow-spin,
+  .perf-live {
+    animation: none !important;
+  }
+
+  .animate-in,
+  .animate-out {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  html:focus-within {
+    scroll-behavior: auto !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

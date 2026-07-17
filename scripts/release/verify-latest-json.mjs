@@ -34,6 +34,14 @@ const latest = JSON.parse(fs.readFileSync(filePath, 'utf8'))
 const platforms = Object.keys(latest.platforms ?? {})
 const expectedPlatforms = ['darwin-aarch64', 'windows-x86_64', 'windows-aarch64']
 
+function decodedPath(url) {
+  try {
+    return decodeURIComponent(new URL(url).pathname)
+  } catch {
+    return url
+  }
+}
+
 function fail(message) {
   console.error(`latest.json error: ${message}`)
   process.exitCode = 1
@@ -56,8 +64,8 @@ if (!darwin?.url) {
   fail('darwin-aarch64 url is required')
 }
 
-if (darwin?.url && !/\/Ax-Studio(?:-[A-Za-z0-9.-]+)?(?:_|\.)/.test(darwin.url)) {
-  fail(`darwin-aarch64 url does not look like an Ax-Studio macOS artifact URL: ${darwin.url}`)
+if (darwin?.url && !/\/AX[ .]Studio(?:-[A-Za-z0-9.-]+)?(?:_|\.)/.test(decodedPath(darwin.url))) {
+  fail(`darwin-aarch64 url does not look like an AX Studio macOS artifact URL: ${darwin.url}`)
 }
 
 const windows = latest.platforms?.['windows-x86_64']
@@ -69,8 +77,8 @@ if (!windows?.url) {
   console.warn('warning: windows-x86_64 url is empty — Windows build may not have completed')
 }
 
-if (windows?.url && !/\/Ax-Studio_.*_x64-setup\.exe$/.test(windows.url)) {
-  fail(`windows-x86_64 url does not look like an Ax-Studio Windows NSIS installer URL: ${windows.url}`)
+if (windows?.url && !/\/AX[ .]Studio_.*_x64-setup\.exe$/.test(decodedPath(windows.url))) {
+  fail(`windows-x86_64 url does not look like an AX Studio Windows NSIS installer URL: ${windows.url}`)
 }
 
 const windowsArm64 = latest.platforms?.['windows-aarch64']
@@ -82,8 +90,8 @@ if (!windowsArm64?.url) {
   console.warn('warning: windows-aarch64 url is empty — Windows ARM64 build may not have completed')
 }
 
-if (windowsArm64?.url && !/\/Ax-Studio_.*_arm64-setup\.exe$/.test(windowsArm64.url)) {
-  fail(`windows-aarch64 url does not look like an Ax-Studio Windows ARM64 NSIS installer URL: ${windowsArm64.url}`)
+if (windowsArm64?.url && !/\/AX[ .]Studio_.*_arm64-setup\.exe$/.test(decodedPath(windowsArm64.url))) {
+  fail(`windows-aarch64 url does not look like an AX Studio Windows ARM64 NSIS installer URL: ${windowsArm64.url}`)
 }
 
 if (process.exitCode) {

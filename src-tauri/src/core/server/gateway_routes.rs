@@ -103,6 +103,7 @@ mod tests {
             proxy_api_key: String::new(),
             trusted_hosts: vec![],
             cors_enabled: false,
+            verbose_logs: false,
             host: "127.0.0.1".to_string(),
         }
     }

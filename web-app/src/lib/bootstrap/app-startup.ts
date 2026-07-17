@@ -38,7 +38,7 @@ export function showStartupError() {
   if (!root || root.childElementCount > 0) return
 
   root.innerHTML =
-    '<div style="height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;text-align:center;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#666;">Ax-Studio failed to initialize. Please restart the app.</div>'
+    '<div style="height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;text-align:center;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#666;">AX Studio failed to initialize. Please restart the app.</div>'
 }
 
 export function preventDefaultFileDrop(): () => void {

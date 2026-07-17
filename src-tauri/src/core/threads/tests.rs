@@ -45,6 +45,26 @@ fn create_test_message(thread_id: &str, content_text: &str) -> MessageRecord {
 }
 
 #[tokio::test]
+async fn test_thread_commands_reject_identifier_normalization_collisions() {
+    let (app, data_dir) = mock_app_with_temp_data_dir();
+    let invalid = ThreadRecord {
+        id: "thread/one".to_string(),
+        title: Some("invalid".to_string()),
+        ..Default::default()
+    };
+    assert!(create_thread(app.handle().clone(), invalid).await.is_err());
+    assert!(list_messages(app.handle().clone(), "../thread".to_string())
+        .await
+        .is_err());
+    assert!(
+        delete_thread(app.handle().clone(), "thread.one".to_string())
+            .await
+            .is_err()
+    );
+    let _ = fs::remove_dir_all(data_dir);
+}
+
+#[tokio::test]
 async fn test_create_and_list_threads() {
     let (app, data_dir) = mock_app_with_temp_data_dir();
     // Create a thread
