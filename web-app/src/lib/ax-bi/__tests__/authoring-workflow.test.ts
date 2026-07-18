@@ -243,6 +243,41 @@ describe('runAxBiAuthoringWorkflow', () => {
     })
   })
 
+  it('does not fall back to planning without plan_dashboard authorization', async () => {
+    const client = createClient()
+    client.ai.getAuthoringCapabilities.mockResolvedValue({
+      contract_version: '1.0',
+      operations: ['upload_and_plan'],
+      artifact_types: ['dashboard'],
+      preview_before_save: true,
+      upload_formats: ['csv'],
+      limits: { max_charts_per_dashboard: 6 },
+      async_jobs: false,
+      llm_configured: false,
+    })
+    client.ai.uploadAndPlan.mockResolvedValue({ dataset: { id: 42 } })
+
+    const result = await runAxBiAuthoringWorkflow({
+      prompt: 'Plan a dashboard from this file',
+      attachments: [
+        {
+          name: 'sales.csv',
+          type: 'document',
+          path: '/tmp/sales.csv',
+        },
+      ],
+      serviceHub,
+      client,
+    })
+
+    expect(result).toMatchObject({
+      handled: true,
+      status: 'failed',
+      message: expect.stringContaining('plan_dashboard'),
+    })
+    expect(client.ai.planDashboard).not.toHaveBeenCalled()
+  })
+
   it('blocks presentation uploads without calling AX BI', async () => {
     const client = createClient()
 

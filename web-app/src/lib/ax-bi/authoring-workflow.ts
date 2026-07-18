@@ -437,6 +437,9 @@ export async function runAxBiAuthoringWorkflow({
     }
 
     if (planOnly) {
+      // upload_and_plan may legitimately return only a dataset. In that case
+      // we fall back to plan_dashboard, which needs its own authorization.
+      requireOperation(capabilities, 'plan_dashboard')
       const numericId =
         datasetId == null ? undefined : numericDatasetId(datasetId)
       const envelope = await axbi.ai.planDashboard({
