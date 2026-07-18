@@ -8,6 +8,7 @@ import {
   Play,
   Trash2,
 } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -186,6 +187,9 @@ export function AxBiWorkspace() {
           <div className="flex min-w-0 items-center gap-2">
             <BarChart3 className="size-4 text-primary" />
             <h1 className="truncate text-sm font-semibold">AX BI</h1>
+            <Badge variant="amber" className="px-1.5 py-0 text-[10px]">
+              Beta
+            </Badge>
           </div>
           <Button
             aria-label="New AX BI session"

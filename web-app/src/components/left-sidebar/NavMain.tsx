@@ -6,6 +6,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { Badge } from '@/components/ui/badge'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { PlatformMetaKey } from '@/components/common/PlatformMetaKey'
 
@@ -137,6 +138,12 @@ export function NavMain() {
                 <span className="group-data-[collapsible=icon]:hidden">
                   {t('common:axBi')}
                 </span>
+                <Badge
+                  variant="amber"
+                  className="ml-auto px-1.5 py-0 text-[10px] group-data-[collapsible=icon]:hidden"
+                >
+                  Beta
+                </Badge>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
