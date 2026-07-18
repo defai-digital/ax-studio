@@ -34,6 +34,7 @@ fn test_app_state() -> AppState {
         approved_read_directories: Arc::new(Mutex::new(HashSet::new())),
         factory_reset_lock: Arc::new(Mutex::new(())),
         active_streams: Arc::new(Mutex::new(std::collections::HashMap::new())),
+        pending_open_files: Arc::new(crate::core::open_files::PendingOpenFiles::default()),
     }
 }
 

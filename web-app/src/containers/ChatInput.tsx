@@ -34,6 +34,7 @@ import { X } from 'lucide-react'
 import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { route } from '@/constants/routes'
+import { COMPOSER_FOCUS_EVENT } from '@/types/events'
 import { resolveEffectiveSelectedModel } from '@/lib/chat/selected-model'
 
 type ChatInputProps = {
@@ -278,6 +279,16 @@ const ChatInput = memo(function ChatInput({
   useEffect(() => {
     textareaRef.current?.focus()
   }, [effectiveThreadId])
+
+  // Global wake hotkey: the app navigates home and dispatches this event so
+  // the mounted composer grabs focus even when it was already mounted.
+  useEffect(() => {
+    const handleComposerFocus = () => textareaRef.current?.focus()
+    window.addEventListener(COMPOSER_FOCUS_EVENT, handleComposerFocus)
+    return () => {
+      window.removeEventListener(COMPOSER_FOCUS_EVENT, handleComposerFocus)
+    }
+  }, [])
 
   useEffect(() => {
     if (chatStatus !== 'submitted') {

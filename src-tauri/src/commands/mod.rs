@@ -56,6 +56,8 @@ macro_rules! desktop_handlers {
             crate::core::system::commands::open_file_explorer,
             crate::core::system::commands::factory_reset,
             crate::core::system::commands::read_logs,
+            // OS file-open requests (Dock drop / "Open with")
+            crate::core::open_files::take_pending_open_files,
             // OS-backed credential storage (allowlisted keys only)
             crate::core::secrets::get_secret,
             crate::core::secrets::set_secret,

@@ -974,18 +974,46 @@ pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         let _ = window.set_focus();
     }
 
+    // Windows "Open with" cold start delivers target files via process argv.
+    // The frontend is not up yet, so these land in the pending buffer and
+    // are drained by `take_pending_open_files` on mount.
+    #[cfg(desktop)]
+    {
+        let argv: Vec<String> = std::env::args().collect();
+        let paths = crate::core::open_files::extract_file_paths_from_argv(&argv);
+        crate::core::open_files::handle_opened_paths(app.handle(), paths);
+    }
+
     Ok(())
 }
 
 /// Tauri `.run()` event handler — handles app lifecycle events.
 pub fn app_run_handler(app: &tauri::AppHandle, event: RunEvent) {
     match event {
+        // macOS Dock drop / Finder "Open" delivers file URLs. The frontend
+        // may not be mounted yet on cold start, so route through the
+        // pending-open-files buffer/emit helper.
+        #[cfg(target_os = "macos")]
+        RunEvent::Opened { urls } => {
+            let paths = crate::core::open_files::paths_from_opened_urls(urls);
+            crate::core::open_files::handle_opened_paths(app, paths);
+        }
         RunEvent::ExitRequested { code, api, .. } => {
             log::warn!("Tauri exit requested with code: {code:?}");
             if should_prevent_exit_for_tray(code, tray_icon_enabled()) {
                 api.prevent_exit();
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.hide();
+                }
+            } else {
+                // Exit is proceeding — release the global hotkey so the OS can
+                // hand the combo to another app immediately.
+                #[cfg(desktop)]
+                {
+                    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+                    if let Err(e) = app.global_shortcut().unregister_all() {
+                        log::warn!("Failed to unregister global shortcuts on exit: {e}");
+                    }
                 }
             }
         }

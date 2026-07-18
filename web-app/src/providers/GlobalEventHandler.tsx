@@ -4,6 +4,10 @@ import { useNavigate } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
+import { useGlobalShortcut } from '@/hooks/settings/useGlobalShortcut'
+import { useDockFileDrop } from '@/hooks/chat/use-dock-file-drop'
+import { COMPOSER_FOCUS_EVENT, SystemEvent } from '@/types/events'
+import { isPlatformTauri } from '@/lib/platform/utils'
 import { useDownloadStore } from '@/hooks/models/useDownloadStore'
 import { useAppState } from '@/hooks/settings/useAppState'
 import { autoSelectDownloadedModel } from '@/lib/models/auto-select-downloaded-model'
@@ -33,6 +37,91 @@ export function GlobalEventHandler() {
   const serviceHub = useServiceHub()
   const navigate = useNavigate()
   const { t } = useTranslation()
+
+  // ─── Global wake hotkey ───────────────────────────────────────────────────
+
+  // Register the persisted quick-launch combo once at startup. Registration
+  // state is tracked by the service (plugin isRegistered() is unreliable), so
+  // a failed registration here only logs — the settings page surfaces remap
+  // errors inline when the user picks a combo.
+  useEffect(() => {
+    const combo = useGlobalShortcut.getState().quickLaunchShortcut
+    serviceHub
+      .globalShortcut()
+      .remap(combo)
+      .catch((error) => {
+        console.error('[GlobalEventHandler] Failed to register global shortcut:', error)
+      })
+  }, [serviceHub])
+
+  // Wake: navigate home and focus the composer. The focus dispatch is deferred
+  // so a not-yet-mounted home composer can mount first (it also autofocuses on
+  // mount; the event covers the already-mounted case).
+  useEffect(() => {
+    let unlisten: (() => void) | undefined
+    serviceHub
+      .events()
+      ?.listen(SystemEvent.GLOBAL_WAKE, () => {
+        navigate({ to: route.home })
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent(COMPOSER_FOCUS_EVENT))
+        }, 50)
+      })
+      .then((unsub) => {
+        unlisten = unsub
+      })
+    return () => unlisten?.()
+  }, [serviceHub, navigate])
+
+  // ─── OS file open (macOS Dock drop / Windows "Open with") ───────────────
+
+  const { handleDockFilePaths } = useDockFileDrop()
+
+  // Warm path: listen for `dock-file-drop`. Cold-start path: files opened
+  // before the frontend mounted are buffered in Rust — drain them once
+  // (the drain also flips the Rust-side ready flag so later drops arrive
+  // through the listener). Both navigate home and attach to a new chat.
+  useEffect(() => {
+    let cancelled = false
+    let unlisten: (() => void) | undefined
+
+    const onPaths = (paths: string[]) => {
+      if (!paths.length) return
+      navigate({ to: route.home })
+      void handleDockFilePaths(paths)
+    }
+
+    serviceHub
+      .events()
+      ?.listen<string[]>(SystemEvent.DOCK_FILE_DROP, (event) => {
+        if (Array.isArray(event.payload)) onPaths(event.payload)
+      })
+      .then((unsub) => {
+        if (cancelled) {
+          unsub()
+          return
+        }
+        unlisten = unsub
+        if (!isPlatformTauri()) return
+        serviceHub
+          .core()
+          .invoke<string[]>('take_pending_open_files')
+          .then((paths) => {
+            if (!cancelled && Array.isArray(paths)) onPaths(paths)
+          })
+          .catch((error) => {
+            console.error(
+              '[GlobalEventHandler] Failed to drain pending open files:',
+              error
+            )
+          })
+      })
+
+    return () => {
+      cancelled = true
+      unlisten?.()
+    }
+  }, [serviceHub, navigate, handleDockFilePaths])
 
   // ─── Settings changes ───────────────────────────────────────────────────────
 

@@ -40,7 +40,14 @@
     "search": "Search",
     "searchDesc": "Open the search dialog.",
     "goToSettings": "Go to Settings",
-    "goToSettingsDesc": "Open settings."
+    "goToSettingsDesc": "Open settings.",
+    "quickLaunch": "Quick Launch",
+    "quickLaunchWake": "Wake AX Studio",
+    "quickLaunchWakeDesc": "Show or hide AX Studio from anywhere with a global hotkey.",
+    "quickLaunchChange": "Change",
+    "quickLaunchRecording": "Press new shortcut… (Esc to cancel)",
+    "quickLaunchError": "Couldn't register this shortcut — it may be in use by another app.",
+    "quickLaunchNote": "The hotkey wakes the app only while AX Studio is running. On platforms where closing the window quits the app, keep it running in the background to use the hotkey."
   },
   "interface": {
     "title": "Interface",

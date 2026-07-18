@@ -30,4 +30,5 @@ export const localStorageKey = {
   localKnowledgeStore: 'local-knowledge-store',
   fileRegistryStore: 'file-registry-store',
   routerSettings: 'router-settings',
+  globalShortcut: 'global-shortcut',
 }

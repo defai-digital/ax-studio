@@ -51,6 +51,14 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
   }),
 }))
 
+vi.mock('@/hooks/useServiceHub', () => ({
+  useServiceHub: () => ({
+    globalShortcut: () => ({
+      remap: vi.fn().mockResolvedValue(undefined),
+    }),
+  }),
+}))
+
 vi.mock('@/constants/routes', () => ({
   route: {
     settings: {

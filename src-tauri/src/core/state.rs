@@ -212,6 +212,9 @@ pub struct AppState {
     pub approved_read_directories: Arc<Mutex<HashSet<PathBuf>>>,
     pub factory_reset_lock: Arc<Mutex<()>>,
     pub active_streams: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
+    /// Cold-start buffer for OS file-open requests (Dock drop / "Open with")
+    /// that arrive before the frontend mounts.
+    pub pending_open_files: Arc<crate::core::open_files::PendingOpenFiles>,
 }
 
 pub fn build_provider_model_index(

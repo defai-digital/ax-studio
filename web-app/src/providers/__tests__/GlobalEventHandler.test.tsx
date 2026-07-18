@@ -115,6 +115,12 @@ vi.mock('@/hooks/useServiceHub', () => ({
     path: () => ({
       sep: () => '/',
     }),
+    globalShortcut: () => ({
+      remap: vi.fn().mockResolvedValue(undefined),
+    }),
+    events: () => ({
+      listen: vi.fn().mockResolvedValue(vi.fn()),
+    }),
   }),
 }))
 

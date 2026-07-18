@@ -13,10 +13,14 @@ pub fn run() {
 
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_single_instance::init(
-        |_app, argv, _cwd| {
+        |app, argv, _cwd| {
             log::info!(
                 "A new app instance was opened with {argv:?} and the deep link event was already triggered"
             );
+            // Windows "Open with" on a running instance delivers the target
+            // files via argv — forward them like a macOS Dock drop.
+            let paths = core::open_files::extract_file_paths_from_argv(&argv);
+            core::open_files::handle_opened_paths(app, paths);
         },
     ));
 
@@ -34,6 +38,11 @@ pub fn run() {
     {
         app_builder = app_builder.plugin(tauri_plugin_hardware::init());
         app_builder = app_builder.plugin(tauri_plugin_llamacpp::init());
+        app_builder = app_builder.plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(core::global_shortcut::handle_shortcut)
+                .build(),
+        );
     }
 
     let app_builder = app_builder.invoke_handler(commands::desktop_handlers!());
@@ -56,6 +65,7 @@ pub fn run() {
         approved_read_directories: Arc::new(Mutex::new(std::collections::HashSet::new())),
         factory_reset_lock: Arc::new(Mutex::new(())),
         active_streams: Arc::new(Mutex::new(HashMap::new())),
+        pending_open_files: Arc::new(crate::core::open_files::PendingOpenFiles::default()),
     });
 
     // In-process MLX state (worker thread holding ax-engine-sdk EngineSessions).

@@ -42,6 +42,8 @@ import type { UpdaterService } from './updater/types'
 import type { PathService } from './path/types'
 import type { CoreService } from './core/types'
 import type { DeepLinkService } from './deeplink/types'
+import type { GlobalShortcutService } from './global-shortcut/types'
+import { DefaultGlobalShortcutService } from './global-shortcut/default'
 import type { ProjectsService } from './projects/types'
 import type { ChatOrganizationService } from './chat-organization/types'
 
@@ -93,6 +95,7 @@ export interface ServiceHub {
   path(): PathService
   core(): CoreService
   deeplink(): DeepLinkService
+  globalShortcut(): GlobalShortcutService
   projects(): ProjectsService
   chatOrganization(): ChatOrganizationService
   rag(): RAGService
@@ -117,6 +120,8 @@ class PlatformServiceHub implements ServiceHub {
   private pathService!: PathService
   private coreService!: CoreService
   private deepLinkService!: DeepLinkService
+  private globalShortcutService: GlobalShortcutService =
+    new DefaultGlobalShortcutService()
   private projectsService: ProjectsService = new DefaultProjectsService()
   private chatOrganizationService: ChatOrganizationService =
     new DefaultChatOrganizationService()
@@ -285,6 +290,7 @@ class PlatformServiceHub implements ServiceHub {
           pathModule,
           coreModule,
           deepLinkModule,
+          globalShortcutModule,
         ] = await Promise.all([
           import('./theme/tauri'),
           import('./window/tauri'),
@@ -298,6 +304,7 @@ class PlatformServiceHub implements ServiceHub {
           import('./path/tauri'),
           import('./core/tauri'),
           import('./deeplink/tauri'),
+          import('./global-shortcut/tauri'),
         ])
 
         this.themeService = new themeModule.TauriThemeService()
@@ -313,6 +320,8 @@ class PlatformServiceHub implements ServiceHub {
         this.pathService = new pathModule.TauriPathService()
         this.coreService = new coreModule.TauriCoreService()
         this.deepLinkService = new deepLinkModule.TauriDeepLinkService()
+        this.globalShortcutService =
+          new globalShortcutModule.TauriGlobalShortcutService()
       } else {
         this.initializeWebFallbacks()
       }
@@ -424,6 +433,11 @@ class PlatformServiceHub implements ServiceHub {
   deeplink(): DeepLinkService {
     this.ensureInitialized()
     return this.deepLinkService
+  }
+
+  globalShortcut(): GlobalShortcutService {
+    this.ensureInitialized()
+    return this.globalShortcutService
   }
 
   projects(): ProjectsService {

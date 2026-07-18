@@ -84,6 +84,29 @@
       "developmentTeam": "N5ZUZDUJS6"
     },
     "icon": ["icons/icon.png", "icons/icon.ico"],
-    "resources": ["resources/LICENSE"]
+    "resources": ["resources/LICENSE"],
+    "fileAssociations": [
+      {
+        "ext": ["png", "jpg", "jpeg"],
+        "name": "Image",
+        "role": "Viewer"
+      },
+      {
+        "ext": ["pdf"],
+        "name": "PDF Document",
+        "role": "Viewer",
+        "mimeType": "application/pdf"
+      },
+      {
+        "ext": ["txt", "md", "csv"],
+        "name": "Text Document",
+        "role": "Viewer"
+      },
+      {
+        "ext": ["docx", "pptx", "xlsx", "xls", "ods", "html", "htm"],
+        "name": "Document",
+        "role": "Viewer"
+      }
+    ]
   }
 }

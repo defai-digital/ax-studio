@@ -13,6 +13,9 @@ import { Kbd, KbdGroup } from '@/components/ui/kbd'
 import { HeaderPage } from '@/containers/HeaderPage'
 import { Keyboard as KeyboardIcon } from 'lucide-react'
 import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
+import { ShortcutRecorder } from '@/components/settings/ShortcutRecorder'
+import { useServiceHub } from '@/hooks/useServiceHub'
+import { useGlobalShortcut } from '@/hooks/settings/useGlobalShortcut'
 
 export const Route = createFileRoute(route.settings.shortcuts)({
   component: Shortcuts,
@@ -81,6 +84,19 @@ function ShortcutKeys({ spec }: { spec: ShortcutSpec }) {
 
 function Shortcuts() {
   const { t } = useTranslation()
+  const serviceHub = useServiceHub()
+  const quickLaunchShortcut = useGlobalShortcut(
+    (state) => state.quickLaunchShortcut
+  )
+  const setQuickLaunchShortcut = useGlobalShortcut(
+    (state) => state.setQuickLaunchShortcut
+  )
+
+  // Rejects on registration failure so ShortcutRecorder can show the error.
+  const handleQuickLaunchRemap = async (accelerator: string) => {
+    await serviceHub.globalShortcut().remap(accelerator)
+    setQuickLaunchShortcut(accelerator)
+  }
 
   return (
     <div className="flex flex-col h-svh w-full">
@@ -103,6 +119,21 @@ function Shortcuts() {
           />
           <div className="px-8 py-7">
             <div className="max-w-2xl space-y-6">
+              {/* Quick launch (global wake hotkey) */}
+              <Card title={t('settings:shortcuts.quickLaunch')}>
+                <CardItem
+                  title={t('settings:shortcuts.quickLaunchWake')}
+                  description={t('settings:shortcuts.quickLaunchWakeDesc')}
+                  descriptionOutside={t('settings:shortcuts.quickLaunchNote')}
+                  actions={
+                    <ShortcutRecorder
+                      value={quickLaunchShortcut}
+                      onRemap={handleQuickLaunchRemap}
+                    />
+                  }
+                />
+              </Card>
+
               {/* Application */}
               <Card title={t('settings:shortcuts.application')}>
                 <CardItem

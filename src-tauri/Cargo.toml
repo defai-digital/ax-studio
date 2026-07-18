@@ -100,6 +100,7 @@ sha2 = { workspace = true }
 tar = "0.4"
 zip = "2"
 tauri-plugin-deep-link = { version = "2", optional = true }
+tauri-plugin-global-shortcut = "2"
 tauri-plugin-hardware = { workspace = true, optional = true }
 tauri-plugin-llamacpp = { workspace = true, optional = true }
 tauri-plugin-http = { version = "2", features = ["unsafe-headers"] }
