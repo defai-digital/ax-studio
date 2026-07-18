@@ -44,6 +44,8 @@ import type { CoreService } from './core/types'
 import type { DeepLinkService } from './deeplink/types'
 import type { GlobalShortcutService } from './global-shortcut/types'
 import { DefaultGlobalShortcutService } from './global-shortcut/default'
+import type { VoiceService } from './voice/types'
+import { DefaultVoiceService } from './voice/default'
 import type { ProjectsService } from './projects/types'
 import type { ChatOrganizationService } from './chat-organization/types'
 
@@ -96,6 +98,7 @@ export interface ServiceHub {
   core(): CoreService
   deeplink(): DeepLinkService
   globalShortcut(): GlobalShortcutService
+  voice(): VoiceService
   projects(): ProjectsService
   chatOrganization(): ChatOrganizationService
   rag(): RAGService
@@ -122,6 +125,7 @@ class PlatformServiceHub implements ServiceHub {
   private deepLinkService!: DeepLinkService
   private globalShortcutService: GlobalShortcutService =
     new DefaultGlobalShortcutService()
+  private voiceService: VoiceService = new DefaultVoiceService()
   private projectsService: ProjectsService = new DefaultProjectsService()
   private chatOrganizationService: ChatOrganizationService =
     new DefaultChatOrganizationService()
@@ -291,6 +295,7 @@ class PlatformServiceHub implements ServiceHub {
           coreModule,
           deepLinkModule,
           globalShortcutModule,
+          voiceModule,
         ] = await Promise.all([
           import('./theme/tauri'),
           import('./window/tauri'),
@@ -305,6 +310,7 @@ class PlatformServiceHub implements ServiceHub {
           import('./core/tauri'),
           import('./deeplink/tauri'),
           import('./global-shortcut/tauri'),
+          import('./voice/tauri'),
         ])
 
         this.themeService = new themeModule.TauriThemeService()
@@ -322,6 +328,7 @@ class PlatformServiceHub implements ServiceHub {
         this.deepLinkService = new deepLinkModule.TauriDeepLinkService()
         this.globalShortcutService =
           new globalShortcutModule.TauriGlobalShortcutService()
+        this.voiceService = new voiceModule.TauriVoiceService()
       } else {
         this.initializeWebFallbacks()
       }
@@ -438,6 +445,11 @@ class PlatformServiceHub implements ServiceHub {
   globalShortcut(): GlobalShortcutService {
     this.ensureInitialized()
     return this.globalShortcutService
+  }
+
+  voice(): VoiceService {
+    this.ensureInitialized()
+    return this.voiceService
   }
 
   projects(): ProjectsService {

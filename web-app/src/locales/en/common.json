@@ -567,5 +567,16 @@
       "svg": "SVG",
       "mermaid": "Diagram"
     }
-  }
+  },
+  "voice": "Voice",
+  "voiceInput": "Voice input",
+  "voiceInputHint": "Dictate with on-device speech recognition",
+  "voiceStop": "Stop and transcribe",
+  "voiceStopHint": "Stop recording and transcribe",
+  "voiceCancel": "Cancel recording",
+  "voiceCancelHint": "Discard this recording (Esc)",
+  "voiceTranscribing": "Transcribing…",
+  "voiceModelRequired": "Download a speech model first — opening Voice settings.",
+  "voiceMicPermissionDenied": "Microphone access denied. Allow it in System Settings → Privacy & Security → Microphone.",
+  "voiceError": "Voice input failed. Please try again."
 }

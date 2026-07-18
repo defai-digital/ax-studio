@@ -41,6 +41,8 @@ import { TokenCounter } from '@/components/TokenCounter'
 import { AvatarEmoji } from '@/components/common/AvatarEmoji'
 import { DropdownToolsAvailable } from '@/containers/DropdownToolsAvailable'
 import { McpExtensionToolLoader } from '@/containers/McpExtensionToolLoader'
+import { VoiceMicButton } from '@/components/chat/VoiceMicButton'
+import type { VoiceRecordingState } from '@/services/voice/types'
 import type { MCPToolComponentProps, ThreadMessage } from '@ax-studio/core'
 import type { MCPTool } from '@/types/mcp'
 
@@ -111,6 +113,14 @@ type Props = {
   onAttachDocuments?: () => void
   onAttachImages?: () => void
   ingestingDocs?: boolean
+  // Voice input (local whisper.cpp STT) — rendered before the send button
+  // when `voiceVisible` is set (desktop shell + feature enabled).
+  voiceVisible?: boolean
+  voiceState?: VoiceRecordingState
+  voiceLevel?: number
+  voiceElapsedSeconds?: number
+  onToggleVoice?: () => void
+  onCancelVoice?: () => void
 }
 
 export const ChatInputToolbar = memo(function ChatInputToolbar({
@@ -145,6 +155,12 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
   onAttachDocuments,
   onAttachImages,
   ingestingDocs,
+  voiceVisible = false,
+  voiceState = 'idle',
+  voiceLevel = 0,
+  voiceElapsedSeconds = 0,
+  onToggleVoice,
+  onCancelVoice,
 }: Props) {
   const { t } = useTranslation()
   const selectedModelHasTools =
@@ -442,6 +458,16 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                 <TokenCounter messages={threadMessages || []} />
               </div>
             )}
+
+          {voiceVisible && (
+            <VoiceMicButton
+              state={voiceState}
+              level={voiceLevel}
+              elapsedSeconds={voiceElapsedSeconds}
+              onToggle={onToggleVoice ?? (() => {})}
+              onCancel={onCancelVoice ?? (() => {})}
+            />
+          )}
 
           {isStreaming ? (
             <Button

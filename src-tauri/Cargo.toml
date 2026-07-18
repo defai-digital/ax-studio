@@ -119,6 +119,7 @@ rfd = { version = "0.15.4", optional = true, default-features = false, features 
   "common-controls-v6",
 ] }
 chrono = { version = "0.4", features = ["serde"] }
+cpal = "0.18"
 hostname = "0.4"
 glob = "0.3"
 scraper = "0.20"
@@ -168,6 +169,13 @@ objc2-app-kit = { version = "0.3.2", features = ["NSWindow"] }
 # pulls this in transitively with matching features; declared here so we can
 # call it without going through the SDK wrapper.
 tokenizers = { version = "0.20", default-features = false, features = ["onig", "esaxx_fast"] }
+# Local speech-to-text (whisper.cpp). `metal` accelerates inference with the
+# Apple GPU; other desktop platforms fall back to the CPU build (no cuda).
+whisper-rs = { version = "0.16", features = ["metal"] }
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+# CPU-only whisper.cpp build — see the macOS section above.
+whisper-rs = { version = "0.16" }
 
 # Release profile optimized for inference throughput, not binary size.
 # Was `opt-level = "z"` (size) which adds ~3× decode latency on the MLX

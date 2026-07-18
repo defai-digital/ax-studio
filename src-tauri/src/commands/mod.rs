@@ -97,6 +97,13 @@ macro_rules! desktop_handlers {
             // Download
             crate::core::downloads::commands::download_files,
             crate::core::downloads::commands::cancel_download_task,
+            // Voice input (local whisper.cpp STT)
+            crate::core::voice::commands::voice_start_recording,
+            crate::core::voice::commands::voice_stop_recording,
+            crate::core::voice::commands::voice_cancel_recording,
+            crate::core::voice::commands::voice_get_status,
+            crate::core::voice::commands::voice_download_model,
+            crate::core::voice::commands::voice_delete_model,
             // Research commands
             crate::core::research::commands::scrape_url,
             // Custom updater commands (desktop only)

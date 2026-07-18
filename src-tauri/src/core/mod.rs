@@ -15,5 +15,6 @@ pub mod setup;
 pub mod state;
 pub mod system;
 pub mod threads;
+pub mod voice;
 
 pub mod updater;

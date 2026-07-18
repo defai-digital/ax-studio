@@ -4,6 +4,8 @@
 <dict>
   <key>CFBundleIdentifier</key>
   <string>ai.axstudio.app</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>AX Studio uses your microphone to transcribe voice input into text, entirely on your device.</string>
   <key>CFBundleURLTypes</key>
   <array>
     <dict>

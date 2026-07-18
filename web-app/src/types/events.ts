@@ -5,6 +5,9 @@ export enum SystemEvent {
   DEEP_LINK = 'deep-link',
   GLOBAL_WAKE = 'global-wake',
   DOCK_FILE_DROP = 'dock-file-drop',
+  VOICE_LEVEL = 'voice-level',
+  VOICE_STATE = 'voice-state',
+  VOICE_TRANSCRIPT = 'voice-transcript',
 }
 
 /**

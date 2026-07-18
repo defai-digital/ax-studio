@@ -68,6 +68,10 @@ pub fn run() {
         pending_open_files: Arc::new(crate::core::open_files::PendingOpenFiles::default()),
     });
 
+    // Voice input state (worker thread owning cpal capture + whisper context,
+    // spawned lazily on first voice command).
+    let app_builder = app_builder.manage(crate::core::voice::state::VoiceState::default());
+
     // In-process MLX state (worker thread holding ax-engine-sdk EngineSessions).
     // macOS-only — `ax-engine-mlx` doesn't build on other platforms.
     #[cfg(target_os = "macos")]

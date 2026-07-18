@@ -16,6 +16,7 @@ import {
   Palette,
   Shield,
   Keyboard,
+  Mic,
   Plug,
   Bot,
   FileText,
@@ -127,6 +128,13 @@ export function SettingsMenu() {
       route: route.settings.shortcuts,
       isEnabled: true,
       icon: <Keyboard className="size-3.5" />,
+      group: 'App',
+    },
+    {
+      title: 'common:voice',
+      route: route.settings.voice,
+      isEnabled: true,
+      icon: <Mic className="size-3.5" />,
       group: 'App',
     },
     // AI group

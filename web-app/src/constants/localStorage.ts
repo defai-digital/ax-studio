@@ -31,4 +31,5 @@ export const localStorageKey = {
   fileRegistryStore: 'file-registry-store',
   routerSettings: 'router-settings',
   globalShortcut: 'global-shortcut',
+  voiceSettings: 'voice-settings',
 }

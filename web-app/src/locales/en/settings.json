@@ -403,5 +403,22 @@
       "modelValidationFailed": "Model validation failed — the file may be corrupted.",
       "backendUpdateAvailable": "llama.cpp update available: {{version}}"
     }
+  },
+  "voice": {
+    "input": "Voice Input",
+    "enable": "Enable voice input",
+    "enableDesc": "Show a microphone button in the composer to dictate messages.",
+    "onDeviceNote": "Transcribed on-device — your audio never leaves this computer.",
+    "model": "Speech model",
+    "modelDesc": "Model used to transcribe your voice. Larger models are more accurate but slower.",
+    "models": "Speech Models",
+    "downloaded": "Downloaded",
+    "notDownloaded": "Not downloaded",
+    "downloading": "Downloading",
+    "download": "Download",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "downloadFailed": "Model download failed. Please try again.",
+    "deleteFailed": "Couldn't delete the model."
   }
 }

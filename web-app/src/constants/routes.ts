@@ -14,6 +14,7 @@ export const route = {
     interface: '/settings/interface',
     privacy: '/settings/privacy',
     shortcuts: '/settings/shortcuts',
+    voice: '/settings/voice',
     extensions: '/settings/extensions',
     local_api_server: '/settings/local-api-server',
     knowledge_base: '/settings/knowledge-base',

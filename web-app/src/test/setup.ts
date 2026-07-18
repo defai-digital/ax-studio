@@ -159,6 +159,20 @@ const mockServiceHub = {
     getCurrent: vi.fn().mockResolvedValue([]),
     onOpenUrl: vi.fn().mockResolvedValue(() => {}),
   }),
+  voice: () => ({
+    isAvailable: vi.fn().mockReturnValue(false),
+    startRecording: vi.fn().mockResolvedValue(undefined),
+    stopRecording: vi.fn().mockResolvedValue(''),
+    cancelRecording: vi.fn().mockResolvedValue(undefined),
+    getStatus: vi.fn().mockResolvedValue({
+      state: 'idle',
+      modelDownloaded: false,
+      audioLevel: 0,
+    }),
+    downloadModel: vi.fn().mockResolvedValue(undefined),
+    cancelModelDownload: vi.fn().mockResolvedValue(undefined),
+    deleteModel: vi.fn().mockResolvedValue(undefined),
+  }),
 }
 
 // Mock the useServiceHub module

@@ -24,6 +24,7 @@ import { useDocumentAttachmentHandler } from '@/hooks/chat/use-document-attachme
 import { useImageAttachmentHandler } from '@/hooks/chat/use-image-attachment-handler'
 import { ChatInputToolbar } from '@/components/chat/ChatInputToolbar'
 import { TemporaryChatNotice } from '@/components/chat/TemporaryChatNotice'
+import { useVoiceInput } from '@/hooks/voice/useVoiceInput'
 import { useTemporaryChat } from '@/hooks/chat/useTemporaryChat'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 import { DropdownModelProvider } from '@/containers/DropdownModelProvider'
@@ -320,6 +321,10 @@ const ChatInput = memo(function ChatInput({
     void handleSendMessage(currentPrompt)
   }, [handleSendMessage, ingestingDocs, prompt])
 
+  // Voice input (on-device whisper.cpp STT) — mic button in the toolbar,
+  // transcript inserted at the textarea cursor.
+  const voiceInput = useVoiceInput({ textareaRef, prompt, setPrompt })
+
   const stopStreaming = useCallback(
     (tid: string) => {
       if (onStop) onStop()
@@ -481,6 +486,12 @@ const ChatInput = memo(function ChatInput({
           onAttachDocuments={handleAttachDocsIngest}
           onAttachImages={handleImagePickerClick}
           ingestingDocs={ingestingDocs}
+          voiceVisible={voiceInput.visible}
+          voiceState={voiceInput.state}
+          voiceLevel={voiceInput.level}
+          voiceElapsedSeconds={voiceInput.elapsedSeconds}
+          onToggleVoice={voiceInput.toggle}
+          onCancelVoice={voiceInput.cancel}
         />
       </div>
 
