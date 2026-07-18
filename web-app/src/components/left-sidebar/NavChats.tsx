@@ -34,14 +34,30 @@ import {
   exportThread,
 } from '@/lib/export/thread-export'
 import {
-  type DragEvent,
+  type HTMLAttributes,
   type ReactNode,
   memo,
   useCallback,
   useMemo,
-  useRef,
   useState,
 } from 'react'
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { ThreadList } from '@/containers/ThreadList'
 import { DeleteAllThreadsDialog } from '@/containers/dialogs/thread/DeleteAllThreadsDialog'
@@ -173,11 +189,13 @@ export function NavChats() {
 
 const PinnedThreadItem = memo(function PinnedThreadItem({
   thread,
+  dragHandleProps,
   onTogglePin,
   onRename,
   onDelete,
 }: {
   thread: Thread
+  dragHandleProps?: HTMLAttributes<HTMLButtonElement>
   onTogglePin: (id: string) => void
   onRename: (id: string, name: string) => void
   onDelete: (id: string) => void
@@ -191,12 +209,23 @@ const PinnedThreadItem = memo(function PinnedThreadItem({
     return (thread.title || '').replace(/<span[^>]*>|<\/span>/g, '')
   }, [thread.title])
 
+  const title = thread.title || t('common:newThread')
+
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild className="cursor-grab active:cursor-grabbing">
+      {/* Keyboard-accessible drag handle (dnd-kit): focus it, press
+          Space/Enter to lift, arrows to move, Space/Enter to drop. */}
+      <button
+        type="button"
+        aria-label={`Reorder ${title}`}
+        className="absolute left-1 top-1/2 -translate-y-1/2 z-10 flex size-5 items-center justify-center rounded cursor-grab active:cursor-grabbing touch-none text-sidebar-foreground/30 hover:text-sidebar-foreground focus-visible:ring-2 ring-sidebar-ring outline-hidden"
+        {...dragHandleProps}
+      >
+        <GripVertical className="size-3 shrink-0" />
+      </button>
+      <SidebarMenuButton asChild className="pl-7">
         <Link to="/threads/$threadId" params={{ threadId: thread.id }}>
-          <GripVertical className="size-3 text-sidebar-foreground/30 shrink-0" />
-          <span>{thread.title || t('common:newThread')}</span>
+          <span>{title}</span>
         </Link>
       </SidebarMenuButton>
       <DropdownMenu>
@@ -269,6 +298,46 @@ const PinnedThreadItem = memo(function PinnedThreadItem({
   )
 })
 
+function SortablePinnedThreadItem({
+  thread,
+  onTogglePin,
+  onRename,
+  onDelete,
+}: {
+  thread: Thread
+  onTogglePin: (id: string) => void
+  onRename: (id: string, name: string) => void
+  onDelete: (id: string) => void
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: thread.id })
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+      }}
+      className={isDragging ? 'relative z-10 opacity-70' : undefined}
+    >
+      <PinnedThreadItem
+        thread={thread}
+        dragHandleProps={{ ...attributes, ...listeners }}
+        onTogglePin={onTogglePin}
+        onRename={onRename}
+        onDelete={onDelete}
+      />
+    </div>
+  )
+}
+
 function DraggablePinnedList({
   threads,
   pinnedIds,
@@ -284,54 +353,43 @@ function DraggablePinnedList({
   onRename: (id: string, name: string) => void
   onDelete: (id: string) => void
 }) {
-  const dragItemRef = useRef<string | null>(null)
-  const dragOverRef = useRef<string | null>(null)
+  const sensors = useSensors(
+    // Distance constraint keeps plain clicks on the handle from starting a drag.
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
 
-  const handleDragStart = useCallback((threadId: string) => {
-    dragItemRef.current = threadId
-  }, [])
+  const handleDragEnd = useCallback(
+    ({ active, over }: DragEndEvent) => {
+      if (!over || active.id === over.id) return
 
-  const handleDragOver = useCallback((e: DragEvent, threadId: string) => {
-    e.preventDefault()
-    dragOverRef.current = threadId
-  }, [])
+      const fromIdx = pinnedIds.indexOf(String(active.id))
+      const toIdx = pinnedIds.indexOf(String(over.id))
+      if (fromIdx === -1 || toIdx === -1) return
 
-  const handleDrop = useCallback(() => {
-    if (!dragItemRef.current || !dragOverRef.current) return
-    if (dragItemRef.current === dragOverRef.current) return
-
-    const fromIdx = pinnedIds.indexOf(dragItemRef.current)
-    const toIdx = pinnedIds.indexOf(dragOverRef.current)
-    if (fromIdx === -1 || toIdx === -1) return
-
-    const newOrder = [...pinnedIds]
-    newOrder.splice(fromIdx, 1)
-    newOrder.splice(toIdx, 0, dragItemRef.current)
-    onReorder(newOrder)
-
-    dragItemRef.current = null
-    dragOverRef.current = null
-  }, [pinnedIds, onReorder])
+      onReorder(arrayMove(pinnedIds, fromIdx, toIdx))
+    },
+    [pinnedIds, onReorder]
+  )
 
   return (
-    <>
-      {threads.map((thread) => (
-        <div
-          key={thread.id}
-          draggable
-          onDragStart={() => handleDragStart(thread.id)}
-          onDragOver={(e) => handleDragOver(e, thread.id)}
-          onDrop={handleDrop}
-        >
-          <PinnedThreadItem
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+    >
+      <SortableContext items={pinnedIds} strategy={verticalListSortingStrategy}>
+        {threads.map((thread) => (
+          <SortablePinnedThreadItem
+            key={thread.id}
             thread={thread}
             onTogglePin={onTogglePin}
             onRename={onRename}
             onDelete={onDelete}
           />
-        </div>
-      ))}
-    </>
+        ))}
+      </SortableContext>
+    </DndContext>
   )
 }
 
@@ -339,7 +397,7 @@ function DraggablePinnedList({
 function PinnedGroupSection({ children }: { children: ReactNode }) {
   return (
     <div className="mb-4">
-      <div className="px-2 pb-1.5 flex items-center gap-1.5 text-[10px] font-semibold text-sidebar-foreground/30 uppercase tracking-widest">
+      <div className="px-2 pb-1.5 flex items-center gap-1.5 text-[12px] font-semibold text-sidebar-foreground/30 uppercase tracking-widest">
         <Pin className="size-2.5" />
         Pinned
       </div>
@@ -358,7 +416,7 @@ function DateGroupSection({
 }) {
   return (
     <div className="mb-4">
-      <div className="px-2 pb-1.5 text-[10px] font-semibold text-sidebar-foreground/30 uppercase tracking-widest">
+      <div className="px-2 pb-1.5 text-[12px] font-semibold text-sidebar-foreground/30 uppercase tracking-widest">
         {label}
       </div>
       {children}

@@ -24,6 +24,11 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
 import { useSidebar } from '@/components/ui/sidebar-context'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { useThreadManagement } from '@/hooks/threads/useThreadManagement'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useTranslation } from '@/i18n/react-i18next-compat'
@@ -170,14 +175,18 @@ export function NavProjects() {
     <>
       <SidebarGroup className="group-data-[collapsible=icon]:hidden">
         <SidebarGroupLabel>{t('common:projects.title')}</SidebarGroupLabel>
-        <SidebarGroupAction
-          className="hover:bg-sidebar-foreground/8"
-          title={t('common:projects.new')}
-          onClick={() => setCreateDialogOpen(true)}
-        >
-          <Plus className="text-muted-foreground" />
-          <span className="sr-only">{t('common:projects.new')}</span>
-        </SidebarGroupAction>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <SidebarGroupAction
+              className="hover:bg-sidebar-foreground/8"
+              onClick={() => setCreateDialogOpen(true)}
+            >
+              <Plus className="text-muted-foreground" />
+              <span className="sr-only">{t('common:projects.new')}</span>
+            </SidebarGroupAction>
+          </TooltipTrigger>
+          <TooltipContent>{t('common:projects.new')}</TooltipContent>
+        </Tooltip>
         <SidebarMenu>
           {folders.map((item) => (
             <ProjectItem

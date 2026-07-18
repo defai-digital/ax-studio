@@ -19,6 +19,7 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-brand-foreground: var(--brand-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -104,6 +105,10 @@
   --brand-to: color-mix(in oklch, var(--primary) 55%, oklch(0.5 0.22 300));
   --brand-gradient: linear-gradient(135deg, var(--brand-from), var(--brand-to));
   --brand-shadow: color-mix(in oklch, var(--primary) 30%, transparent);
+  /* Text color on brand-gradient surfaces (e.g. user chat bubble). Set
+     per-accent by applyAccentColorToDOM so accents where white text fails
+     WCAG AA contrast get a dark foreground instead. */
+  --brand-foreground: oklch(1 0 0); /* #ffffff */
 }
 
 .dark {
@@ -145,6 +150,7 @@
   --brand-to: color-mix(in oklch, var(--primary) 55%, oklch(0.55 0.2 300));
   --brand-gradient: linear-gradient(135deg, var(--brand-from), var(--brand-to));
   --brand-shadow: color-mix(in oklch, var(--primary) 30%, transparent);
+  --brand-foreground: oklch(0.207 0.064 281); /* #1e1b4b */
 }
 
 @property --angle {
@@ -420,8 +426,7 @@
   }
 
   [data-streamdown='code-block'] code {
-    font-family:
-      'JetBrains Mono', 'Fira Code', ui-monospace, monospace !important;
+    font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace !important;
     font-size: 12.5px !important;
     line-height: 1.7 !important;
   }

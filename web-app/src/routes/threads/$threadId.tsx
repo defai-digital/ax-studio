@@ -125,9 +125,10 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   const {
     splitPaneOrder,
     splitThreadId,
-    setSplitThreadId,
-    setSplitDirection,
     handleSplit,
+    compareModels,
+    handleCompare,
+    closeSplit,
   } = useThreadSplit({ thread, selectedModel, selectedProvider: selectedProviderId })
 
   // ─── UI state ─────────────────────────────────────────────────────────────
@@ -293,9 +294,10 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
       reasoningContainerRef={reasoningContainerRef}
       splitPaneOrder={splitPaneOrder}
       splitThreadId={splitThreadId}
-      setSplitThreadId={setSplitThreadId}
-      setSplitDirection={setSplitDirection}
       handleSplit={handleSplit}
+      compareModels={compareModels}
+      handleCompare={handleCompare}
+      closeSplit={closeSplit}
       showThreadPromptEditor={showThreadPromptEditor}
       setShowThreadPromptEditor={setShowThreadPromptEditor}
       threadPromptDraft={threadPromptDraft}

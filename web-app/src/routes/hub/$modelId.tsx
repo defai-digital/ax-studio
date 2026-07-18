@@ -53,6 +53,7 @@ import { useHardwareTotalMemory } from '@/hooks/settings/useHardwareTotalMemory'
 import {
   getVariantMemoryInfo,
   VARIANT_MEMORY_LABEL_CLASSES,
+  type VariantMemoryLabel,
 } from '@/lib/models/variant-memory'
 
 type SearchParams = {
@@ -72,6 +73,15 @@ function isTrustedHuggingFaceReadmeUrl(value: string): boolean {
   } catch {
     return false
   }
+}
+
+/** Display name for a variant: strip the format suffix from the model id. */
+function formatVariantName(modelId: string): string {
+  return modelId
+    .replace(/_GGUF$/i, '')
+    .replace(/-GGUF$/i, '')
+    .replace(/_TensorRT$/i, '')
+    .replace(/-TensorRT$/i, '')
 }
 
 const hubModelSearchSchema = z
@@ -232,6 +242,32 @@ function HubModelDetailContent() {
   const tags = useMemo(() => {
     return extractModelSizeTags(modelData?.quants)
   }, [modelData])
+
+  // S2.4 — pick the best variant for this machine: the first 'Recommended'
+  // one (best quality that fits comfortably), falling back to the first that
+  // 'Fits with tight memory'. Null when hardware info is unavailable or no
+  // variant fits — the table then renders without a pre-selection.
+  const bestVariant = useMemo(() => {
+    if (!modelData?.quants?.length) return null
+    let tight: { id: string; name: string; label: VariantMemoryLabel } | null =
+      null
+    for (const variant of modelData.quants) {
+      const info = getVariantMemoryInfo(
+        variant.file_size,
+        modelData.is_mlx || variant.path.startsWith('hf://'),
+        totalMemoryMB
+      )
+      if (!info) continue
+      const name = formatVariantName(variant.model_id)
+      if (info.label === 'Recommended') {
+        return { id: variant.model_id, name, label: info.label }
+      }
+      if (info.label === 'Fits with tight memory' && !tight) {
+        tight = { id: variant.model_id, name, label: info.label }
+      }
+    }
+    return tight
+  }, [modelData, totalMemoryMB])
 
   // Fetch README content when modelData.readme is available
   useEffect(() => {
@@ -445,6 +481,19 @@ function HubModelDetailContent() {
                 Available Variants ({modelData.quants.length})
               </h2>
 
+              {/* S2.4 — one line of trade-off copy for the pre-selected variant */}
+              {bestVariant && (
+                <p className="text-[13px] text-muted-foreground mb-3">
+                  {bestVariant.label === 'Recommended'
+                    ? `Best quality that fits your ${Math.round(totalMemoryMB / 1024)} GB RAM`
+                    : `Biggest variant that fits your ${Math.round(totalMemoryMB / 1024)} GB RAM (tight)`}
+                  :{' '}
+                  <span className="font-medium text-foreground">
+                    {bestVariant.name}
+                  </span>
+                </p>
+              )}
+
               <div className="rounded-2xl border border-border/50 overflow-hidden shadow-sm">
                 {/* Header row */}
                 <div className="grid grid-cols-[1fr_90px_140px_60px_140px] px-5 py-2.5 bg-muted/30 border-b border-border/30 text-[11px] tracking-wider uppercase text-muted-foreground/60">
@@ -478,11 +527,7 @@ function HubModelDetailContent() {
                         ? 'TensorRT'
                         : 'GGUF'
                   // Extract version name (remove format suffix)
-                  const versionName = variant.model_id
-                    .replace(/_GGUF$/i, '')
-                    .replace(/-GGUF$/i, '')
-                    .replace(/_TensorRT$/i, '')
-                    .replace(/-TensorRT$/i, '')
+                  const versionName = formatVariantName(variant.model_id)
 
                   // S1.2 — estimated runtime memory + human label; null when
                   // hardware info is unavailable (degrade to file size only).
@@ -492,13 +537,20 @@ function HubModelDetailContent() {
                     totalMemoryMB
                   )
 
+                  const isBestVariant = bestVariant?.id === variant.model_id
+
                   return (
                     <div
                       key={variant.model_id}
-                      className="grid grid-cols-[1fr_90px_140px_60px_140px] items-center px-5 py-3 border-b border-border/20 last:border-0 hover:bg-muted/10 transition-colors"
+                      className={`grid grid-cols-[1fr_90px_140px_60px_140px] items-center px-5 py-3 border-b border-border/20 last:border-0 hover:bg-muted/10 transition-colors ${isBestVariant ? 'bg-emerald-500/5' : ''}`}
                     >
                       <span className="text-[14px]" style={{ fontWeight: 500 }}>
                         {versionName}
+                        {isBestVariant && (
+                          <span className="ml-2 px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
+                            Best for you
+                          </span>
+                        )}
                       </span>
                       <span className="text-[12px] text-muted-foreground">
                         <span className="px-2 py-0.5 rounded bg-muted">

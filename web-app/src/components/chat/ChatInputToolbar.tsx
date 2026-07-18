@@ -26,6 +26,7 @@ import {
   Atom,
   Binary,
   Database,
+  EyeOff,
   ImagePlus,
   Loader2,
   Paperclip,
@@ -97,6 +98,9 @@ type Props = {
   // Local knowledge
   isLocalKnowledgeEnabled: boolean
   toggleLocalKnowledge: () => void
+  // Temporary chat (new-chat composer only)
+  temporaryChatEnabled?: boolean
+  onToggleTemporaryChat?: () => void
   // Token counter
   tokenCounterCompact: boolean
   threadMessages: ThreadMessage[]
@@ -131,6 +135,8 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
   setTooltipToolsAvailable,
   isLocalKnowledgeEnabled,
   toggleLocalKnowledge,
+  temporaryChatEnabled = false,
+  onToggleTemporaryChat,
   tokenCounterCompact,
   threadMessages,
   stopStreaming,
@@ -376,6 +382,41 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                 </p>
               </TooltipContent>
             </Tooltip>
+
+            {/* Temporary chat toggle — only on the new-chat composer. While
+                viewing an existing thread there is no mid-thread mode switch;
+                the user starts a temporary chat from Home instead. */}
+            {initialMessage && !projectId && onToggleTemporaryChat && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label="Temporary chat"
+                    aria-pressed={temporaryChatEnabled}
+                    title="Temporary chat"
+                    data-testid="temporary-chat-toggle"
+                    onClick={onToggleTemporaryChat}
+                  >
+                    <EyeOff
+                      size={18}
+                      className={cn(
+                        temporaryChatEnabled
+                          ? 'text-primary'
+                          : 'text-muted-foreground'
+                      )}
+                    />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>
+                    {temporaryChatEnabled
+                      ? 'Temporary chat on — conversations won\'t be saved'
+                      : 'Temporary chat'}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            )}
 
             {selectedModel?.capabilities?.includes('reasoning') && (
               <ToolbarIndicator

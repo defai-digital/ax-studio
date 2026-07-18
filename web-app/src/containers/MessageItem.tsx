@@ -378,7 +378,7 @@ export const MessageItem = memo(
                 )}
                 {displayText && (
                   <div
-                    className="px-4 py-3 rounded-2xl rounded-tr-sm text-primary-foreground shadow-sm select-text whitespace-pre-wrap break-words overflow-hidden bg-brand-gradient"
+                    className="px-4 py-3 rounded-2xl rounded-tr-sm text-brand-foreground shadow-sm select-text whitespace-pre-wrap break-words overflow-hidden bg-brand-gradient"
                     style={{
                       fontSize: '14px',
                       lineHeight: '1.6',

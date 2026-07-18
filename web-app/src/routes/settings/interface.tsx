@@ -1,4 +1,4 @@
-﻿import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { SettingsMenu } from '@/components/common/SettingsMenu'
 import { HeaderPage } from '@/containers/HeaderPage'
@@ -9,6 +9,7 @@ import {
   fontSizeOptions,
   useInterfaceSettings,
   ACCENT_COLORS,
+  readableForeground,
   type FontSize,
 } from '@/hooks/settings/useInterfaceSettings'
 import { Button } from '@/components/ui/button'
@@ -85,7 +86,18 @@ function AccentColorPicker() {
             }}
           >
             {isSelected && (
-              <Check className="size-3 text-white drop-shadow-sm" />
+              <Check
+                className="size-3 drop-shadow-sm"
+                style={{
+                  // White check fails WCAG AA on light accent swatches; the
+                  // gray swatch renders --background, so follow the theme
+                  // foreground there instead.
+                  color:
+                    color.thumb === '#3F3F46'
+                      ? 'var(--foreground)'
+                      : readableForeground(color.thumb),
+                }}
+              />
             )}
           </button>
         )

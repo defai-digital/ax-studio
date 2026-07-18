@@ -23,6 +23,9 @@ import {
 import { useDocumentAttachmentHandler } from '@/hooks/chat/use-document-attachment-handler'
 import { useImageAttachmentHandler } from '@/hooks/chat/use-image-attachment-handler'
 import { ChatInputToolbar } from '@/components/chat/ChatInputToolbar'
+import { TemporaryChatNotice } from '@/components/chat/TemporaryChatNotice'
+import { useTemporaryChat } from '@/hooks/chat/useTemporaryChat'
+import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 import { DropdownModelProvider } from '@/containers/DropdownModelProvider'
 import { ChatInputAttachments } from '@/components/ChatInputAttachments'
 import { TokenCounter } from '@/components/TokenCounter'
@@ -139,6 +142,17 @@ const ChatInput = memo(function ChatInput({
       ? state.threads[effectiveThreadId]
       : state.getCurrentThread()
   )
+  const temporaryChatEnabled = useTemporaryChat(
+    (state) => state.temporaryChatEnabled
+  )
+  const toggleTemporaryChat = useTemporaryChat(
+    (state) => state.toggleTemporaryChat
+  )
+  // Viewing the in-memory temporary thread itself (as opposed to composing a
+  // new chat with the toggle on).
+  const isTemporaryThread =
+    effectiveThreadId === TEMPORARY_CHAT_ID ||
+    Boolean(currentThread?.metadata?.isTemporary)
   const updateCurrentThreadAssistant = useThreads(
     (state) => state.updateCurrentThreadAssistant
   )
@@ -333,6 +347,9 @@ const ChatInput = memo(function ChatInput({
         className="hidden"
         onChange={handleFileChange}
       />
+      {(isTemporaryThread || (initialMessage && temporaryChatEnabled)) && (
+        <TemporaryChatNotice />
+      )}
       <div className="relative">
         {isDragOver && (
           <div className="absolute inset-0 z-30 rounded-2xl border-2 border-dashed border-primary/60 bg-primary/5 pointer-events-none" />
@@ -432,6 +449,8 @@ const ChatInput = memo(function ChatInput({
           setTooltipToolsAvailable={setTooltipToolsAvailable}
           isLocalKnowledgeEnabled={isLocalKnowledgeEnabled}
           toggleLocalKnowledge={toggleLocalKnowledge}
+          temporaryChatEnabled={temporaryChatEnabled}
+          onToggleTemporaryChat={toggleTemporaryChat}
           tokenCounterCompact={tokenCounterCompact}
           threadMessages={threadMessages || []}
           stopStreaming={stopStreaming}

@@ -8,6 +8,15 @@ const mockUpdateFolder = vi.fn()
 const mockNavigate = vi.fn()
 const mockSetCreateDialogOpen = vi.fn()
 
+// jsdom lacks ResizeObserver, which Radix Tooltip's content sizing requires.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+globalThis.ResizeObserver ??=
+  ResizeObserverStub as unknown as typeof ResizeObserver
+
 vi.mock('@/i18n/react-i18next-compat', () => ({
   useTranslation: () => ({
     t: (key: string) => {
@@ -140,6 +149,18 @@ describe('NavProjects', () => {
 
   it('renders New Project action button', () => {
     render(<NavProjects />)
-    expect(screen.getByTitle('New Project')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'New Project' })
+    ).toBeInTheDocument()
+  })
+
+  it('shows a tooltip for the New Project action button', async () => {
+    const user = userEvent.setup()
+    render(<NavProjects />)
+    await user.hover(screen.getByRole('button', { name: 'New Project' }))
+    // The button's sr-only label plus the tooltip content.
+    expect((await screen.findAllByText('New Project')).length).toBeGreaterThan(
+      1
+    )
   })
 })

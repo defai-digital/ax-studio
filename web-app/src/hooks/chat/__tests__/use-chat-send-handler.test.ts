@@ -20,6 +20,11 @@ const modelState = vi.hoisted(() => ({
   selectedProvider: 'openai',
 }))
 
+// Threads already present in the store (getState().threads)
+const threadsState = vi.hoisted(() => ({
+  threads: {} as Record<string, unknown>,
+}))
+
 vi.mock('@tanstack/react-router', () => ({
   useRouter: () => ({ navigate: mockNavigate }),
 }))
@@ -46,7 +51,10 @@ vi.mock('@/lib/models', () => ({
 vi.mock('@/hooks/threads/useThreads', () => {
   const store = (selector: (s: Record<string, unknown>) => unknown) =>
     selector({ createThread: mockCreateThread })
-  store.getState = () => ({ updateThread: mockUpdateThread })
+  store.getState = () => ({
+    updateThread: mockUpdateThread,
+    threads: threadsState.threads,
+  })
   return { useThreads: store }
 })
 
@@ -69,6 +77,7 @@ vi.mock('@/hooks/useServiceHub', () => ({
 // ─── Import under test ───────────────────────────────────────────────────────
 
 import { useChatSendHandler } from '../use-chat-send-handler'
+import { useTemporaryChat } from '@/hooks/chat/useTemporaryChat'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -96,6 +105,8 @@ describe('useChatSendHandler', () => {
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     modelState.selectedModel = { id: 'model-1' }
     modelState.selectedProvider = 'openai'
+    threadsState.threads = {}
+    useTemporaryChat.setState({ temporaryChatEnabled: false })
     sessionStorage.clear()
     // Reset window.location.search
     Object.defineProperty(window, 'location', {
@@ -166,7 +177,7 @@ describe('useChatSendHandler', () => {
 
   // ── Phase 3: Temporary chat path ─────────────────────────────────────────
 
-  it('navigates to temporary chat and stores message in sessionStorage', async () => {
+  it('navigates to temporary chat and stores message in sessionStorage (legacy query param)', async () => {
     Object.defineProperty(window, 'location', {
       value: { search: '?temporary-chat=true' },
       writable: true,
@@ -178,15 +189,91 @@ describe('useChatSendHandler', () => {
       await result.current.handleSendMessage('temp prompt')
     })
 
-    expect(sessionStorage.getItem('initial-message-temporary')).toBe(
+    // Initial message is written under the per-thread key that
+    // useThreadEffects consumes for TEMPORARY_CHAT_ID.
+    expect(sessionStorage.getItem('initial-message-temporary-chat')).toBe(
       JSON.stringify({ text: 'temp prompt' })
     )
-    expect(sessionStorage.getItem('temp-chat-nav')).toBe('true')
     expect(mockNavigate).toHaveBeenCalledWith({
       to: '/threads/$threadId',
       params: { threadId: 'temporary-chat' },
     })
     expect(input.setPrompt).toHaveBeenCalledWith('')
+  })
+
+  it('routes to the temporary-chat path when the composer toggle is enabled', async () => {
+    useTemporaryChat.setState({ temporaryChatEnabled: true })
+    const input = defaultInput()
+    const { result } = renderHook(() => useChatSendHandler(input))
+
+    await act(async () => {
+      await result.current.handleSendMessage('secret stuff')
+    })
+
+    // No persisted thread is created — the only createThread call is the
+    // in-memory temporary one (isTemporary=true, filtered from the sidebar
+    // list and skipped by the persistence service).
+    expect(mockCreateThread).toHaveBeenCalledTimes(1)
+    expect(mockCreateThread).toHaveBeenCalledWith(
+      { id: 'model-1', provider: 'openai' },
+      undefined,
+      undefined,
+      undefined,
+      true
+    )
+    expect(sessionStorage.getItem('initial-message-temporary-chat')).toBe(
+      JSON.stringify({ text: 'secret stuff' })
+    )
+    expect(mockNavigate).toHaveBeenCalledWith({
+      to: '/threads/$threadId',
+      params: { threadId: 'temporary-chat' },
+    })
+    expect(input.setPrompt).toHaveBeenCalledWith('')
+  })
+
+  it('reuses the existing temporary thread instead of recreating it', async () => {
+    useTemporaryChat.setState({ temporaryChatEnabled: true })
+    threadsState.threads = {
+      'temporary-chat': { id: 'temporary-chat', metadata: { isTemporary: true } },
+    }
+    const input = defaultInput()
+    const { result } = renderHook(() => useChatSendHandler(input))
+
+    await act(async () => {
+      await result.current.handleSendMessage('follow up')
+    })
+
+    expect(mockCreateThread).not.toHaveBeenCalled()
+    expect(sessionStorage.getItem('initial-message-temporary-chat')).toBe(
+      JSON.stringify({ text: 'follow up' })
+    )
+    expect(mockNavigate).toHaveBeenCalledWith({
+      to: '/threads/$threadId',
+      params: { threadId: 'temporary-chat' },
+    })
+  })
+
+  it('creates a normal persisted thread when the toggle is off', async () => {
+    const newThread = { id: 'normal-thread-1', metadata: {} }
+    mockCreateThread.mockResolvedValue(newThread)
+    const input = defaultInput()
+    const { result } = renderHook(() => useChatSendHandler(input))
+
+    await act(async () => {
+      await result.current.handleSendMessage('regular prompt')
+    })
+
+    // isTemporary is not set → persisted thread path
+    expect(mockCreateThread).toHaveBeenCalledWith(
+      { id: 'model-1', provider: 'openai' },
+      'regular prompt',
+      undefined,
+      undefined
+    )
+    expect(mockNavigate).toHaveBeenCalledWith({
+      to: '/threads/$threadId',
+      params: { threadId: 'normal-thread-1' },
+    })
   })
 
   // ── Phase 4: New thread path (no project) ────────────────────────────────

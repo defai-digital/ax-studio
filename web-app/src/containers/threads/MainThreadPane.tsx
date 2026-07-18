@@ -3,7 +3,7 @@ import type { UIMessage } from '@ai-sdk/react'
 import type { ChatStatus } from 'ai'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { MessageSquareText } from 'lucide-react'
+import { MessageSquareText, Square } from 'lucide-react'
 import { ChatInput } from '@/containers/ChatInput'
 import { MessagesArea } from '@/containers/threads/MessagesArea'
 
@@ -55,6 +55,10 @@ export type MainThreadPaneProps = {
   updateThread: (id: string, updates: Partial<Thread>) => void
   isSplitView?: boolean
   onSplitClose?: () => void
+  /** Compare mode: hide the per-pane composer (a shared composer is used). */
+  hideComposer?: boolean
+  /** Small muted badge in the split-pane header (e.g. the pane's model id). */
+  headerBadge?: string
 }
 
 export function MainThreadPane({
@@ -81,6 +85,8 @@ export function MainThreadPane({
   updateThread,
   isSplitView = false,
   onSplitClose,
+  hideComposer = false,
+  headerBadge,
 }: MainThreadPaneProps) {
   const containerCls = isSplitView
     ? 'h-full rounded-xl border bg-background overflow-hidden flex flex-col relative'
@@ -113,8 +119,28 @@ export function MainThreadPane({
                 />
               )}
               <span className="truncate">{title}</span>
+              {headerBadge && (
+                <span
+                  className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground truncate max-w-40"
+                  title={headerBadge}
+                >
+                  {headerBadge}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-0.5 shrink-0">
+              {hideComposer &&
+                (status === 'submitted' || status === 'streaming') && (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    title="Stop generating"
+                    aria-label="Stop generating"
+                    onClick={stop}
+                  >
+                    <Square className="size-3.5" />
+                  </Button>
+                )}
               <Button
                 variant={showThreadPromptEditor ? 'secondary' : 'ghost'}
                 size="icon-xs"
@@ -215,24 +241,26 @@ export function MainThreadPane({
           handleContextSizeIncrease={handleContextSizeIncrease}
           contentCls={contentCls}
         />
-        <div className="relative">
-          <div
-            className="absolute -top-8 left-0 right-0 h-8 pointer-events-none z-10"
-            style={{
-              background:
-                'linear-gradient(to top, var(--background) 20%, transparent)',
-            }}
-          />
-          <div className={inputCls}>
-            <ChatInput
-              threadId={threadId}
-              model={threadModel}
-              onSubmit={handleSubmit}
-              onStop={stop}
-              chatStatus={status}
+        {!hideComposer && (
+          <div className="relative">
+            <div
+              className="absolute -top-8 left-0 right-0 h-8 pointer-events-none z-10"
+              style={{
+                background:
+                  'linear-gradient(to top, var(--background) 20%, transparent)',
+              }}
             />
+            <div className={inputCls}>
+              <ChatInput
+                threadId={threadId}
+                model={threadModel}
+                onSubmit={handleSubmit}
+                onStop={stop}
+                chatStatus={status}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )

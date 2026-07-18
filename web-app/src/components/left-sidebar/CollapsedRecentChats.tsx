@@ -48,7 +48,7 @@ export function CollapsedRecentChats() {
           </SidebarMenuButton>
         </PopoverTrigger>
         <PopoverContent side="right" align="start" className="w-64 p-1.5">
-          <p className="px-2 py-1 text-[10px] font-semibold tracking-widest uppercase text-muted-foreground/40">
+          <p className="px-2 py-1 text-[12px] font-semibold tracking-widest uppercase text-muted-foreground/40">
             {label}
           </p>
           <div className="flex flex-col">

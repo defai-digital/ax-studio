@@ -92,7 +92,7 @@ const DEFAULT_ACCENT_COLOR: AccentColorValue = 'gray'
 // Pick black or white text for the best contrast on a given hex color,
 // using WCAG relative luminance. Prevents unreadable white-on-light-accent
 // text (e.g. Orange/Green) on primary surfaces.
-const readableForeground = (hex: string): string => {
+export const readableForeground = (hex: string): string => {
   const c = hex.replace('#', '')
   if (c.length < 6) return '#ffffff'
   const channel = (h: string) => {
@@ -130,6 +130,10 @@ export const applyAccentColorToDOM = (colorValue: string, isDark: boolean) => {
   root.style.setProperty('--sidebar-primary', color.primary)
   root.style.setProperty('--sidebar-primary-foreground', onPrimary)
   root.style.setProperty('--sidebar-ring', color.primary)
+  // S2.5 — text color for brand-gradient surfaces (user chat bubble). Matches
+  // --primary-foreground: dark when white text would fail WCAG AA on this
+  // accent (e.g. Orange/Green/Cyan), white otherwise.
+  root.style.setProperty('--brand-foreground', onPrimary)
 }
 
 interface InterfaceSettingsState {

@@ -33,9 +33,25 @@ import { MainThreadPane } from '@/containers/threads/MainThreadPane'
 export function SplitThreadContainer({
   threadId,
   onClose,
+  hideComposer = false,
+  headerBadge,
+  registerSend,
+  onBusyChange,
 }: {
   threadId: string
   onClose: () => void
+  /** Compare mode: hide the per-pane composer (a shared composer is used). */
+  hideComposer?: boolean
+  /** Small muted badge in the pane header (e.g. the pane's model id). */
+  headerBadge?: string
+  /**
+   * Compare mode: exposes this pane's submit handler so a shared composer can
+   * dispatch the same prompt to both threads via the existing send path.
+   * Called with null on unmount.
+   */
+  registerSend?: (send: ((text: string) => Promise<void>) | null) => void
+  /** Compare mode: reports whether this pane is generating. */
+  onBusyChange?: (busy: boolean) => void
 }) {
   // ─── Store subscriptions ──────────────────────────────────────────────────
   const thread = useThreads(useShallow((state) => state.threads[threadId]))
@@ -99,6 +115,9 @@ export function SplitThreadContainer({
       (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : '') +
       (localKnowledgeActive ? CITATION_FORMAT_INSTRUCTION : ''),
     modelOverrideId: optimizedModelConfig.modelId,
+    // Bind the pane to the thread's own provider (same as $threadId.tsx) so
+    // compare mode can pin each pane to a model from a different provider.
+    modelOverrideProviderId: thread?.model?.provider,
     inferenceParameters: {
       temperature: optimizedModelConfig.temperature,
       top_p: optimizedModelConfig.top_p,
@@ -201,6 +220,21 @@ export function SplitThreadContainer({
     [processAndSendMessage, resetTurnState],
   )
 
+  // ─── Compare-mode wiring ──────────────────────────────────────────────────
+  // Expose this pane's send path to the shared composer. The registered
+  // handler is exactly the same one the pane's own composer uses, so a
+  // compare send is two independent calls through the existing per-thread
+  // pipeline (no new message format).
+  useEffect(() => {
+    if (!registerSend) return
+    registerSend(handleSubmit)
+    return () => registerSend(null)
+  }, [registerSend, handleSubmit])
+
+  useEffect(() => {
+    onBusyChange?.(status === 'submitted' || status === 'streaming')
+  }, [onBusyChange, status])
+
   // ─── Derived values ──────────────────────────────────────────────────────
   const threadModel = useMemo(() => thread?.model, [thread])
   const threadLogo = useMemo(() => {
@@ -243,6 +277,8 @@ export function SplitThreadContainer({
         updateThread={updateThread}
         isSplitView
         onSplitClose={onClose}
+        hideComposer={hideComposer}
+        headerBadge={headerBadge}
       />
     </div>
   )

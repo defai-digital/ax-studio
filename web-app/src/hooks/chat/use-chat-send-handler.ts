@@ -11,13 +11,13 @@ import {
   TEMPORARY_CHAT_ID,
   TEMPORARY_CHAT_QUERY_ID,
   SESSION_STORAGE_PREFIX,
-  SESSION_STORAGE_KEY,
 } from '@/constants/chat'
 import { defaultModel } from '@/lib/models'
 import { toast } from 'sonner'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useThreads } from '@/hooks/threads/useThreads'
+import { useTemporaryChat } from '@/hooks/chat/useTemporaryChat'
 import {
   useChatAttachments,
   NEW_THREAD_ATTACHMENT_KEY,
@@ -53,6 +53,7 @@ export function useChatSendHandler({
   const selectedModelFromStore = useModelProvider((s) => s.selectedModel)
   const selectedProvider = useModelProvider((s) => s.selectedProvider)
   const createThread = useThreads((s) => s.createThread)
+  const temporaryChatEnabled = useTemporaryChat((s) => s.temporaryChatEnabled)
   const router = useRouter()
   // Double-submit guard: a rapid double-click on the send button used to
   // create two threads (and navigate to one, leaving the other orphaned).
@@ -89,27 +90,41 @@ export function useChatSendHandler({
           return
         }
 
-        // New-thread path — create thread and navigate
-        const isTemporaryChat = window.location.search.includes(
-          `${TEMPORARY_CHAT_QUERY_ID}=true`
-        )
+        // New-thread path — create thread and navigate. Temporary mode is
+        // triggered by the composer toggle (useTemporaryChat) or the legacy
+        // `?temporary-chat=true` query param.
+        const isTemporaryChat =
+          temporaryChatEnabled ||
+          window.location.search.includes(`${TEMPORARY_CHAT_QUERY_ID}=true`)
 
         const messagePayload = { text: prompt }
 
         if (isTemporaryChat) {
+          // The thread route redirects home for unknown IDs, so the in-memory
+          // temporary thread must exist before navigating. Reuse the existing
+          // one if present — re-entering temporary mode continues the same
+          // unsaved conversation instead of wiping it.
+          if (!useThreads.getState().threads[TEMPORARY_CHAT_ID]) {
+            await createThread(
+              {
+                id: selectedModelId,
+                provider: selectedProvider,
+              },
+              undefined,
+              selectedAssistant,
+              undefined,
+              /* isTemporary */ true
+            )
+          }
+          // useThreadEffects consumes the per-thread initial-message key, so
+          // the first message is dispatched once the temporary thread mounts.
           const storedTemporaryMessage = safeStorageSetItem(
             sessionStorage,
-            SESSION_STORAGE_KEY.INITIAL_MESSAGE_TEMPORARY,
+            `${SESSION_STORAGE_PREFIX.INITIAL_MESSAGE}${TEMPORARY_CHAT_ID}`,
             JSON.stringify(messagePayload),
             'useChatSendHandler'
           )
-          const storedTempNavigation = safeStorageSetItem(
-            sessionStorage,
-            'temp-chat-nav',
-            'true',
-            'useChatSendHandler'
-          )
-          if (!storedTemporaryMessage || !storedTempNavigation) {
+          if (!storedTemporaryMessage) {
             console.warn(
               'sessionStorage write failed for temporary chat; continuing navigation'
             )
@@ -229,6 +244,7 @@ export function useChatSendHandler({
       setMessage,
       setPrompt,
       setSelectedAssistant,
+      temporaryChatEnabled,
     ]
   )
 

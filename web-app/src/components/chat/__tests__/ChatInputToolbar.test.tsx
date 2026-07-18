@@ -291,4 +291,77 @@ describe('ChatInputToolbar — Phase 3 Manual Test Protocol', () => {
     render(<ChatInputToolbar {...createProps({ isStreaming: true })} />)
     expect(screen.getByLabelText('common:stop')).toBeInTheDocument()
   })
+
+  // ── Temporary chat toggle (S2.1) ──
+
+  it('renders the temporary chat toggle on the new-chat composer with aria-pressed', () => {
+    render(
+      <ChatInputToolbar
+        {...createProps({
+          initialMessage: true,
+          temporaryChatEnabled: true,
+          onToggleTemporaryChat: vi.fn(),
+        })}
+      />
+    )
+    const toggle = screen.getByTestId('temporary-chat-toggle')
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    expect(toggle).toHaveAttribute('aria-label', 'Temporary chat')
+  })
+
+  it('reflects the off state via aria-pressed=false', () => {
+    render(
+      <ChatInputToolbar
+        {...createProps({
+          initialMessage: true,
+          temporaryChatEnabled: false,
+          onToggleTemporaryChat: vi.fn(),
+        })}
+      />
+    )
+    expect(screen.getByTestId('temporary-chat-toggle')).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    )
+  })
+
+  it('clicking the temporary chat toggle calls onToggleTemporaryChat', () => {
+    const onToggleTemporaryChat = vi.fn()
+    render(
+      <ChatInputToolbar
+        {...createProps({ initialMessage: true, onToggleTemporaryChat })}
+      />
+    )
+    fireEvent.click(screen.getByTestId('temporary-chat-toggle'))
+    expect(onToggleTemporaryChat).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides the temporary chat toggle inside an existing thread', () => {
+    render(
+      <ChatInputToolbar
+        {...createProps({
+          initialMessage: false,
+          onToggleTemporaryChat: vi.fn(),
+        })}
+      />
+    )
+    expect(
+      screen.queryByTestId('temporary-chat-toggle')
+    ).not.toBeInTheDocument()
+  })
+
+  it('hides the temporary chat toggle in a project composer', () => {
+    render(
+      <ChatInputToolbar
+        {...createProps({
+          initialMessage: true,
+          projectId: 'proj-1',
+          onToggleTemporaryChat: vi.fn(),
+        })}
+      />
+    )
+    expect(
+      screen.queryByTestId('temporary-chat-toggle')
+    ).not.toBeInTheDocument()
+  })
 })

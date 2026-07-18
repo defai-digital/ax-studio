@@ -15,6 +15,11 @@ export type ThreadSplitResult = {
   setSplitThreadId: (id: string | null) => void
   splitPaneOrder: string[] | null
   handleSplit: (direction: 'left' | 'right') => Promise<void>
+  /** Models bound to [main pane, split pane] while compare mode is active. */
+  compareModels: [ThreadModel, ThreadModel] | null
+  handleCompare: (modelA: ThreadModel, modelB: ThreadModel) => Promise<void>
+  /** Clears split + compare state (used by every "close split view" path). */
+  closeSplit: () => void
 }
 
 type Input = {
@@ -70,6 +75,7 @@ function readAndConsumeSplitViewInfo(): StoredSplitViewInfo | null {
 
 export function useThreadSplit({ thread, selectedModel, selectedProvider }: Input): ThreadSplitResult {
   const createThread = useThreads((state) => state.createThread)
+  const updateThread = useThreads((state) => state.updateThread)
   const [initialSplitViewInfo] = useState(readAndConsumeSplitViewInfo)
 
   const [splitDirection, setSplitDirection] = useState<'left' | 'right' | null>(
@@ -80,6 +86,10 @@ export function useThreadSplit({ thread, selectedModel, selectedProvider }: Inpu
     () => initialSplitViewInfo?.splitThreadId ?? null
   )
 
+  const [compareModels, setCompareModels] = useState<
+    [ThreadModel, ThreadModel] | null
+  >(null)
+
   const splitPaneOrder = useMemo(() => {
     if (!splitThreadId || !splitDirection) return null
     return splitDirection === 'left' ? ['split', 'main'] : ['main', 'split']
@@ -87,6 +97,8 @@ export function useThreadSplit({ thread, selectedModel, selectedProvider }: Inpu
 
   const handleSplit = useCallback(
     async (direction: 'left' | 'right') => {
+      // Plain split view and compare mode are mutually exclusive.
+      setCompareModels(null)
       if (splitThreadId) {
         setSplitDirection(direction)
         return
@@ -122,5 +134,64 @@ export function useThreadSplit({ thread, selectedModel, selectedProvider }: Inpu
     ]
   )
 
-  return { splitDirection, setSplitDirection, splitThreadId, setSplitThreadId, splitPaneOrder, handleSplit }
+  const closeSplit = useCallback(() => {
+    setCompareModels(null)
+    setSplitThreadId(null)
+    setSplitDirection(null)
+  }, [])
+
+  /**
+   * Compare mode: split view where each pane is bound to a different model and
+   * a single shared composer dispatches the same prompt to both threads.
+   * The main thread is rebound to modelA; the split pane thread is rebound to
+   * (or created with) modelB.
+   */
+  const handleCompare = useCallback(
+    async (modelA: ThreadModel, modelB: ThreadModel) => {
+      try {
+        if (thread?.id) {
+          updateThread(thread.id, { model: modelA })
+        }
+        if (splitThreadId) {
+          updateThread(splitThreadId, { model: modelB })
+        } else {
+          const newThread = await createThread(
+            modelB,
+            modelB.id,
+            thread?.assistants?.[0],
+            thread?.metadata?.project
+          )
+          setSplitThreadId(newThread.id)
+        }
+        // Main pane stays on the left, compare pane on the right.
+        setSplitDirection('right')
+        setCompareModels([modelA, modelB])
+      } catch (error) {
+        console.error('Failed to start compare mode:', error)
+        toast.error('Failed to start compare mode', {
+          description: error instanceof Error ? error.message : 'Please try again.',
+        })
+      }
+    },
+    [
+      createThread,
+      splitThreadId,
+      thread?.assistants,
+      thread?.id,
+      thread?.metadata?.project,
+      updateThread,
+    ]
+  )
+
+  return {
+    splitDirection,
+    setSplitDirection,
+    splitThreadId,
+    setSplitThreadId,
+    splitPaneOrder,
+    handleSplit,
+    compareModels,
+    handleCompare,
+    closeSplit,
+  }
 }

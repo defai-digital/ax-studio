@@ -310,5 +310,76 @@ describe('Hub Model Detail Route', () => {
     expect(await screen.findByText('4.0 GB')).toBeInTheDocument()
     expect(screen.queryByText('Recommended')).not.toBeInTheDocument()
     expect(screen.queryByText(/≈/)).not.toBeInTheDocument()
+    // S2.4 — no pre-selection or trade-off copy without hardware info.
+    expect(screen.queryByText('Best for you')).not.toBeInTheDocument()
+    expect(screen.queryByText(/GB RAM/)).not.toBeInTheDocument()
+  })
+
+  it('pre-selects the first Recommended variant with trade-off copy', async () => {
+    useHardware.setState({
+      hardwareData: { ...emptyHardwareData, total_memory: 16 * 1024 },
+    })
+    mocks.fetchHuggingFaceRepo.mockResolvedValueOnce({ id: 'repo' })
+    mocks.convertHfRepoToCatalogModel.mockReturnValue({
+      model_name: 'user/model',
+      developer: 'user',
+      downloads: 0,
+      quants: [
+        {
+          model_id: 'model-Q4_K_M-GGUF',
+          path: 'https://huggingface.co/user/model/resolve/main/model-Q4_K_M.gguf',
+          file_size: '4.0 GB',
+        },
+        {
+          model_id: 'model-Q8_0-GGUF',
+          path: 'https://huggingface.co/user/model/resolve/main/model-Q8_0.gguf',
+          file_size: '14.0 GB',
+        },
+      ],
+    })
+    ;(useParams as any).mockReturnValue({ modelId: 'user/model' })
+
+    const Component = Route.component as React.ComponentType
+    render(<Component />)
+
+    expect(
+      await screen.findByText(/Best quality that fits your 16 GB RAM/)
+    ).toBeInTheDocument()
+    expect(screen.getByText('Best for you')).toBeInTheDocument()
+  })
+
+  it('falls back to the first tight-memory variant when none is Recommended', async () => {
+    useHardware.setState({
+      hardwareData: { ...emptyHardwareData, total_memory: 6 * 1024 },
+    })
+    mocks.fetchHuggingFaceRepo.mockResolvedValueOnce({ id: 'repo' })
+    mocks.convertHfRepoToCatalogModel.mockReturnValue({
+      model_name: 'user/model',
+      developer: 'user',
+      downloads: 0,
+      quants: [
+        {
+          model_id: 'model-Q4_K_M-GGUF',
+          path: 'https://huggingface.co/user/model/resolve/main/model-Q4_K_M.gguf',
+          file_size: '4.0 GB',
+        },
+        {
+          model_id: 'model-Q8_0-GGUF',
+          path: 'https://huggingface.co/user/model/resolve/main/model-Q8_0.gguf',
+          file_size: '14.0 GB',
+        },
+      ],
+    })
+    ;(useParams as any).mockReturnValue({ modelId: 'user/model' })
+
+    const Component = Route.component as React.ComponentType
+    render(<Component />)
+
+    expect(
+      await screen.findByText(
+        /Biggest variant that fits your 6 GB RAM \(tight\)/
+      )
+    ).toBeInTheDocument()
+    expect(screen.getByText('Best for you')).toBeInTheDocument()
   })
 })

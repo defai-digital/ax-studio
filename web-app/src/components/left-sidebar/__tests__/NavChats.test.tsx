@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockThreads: Thread[] = [
@@ -272,5 +272,75 @@ describe('NavChats', () => {
     })
     render(<NavChats />)
     expect(screen.getByText('Pinned')).toBeInTheDocument()
+  })
+
+  it('reorders pinned threads via keyboard (dnd-kit KeyboardSensor)', async () => {
+    const { useThreads } = (await import('@/hooks/threads/useThreads')) as {
+      useThreads: ReturnType<typeof vi.fn>
+    }
+    vi.mocked(useThreads).mockImplementation(
+      (selector: (state: Record<string, unknown>) => unknown) =>
+        selector({
+          getFilteredThreads: () => mockThreads,
+          threads: toThreadRecord(mockThreads),
+          deleteAllThreads: vi.fn(),
+          renameThread: vi.fn(),
+          deleteThread: vi.fn(),
+        })
+    )
+
+    const reorder = vi.fn()
+    const { usePinnedThreads } = (await import(
+      '@/hooks/threads/usePinnedThreads'
+    )) as { usePinnedThreads: ReturnType<typeof vi.fn> }
+    vi.mocked(usePinnedThreads).mockReturnValue({
+      pinnedIds: ['t1', 't2'],
+      pinnedSet: new Set(['t1', 't2']),
+      togglePin: vi.fn(),
+      reorder,
+    })
+
+    // jsdom reports zero rects; give each sortable row a stacked 32px rect so
+    // dnd-kit collision detection can resolve the drop target.
+    const rectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        const label =
+          this.querySelector?.('[aria-label^="Reorder"]')?.getAttribute(
+            'aria-label'
+          ) ?? ''
+        const index = label.includes('Beta') ? 1 : 0
+        return {
+          x: 0,
+          y: index * 32,
+          top: index * 32,
+          left: 0,
+          right: 200,
+          bottom: index * 32 + 32,
+          width: 200,
+          height: 32,
+          toJSON: () => ({}),
+        } as DOMRect
+      })
+
+    try {
+      render(<NavChats />)
+
+      const handle = screen.getByRole('button', { name: 'Reorder Chat Beta' })
+      handle.focus()
+      // Lift, move up one row, drop.
+      fireEvent.keyDown(handle, { code: 'Space' })
+      // dnd-kit's KeyboardSensor attaches its move/end keydown listeners in a
+      // setTimeout after activation — flush a macrotask before moving.
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+      fireEvent.keyDown(handle, { code: 'ArrowUp' })
+      fireEvent.keyDown(handle, { code: 'Space' })
+
+      expect(reorder).toHaveBeenCalledWith(['t2', 't1'])
+    } finally {
+      rectSpy.mockRestore()
+    }
   })
 })

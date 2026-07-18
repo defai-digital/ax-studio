@@ -92,6 +92,30 @@ describe('useInterfaceSettings', () => {
       // Should remain unchanged
       expect(result.current.accentColor).toBe(currentColor)
     })
+
+    it('applies a dark --brand-foreground for light accents (WCAG AA)', () => {
+      const { result } = renderHook(() => useInterfaceSettings())
+
+      act(() => {
+        result.current.setAccentColor('orange')
+      })
+
+      expect(
+        document.documentElement.style.getPropertyValue('--brand-foreground')
+      ).toBe('#09090b')
+    })
+
+    it('keeps a white --brand-foreground for dark accents', () => {
+      const { result } = renderHook(() => useInterfaceSettings())
+
+      act(() => {
+        result.current.setAccentColor('blue')
+      })
+
+      expect(
+        document.documentElement.style.getPropertyValue('--brand-foreground')
+      ).toBe('#ffffff')
+    })
   })
 
   it('should reset interface settings to defaults', () => {
