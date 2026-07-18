@@ -9,11 +9,17 @@ export function getHuggingFaceModelUrl(modelName: string): string {
 }
 
 function encodeHuggingFacePath(path: string): string {
-  return path
-    .split('/')
-    .filter(Boolean)
-    .map((segment) => encodeURIComponent(segment))
-    .join('/')
+  // Resolve `.` / `..` so file names cannot escape `/resolve/main/`.
+  const resolved: string[] = []
+  for (const segment of path.split('/')) {
+    if (!segment || segment === '.') continue
+    if (segment === '..') {
+      resolved.pop()
+      continue
+    }
+    resolved.push(encodeURIComponent(segment))
+  }
+  return resolved.join('/')
 }
 
 export function getHuggingFaceApiModelUrl(cleanRepoId: string): string {

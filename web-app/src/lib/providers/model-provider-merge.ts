@@ -5,9 +5,8 @@
  * @param incomingProviders - Fresh providers from the backend/service
  * @param existingProviders - Current providers from the store
  * @param deletedModels - Model IDs that have been explicitly deleted
- * @param pathSep - Platform path separator (e.g. '/' or '\\'), used for
- *   matching model IDs that encode the separator. Pass `serviceHub.path().sep()`
- *   at the call site — never call the service hub inside a store action.
+ * @param pathSep - Kept for call-site compatibility. Model ID prefix matching
+ *   always uses `/` (HF-style), not the OS filesystem separator.
  */
 import {
   LEGACY_BUNDLED_MLX_MODEL_IDS,
@@ -18,7 +17,7 @@ export function mergeProviders(
   incomingProviders: ModelProvider[],
   existingProviders: ModelProvider[],
   deletedModels: string[],
-  pathSep: string = '/'
+  _pathSep: string = '/'
 ): ModelProvider[] {
   const safeDeletedModels = Array.isArray(deletedModels) ? deletedModels : []
 
@@ -48,9 +47,11 @@ export function mergeProviders(
     ]
 
     const updatedModels = provider.models?.map((model) => {
+      // Model IDs use HF-style `/` separators (e.g. org:model:Q4 → org/model),
+      // not the OS path separator. Always join with `/` so Windows keeps settings.
       const settings =
         existingModels.find(
-          (m) => m.id.split(':').slice(0, 2).join(pathSep) === model.id
+          (m) => m.id.split(':').slice(0, 2).join('/') === model.id
         )?.settings || model.settings
 
       const existingModel = existingModels.find((m) => m.id === model.id)

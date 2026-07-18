@@ -4,6 +4,7 @@ import type {
   InputType,
   SettingComponentProps,
 } from '@ax-studio/core'
+import { parsePlainDecimalNumber } from '@/lib/utils/decimal'
 
 const DEFAULT_CONTEXT_WINDOW_SETTING_VALUE = 8192
 const CONTROLLER_TYPES = new Set<ControllerType>([
@@ -87,6 +88,14 @@ function normalizeInputType(value: string | undefined): InputType | undefined {
     : undefined
 }
 
+function coerceFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : undefined
+  }
+  const parsed = parsePlainDecimalNumber(value)
+  return parsed !== null && Number.isFinite(parsed) ? parsed : undefined
+}
+
 function normalizeInputActions(value: string[] | undefined): InputAction[] {
   return (value ?? []).filter((action): action is InputAction =>
     INPUT_ACTIONS.has(action as InputAction)
@@ -100,12 +109,24 @@ function toCoreControllerProps(
   const normalized: Record<string, unknown> = {}
 
   switch (controllerType) {
-    case 'slider':
-      normalized.value = typeof props.value === 'number' ? props.value : 0
-      if (typeof props.min === 'number') normalized.min = props.min
-      if (typeof props.max === 'number') normalized.max = props.max
-      if (typeof props.step === 'number') normalized.step = props.step
+    case 'slider': {
+      // Accept numeric strings from JSON/UI; only fall back to 0 when unparsable.
+      const parsedValue =
+        typeof props.value === 'number'
+          ? props.value
+          : parsePlainDecimalNumber(props.value)
+      normalized.value =
+        typeof parsedValue === 'number' && Number.isFinite(parsedValue)
+          ? parsedValue
+          : 0
+      const min = coerceFiniteNumber(props.min)
+      const max = coerceFiniteNumber(props.max)
+      const step = coerceFiniteNumber(props.step)
+      if (min !== undefined) normalized.min = min
+      if (max !== undefined) normalized.max = max
+      if (step !== undefined) normalized.step = step
       break
+    }
     case 'checkbox':
       normalized.value =
         typeof props.value === 'boolean' ? props.value : false

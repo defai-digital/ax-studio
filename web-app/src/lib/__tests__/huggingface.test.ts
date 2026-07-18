@@ -44,4 +44,13 @@ describe('getHuggingFaceModelFileUrl', () => {
       'https://huggingface.co/org/model/resolve/main/tokenizer/tokenizer.json'
     )
   })
+
+  it('resolves parent-directory segments so paths cannot escape /resolve/main/', () => {
+    expect(getHuggingFaceModelFileUrl('org/model', '../../evil.bin')).toBe(
+      'https://huggingface.co/org/model/resolve/main/evil.bin'
+    )
+    expect(
+      getHuggingFaceModelFileUrl('org/model', 'folder/../weights.gguf')
+    ).toBe('https://huggingface.co/org/model/resolve/main/weights.gguf')
+  })
 })

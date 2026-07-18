@@ -26,6 +26,9 @@ describe('normalizeAxBiMcpUrl', () => {
     expect(normalizeAxBiMcpUrl('localhost:8088')).toBe(
       'http://localhost:5008/mcp'
     )
+    expect(normalizeAxBiMcpUrl('http://[::1]:8088/mcp')).toBe(
+      'http://[::1]:5008/mcp'
+    )
   })
 
   it('preserves remote hosts and ports (reverse-proxy /mcp)', () => {

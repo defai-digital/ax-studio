@@ -387,9 +387,10 @@ export function extractContentPartsFromUIMessage(
         part.type === 'dynamic-tool' || part.type === 'tool-invocation'
           ? (part.toolName ?? 'unknown')
           : (part.type as string).replace(/^tool-/, '')
-      const toolCallId = part.toolCallId || part.toolInvocationId
-      const input = part.input || part.args
-      const output = part.output || part.result
+      // Use nullish coalescing so valid falsy tool I/O (0, '', false, {}) is kept.
+      const toolCallId = part.toolCallId ?? part.toolInvocationId
+      const input = part.input ?? part.args
+      const output = part.output ?? part.result
 
       const toolCallContent = {
         type: 'tool_call' as ContentType.ToolCall,

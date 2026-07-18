@@ -351,6 +351,25 @@ describe('DefaultUploadsService', () => {
       ).rejects.toThrow('unsupported format')
     })
 
+    it('does not prefer alias counts when filesSucceeded is explicitly 0', async () => {
+      const metrics = {
+        filesSucceeded: 0,
+        processed_files: 1,
+        ok: 1,
+        totalChunksGenerated: 0,
+        errors: [{ path: '/tmp/report.pdf', message: 'parse failed' }],
+      }
+      const hub = makeServiceHub({
+        error: '',
+        content: [{ text: JSON.stringify(metrics) }],
+      })
+      service.setMcpService(hub.mcp())
+
+      await expect(
+        service.ingestFileAttachment('t1', makeDocAttachment())
+      ).rejects.toThrow('parse failed')
+    })
+
     it('throws when MCP server is not available', async () => {
       const hub = {
         mcp: () => ({

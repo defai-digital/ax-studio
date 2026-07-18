@@ -76,7 +76,7 @@ function parsePipelineMetrics(result: {
   }
   try {
     const metrics = JSON.parse(text)
-    const filesSucceeded = firstPositiveIntegerMetric(
+    const filesSucceeded = firstNonNegativeIntegerMetric(
       metrics?.filesSucceeded,
       metrics?.files_succeeded,
       metrics?.succeeded,
@@ -86,7 +86,7 @@ function parsePipelineMetrics(result: {
       metrics?.successful_files,
       metrics?.ok
     )
-    const totalChunksGenerated = firstPositiveIntegerMetric(
+    const totalChunksGenerated = firstNonNegativeIntegerMetric(
       metrics?.totalChunksGenerated,
       metrics?.total_chunks_generated,
       metrics?.chunksGenerated,
@@ -106,9 +106,13 @@ function parsePipelineMetrics(result: {
   }
 }
 
-function parsePositiveIntegerMetric(value: unknown): number | undefined {
+/**
+ * Parse a non-negative integer metric. Explicit `0` is valid (e.g. zero files
+ * succeeded) and must not fall through to alias fields.
+ */
+function parseNonNegativeIntegerMetric(value: unknown): number | undefined {
   if (typeof value === 'number') {
-    return Number.isSafeInteger(value) && value > 0 ? value : undefined
+    return Number.isSafeInteger(value) && value >= 0 ? value : undefined
   }
 
   if (typeof value !== 'string') return undefined
@@ -117,12 +121,14 @@ function parsePositiveIntegerMetric(value: unknown): number | undefined {
   if (!/^\d+$/.test(trimmed)) return undefined
 
   const parsed = Number(trimmed)
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : undefined
 }
 
-function firstPositiveIntegerMetric(...values: unknown[]): number {
+function firstNonNegativeIntegerMetric(...values: unknown[]): number {
   for (const value of values) {
-    const parsed = parsePositiveIntegerMetric(value)
+    // Skip only truly missing fields — not 0.
+    if (value === undefined || value === null || value === '') continue
+    const parsed = parseNonNegativeIntegerMetric(value)
     if (parsed !== undefined) return parsed
   }
   return 0

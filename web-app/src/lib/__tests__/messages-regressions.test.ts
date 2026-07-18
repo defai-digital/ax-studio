@@ -256,4 +256,46 @@ describe('messages regressions', () => {
       },
     ])
   })
+
+  it('preserves falsy tool input/output instead of falling back to aliases', () => {
+    const uiMessage = {
+      id: 'ui-tool-falsy',
+      role: 'assistant',
+      parts: [
+        {
+          type: 'tool-search',
+          toolCallId: 't-empty',
+          input: '',
+          args: { q: 'should-not-win' },
+          output: '',
+          result: 'stale',
+        },
+        {
+          type: 'tool-count',
+          toolCallId: 't-zero',
+          input: 0,
+          args: 99,
+          output: 0,
+          result: 42,
+        },
+      ],
+    } as unknown as UIMessage
+
+    expect(extractContentPartsFromUIMessage(uiMessage)).toEqual([
+      {
+        type: ContentType.ToolCall,
+        tool_call_id: 't-empty',
+        tool_name: 'search',
+        input: '',
+        output: '',
+      },
+      {
+        type: ContentType.ToolCall,
+        tool_call_id: 't-zero',
+        tool_name: 'count',
+        input: 0,
+        output: 0,
+      },
+    ])
+  })
 })

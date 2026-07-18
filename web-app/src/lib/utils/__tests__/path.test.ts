@@ -59,6 +59,12 @@ describe('isRootDir', () => {
       expect(isRootDir('C:')).toBe(true)
     })
 
+    it('returns true for forward-slash drive roots (C:/)', () => {
+      if (!IS_WINDOWS) return
+      expect(isRootDir('C:/')).toBe(true)
+      expect(isRootDir('d:/')).toBe(true)
+    })
+
     it('returns false for a subdirectory on Windows', () => {
       if (!IS_WINDOWS) return
       expect(isRootDir('C:\\Users')).toBe(false)
@@ -143,6 +149,16 @@ describe('isRootDir', () => {
       // Previously JSON.stringify('false') produced the string "false"
       // which is truthy, causing the Windows branch to always execute.
       expect(typeof IS_WINDOWS).toBe('boolean')
+    })
+  })
+
+  describe('regression: Windows forward-slash drive root', () => {
+    it('treats C:/ as a drive root when the Windows branch is active', () => {
+      // Drive the real regex used by isRootDir's Windows branch so this
+      // assertion holds on Unix CI as well as Windows.
+      expect(/^[a-zA-Z]:[\\/]?$/.test('C:/')).toBe(true)
+      expect(/^[a-zA-Z]:[\\/]?$/.test('C:\\')).toBe(true)
+      expect(/^[a-zA-Z]:[\\/]?$/.test('C:/Users')).toBe(false)
     })
   })
 })

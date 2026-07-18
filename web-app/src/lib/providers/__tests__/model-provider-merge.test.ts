@@ -69,6 +69,39 @@ describe('mergeProviders', () => {
     expect(modelIds).toContain('mlx-community/Qwen3.5-4B-4bit')
   })
 
+  it('matches colon-encoded model ids with HF slash paths even when pathSep is backslash', () => {
+    const existingSettings = {
+      temperature: {
+        key: 'temperature',
+        title: 'Temperature',
+        description: '',
+        controller_type: 'slider' as const,
+        controller_props: { value: 0.2, min: 0, max: 2, step: 0.1 },
+      },
+    }
+    const existing = [
+      makeProvider('openrouter', [
+        {
+          id: 'org:model:Q4',
+          settings: existingSettings,
+        } as Partial<Model>,
+      ]),
+    ]
+    const incoming = [
+      makeProvider(
+        'openrouter',
+        [{ id: 'org/model' }],
+        { persist: true }
+      ),
+    ]
+
+    const withUnixSep = mergeProviders(incoming, existing, [], '/')
+    const withWinSep = mergeProviders(incoming, existing, [], '\\')
+
+    expect(withUnixSep[0].models[0].settings).toEqual(existingSettings)
+    expect(withWinSep[0].models[0].settings).toEqual(existingSettings)
+  })
+
   it('preserves providers in existing that are not in incoming', () => {
     const existing = [makeProvider('anthropic', [{ id: 'claude-3' }])]
     const incoming = [makeProvider('openai', [{ id: 'gpt-4' }])]

@@ -43,8 +43,10 @@ export function normalizeAxBiMcpUrl(value: string): string {
 
   const path = url.pathname.replace(/\/+$/, '')
   url.pathname = /\/mcp$/i.test(path) ? path : `${path}/mcp`
+  // URL.hostname may be `::1` or `[::1]` depending on runtime.
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '')
   if (
-    (url.hostname === '127.0.0.1' || url.hostname === 'localhost') &&
+    (host === '127.0.0.1' || host === 'localhost' || host === '::1') &&
     url.port === '8088' &&
     url.pathname.toLowerCase() === '/mcp'
   ) {

@@ -10,9 +10,9 @@
 export const isRootDir = (selectedNewPath: string) => {
   if (!selectedNewPath) return false
 
-  // Windows root: C:\, D:\, etc.
+  // Windows root: C:\, C:/, D:\, etc. (dialogs often use forward slashes).
   if (IS_WINDOWS) {
-    return /^[a-zA-Z]:\\?$/.test(selectedNewPath)
+    return /^[a-zA-Z]:[\\/]?$/.test(selectedNewPath)
   }
   // Linux/Mac: only block the actual filesystem root
   const normalized =
