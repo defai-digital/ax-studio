@@ -279,7 +279,9 @@ export function createMlxIpcFetch(): typeof fetch {
       // Respect an explicit init body when present; otherwise consume the
       // Request body exactly as native fetch would.
       const body =
-        init && Object.hasOwn(init, 'body') ? init.body : request?.body
+        init && Object.prototype.hasOwnProperty.call(init, 'body')
+          ? init.body
+          : request?.body
       const raw =
         typeof body === 'string' ? body : await new Response(body).text()
       parsed = JSON.parse(raw) as OpenAIChatRequest
