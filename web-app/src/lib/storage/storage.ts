@@ -99,7 +99,9 @@ export const safeStorageParseJSONAs = <T>(
   context?: string
 ): T | null => {
   const parsed = safeStorageParseJSON<unknown>(storage, key, context)
-  return parsed && isValid(parsed) ? parsed : null
+  // Use nullish check so valid falsy JSON values (0, false, "") pass the guard.
+  if (parsed === null || parsed === undefined) return null
+  return isValid(parsed) ? parsed : null
 }
 
 export const safeStorageSetJSON = (
@@ -120,7 +122,7 @@ export const createSafeJSONStorage = <T>(
     if (!storage) return null
 
     const parsed = safeStorageParseJSON<unknown>(storage, name, context)
-    if (!parsed) return null
+    if (parsed === null || parsed === undefined) return null
 
     return parsed as StorageValue<T>
   },

@@ -20,18 +20,12 @@ pub fn is_valid_host(host: &str, trusted_hosts: &[Vec<String>]) -> bool {
         return false;
     }
 
-    let host_without_port = if host.starts_with('[') {
-        host.split(']')
-            .next()
-            .unwrap_or(host)
-            .trim_start_matches('[')
-    } else {
-        host.split(':').next().unwrap_or(host)
-    };
+    let host_without_port = strip_host_port(host);
     // Include tauri.localhost as a default trusted host since the Tauri webview
     // uses it as the origin for requests to the local proxy server.
     // This is critical for Windows where the origin is http://tauri.localhost.
-    let default_valid_hosts = ["localhost", "127.0.0.1", "tauri.localhost"];
+    // Include IPv6 loopback (::1) so Host: [::1]:port is treated like 127.0.0.1.
+    let default_valid_hosts = ["localhost", "127.0.0.1", "::1", "tauri.localhost"];
 
     if default_valid_hosts
         .iter()
@@ -48,18 +42,29 @@ pub fn is_valid_host(host: &str, trusted_hosts: &[Vec<String>]) -> bool {
             return true;
         }
 
-        let valid_without_port = if valid.starts_with('[') {
-            valid
-                .split(']')
-                .next()
-                .unwrap_or(valid)
-                .trim_start_matches('[')
-        } else {
-            valid.split(':').next().unwrap_or(valid)
-        };
+        let valid_without_port = strip_host_port(valid);
 
         host_without_port.to_lowercase() == valid_without_port.to_lowercase()
     })
+}
+
+/// Strip an optional port from a Host header value.
+/// Handles `host:port`, `[ipv6]:port`, and unbracketed IPv6 (`::1`).
+fn strip_host_port(host: &str) -> &str {
+    if host.starts_with('[') {
+        return host
+            .split(']')
+            .next()
+            .unwrap_or(host)
+            .trim_start_matches('[');
+    }
+
+    // Unbracketed IPv6 has multiple colons; do not treat the first as a port separator.
+    if host.matches(':').count() >= 2 {
+        return host;
+    }
+
+    host.split(':').next().unwrap_or(host)
 }
 
 #[cfg(test)]
@@ -72,6 +77,14 @@ mod tests {
         assert!(is_valid_host("localhost:1337", &[]));
         assert!(is_valid_host("127.0.0.1", &[]));
         assert!(is_valid_host("127.0.0.1:1337", &[]));
+    }
+
+    #[test]
+    fn test_ipv6_loopback_is_valid() {
+        // Host headers for IPv6 loopback arrive bracketed, often with a port.
+        assert!(is_valid_host("[::1]", &[]));
+        assert!(is_valid_host("[::1]:1337", &[]));
+        assert!(is_valid_host("::1", &[]));
     }
 
     #[test]

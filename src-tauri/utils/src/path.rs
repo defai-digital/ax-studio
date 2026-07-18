@@ -73,19 +73,26 @@ pub fn normalize_file_path(path: &str) -> String {
         .to_string()
 }
 
-/// Removes prefix from path string with proper formatting
+/// Removes a path prefix only on a segment boundary.
+///
+/// `/v1` is stripped from `/v1/messages` → `/messages`, but not from
+/// `/v10/messages` or `/v1messages` (those keep the original path).
 pub fn remove_prefix(path: &str, prefix: &str) -> String {
-    if !prefix.is_empty() && path.starts_with(prefix) {
-        let result = path[prefix.len()..].to_string();
-        if result.is_empty() {
-            "/".to_string()
-        } else if result.starts_with('/') {
-            result
-        } else {
-            format!("/{}", result)
-        }
+    if prefix.is_empty() || !path.starts_with(prefix) {
+        return path.to_string();
+    }
+
+    let rest = &path[prefix.len()..];
+    // Require an exact match or a following `/` so longer first segments
+    // (e.g. `/v10`, `/v1messages`) are not partially stripped.
+    if !rest.is_empty() && !rest.starts_with('/') {
+        return path.to_string();
+    }
+
+    if rest.is_empty() {
+        "/".to_string()
     } else {
-        path.to_string()
+        rest.to_string()
     }
 }
 
@@ -109,6 +116,28 @@ pub fn get_short_path<P: AsRef<std::path::Path>>(path: P) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use super::remove_prefix;
+
+    #[test]
+    fn remove_prefix_strips_exact_segment_boundary() {
+        assert_eq!(remove_prefix("/v1/messages", "/v1"), "/messages");
+        assert_eq!(
+            remove_prefix("/v1/messages/threads/123", "/v1"),
+            "/messages/threads/123"
+        );
+        assert_eq!(remove_prefix("/api/v1/messages", "/api/v1"), "/messages");
+        assert_eq!(remove_prefix("/v1", "/v1"), "/");
+    }
+
+    #[test]
+    fn remove_prefix_does_not_strip_longer_first_segment() {
+        // Regression: starts_with("/v1") must not rewrite /v10 or /v1messages.
+        assert_eq!(remove_prefix("/v10/messages", "/v1"), "/v10/messages");
+        assert_eq!(remove_prefix("/v1messages", "/v1"), "/v1messages");
+        assert_eq!(remove_prefix("/messages", "/v1"), "/messages");
+        assert_eq!(remove_prefix("/messages", ""), "/messages");
+    }
+
     #[cfg(windows)]
     use super::get_short_path;
 

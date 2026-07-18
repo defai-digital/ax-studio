@@ -148,4 +148,112 @@ describe('messages regressions', () => {
       },
     ])
   })
+
+  it('splits completed analysis-channel markers into reasoning and text', () => {
+    const uiMessage = convertThreadMessageToUIMessage(
+      makeThreadMessage({
+        content: [
+          {
+            type: ContentType.Text,
+            text: {
+              value:
+                '<|channel|>analysis<|message|>think hard<|start|>assistant<|channel|>final<|message|>answer',
+              annotations: [],
+            },
+          },
+        ],
+      })
+    )
+
+    expect(uiMessage.parts).toEqual([
+      { type: 'reasoning', text: 'think hard' },
+      { type: 'text', text: 'answer' },
+    ])
+  })
+
+  it('keeps in-progress analysis-channel body as reasoning', () => {
+    const uiMessage = convertThreadMessageToUIMessage(
+      makeThreadMessage({
+        content: [
+          {
+            type: ContentType.Text,
+            text: {
+              value: '<|channel|>analysis<|message|>partial reasoning',
+              annotations: [],
+            },
+          },
+        ],
+      })
+    )
+
+    expect(uiMessage.parts).toEqual([
+      { type: 'reasoning', text: 'partial reasoning' },
+    ])
+  })
+
+  it('detects image media type from URLs with query strings and hashes', () => {
+    const withQuery = convertThreadMessageToUIMessage(
+      makeThreadMessage({
+        role: 'user',
+        content: [
+          {
+            type: ContentType.Image,
+            image_url: {
+              url: 'https://cdn.example.com/shot.png?token=abc',
+              detail: 'auto',
+            },
+          },
+        ],
+      })
+    )
+    expect(withQuery.parts[0]).toMatchObject({
+      type: 'file',
+      mediaType: 'image/png',
+    })
+
+    const withHash = convertThreadMessageToUIMessage(
+      makeThreadMessage({
+        role: 'user',
+        content: [
+          {
+            type: ContentType.Image,
+            image_url: {
+              url: 'https://cdn.example.com/shot.webp#preview',
+              detail: 'auto',
+            },
+          },
+        ],
+      })
+    )
+    expect(withHash.parts[0]).toMatchObject({
+      type: 'file',
+      mediaType: 'image/webp',
+    })
+  })
+
+  it('persists tool-invocation parts using toolName, not "invocation"', () => {
+    const uiMessage = {
+      id: 'ui-tool-inv',
+      role: 'assistant',
+      parts: [
+        {
+          type: 'tool-invocation',
+          toolName: 'web_search',
+          toolInvocationId: 't1',
+          input: { q: 'ax' },
+          output: { hits: 1 },
+        },
+      ],
+    } as unknown as UIMessage
+
+    expect(extractContentPartsFromUIMessage(uiMessage)).toEqual([
+      {
+        type: ContentType.ToolCall,
+        tool_call_id: 't1',
+        tool_name: 'web_search',
+        input: { q: 'ax' },
+        output: { hits: 1 },
+      },
+    ])
+  })
 })

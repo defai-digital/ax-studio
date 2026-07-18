@@ -145,6 +145,8 @@ describe('safeStorageParseJSON', () => {
 
 describe('safeStorageParseJSONAs', () => {
   const isString = (v: unknown): v is string => typeof v === 'string'
+  const isNumber = (v: unknown): v is number => typeof v === 'number'
+  const isBoolean = (v: unknown): v is boolean => typeof v === 'boolean'
 
   it('returns value when guard passes', () => {
     const s = makeStorage()
@@ -160,6 +162,17 @@ describe('safeStorageParseJSONAs', () => {
 
   it('returns null when key is missing', () => {
     expect(safeStorageParseJSONAs(makeStorage(), 'k', isString)).toBeNull()
+  })
+
+  it('accepts valid falsy JSON values that pass the type guard', () => {
+    const s = makeStorage()
+    s.setItem('n', JSON.stringify(0))
+    s.setItem('b', JSON.stringify(false))
+    s.setItem('empty', JSON.stringify(''))
+
+    expect(safeStorageParseJSONAs(s, 'n', isNumber)).toBe(0)
+    expect(safeStorageParseJSONAs(s, 'b', isBoolean)).toBe(false)
+    expect(safeStorageParseJSONAs(s, 'empty', isString)).toBe('')
   })
 })
 

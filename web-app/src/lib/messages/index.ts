@@ -45,7 +45,8 @@ const getImageMediaType = (url?: string): string => {
   }
 
   try {
-    const normalized = url.toLowerCase()
+    // Strip query/hash so signed CDN URLs still match by extension.
+    const normalized = url.toLowerCase().split(/[?#]/, 1)[0] ?? ''
     if (normalized.endsWith('.png')) return 'image/png'
     if (normalized.endsWith('.webp')) return 'image/webp'
     if (normalized.endsWith('.gif')) return 'image/gif'
@@ -140,7 +141,7 @@ export function convertThreadMessageToUIMessage(
         content.text.value
       )
 
-      // BACKWARD COMPATIBILITY: Handle old format with <think> tags
+      // BACKWARD COMPATIBILITY: Handle old formats (<think> and analysis channel)
       if (reasoningSegment) {
         // Extract reasoning text from <think> tags
         const completedMatch = reasoningSegment.match(
@@ -159,6 +160,27 @@ export function convertThreadMessageToUIMessage(
               type: 'reasoning',
               text: inProgressMatch[1],
             })
+          } else {
+            // Analysis-channel format (GPT-oss / Harmony style)
+            const analysisCompleted = reasoningSegment.match(
+              /<\|channel\|>analysis<\|message\|>([\s\S]*?)<\|start\|>assistant<\|channel\|>final<\|message\|>/
+            )
+            if (analysisCompleted) {
+              parts.push({
+                type: 'reasoning',
+                text: analysisCompleted[1],
+              })
+            } else {
+              const analysisInProgress = reasoningSegment.match(
+                /<\|channel\|>analysis<\|message\|>([\s\S]*)/
+              )
+              if (analysisInProgress) {
+                parts.push({
+                  type: 'reasoning',
+                  text: analysisInProgress[1],
+                })
+              }
+            }
           }
         }
       }
@@ -358,11 +380,13 @@ export function extractContentPartsFromUIMessage(
         })
       }
     } else if (part.type === 'dynamic-tool' || part.type.startsWith('tool-')) {
-      // Handle tool call parts - flatten structure to match parts format
+      // Handle tool call parts - flatten structure to match parts format.
+      // `dynamic-tool` and legacy `tool-invocation` carry the real name in
+      // `toolName`; static AI SDK v5 tools use `tool-${name}` in the type.
       const toolName =
-        part.type === 'dynamic-tool'
-          ? part.toolName
-          : (part.type as string).replace('tool-', '')
+        part.type === 'dynamic-tool' || part.type === 'tool-invocation'
+          ? (part.toolName ?? 'unknown')
+          : (part.type as string).replace(/^tool-/, '')
       const toolCallId = part.toolCallId || part.toolInvocationId
       const input = part.input || part.args
       const output = part.output || part.result

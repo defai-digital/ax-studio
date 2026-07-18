@@ -13,12 +13,17 @@ export function joinPathSegments(...segments: string[]): string {
 
 export function dirnameFallback(path: string, fallbackRoot: string): string {
   const normalized = normalizePath(path).replace(/\/+$/g, '')
-  const lastSlash = normalized.lastIndexOf('/')
-
-  if (lastSlash > 0) {
-    return normalized.slice(0, lastSlash)
+  // Empty / root-only path: keep a stable parent (Node returns "/").
+  if (!normalized) {
+    return fallbackRoot === '/' ? '/' : fallbackRoot
   }
-  return fallbackRoot
+
+  const lastSlash = normalized.lastIndexOf('/')
+  // Relative basename (e.g. "file.txt") — no directory component.
+  if (lastSlash === -1) return fallbackRoot
+  // Absolute single-segment path (e.g. "/home") — parent is filesystem root.
+  if (lastSlash === 0) return '/'
+  return normalized.slice(0, lastSlash)
 }
 
 export function basenameFallback(

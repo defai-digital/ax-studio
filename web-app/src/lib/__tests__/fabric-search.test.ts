@@ -56,4 +56,42 @@ describe('fabric search helpers', () => {
       { source: null, content: '', score: undefined },
     ])
   })
+
+  it('finds JSON hits when a non-JSON text part comes first', () => {
+    const multiPart = {
+      content: [
+        { type: 'text', text: 'Searching knowledge base…' },
+        {
+          type: 'text',
+          text: JSON.stringify({
+            results: [{ source: 'a.md', content: 'hit', score: 0.8 }],
+          }),
+        },
+      ],
+    }
+
+    expect(fabricSearchHasResults(multiPart)).toBe(true)
+    expect(parseFabricSearchResults(multiPart)).toEqual([
+      { source: 'a.md', content: 'hit', score: 0.8 },
+    ])
+  })
+
+  it('still rejects multi-part content with only non-JSON prose', () => {
+    expect(
+      fabricSearchHasResults({
+        content: [
+          { type: 'text', text: 'Searching…' },
+          { type: 'text', text: 'Connection refused' },
+        ],
+      })
+    ).toBe(false)
+    expect(
+      parseFabricSearchResults({
+        content: [
+          { type: 'text', text: 'Searching…' },
+          { type: 'text', text: 'Connection refused' },
+        ],
+      })
+    ).toEqual([])
+  })
 })

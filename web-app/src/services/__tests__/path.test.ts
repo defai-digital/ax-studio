@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { TauriPathService } from '../path/tauri'
+import { dirnameFallback } from '../path/fallback'
 
 // Mock the @tauri-apps/api/path module
 const mockBasename = vi.fn()
@@ -80,7 +81,15 @@ describe('TauriPathService', () => {
       const result = await pathService.dirname('file.txt')
       expect(result).toBe('.')
     })
+
+    it('should return root for absolute single-segment paths in fallback', async () => {
+      mockDirname.mockRejectedValue(new Error('Test error'))
+      expect(await pathService.dirname('/home')).toBe('/')
+      expect(await pathService.dirname('/tmp')).toBe('/')
+      expect(await pathService.dirname('/home/')).toBe('/')
+    })
   })
+
 
   describe('basename', () => {
     it('should get basename using Tauri API for Unix paths', async () => {
@@ -184,3 +193,27 @@ describe('TauriPathService', () => {
     })
   })
 })
+
+describe('dirnameFallback', () => {
+  it('returns parent for multi-segment absolute paths', () => {
+    expect(dirnameFallback('/a/b/c', '.')).toBe('/a/b')
+    expect(dirnameFallback('/path/to/file.txt', '.')).toBe('/path/to')
+  })
+
+  it('returns filesystem root for absolute single-segment paths', () => {
+    expect(dirnameFallback('/home', '.')).toBe('/')
+    expect(dirnameFallback('/tmp', '/')).toBe('/')
+  })
+
+  it('returns fallback for relative basenames', () => {
+    expect(dirnameFallback('file.txt', '.')).toBe('.')
+    expect(dirnameFallback('file.txt', '/')).toBe('/')
+  })
+
+  it('handles trailing slashes and empty input', () => {
+    expect(dirnameFallback('/home/', '.')).toBe('/')
+    expect(dirnameFallback('/', '.')).toBe('.')
+    expect(dirnameFallback('/', '/')).toBe('/')
+  })
+})
+
