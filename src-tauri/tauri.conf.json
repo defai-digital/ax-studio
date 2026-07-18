@@ -7,7 +7,7 @@
     "frontendDist": "../web-app/dist",
     "devUrl": "http://localhost:1420",
     "beforeDevCommand": "node scripts/tauri-dev-web.mjs",
-    "beforeBuildCommand": "node scripts/run-with-env.mjs IS_TAURI=true yarn build:web"
+    "beforeBuildCommand": "node scripts/prepare-ios-xcode.mjs && node scripts/run-with-env.mjs IS_TAURI=true yarn build:web"
   },
   "app": {
     "macOSPrivateApi": false,
@@ -77,9 +77,12 @@
     }
   },
   "bundle": {
-    "publisher": "AX Studio",
+    "publisher": "DEFAI Private Limited",
     "active": true,
     "createUpdaterArtifacts": false,
+    "iOS": {
+      "developmentTeam": "N5ZUZDUJS6"
+    },
     "icon": ["icons/icon.png", "icons/icon.ico"],
     "resources": ["resources/LICENSE"]
   }

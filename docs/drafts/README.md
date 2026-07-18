@@ -14,6 +14,7 @@ These files are final for the current repository assessment. They still identify
 | `ADR-006-local-first-data-storage.md` | ADR | Accepted decision for local-first user workspace data |
 | `ADR-007-multi-agent-orchestration-design.md` | ADR | Accepted direction for TypeScript-layer multi-agent orchestration |
 | `ADR-008-extension-system-design.md` | ADR | Accepted decision for bundled TypeScript extensions and core lifecycle contracts |
+| `ADR-009-local-engine-backends.md` | ADR | Accepted dual-backend model: in-process MLX default, optional sidecar HTTP, shared lifecycle phases with AX Code / ax-engine |
 
 ## Existing docs (in docs/)
 

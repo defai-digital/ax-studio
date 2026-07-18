@@ -15,16 +15,64 @@ export const isPlatformTauri = (): boolean => {
   return !(IS_WEB_APP === true || (IS_WEB_APP as unknown as string) === 'true')
 }
 
-/**
- * Detect if running on macOS. MLX models only work on macOS with Apple Silicon.
- * Uses navigator.platform which works in both browser and Tauri WebView.
- */
-const isMacOS = (): boolean => {
-  if (typeof navigator !== 'undefined') {
-    return /Mac|iPod|iPhone|iPad/.test(navigator.platform)
+export type InferenceProfile =
+  | 'macos-local'
+  | 'windows-x64-local'
+  | 'api-only'
+  | 'unsupported'
+
+function runtimePlatform(): string {
+  if (typeof navigator === 'undefined') return ''
+  const nav = navigator as Navigator & {
+    userAgentData?: { platform?: string; architecture?: string }
   }
-  return false
+  return [
+    nav.userAgentData?.platform,
+    nav.userAgentData?.architecture,
+    nav.platform,
+    nav.userAgent,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
 }
+
+function isIPad(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const nav = navigator as Navigator & { maxTouchPoints?: number }
+  return (
+    /ipad/.test(runtimePlatform()) ||
+    (navigator.platform === 'MacIntel' && (nav.maxTouchPoints ?? 0) > 1)
+  )
+}
+
+/** Product-level inference policy, independent of browser user-agent quirks. */
+export const getInferenceProfile = (): InferenceProfile => {
+  const platform = runtimePlatform()
+  if (isIPad()) return 'api-only'
+  if (/mac/.test(platform) && !/iphone|ipad|ipod/.test(platform)) {
+    return 'macos-local'
+  }
+  if (/win/.test(platform)) {
+    return /arm64|aarch64|\barm\b/.test(platform)
+      ? 'api-only'
+      : 'windows-x64-local'
+  }
+  return 'unsupported'
+}
+
+export const isApiOnlyPlatform = (): boolean =>
+  getInferenceProfile() === 'api-only'
+
+export const supportsLocalLlamaCpp = (): boolean =>
+  getInferenceProfile() === 'macos-local' ||
+  getInferenceProfile() === 'windows-x64-local'
+
+export const supportsAxEngine = (): boolean =>
+  getInferenceProfile() === 'macos-local'
+
+/** Detect if running on macOS desktop. */
+const isMacOS = (): boolean => getInferenceProfile() === 'macos-local'
 
 /**
  * Check if MLX models are supported on this platform.

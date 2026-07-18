@@ -492,15 +492,21 @@ function StepProviders() {
 
 function StepPrivacy() {
   const privacyPoints = [
-    { title: 'Local-first', desc: 'All data stays on your machine by default' },
-    { title: 'No telemetry', desc: "We don't collect or send any usage data" },
     {
-      title: 'Your keys, your control',
-      desc: 'API keys are stored locally, never sent to us',
+      title: 'Local-first workspace',
+      desc: 'Threads, settings, memory, and local models stay on your device',
     },
     {
-      title: 'Open source',
-      desc: 'Full transparency — inspect the code yourself',
+      title: 'Connected services are explicit',
+      desc: 'Cloud providers and remote tools receive data only when you use them',
+    },
+    {
+      title: 'Your keys, your control',
+      desc: 'Credentials are stored locally and used only with the service you configure',
+    },
+    {
+      title: 'No AX Studio telemetry',
+      desc: "We don't collect product analytics or conversation telemetry",
     },
   ]
 
@@ -516,7 +522,8 @@ function StepPrivacy() {
       </motion.div>
       <h2 className="text-xl font-bold mb-2">Your privacy matters</h2>
       <p className="text-sm text-muted-foreground mb-6">
-        AX Studio is built with privacy at its core.
+        AX Studio displays live AI-generated content. Review outputs before
+        relying on them; you can report inappropriate content from Settings.
       </p>
       <div className="space-y-3">
         {privacyPoints.map((point) => (

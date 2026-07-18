@@ -85,12 +85,13 @@ function createToolCall(
 async function executeToolCallWithRetry<T>(
   call: () => Promise<T>,
   retry: () => Promise<T>,
-  fallback: (error: unknown) => T
+  fallback: (error: unknown) => T,
+  retryOnTransportFailure = true
 ): Promise<T> {
   try {
     return await call()
   } catch (error) {
-    if (!isRecoverableMCPError(error)) {
+    if (!retryOnTransportFailure || !isRecoverableMCPError(error)) {
       return fallback(error)
     }
 
@@ -176,13 +177,21 @@ export class TauriMCPService implements MCPService {
     toolName: string
     serverName?: string
     arguments: object
+    retryOnTransportFailure?: boolean
   }): Promise<{ error: string; content: { text: string }[] }> {
     const api = getCoreApi()
+    const { retryOnTransportFailure = true, ...nativeArgs } = args
 
     return executeToolCallWithRetry(
-      () => createToolCall(api, args, DEFAULT_UNAVAILABLE_TOOL_ERROR)(),
-      () => createToolCall(api, args, DEFAULT_UNAVAILABLE_TOOL_ERROR_AFTER_RESTART)(),
-      fallbackToolCallResult
+      () => createToolCall(api, nativeArgs, DEFAULT_UNAVAILABLE_TOOL_ERROR)(),
+      () =>
+        createToolCall(
+          api,
+          nativeArgs,
+          DEFAULT_UNAVAILABLE_TOOL_ERROR_AFTER_RESTART
+        )(),
+      fallbackToolCallResult,
+      retryOnTransportFailure
     )
   }
 

@@ -22,7 +22,12 @@ export interface MCPService {
   getMCPConfig(): Promise<MCPConfig>
   getTools(): Promise<MCPTool[]>
   getConnectedServers(): Promise<string[]>
-  callTool(args: { toolName: string; serverName?: string; arguments: object }): Promise<MCPToolCallResult>
+  callTool(args: {
+    toolName: string
+    serverName?: string
+    arguments: object
+    retryOnTransportFailure?: boolean
+  }): Promise<MCPToolCallResult>
   callToolWithCancellation(args: {
     toolName: string
     serverName?: string

@@ -173,10 +173,15 @@
     "proxyTimeoutDesc": "Time to wait for a response from the local model, seconds."
   },
   "privacy": {
-    "privacyPolicy": "You have full control over your data. Learn more in our Privacy Policy.",
-    "promise1": "Your conversations stay private and on your device",
-    "promise2": "We never collect your personal information or chat content",
-    "promise3": "All data sharing is anonymous and aggregated"
+    "privacyPolicy": "Threads, settings, memory, and downloaded models are stored locally. Connected services receive data only when you choose to use them.",
+    "promise1": "Local model requests and local workspace data stay on your device",
+    "promise2": "Cloud providers receive prompts, context, and attachments needed for the requests you send",
+    "promise3": "Local or remote MCP servers receive the tool inputs and context needed for approved tool calls",
+    "promise4": "AX Studio does not include product analytics or conversation telemetry",
+    "aiDisclosure": "AX Studio displays live AI-generated content. Outputs may be inaccurate or inappropriate; review them before relying on them.",
+    "readPrivacyPolicy": "Read Privacy Notice",
+    "readTerms": "Read Terms of Use",
+    "reportAiContent": "Report inappropriate AI content"
   },
   "general": {
     "showInFinder": "Show in Finder",

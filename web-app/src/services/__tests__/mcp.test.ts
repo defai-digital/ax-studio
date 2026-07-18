@@ -453,6 +453,27 @@ describe('TauriMCPService', () => {
       expect(result).toEqual(mockResult)
     })
 
+    it('should not retry mutations when transport retry is disabled', async () => {
+      const toolArgs = {
+        serverName: 'ax-bi',
+        toolName: 'prompt_to_dashboard',
+        arguments: { request: { prompt: 'Create a dashboard' } },
+        retryOnTransportFailure: false,
+      }
+      mockCore.api.callTool.mockRejectedValue(new Error('Transport closed'))
+
+      const result = await mcpService.callTool(toolArgs)
+
+      expect(mockCore.api.restartMcpServers).not.toHaveBeenCalled()
+      expect(mockCore.api.callTool).toHaveBeenCalledOnce()
+      expect(mockCore.api.callTool).toHaveBeenCalledWith({
+        serverName: 'ax-bi',
+        toolName: 'prompt_to_dashboard',
+        arguments: { request: { prompt: 'Create a dashboard' } },
+      })
+      expect(result).toEqual({ error: 'Transport closed', content: [] })
+    })
+
     it('should reject when window.core.api is unavailable', async () => {
       const originalCore = window.core
       window.core = undefined

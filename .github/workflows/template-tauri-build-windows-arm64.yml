@@ -28,6 +28,11 @@ on:
         type: string
         default: 'nightly'
         description: 'The channel to use for this job'
+      microsoft_store:
+        required: false
+        type: boolean
+        default: false
+        description: 'Build the offline NSIS package used for Microsoft Store submission'
     secrets:
       DELTA_AWS_S3_BUCKET_NAME:
         required: false
@@ -93,7 +98,7 @@ jobs:
       - name: Installing node
         uses: actions/setup-node@v6
         with:
-          node-version: '20.19'
+          node-version: '24'
 
       - name: Enable long paths
         run: git config --global core.longpaths true
@@ -165,6 +170,7 @@ jobs:
         run: |
           make build
         env:
+          TAURI_BUILD_CONFIG: ${{ inputs.microsoft_store && 'src-tauri/tauri.microsoftstore.conf.json' || '' }}
           AX_STUDIO_WINDOWS_TARGET: aarch64-pc-windows-msvc
           TAURI_BUILD_TARGET: aarch64-pc-windows-msvc
           AZURE_KEY_VAULT_URI: ${{ secrets.AZURE_KEY_VAULT_URI }}
@@ -224,6 +230,16 @@ jobs:
             echo "FILE_NAME=${FILE_NAME}"
             echo "PORTABLE_FILE_NAME=${PORTABLE_FILE_NAME}"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Upload Microsoft Store NSIS artifact
+        if: inputs.microsoft_store
+        uses: actions/upload-artifact@v7
+        with:
+          name: ax-studio-windows-store-arm64-exe-${{ inputs.new_version }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            ./src-tauri/target/aarch64-pc-windows-msvc/release/bundle/nsis/*.exe
 
       ## Upload to s3 for nightly and beta
       - name: upload to aws s3 if public provider is aws

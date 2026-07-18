@@ -6,6 +6,7 @@ import { Card, CardItem } from '@/components/common/Card'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { Shield } from 'lucide-react'
 import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
+import { AX_STUDIO_EXTERNAL_LINKS } from '@/constants/external-links'
 
 export const Route = createFileRoute(route.settings.privacy)({
   component: Privacy,
@@ -55,7 +56,39 @@ function Privacy() {
                         <li className="font-medium">
                           {t('settings:privacy.promise3')}
                         </li>
+                        <li className="font-medium">
+                          {t('settings:privacy.promise4')}
+                        </li>
                       </ul>
+                      <p className="mt-4 text-muted-foreground">
+                        {t('settings:privacy.aiDisclosure')}
+                      </p>
+                      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2">
+                        <a
+                          href={AX_STUDIO_EXTERNAL_LINKS.privacy}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          {t('settings:privacy.readPrivacyPolicy')}
+                        </a>
+                        <a
+                          href={AX_STUDIO_EXTERNAL_LINKS.terms}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          {t('settings:privacy.readTerms')}
+                        </a>
+                        <a
+                          href={AX_STUDIO_EXTERNAL_LINKS.aiContentReport}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          {t('settings:privacy.reportAiContent')}
+                        </a>
+                      </div>
                     </div>
                   }
                 />

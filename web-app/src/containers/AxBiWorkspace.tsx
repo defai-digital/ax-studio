@@ -12,10 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useServiceHub } from '@/hooks/useServiceHub'
-import {
-  runAxBiExistingDatasetChartWorkflow,
-  runAxBiSdkPromptWorkflow,
-} from '@/lib/ax-bi/dashboard-workflow'
+import { runAxBiAuthoringWorkflow } from '@/lib/ax-bi/authoring-workflow'
 import {
   DEFAULT_AX_BI_MCP_URL,
   connectAxBiMcpServer,
@@ -157,34 +154,21 @@ export function AxBiWorkspace() {
     updateSession(activeSession.id, { status: 'running' })
 
     try {
-      const chartResult = await runAxBiExistingDatasetChartWorkflow({
+      const result = await runAxBiAuthoringWorkflow({
         prompt: workflowPrompt,
         serviceHub,
-      })
-      if (chartResult.handled) {
-        recordRun(activeSession.id, {
-          status: 'ready',
-          message: chartResult.message,
-          prompt: submittedPrompt,
-          url: chartResult.chartUrl,
-        })
-        return
-      }
-
-      const planResult = await runAxBiSdkPromptWorkflow({
-        prompt: workflowPrompt,
-        serviceHub,
+        force: true,
       })
       const workflowFailed =
-        planResult.handled &&
-        (planResult.status === 'failed' || planResult.status === 'blocked')
+        result.handled &&
+        (result.status === 'failed' || result.status === 'blocked')
       recordRun(activeSession.id, {
-        status: planResult.handled && !workflowFailed ? 'ready' : 'error',
-        message: planResult.handled
-          ? planResult.message
+        status: result.handled && !workflowFailed ? 'ready' : 'error',
+        message: result.handled
+          ? result.message
           : 'No AX BI workflow matched this request.',
         prompt: submittedPrompt,
-        url: planResult.handled ? planResult.dashboardUrl : undefined,
+        url: result.handled ? result.artifactUrl : undefined,
       })
     } catch (error) {
       recordRun(activeSession.id, {

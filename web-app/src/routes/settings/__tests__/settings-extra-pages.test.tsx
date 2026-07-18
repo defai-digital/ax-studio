@@ -249,6 +249,13 @@ describe('additional settings pages', () => {
       screen.getByText('settings:privacy.privacyPolicy')
     ).toBeInTheDocument()
     expect(screen.getByText('settings:privacy.promise1')).toBeInTheDocument()
+    expect(screen.getByText('settings:privacy.promise4')).toBeInTheDocument()
+    expect(
+      screen.getByText('settings:privacy.reportAiContent')
+    ).toHaveAttribute(
+      'href',
+      'https://github.com/defai-digital/ax-studio/issues/new?template=ai-content-report.yml'
+    )
     expect(screen.getByTestId('settings-menu')).toBeInTheDocument()
   })
 

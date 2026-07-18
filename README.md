@@ -34,21 +34,41 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 
 ## Get Started
 
+### Installation Index
+
+- [macOS Apple Silicon](#macos-apple-silicon---recommended) — Homebrew or GitHub release
+- [Windows x64 and ARM64](#windows) — signed installer from GitHub Releases
+- [iPad](#ipad-apiurl-first-planned) — planned App Store/TestFlight client using an API or base URL
+
 ### Supported Desktop Targets
 
 | Platform | Status | Install path |
 | --- | --- | --- |
 | macOS Apple Silicon | Active support | Homebrew cask or GitHub release assets |
 | Windows x64 | Active support | GitHub release installer |
-| Windows ARM64 | Active support | GitHub release installer |
+| Windows ARM64 | API/URL client | GitHub release installer |
 | Linux desktop | Not active support | Source builds only, without release/SLA expectations |
 
 Linux users should use AX Serving, OpenAI-compatible endpoints, or source builds
 when they need AX workflows outside the supported desktop release targets.
 
+### Platform and Inference Profiles
+
+AX Studio uses different local-inference profiles by platform:
+
+| Profile | Platforms | Inference model |
+| --- | --- | --- |
+| Primary desktop client | macOS Apple Silicon | AX Engine/MLX and `llama.cpp` |
+| CUDA desktop client | Windows x64 | `llama.cpp`; CUDA is selected when a compatible NVIDIA GPU and driver are available |
+| API/URL-first client | Windows ARM64 and iPad | Connect to a local or remote OpenAI-compatible inference endpoint such as AX Serving, Ollama, or another reachable server |
+
+Windows ARM64 does not run a local inference backend in the supported product
+configuration. It is an API/URL client, as is iPad; neither target downloads or
+executes AX Engine or `llama.cpp` binaries.
+
 ### Install
 
-**macOS Apple Silicon - recommended**
+#### macOS Apple Silicon - recommended
 
 1. Install Homebrew if you do not already have it:
 
@@ -73,7 +93,7 @@ Homebrew setups that require explicit trust for third-party taps.
 The Homebrew cask is the fastest install path for supported Macs. Manual
 downloads are available from GitHub Releases if you prefer not to use Homebrew.
 
-**Windows**
+#### Windows
 
 Download AX Studio only from the official
 [GitHub Releases](https://github.com/defai-digital/ax-studio/releases/latest)
@@ -101,7 +121,7 @@ Get-AuthenticodeSignature ".\AX.Studio_*_x64-setup.exe" |
 The expected status is `Valid`, and the certificate subject must identify
 `DEFAI Private Limited`.
 
-**Manual download**
+#### Manual download
 
 All release assets are published on the
 [AX Studio releases page](https://github.com/defai-digital/ax-studio/releases).
@@ -109,6 +129,15 @@ Every stable release asset includes a detached `.minisig` signature. The
 verification key and command are documented in
 [`docs/ax-studio.minisign.pub`](docs/ax-studio.minisign.pub) and
 [`docs/release.md`](docs/release.md).
+
+#### iPad (API/URL-first; planned)
+
+iPad support is planned as a mobile client and is not included in the current
+desktop release assets. When the mobile build is available, install AX Studio
+through TestFlight or the App Store, then open **Settings -> Providers** and
+configure an API key plus the base URL for AX Serving, Ollama, or another
+reachable OpenAI-compatible inference server. The iPad client will not run the
+desktop local-inference executables.
 
 ### First Launch
 
@@ -149,10 +178,12 @@ Use this path when you want inference to run on your own machine.
 
 Local model support depends on the machine and runtime:
 
-- `llama.cpp` is the default GGUF local inference path on macOS and Windows.
-- MLX requires Apple Silicon macOS.
-- Ollama and OpenAI-compatible servers must already be running locally or on a
-  reachable host.
+- macOS Apple Silicon supports AX Engine/MLX and `llama.cpp` for local inference.
+- Windows x64 uses `llama.cpp`; compatible NVIDIA systems can use CUDA.
+- Windows ARM64 and iPad should use AX Serving, Ollama, or another
+  OpenAI-compatible server through a configured API/base URL.
+- OpenAI-compatible servers must already be running locally or on a reachable
+  host.
 
 ### Quickstart: MCP Tools
 
@@ -336,10 +367,10 @@ AX Studio supports multiple local inference paths:
 
 | Runtime | Platform | Use it when |
 | --- | --- | --- |
-| `llama.cpp` | macOS, Windows | You want GGUF local inference through the bundled engine manager |
+| `llama.cpp` | macOS Apple Silicon, Windows x64 | You want GGUF local inference through the bundled engine manager |
 | MLX provider | Apple Silicon macOS | You want in-process AX Engine SDK inference on Metal |
-| AX Serving / OpenAI-compatible | Any reachable endpoint | You already run a local or remote OpenAI-compatible model server |
-| Ollama | Local machine | You want AX Studio to use models served by Ollama |
+| AX Serving / OpenAI-compatible | Windows ARM64, iPad, or any reachable endpoint | You already run a local or remote OpenAI-compatible model server |
+| Ollama | Any reachable machine | You want AX Studio to use models served by Ollama through its API |
 
 The app separates local runtime configuration from cloud provider settings so
 users can decide when work stays local and when it routes to a hosted model.
@@ -445,9 +476,9 @@ Use this path when contributing to AX Studio or running the app from source.
 
 ### Prerequisites
 
-- Node.js 20.19+ or 22.12+
+- Node.js 24+
 - Yarn 4.5.3
-- Rust 1.77.2+
+- Rust 1.85.0+
 - Tauri CLI 2.x
 - macOS users building MLX support: Apple Silicon is required for the MLX provider
 - Desktop development is focused on macOS and Windows. Linux may compile from

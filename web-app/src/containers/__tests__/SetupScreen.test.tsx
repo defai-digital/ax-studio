@@ -149,10 +149,10 @@ describe('SetupScreen — Manual Test Protocol', () => {
     // Navigate to Step 4: Privacy
     clickButton('Continue')
     expect(screen.getByText('Your privacy matters')).toBeInTheDocument()
-    expect(screen.getByText('Local-first')).toBeInTheDocument()
-    expect(screen.getByText('No telemetry')).toBeInTheDocument()
+    expect(screen.getByText('Local-first workspace')).toBeInTheDocument()
+    expect(screen.getByText('No AX Studio telemetry')).toBeInTheDocument()
     expect(screen.getByText('Your keys, your control')).toBeInTheDocument()
-    expect(screen.getByText('Open source')).toBeInTheDocument()
+    expect(screen.getByText('Connected services are explicit')).toBeInTheDocument()
 
     // Navigate to Step 5: Ready
     clickButton('Continue')

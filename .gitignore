@@ -15,6 +15,9 @@ core/lib/**
 test_results.html
 pre-install
 *.md
+!docs/microsoft-store.md
+!docs/privacy.md
+!docs/terms.md
 # docs
 docs/yarn.lock
 src-tauri/resources/lib

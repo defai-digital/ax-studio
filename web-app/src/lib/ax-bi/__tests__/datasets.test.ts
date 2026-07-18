@@ -179,6 +179,49 @@ describe('ax-bi datasets', () => {
     ).resolves.toBe('http://localhost:5008/mcp')
   })
 
+  it('preserves existing AX BI authentication and timeout settings', async () => {
+    const updateMCPConfig = vi.fn().mockResolvedValue(undefined)
+    const activateMCPServer = vi.fn().mockResolvedValue(undefined)
+    const serviceHub = {
+      mcp: () => ({
+        getMCPConfig: vi.fn().mockResolvedValue({
+          mcpServers: {
+            'ax-bi': {
+              type: 'http',
+              url: 'https://old.example.com/mcp',
+              headers: { Authorization: 'Bearer configured-token' },
+              timeout: 45,
+              managed: true,
+            },
+          },
+        }),
+        updateMCPConfig,
+        activateMCPServer,
+      }),
+    }
+
+    await connectAxBiMcpServer({
+      serviceHub: serviceHub as never,
+      url: 'https://bi.example.com/mcp',
+    })
+
+    const saved = JSON.parse(updateMCPConfig.mock.calls[0][0])
+    expect(saved.mcpServers['ax-bi']).toMatchObject({
+      url: 'https://bi.example.com/mcp',
+      headers: { Authorization: 'Bearer configured-token' },
+      timeout: 45,
+      managed: true,
+      active: true,
+    })
+    expect(activateMCPServer).toHaveBeenCalledWith(
+      'ax-bi',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer configured-token' },
+        timeout: 45,
+      })
+    )
+  })
+
   it('uses list_datasets when available', async () => {
     const callTool = vi.fn().mockResolvedValue({
       error: '',

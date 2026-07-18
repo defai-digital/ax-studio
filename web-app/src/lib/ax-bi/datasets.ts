@@ -47,10 +47,12 @@ export async function connectAxBiMcpServer({
     .mcp()
     .getMCPConfig()
     .catch((): MCPConfig => ({}))
+  const existingServer = config.mcpServers?.[AX_BI_SERVER]
   const nextServer: MCPServerConfig = {
+    ...existingServer,
     command: '',
     args: [],
-    env: {},
+    env: existingServer?.env ?? {},
     type: 'http',
     url: normalizedUrl,
     active: true,
@@ -77,21 +79,27 @@ function axBiToolNames(tools: MCPTool[]): Set<string> {
   )
 }
 
-async function callAxBiDatasetTool({
+export async function callAxBiMcpTool({
   serviceHub,
   toolName,
   arguments: toolArguments,
+  retryOnTransportFailure = true,
 }: {
   serviceHub: ServiceHub
   toolName: string
   arguments: Record<string, unknown>
+  retryOnTransportFailure?: boolean
 }): Promise<MCPToolCallResult> {
   const toolNames = axBiToolNames(await serviceHub.mcp().getTools())
+  const retryOptions = retryOnTransportFailure
+    ? {}
+    : { retryOnTransportFailure: false }
   if (toolNames.has(toolName)) {
     return serviceHub.mcp().callTool({
       serverName: AX_BI_SERVER,
       toolName,
       arguments: toolArguments,
+      ...retryOptions,
     })
   }
 
@@ -103,11 +111,12 @@ async function callAxBiDatasetTool({
         name: toolName,
         arguments: toolArguments,
       },
+      ...retryOptions,
     })
   }
 
   throw new Error(
-    'AX BI MCP is connected, but the list_datasets tool is not available.'
+    `AX BI MCP is connected, but the ${toolName} tool is not available.`
   )
 }
 
@@ -192,7 +201,7 @@ export async function listAxBiDatasets({
   serviceHub: ServiceHub
   search?: string
 }): Promise<AxBiDataset[]> {
-  const result = await callAxBiDatasetTool({
+  const result = await callAxBiMcpTool({
     serviceHub,
     toolName: 'list_datasets',
     arguments: {

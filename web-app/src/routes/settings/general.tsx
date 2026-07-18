@@ -33,6 +33,7 @@ import {
 import { fallbackDefaultPrompt } from '@/lib/prompts/system-prompt'
 import { useGeneralSettingsPage } from '@/hooks/settings/useGeneralSettingsPage'
 import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
+import { AX_STUDIO_EXTERNAL_LINKS } from '@/constants/external-links'
 
 const LANGUAGES = [{ value: 'en', label: 'English' }]
 
@@ -436,7 +437,7 @@ function General() {
                   description={t('settings:general.documentationDesc')}
                   actions={
                     <ExternalTextLink
-                      href="https://axstudio.ai/docs"
+                      href={AX_STUDIO_EXTERNAL_LINKS.documentation}
                       label={t('settings:general.viewDocs')}
                     />
                   }
@@ -446,7 +447,7 @@ function General() {
                   description={t('settings:general.releaseNotesDesc')}
                   actions={
                     <ExternalTextLink
-                      href="https://github.com/ax-studio/ax-studio/releases"
+                      href={AX_STUDIO_EXTERNAL_LINKS.releases}
                       label={t('settings:general.viewReleases')}
                     />
                   }
@@ -460,7 +461,7 @@ function General() {
                   description={t('settings:general.githubDesc')}
                   actions={
                     <a
-                      href="https://github.com/ax-studio/ax-studio"
+                      href={AX_STUDIO_EXTERNAL_LINKS.repository}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
@@ -473,7 +474,7 @@ function General() {
                   description={t('settings:general.discordDesc')}
                   actions={
                     <a
-                      href="https://discord.gg/cd5AD5zY6U"
+                      href={AX_STUDIO_EXTERNAL_LINKS.discord}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
@@ -493,7 +494,7 @@ function General() {
                   description={t('settings:general.reportAnIssueDesc')}
                   actions={
                     <ExternalTextLink
-                      href="https://github.com/ax-studio/ax-studio/issues/new"
+                      href={AX_STUDIO_EXTERNAL_LINKS.issueChooser}
                       label={t('settings:general.reportIssue')}
                     />
                   }

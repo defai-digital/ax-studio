@@ -22,7 +22,9 @@ macro_rules! desktop_handlers {
             crate::core::filesystem::commands::write_yaml,
             crate::core::filesystem::commands::read_yaml,
             crate::core::filesystem::commands::decompress,
+            #[cfg(desktop)]
             crate::core::filesystem::commands::open_dialog,
+            #[cfg(desktop)]
             crate::core::filesystem::commands::save_dialog,
             crate::core::filesystem::commands::write_binary_file,
             crate::core::filesystem::commands::write_text_file,

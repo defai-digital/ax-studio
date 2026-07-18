@@ -93,6 +93,54 @@ export type PromptToDashboardResult = {
   charts_failed?: number
 }
 
+export type CreateChartFromIntentResult = {
+  chart?: Record<string, unknown> | null
+  chart_name?: string
+  form_data?: Record<string, unknown> | null
+  success?: boolean
+  dataset_used?: Record<string, unknown> | null
+  chart_type_selected?: string
+  explanation?: string
+  confidence?: number
+  warnings?: string[]
+  preview_url?: string | null
+  alternatives?: string[]
+}
+
+export type UploadAndPlanResult = {
+  dataset?: Record<string, unknown>
+  plan?: DashboardPlan | null
+  warnings?: string[]
+  next_steps?: string
+}
+
+export type AuthoringCapabilities = {
+  contract_version: '1.0'
+  operations: Array<
+    | 'plan_dashboard'
+    | 'create_chart_from_intent'
+    | 'prompt_to_dashboard'
+    | 'upload_and_plan'
+  >
+  deployment_operations?: Array<
+    | 'plan_dashboard'
+    | 'create_chart_from_intent'
+    | 'prompt_to_dashboard'
+    | 'upload_and_plan'
+  >
+  artifact_types: Array<'chart' | 'dashboard'>
+  preview_before_save: boolean
+  upload_formats: Array<'csv' | 'tsv' | 'xls' | 'xlsx' | 'parquet'>
+  limits: {
+    max_charts_per_dashboard: number
+    max_upload_bytes?: number | null
+  }
+  async_jobs: boolean
+  llm_configured: boolean
+  llm_provider_type?: string | null
+  llm_model?: string | null
+}
+
 class AxBIAuthProvider {
   constructor(private readonly auth?: AxBIAuthConfig) {}
 
@@ -262,6 +310,16 @@ class MCPClient {
 export class AIResource {
   constructor(private readonly mcp: MCPClient) {}
 
+  async getAuthoringCapabilities(): Promise<AuthoringCapabilities> {
+    const result = await this.mcp.callTool<unknown>(
+      'get_authoring_capabilities'
+    )
+    return this.parseMcpToolResult<AuthoringCapabilities>(
+      'get_authoring_capabilities',
+      result
+    )
+  }
+
   async planDashboard(params: {
     prompt: string
     dataset_candidates?: number[]
@@ -277,6 +335,7 @@ export class AIResource {
   async promptToDashboard(params: {
     prompt: string
     dataset_ids?: number[]
+    plan?: DashboardPlan
     max_charts?: number
     draft?: boolean
     save_charts?: boolean
@@ -285,14 +344,52 @@ export class AIResource {
     force?: boolean
   }): Promise<PromptToDashboardResult> {
     return this.callMcpTool<PromptToDashboardResult>('prompt_to_dashboard', {
-      prompt: params.prompt,
-      dataset_ids: params.dataset_ids ?? [],
+          prompt: params.prompt,
+          dataset_ids: params.dataset_ids ?? [],
+          plan: params.plan,
       max_charts: params.max_charts ?? 6,
       draft: params.draft ?? true,
       save_charts: params.save_charts ?? true,
       dry_run: params.dry_run ?? false,
       min_confidence: params.min_confidence ?? 0.25,
       force: params.force ?? false,
+    })
+  }
+
+  async createChartFromIntent(params: {
+    prompt: string
+    dataset_id?: number | string
+    save_chart?: boolean
+    max_preview_rows?: number
+  }): Promise<CreateChartFromIntentResult> {
+    return this.callMcpTool<CreateChartFromIntentResult>(
+      'create_chart_from_intent',
+      {
+        prompt: params.prompt,
+        ...(params.dataset_id == null
+          ? {}
+          : { dataset_id: params.dataset_id }),
+        save_chart: params.save_chart ?? true,
+        max_preview_rows: params.max_preview_rows ?? 100,
+      }
+    )
+  }
+
+  async uploadAndPlan(params: {
+    file_content: string
+    filename: string
+    prompt: string
+    table_name?: string
+    sheet_name?: string
+    max_charts?: number
+  }): Promise<UploadAndPlanResult> {
+    return this.callMcpTool<UploadAndPlanResult>('upload_and_plan', {
+      file_content: params.file_content,
+      filename: params.filename,
+      prompt: params.prompt,
+      ...(params.table_name ? { table_name: params.table_name } : {}),
+      ...(params.sheet_name ? { sheet_name: params.sheet_name } : {}),
+      max_charts: params.max_charts ?? 6,
     })
   }
 
@@ -308,6 +405,10 @@ export class AIResource {
     args: Record<string, unknown>
   ): Promise<T> {
     const result = await this.mcp.callTool<unknown>(name, { request: args })
+    return this.parseMcpToolResult<T>(name, result)
+  }
+
+  private parseMcpToolResult<T>(name: string, result: unknown): T {
     if (!isRecord(result)) {
       throw new Error(`AX BI MCP tool "${name}" returned a malformed result`)
     }

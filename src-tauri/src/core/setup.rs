@@ -911,6 +911,7 @@ pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
             ])
             .build(),
     )?;
+    #[cfg(desktop)]
     app.handle()
         .plugin(tauri_plugin_updater::Builder::new().build())?;
 
@@ -925,17 +926,20 @@ pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|v| v.as_str().map(String::from))
         .unwrap_or_default();
     let app_version = app.config().version.clone().unwrap_or_default();
-    let extensions_path = get_app_extensions_path(app.handle().clone());
-    let pre_install_path = app
-        .path()
-        .resource_dir()?
-        .join("resources")
-        .join("pre-install");
-    schedule_extension_install_if_needed(
-        extensions_path,
-        pre_install_path,
-        stored_version != app_version,
-    );
+    #[cfg(desktop)]
+    {
+        let extensions_path = get_app_extensions_path(app.handle().clone());
+        let pre_install_path = app
+            .path()
+            .resource_dir()?
+            .join("resources")
+            .join("pre-install");
+        schedule_extension_install_if_needed(
+            extensions_path,
+            pre_install_path,
+            stored_version != app_version,
+        );
+    }
     if let Err(e) = migrate_mcp_servers(app.handle().clone(), store.clone()) {
         log::error!("Failed to migrate MCP servers: {e}");
     }
@@ -958,6 +962,7 @@ pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         app.deep_link().register_all()?;
     }
 
+    #[cfg(desktop)]
     setup_mcp(app);
     setup_theme_listener(app)?;
 
@@ -1010,10 +1015,14 @@ pub fn app_run_handler(app: &tauri::AppHandle, event: RunEvent) {
                         let cleanup_task = tauri::async_runtime::spawn(async move {
                             let state = cleanup_app.state::<super::state::AppState>();
                             background_cleanup_mcp_servers(&cleanup_app, &state).await;
-                            let _ =
-                                tauri_plugin_llamacpp::cleanup_llama_processes(cleanup_app.clone())
-                                    .await;
-                            log::info!("llama.cpp process cleanup completed");
+                            #[cfg(feature = "llamacpp")]
+                            {
+                                let _ = tauri_plugin_llamacpp::cleanup_llama_processes(
+                                    cleanup_app.clone(),
+                                )
+                                .await;
+                                log::info!("llama.cpp process cleanup completed");
+                            }
                         });
                         *cleanup_guard = Some(cleanup_task);
                     }

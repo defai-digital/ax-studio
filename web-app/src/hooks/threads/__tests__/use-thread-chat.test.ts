@@ -5,12 +5,10 @@ import { useThreads } from '@/hooks/threads/useThreads'
 import { useChatAttachments } from '@/hooks/chat/useChatAttachments'
 import { useChatSessions } from '@/stores/chat-session-store'
 import { useThreadChat, type ThreadChatParams } from '../use-thread-chat'
-import { runAxBiDashboardWorkflow } from '@/lib/ax-bi/dashboard-workflow'
+import { runAxBiAuthoringWorkflow } from '@/lib/ax-bi/authoring-workflow'
 
 const axBiWorkflowMocks = vi.hoisted(() => ({
-  runAxBiDashboardWorkflow: vi.fn(),
-  runAxBiExistingDatasetChartWorkflow: vi.fn(),
-  runAxBiSdkPromptWorkflow: vi.fn(),
+  runAxBiAuthoringWorkflow: vi.fn(),
 }))
 
 // Mock AI SDK
@@ -56,7 +54,7 @@ vi.mock('@/lib/completion', () => ({
   ),
 }))
 
-vi.mock('@/lib/ax-bi/dashboard-workflow', () => axBiWorkflowMocks)
+vi.mock('@/lib/ax-bi/authoring-workflow', () => axBiWorkflowMocks)
 
 // Mock messages conversion
 vi.mock('@/lib/messages', () => ({
@@ -148,9 +146,7 @@ describe('useThreadChat', () => {
         } as unknown as Thread,
       },
     })
-    axBiWorkflowMocks.runAxBiExistingDatasetChartWorkflow.mockResolvedValue({ handled: false })
-    axBiWorkflowMocks.runAxBiDashboardWorkflow.mockResolvedValue({ handled: false })
-    axBiWorkflowMocks.runAxBiSdkPromptWorkflow.mockResolvedValue({ handled: false })
+    axBiWorkflowMocks.runAxBiAuthoringWorkflow.mockResolvedValue({ handled: false })
   })
 
   describe('processAndSendMessage', () => {
@@ -302,7 +298,7 @@ describe('useThreadChat', () => {
       ])
     })
 
-    it('passes failed document-processing attachments to direct AX BI dashboard workflow', async () => {
+    it('passes failed document-processing attachments to the AX BI authoring workflow', async () => {
       const attachment = {
         name: 'sales.csv',
         type: 'document' as const,
@@ -316,8 +312,11 @@ describe('useThreadChat', () => {
           [threadId]: [attachment],
         },
       })
-      axBiWorkflowMocks.runAxBiDashboardWorkflow.mockResolvedValueOnce({
+      axBiWorkflowMocks.runAxBiAuthoringWorkflow.mockResolvedValueOnce({
         handled: true,
+        delegated: true,
+        artifactType: 'dashboard',
+        status: 'completed',
         message: 'Created AX BI dashboard',
       })
 
@@ -327,7 +326,7 @@ describe('useThreadChat', () => {
         await result.current.processAndSendMessage('Create an AX BI dashboard from this file')
       })
 
-      expect(runAxBiDashboardWorkflow).toHaveBeenCalledWith(
+      expect(runAxBiAuthoringWorkflow).toHaveBeenCalledWith(
         expect.objectContaining({
           attachments: [attachment],
         })
