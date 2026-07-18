@@ -174,7 +174,7 @@ pub async fn load_llama_model<R: Runtime>(
 
         log::info!(
             "MMPROJ Path string: {}",
-            &mmproj_path_string.as_ref().unwrap_or(&"None".to_string())
+            mmproj_path_string.as_deref().unwrap_or("None")
         );
 
         (model_path_pb, mmproj_path_string)

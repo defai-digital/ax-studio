@@ -133,7 +133,7 @@ fn path_arg(
 fn validate_existing_file(path: &Path, label: &str, user_message: &str) -> ServerResult<()> {
     if !path.exists() {
         let err_msg = format!("Invalid or inaccessible {label} path: {}", path.display());
-        log::error!("{}", &err_msg);
+        log::error!("{}", err_msg);
         return Err(LlamacppError::new(
             ErrorCode::ModelFileNotFound,
             user_message.into(),

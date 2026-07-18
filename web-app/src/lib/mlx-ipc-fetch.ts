@@ -255,10 +255,14 @@ function streamingResponse(
  */
 export function createMlxIpcFetch(): typeof fetch {
   return async function mlxIpcFetch(
-    _input: RequestInfo | URL,
+    input: RequestInfo | URL,
     init?: RequestInit
   ): Promise<Response> {
-    const method = (init?.method ?? 'GET').toUpperCase()
+    const request =
+      typeof Request !== 'undefined' && input instanceof Request
+        ? input
+        : undefined
+    const method = (init?.method ?? request?.method ?? 'GET').toUpperCase()
     if (method !== 'POST') {
       return new Response(
         JSON.stringify({ error: 'mlx fetch supports POST only' }),
@@ -271,10 +275,13 @@ export function createMlxIpcFetch(): typeof fetch {
 
     let parsed: OpenAIChatRequest
     try {
+      // Fetch callers may provide a Request object instead of a URL + init.
+      // Respect an explicit init body when present; otherwise consume the
+      // Request body exactly as native fetch would.
+      const body =
+        init && Object.hasOwn(init, 'body') ? init.body : request?.body
       const raw =
-        typeof init?.body === 'string'
-          ? init.body
-          : await new Response(init?.body).text()
+        typeof body === 'string' ? body : await new Response(body).text()
       parsed = JSON.parse(raw) as OpenAIChatRequest
     } catch (e) {
       console.warn('[mlx-ipc-fetch] failed to parse request body:', e)

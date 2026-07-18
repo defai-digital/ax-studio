@@ -165,4 +165,52 @@ describe('createMlxIpcFetch', () => {
       expect.any(Object)
     )
   })
+
+  it('accepts a POST Request object without a separate init argument', async () => {
+    mocks.invoke.mockImplementation(async (command: string) => {
+      if (command === 'mlx_load_model') return undefined
+      if (command === 'mlx_chat_completion') {
+        return {
+          id: 'mlx-request-input',
+          object: 'chat.completion',
+          created: 1,
+          model: 'test-model',
+          choices: [
+            {
+              index: 0,
+              message: { role: 'assistant', content: 'ok' },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: {
+            prompt_tokens: 1,
+            completion_tokens: 1,
+            total_tokens: 2,
+          },
+        }
+      }
+      throw new Error(`unexpected command ${command}`)
+    })
+
+    const fetchFn = createMlxIpcFetch()
+    const response = await fetchFn(
+      new Request('http://localhost/v1/chat/completions', {
+        method: 'POST',
+        body: JSON.stringify({
+          model: 'test-model',
+          messages: [{ role: 'user', content: 'hi' }],
+        }),
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(mocks.invoke).toHaveBeenCalledWith('mlx_load_model', {
+      modelId: 'test-model',
+    })
+    expect(mocks.invoke).toHaveBeenCalledWith('mlx_chat_completion', {
+      modelId: 'test-model',
+      messages: [{ role: 'user', content: 'hi' }],
+      params: {},
+    })
+  })
 })

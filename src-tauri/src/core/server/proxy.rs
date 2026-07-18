@@ -200,7 +200,7 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
     } else if !host.is_empty() {
         log::debug!(
             "CORS preflight: Host is '{host}', trusted hosts: {:?}",
-            &config.trusted_hosts
+            config.trusted_hosts
         );
         is_valid_host(host, &config.trusted_hosts)
     } else {
