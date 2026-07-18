@@ -68,6 +68,34 @@ minisign -Vm AX.Studio_2.0.0_aarch64.dmg \
   -x AX.Studio_2.0.0_aarch64.dmg.minisig
 ```
 
+## Release Download Policy
+
+Use `gh release download` for release assets inside GitHub Actions. It handles
+authenticated draft releases and allows the workflow to pin an exact tag and
+asset pattern. Do not replace these calls with a generic `curl -fsSL` command.
+
+Use `gh api` with `GH_TOKEN` for GitHub API metadata. API failures must remain
+visible in the job log and return a nonzero status; do not use a silent
+`curl | jq` pipeline that can hide an HTTP or parsing failure.
+
+The public DMG download used to update the Homebrew cask is the narrow exception
+where `curl` is appropriate. It must use an exact versioned HTTPS URL, fail on
+HTTP errors, follow HTTPS redirects, retain diagnostic messages, retry transient
+failures, enforce connection and transfer timeouts, and remove partial output:
+
+```bash
+curl --fail --location --no-progress-meter \
+  --retry 6 --retry-all-errors --retry-delay 10 \
+  --connect-timeout 15 --max-time 600 --remove-on-error \
+  --proto '=https' --proto-redir '=https' \
+  --output release.dmg "$DMG_URL"
+```
+
+Transport flags are not authenticity checks. After download, the release must
+still pass Developer ID and notarization verification on macOS, Authenticode
+verification on Windows, and detached Minisign verification before publication.
+Release automation must never pipe downloaded content directly into a shell.
+
 The Homebrew tap update accepts either `HOMEBREW_TAP_TOKEN` or the legacy
 `TAP_TOKEN`. Prefer `HOMEBREW_TAP_TOKEN` for new configuration. The token needs
 write access to `defai-digital/homebrew-ax-studio`. Stable releases fail when

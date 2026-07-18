@@ -130,6 +130,14 @@ verification key and command are documented in
 [`docs/ax-studio.minisign.pub`](docs/ax-studio.minisign.pub) and
 [`docs/release.md`](docs/release.md).
 
+The `curl -fsSL` command above is only Homebrew's official bootstrap command;
+it is not an AX Studio download or integrity check. Do not install AX Studio
+from third-party `curl | sh` or PowerShell `irm | iex` commands. Those commands
+execute remote content and do not replace Minisign, macOS Developer ID and
+notarization, or Windows Authenticode verification. Use the official Homebrew
+cask or GitHub Releases and verify the publisher before running a downloaded
+installer.
+
 #### iPad (API/URL-first; planned)
 
 iPad support is planned as a mobile client and is not included in the current

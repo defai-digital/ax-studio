@@ -118,6 +118,30 @@ describe('GitHub Actions dependency boundaries', () => {
     expect(caskWriter).not.toContain('xattr')
   })
 
+  it('keeps release downloads authenticated, observable, and retryable', () => {
+    const releaseWorkflow = fs.readFileSync(
+      path.join(workflowsDirectory, 'ax-studio-tauri-build.yaml'),
+      'utf8',
+    )
+    const versionWorkflow = fs.readFileSync(
+      path.join(workflowsDirectory, 'template-get-update-version.yml'),
+      'utf8',
+    )
+
+    expect(releaseWorkflow).toContain('gh release download')
+    expect(releaseWorkflow).toContain('curl --fail --location --no-progress-meter')
+    expect(releaseWorkflow).toContain('--retry 6 --retry-all-errors --retry-delay 10')
+    expect(releaseWorkflow).toContain('--connect-timeout 15 --max-time 600 --remove-on-error')
+    expect(releaseWorkflow).toContain("--proto '=https' --proto-redir '=https'")
+    expect(releaseWorkflow).not.toContain('curl -fsSL')
+
+    expect(versionWorkflow).toContain('GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}')
+    expect(versionWorkflow).toContain('gh api')
+    expect(versionWorkflow).toContain('repos/${GITHUB_REPOSITORY}/releases/latest')
+    expect(versionWorkflow).toContain("--jq '.tag_name'")
+    expect(versionWorkflow).not.toContain('curl -H "Authorization: token')
+  })
+
   it('does not execute actions from mutable branch refs', () => {
     const mutableReferences = []
 

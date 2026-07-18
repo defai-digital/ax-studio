@@ -477,7 +477,11 @@ jobs:
         run: |
           # Assets can take a moment to propagate right after publish; retry
           # instead of stranding Homebrew users on the previous version.
-          curl -fSL --retry 6 --retry-all-errors --retry-delay 10 -o release.dmg \
+          curl --fail --location --no-progress-meter \
+            --retry 6 --retry-all-errors --retry-delay 10 \
+            --connect-timeout 15 --max-time 600 --remove-on-error \
+            --proto '=https' --proto-redir '=https' \
+            --output release.dmg \
             "https://github.com/defai-digital/ax-studio/releases/download/v${VERSION}/AX.Studio_${VERSION}_aarch64.dmg"
           echo "DMG_SHA256=$(sha256sum release.dmg | awk '{print $1}')" >> "$GITHUB_ENV"
 
