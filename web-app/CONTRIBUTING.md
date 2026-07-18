@@ -12,7 +12,7 @@ The web app is the React frontend for AX Studio. It handles chat UX, settings, r
 - `src/stores/` Zustand stores
 - `src/lib/` provider, service, and shared frontend logic
 - `src/hooks/` custom hooks
-- `src/locales/` translations
+- `src/locales/` English string resources
 
 ## Common Commands
 
@@ -41,7 +41,7 @@ Use `make dev-web-app` for a frontend-only loop. Use `make dev` when you need th
 - Avoid `any` unless there is a concrete reason
 - Prefer composition over deep prop drilling where existing store or provider patterns fit
 - Follow existing route, store, and service patterns before introducing new abstractions
-- All user-facing strings should go through i18n
+- AX Studio is English-only; hardcoded English strings are acceptable for new UI, while existing `t()` keys remain in use
 
 ## Tauri Integration
 
@@ -76,6 +76,5 @@ Add tests when you change behavior in:
 ## Common Pitfalls
 
 - Browser mode can hide native integration issues
-- Translation keys drift if English strings are added directly in components
 - Provider logic becomes hard to maintain if duplicated across routes or containers
 - Large UI features usually need both state and rendering tests

@@ -4,22 +4,15 @@ import { TranslationContext } from '../context'
 import { TranslationProvider } from '../TranslationContext'
 
 const mocks = vi.hoisted(() => ({
-  currentLanguage: 'en',
-  changeLanguage: vi.fn(),
   t: vi.fn((key: string, options?: Record<string, unknown>) => {
     return `${key}:${String(options?.lng ?? 'none')}`
   }),
 }))
 
-vi.mock('@/hooks/settings/useGeneralSetting', () => ({
-  useGeneralSetting: () => ({
-    currentLanguage: mocks.currentLanguage,
-  }),
-}))
-
 vi.mock('../setup', () => ({
   i18n: {
-    changeLanguage: mocks.changeLanguage,
+    language: 'en',
+    fallbackLng: 'en',
     t: mocks.t,
   },
 }))
@@ -40,63 +33,34 @@ function TranslationConsumer({
 
 describe('TranslationProvider', () => {
   beforeEach(() => {
-    mocks.currentLanguage = 'en'
     vi.clearAllMocks()
   })
 
-  it('rebinds translations when the selected language changes', () => {
-    const { rerender } = render(
+  it('delegates translation calls to the i18n instance', () => {
+    render(
       <TranslationProvider>
         <TranslationConsumer />
       </TranslationProvider>
     )
 
     expect(screen.getByTestId('translation').textContent).toBe(
-      'common:newChat:en'
+      'common:newChat:none'
     )
-    expect(mocks.changeLanguage).toHaveBeenLastCalledWith('en')
     expect(mocks.t).toHaveBeenLastCalledWith('common:newChat', {
-      lng: 'en',
-      defaultValue: 'New Chat',
-    })
-
-    mocks.currentLanguage = 'fr'
-
-    rerender(
-      <TranslationProvider>
-        <TranslationConsumer />
-      </TranslationProvider>
-    )
-
-    expect(screen.getByTestId('translation').textContent).toBe(
-      'common:newChat:fr'
-    )
-    expect(mocks.changeLanguage).toHaveBeenLastCalledWith('fr')
-    expect(mocks.t).toHaveBeenLastCalledWith('common:newChat', {
-      lng: 'fr',
       defaultValue: 'New Chat',
     })
   })
 
-  it('uses explicit language overrides without treating undefined as an override', () => {
-    const { rerender } = render(
+  it('passes explicit language overrides through to the i18n instance', () => {
+    render(
       <TranslationProvider>
-        <TranslationConsumer options={{ lng: 'zh-TW' }} />
-      </TranslationProvider>
-    )
-
-    expect(screen.getByTestId('translation').textContent).toBe(
-      'common:newChat:zh-TW'
-    )
-
-    rerender(
-      <TranslationProvider>
-        <TranslationConsumer options={{ lng: undefined }} />
+        <TranslationConsumer options={{ lng: 'en' }} />
       </TranslationProvider>
     )
 
     expect(screen.getByTestId('translation').textContent).toBe(
       'common:newChat:en'
     )
+    expect(mocks.t).toHaveBeenLastCalledWith('common:newChat', { lng: 'en' })
   })
 })

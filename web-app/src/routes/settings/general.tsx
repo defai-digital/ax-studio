@@ -12,7 +12,6 @@ import { FactoryResetDialog } from '@/containers/dialogs'
 import {
   CheckCheck,
   Copy,
-  ChevronsUpDown,
   ExternalLink,
   Folder,
   Github,
@@ -20,57 +19,12 @@ import {
   ScrollText,
   Settings,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { useAppTranslation } from '@/i18n'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { fallbackDefaultPrompt } from '@/lib/prompts/system-prompt'
 import { useGeneralSettingsPage } from '@/hooks/settings/useGeneralSettingsPage'
 import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
 import { AX_STUDIO_EXTERNAL_LINKS } from '@/constants/external-links'
-
-const LANGUAGES = [{ value: 'en', label: 'English' }]
-
-function LanguageSwitcher() {
-  const { i18n, t } = useAppTranslation()
-  const { setCurrentLanguage, currentLanguage } = useGeneralSetting()
-
-  const changeLanguage = (lng: string) => {
-    i18n.changeLanguage(lng)
-    setCurrentLanguage(lng as Language)
-  }
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="w-full justify-between">
-          {LANGUAGES.find((lang) => lang.value === currentLanguage)?.label ||
-            t('common:english')}
-          <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground ml-2" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-40">
-        {LANGUAGES.map((lang) => (
-          <DropdownMenuItem
-            key={lang.value}
-            className={cn(
-              'cursor-pointer my-0.5',
-              currentLanguage === lang.value && 'bg-secondary-foreground/8'
-            )}
-            onClick={() => changeLanguage(lang.value)}
-          >
-            {lang.label}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
 
 function ExternalTextLink({ href, label }: { href: string; label: string }) {
   return (
@@ -172,10 +126,6 @@ function General() {
                     }
                   />
                 )}
-                <CardItem
-                  title={t('common:language')}
-                  actions={<LanguageSwitcher />}
-                />
               </Card>
 
               <Card title="Custom System Prompts">

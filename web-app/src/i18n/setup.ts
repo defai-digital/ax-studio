@@ -1,17 +1,3 @@
-import { localStorageKey } from '@/constants/localStorage'
-import { safeStorageGetItem, safeStorageSetItem } from '@/lib/storage/storage'
-
-// Validation helper for stored settings structure
-const isValidStoredSettings = (
-  parsed: unknown
-): parsed is { state: { currentLanguage: string } } => {
-  if (typeof parsed !== 'object' || parsed === null) return false
-  const obj = parsed as Record<string, unknown>
-  if (typeof obj.state !== 'object' || obj.state === null) return false
-  const state = obj.state as Record<string, unknown>
-  return typeof state.currentLanguage === 'string'
-}
-
 // Types for our i18n implementation
 export interface TranslationResources {
   [language: string]: {
@@ -27,7 +13,6 @@ export interface I18nInstance {
   resources: TranslationResources
   namespaces: string[]
   defaultNS: string
-  changeLanguage: (lng: string) => void
   t: (key: string, options?: Record<string, unknown>) => string
 }
 
@@ -68,73 +53,6 @@ Object.entries(localeFiles).forEach(([path, module]) => {
       (module as { [key: string]: string })
   }
 })
-
-function flattenTranslationKeys(value: unknown, prefix = ''): string[] {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return prefix ? [prefix] : []
-  }
-
-  return Object.entries(value as Record<string, unknown>).flatMap(
-    ([key, nestedValue]) => {
-      const nextPrefix = prefix ? `${prefix}.${key}` : key
-      return flattenTranslationKeys(nestedValue, nextPrefix)
-    }
-  )
-}
-
-function getCompleteLanguages(minCoverage = 0.95): string[] {
-  const englishResources = resources.en
-  if (!englishResources) return ['en']
-
-  const expectedKeys = new Set(
-    Object.entries(englishResources).flatMap(([namespace, namespaceValues]) =>
-      flattenTranslationKeys(namespaceValues).map(
-        (key) => `${namespace}:${key}`
-      )
-    )
-  )
-
-  if (expectedKeys.size === 0) return ['en']
-
-  return Object.entries(resources)
-    .filter(([language, languageResources]) => {
-      if (language === 'en') return true
-      const languageKeys = new Set(
-        Object.entries(languageResources).flatMap(
-          ([namespace, namespaceValues]) =>
-            flattenTranslationKeys(namespaceValues).map(
-              (key) => `${namespace}:${key}`
-            )
-        )
-      )
-      let matched = 0
-      for (const key of expectedKeys) {
-        if (languageKeys.has(key)) matched += 1
-      }
-      return matched / expectedKeys.size >= minCoverage
-    })
-    .map(([language]) => language)
-}
-
-// Get stored language preference
-const getStoredLanguage = (): string => {
-  try {
-    const stored = safeStorageGetItem(
-      localStorage,
-      localStorageKey.settingGeneral,
-      'i18n'
-    )
-    const parsed = stored ? JSON.parse(stored) : {}
-    if (isValidStoredSettings(parsed)) {
-      return getCompleteLanguages().includes(parsed.state.currentLanguage)
-        ? parsed.state.currentLanguage
-        : 'en'
-    }
-    return 'en'
-  } catch {
-    return 'en'
-  }
-}
 
 // Translation function
 const translate = (key: string, options: TranslationOptions = {}): string => {
@@ -193,54 +111,14 @@ const translate = (key: string, options: TranslationOptions = {}): string => {
   return String(translation)
 }
 
-// Change language function
-const changeLanguage = (lng: string): void => {
-  if (i18nInstance && getCompleteLanguages().includes(lng)) {
-    i18nInstance.language = lng
-
-    // Update localStorage
-    try {
-      const stored = safeStorageGetItem(
-        localStorage,
-        localStorageKey.settingGeneral,
-        'i18n'
-      )
-      const parsed = stored ? JSON.parse(stored) : { state: {} }
-      const parsedState =
-        parsed &&
-        typeof parsed === 'object' &&
-        parsed !== null &&
-        typeof parsed.state === 'object' &&
-        parsed.state !== null
-          ? (parsed.state as { currentLanguage?: string })
-          : {}
-      const nextState = {
-        ...parsedState,
-        currentLanguage: lng,
-      }
-      safeStorageSetItem(
-        localStorage,
-        localStorageKey.settingGeneral,
-        JSON.stringify({ ...parsed, state: nextState }),
-        'i18n'
-      )
-    } catch (error) {
-      console.error('Failed to save language preference:', error)
-    }
-  }
-}
-
 // Initialize i18n instance
 const initI18n = (): I18nInstance => {
-  const currentLanguage = getStoredLanguage()
-
   i18nInstance = {
-    language: currentLanguage,
+    language: 'en',
     fallbackLng: 'en',
     resources,
     namespaces,
     defaultNS: 'common',
-    changeLanguage,
     t: translate,
   }
 

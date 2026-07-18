@@ -9,7 +9,6 @@ import {
 } from '@/lib/storage/storage'
 
 type GeneralSettingState = {
-  currentLanguage: Language
   spellCheckChatInput: boolean
   tokenCounterCompact: boolean
   huggingfaceToken?: string
@@ -19,7 +18,6 @@ type GeneralSettingState = {
   setHuggingfaceToken: (token: string) => void
   setSpellCheckChatInput: (value: boolean) => void
   setTokenCounterCompact: (value: boolean) => void
-  setCurrentLanguage: (value: Language) => void
   setGlobalDefaultPrompt: (value: string) => void
   setAutoTuningEnabled: (value: boolean) => void
   setApplyMode: (value: ApplyMode) => void
@@ -80,7 +78,6 @@ const encryptedStorage = {
 export const useGeneralSetting = create<GeneralSettingState>()(
   persist(
     (set) => ({
-      currentLanguage: 'en',
       spellCheckChatInput: true,
       tokenCounterCompact: true,
       huggingfaceToken: undefined,
@@ -89,7 +86,6 @@ export const useGeneralSetting = create<GeneralSettingState>()(
       applyMode: 'all_chats',
       setSpellCheckChatInput: (value) => set({ spellCheckChatInput: value }),
       setTokenCounterCompact: (value) => set({ tokenCounterCompact: value }),
-      setCurrentLanguage: (value) => set({ currentLanguage: value }),
       setGlobalDefaultPrompt: (value) => set({ globalDefaultPrompt: value }),
       setAutoTuningEnabled: (value) => set({ autoTuningEnabled: value }),
       setApplyMode: (value) => set({ applyMode: value }),

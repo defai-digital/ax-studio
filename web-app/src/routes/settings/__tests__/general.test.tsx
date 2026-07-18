@@ -47,10 +47,6 @@ vi.mock('@/components/common/Card', () => ({
   ),
 }))
 
-vi.mock('@/containers/LanguageSwitcher', () => ({
-  default: () => <div data-testid="language-switcher">Language Switcher</div>,
-}))
-
 vi.mock('@/containers/dialogs/thread/ChangeDataFolderLocation', () => ({
   ChangeDataFolderLocation: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="change-data-folder-dialog">{children}</div>
@@ -65,8 +61,6 @@ vi.mock('@/hooks/settings/useGeneralSetting', () => ({
     setHuggingfaceToken: vi.fn(),
     globalDefaultPrompt: '',
     setGlobalDefaultPrompt: vi.fn(),
-    currentLanguage: 'en',
-    setCurrentLanguage: vi.fn(),
     autoTuningEnabled: false,
     setAutoTuningEnabled: vi.fn(),
     applyMode: 'all_chats',
@@ -92,9 +86,7 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
 vi.mock('@/i18n', () => ({
   useAppTranslation: () => ({
     t: (key: string) => key,
-    i18n: {
-      changeLanguage: vi.fn(),
-    },
+    i18n: {},
   }),
 }))
 
@@ -398,15 +390,6 @@ describe('General Settings Route', () => {
     })
 
     expect(screen.getByText('v1.0.0')).toBeInTheDocument()
-  })
-
-  it('should render language switcher', async () => {
-    const Component = GeneralRoute.component as React.ComponentType
-    await act(async () => {
-      render(<Component />)
-    })
-
-    expect(screen.getByText('common:language')).toBeInTheDocument()
   })
 
   it('renders global default prompt as a full-width editor block', async () => {
