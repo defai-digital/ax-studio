@@ -193,6 +193,26 @@ describe('TauriUpdaterService', () => {
       errorSpy.mockRestore()
     })
 
+    it('retries the installable update check after a transient failure', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const service = await createService()
+      const downloadAndInstall = vi.fn().mockResolvedValue(undefined)
+      mocks.check
+        .mockRejectedValueOnce(new Error('temporary network failure'))
+        .mockResolvedValueOnce({ version: '1.3.7', downloadAndInstall })
+
+      await expect(
+        service.downloadAndInstallWithProgress(() => {})
+      ).rejects.toThrow('temporary network failure')
+      await expect(
+        service.downloadAndInstallWithProgress(() => {})
+      ).resolves.toBeUndefined()
+
+      expect(mocks.check).toHaveBeenCalledTimes(2)
+      expect(downloadAndInstall).toHaveBeenCalledTimes(1)
+      errorSpy.mockRestore()
+    })
+
     it('forwards progress events to the callback', async () => {
       const service = await createService()
       const downloadAndInstall = vi.fn(async (cb: (event: unknown) => void) => {
