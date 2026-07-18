@@ -544,5 +544,28 @@
     "minutesAgo": "{{count}}m ago",
     "hoursAgo": "{{count}}h ago",
     "daysAgo": "{{count}}d ago"
+  },
+  "artifacts": {
+    "openInPanel": "Open in panel",
+    "panelTitle": "Artifacts",
+    "previewTitle": "Artifact preview",
+    "close": "Close panel",
+    "lines": "{{count}} lines",
+    "allArtifacts": "All artifacts in thread",
+    "messageLabel": "Message {{index}} · {{count}} artifacts",
+    "preview": "Preview",
+    "code": "Code",
+    "empty": "No artifacts in this thread yet",
+    "download": "Download",
+    "reviseHint": "Describe how to change the selected part",
+    "reviseDismiss": "Dismiss",
+    "revisePlaceholder": "e.g. make this async",
+    "reviseSubmit": "Revise selection",
+    "kind": {
+      "code": "Code",
+      "html": "HTML",
+      "svg": "SVG",
+      "mermaid": "Diagram"
+    }
   }
 }

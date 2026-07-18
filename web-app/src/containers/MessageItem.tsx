@@ -37,11 +37,14 @@ import {
   ChevronRight,
   Database,
   GitBranch,
+  PanelRight,
   Paperclip,
   RefreshCw,
   Zap,
 } from 'lucide-react'
 import { useMessages } from '@/hooks/chat/useMessages'
+import { useArtifactPanel } from '@/stores/artifact-panel-store'
+import { extractArtifactsFromTextParts } from '@/lib/artifacts/extract-artifacts'
 import { useForkThread } from '@/hooks/threads/use-fork-thread'
 import { MessageRatingActions } from '@/components/chat/MessageRatingActions'
 import type { VersionInfo } from '@/lib/messages/versions'
@@ -290,6 +293,25 @@ export const MessageItem = memo(
         .map((part) => part.text)
         .join('\n')
     }, [message.parts])
+
+    // Artifact candidates (long code fences, html/svg/mermaid) — memoized so
+    // detection only re-runs when the message content changes.
+    const messageArtifacts = useMemo(
+      () =>
+        message.role === 'assistant'
+          ? extractArtifactsFromTextParts(
+              message.id,
+              message.parts as ReadonlyArray<{ type: string; text?: unknown }>
+            )
+          : [],
+      [message.role, message.id, message.parts]
+    )
+
+    const openArtifactPanel = useArtifactPanel((s) => s.openPanel)
+    const handleOpenArtifacts = useCallback(() => {
+      if (!threadId || messageArtifacts.length === 0) return
+      openArtifactPanel(threadId, messageArtifacts[0].id)
+    }, [threadId, messageArtifacts, openArtifactPanel])
 
     const renderTextPart = (
       part: { type: 'text'; text: string },
@@ -695,6 +717,20 @@ export const MessageItem = memo(
                 )}
               >
                 <CopyButton text={getFullTextContent()} />
+
+                {/* Open artifacts (long code fences, html/svg/mermaid) in the side panel */}
+                {threadId && !isStreaming && messageArtifacts.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={handleOpenArtifacts}
+                    title={t('common:artifacts.openInPanel')}
+                    aria-label={t('common:artifacts.openInPanel')}
+                    className="text-muted-foreground/50 hover:text-foreground"
+                  >
+                    <PanelRight size={14} />
+                  </Button>
+                )}
 
                 {onDelete && !isStreaming && (
                   <DeleteMessageDialog onDelete={handleDelete} />

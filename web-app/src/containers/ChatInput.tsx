@@ -245,6 +245,17 @@ const ChatInput = memo(function ChatInput({
     [setGlobalPrompt, threadId]
   )
 
+  // External prefill (e.g. artifact "Revise selection" via usePrompt.setPrompt):
+  // thread composers keep their text in localPrompt, so adopt global prompt
+  // writes, clear the global, and focus the textarea.
+  useEffect(() => {
+    if (threadId && globalPrompt) {
+      setLocalPrompt(globalPrompt)
+      setGlobalPrompt('')
+      textareaRef.current?.focus()
+    }
+  }, [threadId, globalPrompt, setGlobalPrompt])
+
   // Focus management
   useEffect(() => {
     const handleFocusIn = () => {

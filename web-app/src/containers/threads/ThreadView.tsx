@@ -22,6 +22,7 @@ import { SplitThreadContainer } from '@/containers/threads/SplitThreadContainer'
 import { MainThreadPane } from '@/containers/threads/MainThreadPane'
 import { CompareModelsDialog } from '@/containers/threads/CompareModelsDialog'
 import { CompareComposer } from '@/containers/threads/CompareComposer'
+import { ArtifactPanel } from '@/components/artifacts/ArtifactPanel'
 import { Columns2, MessageSquareText } from 'lucide-react'
 
 export type ThreadViewProps = {
@@ -99,7 +100,9 @@ export function ThreadView({
     []
   )
 
-  const compareActive = Boolean(compareModels && splitPaneOrder && splitThreadId)
+  const compareActive = Boolean(
+    compareModels && splitPaneOrder && splitThreadId
+  )
   const mainBusy = status === 'submitted' || status === 'streaming'
 
   const handleCompareSubmit = useCallback(
@@ -140,7 +143,9 @@ export function ThreadView({
           updateThread={updateThread}
           isSplitView
           hideComposer={compare}
-          headerBadge={compare && compareModels ? compareModels[0].id : undefined}
+          headerBadge={
+            compare && compareModels ? compareModels[0].id : undefined
+          }
           onSplitClose={() => {
             if (!splitThreadId) return
             closeSplit()
@@ -210,102 +215,110 @@ export function ThreadView({
           </div>
         </div>
       </HeaderPage>
-      <div className="flex flex-1 flex-col h-full overflow-hidden">
-        <div className="px-4 md:px-8 shrink-0">
-          {!splitPaneOrder && showThreadPromptEditor && (
-            <div className="mx-auto w-full md:w-4/5 xl:w-4/6 mt-2 rounded-md border bg-card p-3 space-y-2">
-              <p className="text-xs text-muted-foreground">
-                {promptResolution.source === 'thread'
-                  ? 'Using Thread Prompt'
-                  : promptResolution.source === 'project'
-                    ? 'Inheriting from Project Prompt'
-                    : promptResolution.source === 'global'
-                      ? 'Inheriting from Global Prompt'
-                      : 'Using Fallback Prompt'}
-              </p>
-              <Textarea
-                value={threadPromptDraft}
-                onChange={(e) => setThreadPromptDraft(e.target.value)}
-                className="min-h-24"
-                placeholder="Leave empty to inherit from project/global."
-              />
-              <div className="flex justify-end gap-2">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setThreadPromptDraft('')
-                    updateThread(threadId, {
-                      metadata: { ...thread?.metadata, threadPrompt: null },
-                    })
-                  }}
-                >
-                  Clear Override
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    updateThread(threadId, {
-                      metadata: {
-                        ...thread?.metadata,
-                        threadPrompt: threadPromptDraft.trim() || null,
-                      },
-                    })
-                    setShowThreadPromptEditor(false)
-                  }}
-                >
-                  Save
-                </Button>
+      <div className="flex flex-1 h-full overflow-hidden">
+        <div className="flex flex-1 flex-col h-full overflow-hidden min-w-0">
+          <div className="px-4 md:px-8 shrink-0">
+            {!splitPaneOrder && showThreadPromptEditor && (
+              <div className="mx-auto w-full md:w-4/5 xl:w-4/6 mt-2 rounded-md border bg-card p-3 space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  {promptResolution.source === 'thread'
+                    ? 'Using Thread Prompt'
+                    : promptResolution.source === 'project'
+                      ? 'Inheriting from Project Prompt'
+                      : promptResolution.source === 'global'
+                        ? 'Inheriting from Global Prompt'
+                        : 'Using Fallback Prompt'}
+                </p>
+                <Textarea
+                  value={threadPromptDraft}
+                  onChange={(e) => setThreadPromptDraft(e.target.value)}
+                  className="min-h-24"
+                  placeholder="Leave empty to inherit from project/global."
+                />
+                <div className="flex justify-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setThreadPromptDraft('')
+                      updateThread(threadId, {
+                        metadata: { ...thread?.metadata, threadPrompt: null },
+                      })
+                    }}
+                  >
+                    Clear Override
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      updateThread(threadId, {
+                        metadata: {
+                          ...thread?.metadata,
+                          threadPrompt: threadPromptDraft.trim() || null,
+                        },
+                      })
+                      setShowThreadPromptEditor(false)
+                    }}
+                  >
+                    Save
+                  </Button>
+                </div>
               </div>
+            )}
+          </div>
+
+          {splitPaneOrder && splitThreadId ? (
+            compareActive && compareModels ? (
+              <div className="flex flex-col h-full overflow-hidden">
+                <div className="grid grid-cols-2 gap-2 px-2 pb-2 flex-1 min-h-0">
+                  {splitPaneOrder.map((pane) => renderSplitPane(pane, true))}
+                </div>
+                <CompareComposer
+                  modelALabel={compareModels[0].id}
+                  modelBLabel={compareModels[1].id}
+                  disabled={mainBusy || splitBusy}
+                  onSubmit={handleCompareSubmit}
+                />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 px-2 pb-2 h-full">
+                {splitPaneOrder.map((pane) => renderSplitPane(pane, false))}
+              </div>
+            )
+          ) : (
+            <div className="flex flex-1 flex-col h-full overflow-hidden">
+              <MainThreadPane
+                threadId={threadId}
+                thread={thread}
+                threadLogo={threadLogo}
+                chatMessages={chatMessages}
+                status={status}
+                error={error}
+                stop={stop}
+                threadModel={threadModel}
+                handleSubmit={handleSubmit}
+                handleRegenerate={handleRegenerate}
+                handleEditMessage={handleEditMessage}
+                handleDeleteMessage={handleDeleteMessage}
+                handleSwitchVersion={handleSwitchVersion}
+                handleContextSizeIncrease={handleContextSizeIncrease}
+                reasoningContainerRef={reasoningContainerRef}
+                showThreadPromptEditor={false}
+                setShowThreadPromptEditor={setShowThreadPromptEditor}
+                threadPromptDraft={threadPromptDraft}
+                setThreadPromptDraft={setThreadPromptDraft}
+                promptResolution={promptResolution}
+                updateThread={updateThread}
+              />
             </div>
           )}
         </div>
-
-        {splitPaneOrder && splitThreadId ? (
-          compareActive && compareModels ? (
-            <div className="flex flex-col h-full overflow-hidden">
-              <div className="grid grid-cols-2 gap-2 px-2 pb-2 flex-1 min-h-0">
-                {splitPaneOrder.map((pane) => renderSplitPane(pane, true))}
-              </div>
-              <CompareComposer
-                modelALabel={compareModels[0].id}
-                modelBLabel={compareModels[1].id}
-                disabled={mainBusy || splitBusy}
-                onSubmit={handleCompareSubmit}
-              />
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-2 px-2 pb-2 h-full">
-              {splitPaneOrder.map((pane) => renderSplitPane(pane, false))}
-            </div>
-          )
-        ) : (
-          <div className="flex flex-1 flex-col h-full overflow-hidden">
-            <MainThreadPane
-              threadId={threadId}
-              thread={thread}
-              threadLogo={threadLogo}
-              chatMessages={chatMessages}
-              status={status}
-              error={error}
-              stop={stop}
-              threadModel={threadModel}
-              handleSubmit={handleSubmit}
-              handleRegenerate={handleRegenerate}
-              handleEditMessage={handleEditMessage}
-              handleDeleteMessage={handleDeleteMessage}
-              handleSwitchVersion={handleSwitchVersion}
-              handleContextSizeIncrease={handleContextSizeIncrease}
-              reasoningContainerRef={reasoningContainerRef}
-              showThreadPromptEditor={false}
-              setShowThreadPromptEditor={setShowThreadPromptEditor}
-              threadPromptDraft={threadPromptDraft}
-              setThreadPromptDraft={setThreadPromptDraft}
-              promptResolution={promptResolution}
-              updateThread={updateThread}
-            />
-          </div>
-        )}
+        {/* Artifacts side panel — keyed per threadId so Split View coexists */}
+        <ArtifactPanel
+          key={threadId}
+          threadId={threadId}
+          messages={chatMessages}
+        />
       </div>
       <CompareModelsDialog
         open={compareDialogOpen}

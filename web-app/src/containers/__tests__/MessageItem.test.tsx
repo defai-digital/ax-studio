@@ -95,6 +95,7 @@ vi.mock('@/components/RunLogViewer', () => ({
 }))
 
 import { useCitations } from '@/hooks/citations/use-citations'
+import { useArtifactPanel } from '@/stores/artifact-panel-store'
 import { MessageItem } from '../MessageItem'
 
 function makeMessage(overrides: Partial<UIMessage> = {}): UIMessage {
@@ -527,6 +528,114 @@ describe('MessageItem', () => {
       })
       render(<MessageItem message={msg} isLastMessage={false} status="ready" />)
       expect(screen.queryByTestId('agent-output-card')).toBeNull()
+    })
+  })
+
+  describe('artifacts panel button', () => {
+    const longCode = `\`\`\`python\n${Array.from(
+      { length: 15 },
+      (_, i) => `line ${i + 1}`
+    ).join('\n')}\n\`\`\``
+
+    beforeEach(() => {
+      useArtifactPanel.setState({ panels: {} })
+    })
+
+    it('shows "Open in panel" for assistant messages with artifacts', () => {
+      const msg = makeMessage({
+        id: 'art-msg',
+        role: 'assistant',
+        parts: [{ type: 'text', text: longCode }],
+      })
+      render(
+        <MessageItem
+          message={msg}
+          isLastMessage={false}
+          status="ready"
+          threadId="thread-1"
+        />
+      )
+      expect(
+        screen.getByLabelText('common:artifacts.openInPanel')
+      ).toBeInTheDocument()
+    })
+
+    it('opens the panel with the first artifact on click', () => {
+      const msg = makeMessage({
+        id: 'art-msg',
+        role: 'assistant',
+        parts: [{ type: 'text', text: longCode }],
+      })
+      render(
+        <MessageItem
+          message={msg}
+          isLastMessage={false}
+          status="ready"
+          threadId="thread-1"
+        />
+      )
+      fireEvent.click(screen.getByLabelText('common:artifacts.openInPanel'))
+      expect(useArtifactPanel.getState().panels['thread-1']).toEqual({
+        open: true,
+        activeArtifactId: 'art-msg:0',
+      })
+    })
+
+    it('hides the button for assistant messages without artifacts', () => {
+      const msg = makeMessage({
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'short reply' }],
+      })
+      render(
+        <MessageItem
+          message={msg}
+          isLastMessage={false}
+          status="ready"
+          threadId="thread-1"
+        />
+      )
+      expect(screen.queryByLabelText('common:artifacts.openInPanel')).toBeNull()
+    })
+
+    it('hides the button for user messages even with artifact-like content', () => {
+      const msg = makeMessage({
+        role: 'user',
+        parts: [{ type: 'text', text: longCode }],
+      })
+      render(
+        <MessageItem
+          message={msg}
+          isLastMessage={false}
+          status="ready"
+          threadId="thread-1"
+        />
+      )
+      expect(screen.queryByLabelText('common:artifacts.openInPanel')).toBeNull()
+    })
+
+    it('hides the button while streaming', () => {
+      const msg = makeMessage({
+        role: 'assistant',
+        parts: [{ type: 'text', text: longCode }],
+      })
+      render(
+        <MessageItem
+          message={msg}
+          isLastMessage={true}
+          status="streaming"
+          threadId="thread-1"
+        />
+      )
+      expect(screen.queryByLabelText('common:artifacts.openInPanel')).toBeNull()
+    })
+
+    it('hides the button when no threadId is available', () => {
+      const msg = makeMessage({
+        role: 'assistant',
+        parts: [{ type: 'text', text: longCode }],
+      })
+      render(<MessageItem message={msg} isLastMessage={false} status="ready" />)
+      expect(screen.queryByLabelText('common:artifacts.openInPanel')).toBeNull()
     })
   })
 })
