@@ -347,6 +347,34 @@ describe('stripUnavailableToolParts', () => {
     expect(stripped[0].parts).toEqual([{ type: 'text', text: '' }])
   })
 
+  it('keeps tool-invocation parts using toolName, not type suffix "invocation"', () => {
+    const messages: UIMessage[] = [
+      makeUiMessage({
+        id: '1',
+        role: 'assistant',
+        parts: [
+          makeUiPart({
+            type: 'tool-invocation',
+            toolName: 'fabric_search',
+            toolCallId: 'tc1',
+            state: 'result',
+            result: 'hit',
+          }),
+        ],
+      }),
+    ]
+
+    const kept = stripUnavailableToolParts(
+      messages,
+      new Set(['fabric_search'])
+    )
+    expect(kept[0].parts).toHaveLength(1)
+    expect(kept[0].parts[0].type).toBe('tool-invocation')
+
+    const stripped = stripUnavailableToolParts(messages, new Set(['search']))
+    expect(stripped[0].parts).toEqual([{ type: 'text', text: '' }])
+  })
+
   it('does not modify non-assistant messages', () => {
     const messages: UIMessage[] = [
       makeUiMessage({

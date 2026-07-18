@@ -46,10 +46,17 @@ export function parseAxBiToolResult(result: {
 }
 
 function isTrustedAxBiHostname(hostname: string): boolean {
-  const host = hostname.toLowerCase()
-  if (host === 'localhost' || host === '127.0.0.1') return true
+  // URL.hostname may be `::1` or bracketed `[::1]` depending on runtime.
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  // Treat IPv6 loopback the same as 127.0.0.1 / localhost.
+  if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
+    return true
+  }
   try {
-    return host === new URL(DEFAULT_AX_BI_WEB_URL).hostname.toLowerCase()
+    const defaultHost = new URL(DEFAULT_AX_BI_WEB_URL).hostname
+      .toLowerCase()
+      .replace(/^\[|\]$/g, '')
+    return host === defaultHost
   } catch {
     return false
   }

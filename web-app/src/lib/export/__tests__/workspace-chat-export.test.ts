@@ -23,6 +23,24 @@ const threads = [
   },
 ]
 
+const messagesWithCr: ThreadMessage[] = [
+  {
+    id: 'msg-cr',
+    object: 'thread.message',
+    thread_id: 'thread-1',
+    role: 'user',
+    content: [
+      {
+        type: ContentType.Text,
+        text: { value: 'line1\rline2', annotations: [] },
+      },
+    ],
+    status: MessageStatus.Ready,
+    created_at: 1_736_200_001_000,
+    completed_at: 0,
+  },
+]
+
 const messages: ThreadMessage[] = [
   {
     id: 'msg-1',
@@ -131,6 +149,14 @@ describe('workspace chat export', () => {
     expect(userRow).toBeDefined()
     expect(userRow?.split(',')[8]).toBe('')
     expect(csv).not.toContain('1970-01-01T00:00:00.000Z')
+  })
+
+  it('quotes CSV fields that contain bare carriage returns', () => {
+    const exportData = buildWorkspaceChatsExportData(workspace, threads, {
+      'thread-1': messagesWithCr,
+    })
+    const csv = workspaceChatsToCsv(exportData)
+    expect(csv).toContain('"line1\rline2"')
   })
 
   it('exports workspace chats to alpaca json and openai jsonl', () => {

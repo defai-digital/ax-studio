@@ -22,15 +22,14 @@ export function stripUnavailableToolParts(
     if (msg.role !== 'assistant') return msg
 
     const filtered = msg.parts.filter((part) => {
-      // Typed tool parts: type is "tool-<toolName>"
-      if (typeof part.type === 'string' && part.type.startsWith('tool-')) {
-        return availableToolNames.has(part.type.slice(5))
+      // Dynamic / legacy invocation parts carry the real name in toolName.
+      if (part.type === 'dynamic-tool' || part.type === 'tool-invocation') {
+        const toolName = (part as { toolName?: string }).toolName
+        return typeof toolName === 'string' && availableToolNames.has(toolName)
       }
-      // Dynamic tool parts
-      if (part.type === 'dynamic-tool') {
-        return availableToolNames.has(
-          (part as { type: 'dynamic-tool'; toolName: string }).toolName
-        )
+      // Typed AI SDK v5 tool parts: type is "tool-<toolName>"
+      if (typeof part.type === 'string' && part.type.startsWith('tool-')) {
+        return availableToolNames.has(part.type.slice('tool-'.length))
       }
       return true
     })

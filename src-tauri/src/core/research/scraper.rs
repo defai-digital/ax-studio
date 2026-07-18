@@ -130,6 +130,24 @@ pub async fn scrape_url(url: &str) -> Result<String, String> {
         .map_err(|e| format!("Parse task failed: {e}"))
 }
 
+fn is_noise_tag(tag: &str) -> bool {
+    matches!(
+        tag,
+        "script" | "style" | "nav" | "footer" | "aside" | "noscript"
+    )
+}
+
+/// True when any ancestor element is a noise tag (nav/script/… including nested wrappers).
+fn ancestor_is_noise(mut parent: Option<scraper::ElementRef<'_>>) -> bool {
+    while let Some(element) = parent {
+        if is_noise_tag(element.value().name()) {
+            return true;
+        }
+        parent = element.parent().and_then(scraper::ElementRef::wrap);
+    }
+    false
+}
+
 /// Strip HTML and return readable text (first 8 000 chars).
 fn extract_text(html: &str) -> String {
     let document = Html::parse_document(html);
@@ -147,15 +165,10 @@ fn extract_text(html: &str) -> String {
 
     for body in document.select(&body_selector) {
         for node in body.descendants() {
-            // Skip children of noise elements
-            if let Some(parent_element) = node.parent().and_then(|p| p.value().as_element()) {
-                let tag = parent_element.name();
-                if matches!(
-                    tag,
-                    "script" | "style" | "nav" | "footer" | "aside" | "noscript"
-                ) {
-                    continue;
-                }
+            // Skip text nested under noise elements (nav > ul > li, etc.).
+            let parent_el = node.parent().and_then(scraper::ElementRef::wrap);
+            if ancestor_is_noise(parent_el) {
+                continue;
             }
 
             if let scraper::node::Node::Text(text_node) = node.value() {
@@ -226,6 +239,23 @@ mod tests {
         assert!(!result.contains("Navigation links"));
         assert!(!result.contains("Footer info"));
         assert!(!result.contains("Sidebar"));
+    }
+
+    #[test]
+    fn test_extract_text_strips_nested_noise_descendants() {
+        // Text nodes under nav/footer live in nested li/div, not as direct children.
+        let html = r#"
+            <html><body>
+                <nav><ul><li>Home</li><li>About</li></ul></nav>
+                <main><p>Article body</p></main>
+                <footer><div><span>Copyright</span></div></footer>
+            </body></html>
+        "#;
+        let result = extract_text(html);
+        assert_eq!(result, "Article body");
+        assert!(!result.contains("Home"));
+        assert!(!result.contains("About"));
+        assert!(!result.contains("Copyright"));
     }
 
     #[test]

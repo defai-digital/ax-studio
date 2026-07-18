@@ -103,9 +103,9 @@ describe('newUserThreadContent', () => {
     const msg = newUserThreadContent('t1', 'analyze this', docs)
     const textValue = msg.content[0].text?.value ?? ''
     expect(textValue).toContain('[ATTACHED_FILES]')
-    expect(textValue).toContain('file_id: doc-1')
-    expect(textValue).toContain('name: report.pdf')
-    expect(textValue).toContain('mode: embeddings')
+    expect(textValue).toContain('"file_id":"doc-1"')
+    expect(textValue).toContain('"name":"report.pdf"')
+    expect(textValue).toContain('"mode":"embeddings"')
   })
 
   it('uses document name as fallback id when id is missing', () => {
@@ -118,7 +118,7 @@ describe('newUserThreadContent', () => {
     ]
     const msg = newUserThreadContent('t1', 'look', docs)
     const textValue = msg.content[0].text?.value ?? ''
-    expect(textValue).toContain('file_id: unnamed.txt')
+    expect(textValue).toContain('"file_id":"unnamed.txt"')
   })
 
   it('includes inline document content in metadata', () => {
@@ -313,7 +313,7 @@ describe('completion adversarial inputs', () => {
     ]
     const msg = newUserThreadContent('t1', 'look', docs)
     const textValue = msg.content[0].text?.value ?? ''
-    expect(textValue).toContain('size: 0')
+    expect(textValue).toContain('"size":0')
   })
 
   it('handles document with chunkCount=0', () => {
@@ -328,7 +328,7 @@ describe('completion adversarial inputs', () => {
     ]
     const msg = newUserThreadContent('t1', 'look', docs)
     const textValue = msg.content[0].text?.value ?? ''
-    expect(textValue).toContain('chunks: 0')
+    expect(textValue).toContain('"chunks":0')
   })
 })
 

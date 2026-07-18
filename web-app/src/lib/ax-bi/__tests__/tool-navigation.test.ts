@@ -72,6 +72,12 @@ describe('AX BI tool navigation helpers', () => {
     ).toBe('http://localhost:8088/explore/?slice_id=1')
   })
 
+  it('trusts IPv6 loopback the same as 127.0.0.1', () => {
+    expect(
+      normalizeAxBiResultUrl('http://[::1]:8088/explore/?slice_id=1')
+    ).toBe('http://[::1]:8088/explore/?slice_id=1')
+  })
+
   it('rejects non-HTTP result URLs', () => {
     expect(normalizeAxBiResultUrl('javascript:alert(1)')).toBeUndefined()
   })

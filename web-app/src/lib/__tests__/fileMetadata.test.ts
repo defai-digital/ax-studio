@@ -27,12 +27,12 @@ describe('injectFilesIntoPrompt', () => {
     ])
     expect(result).toContain('[ATTACHED_FILES]')
     expect(result).toContain('[/ATTACHED_FILES]')
-    expect(result).toContain('file_id: abc')
-    expect(result).toContain('name: test.pdf')
-    expect(result).not.toContain('type:')
-    expect(result).not.toContain('size:')
-    expect(result).not.toContain('chunks:')
-    expect(result).not.toContain('mode:')
+    expect(result).toContain('"file_id":"abc"')
+    expect(result).toContain('"name":"test.pdf"')
+    expect(result).not.toContain('"type"')
+    expect(result).not.toContain('"size"')
+    expect(result).not.toContain('"chunks"')
+    expect(result).not.toContain('"mode"')
   })
 
   it('includes all optional fields when provided', () => {
@@ -46,10 +46,10 @@ describe('injectFilesIntoPrompt', () => {
         injectionMode: 'inline',
       },
     ])
-    expect(result).toContain('type: application/pdf')
-    expect(result).toContain('size: 1024')
-    expect(result).toContain('chunks: 5')
-    expect(result).toContain('mode: inline')
+    expect(result).toContain('"type":"application/pdf"')
+    expect(result).toContain('"size":1024')
+    expect(result).toContain('"chunks":5')
+    expect(result).toContain('"mode":"inline"')
   })
 
   it('handles multiple files with newline separation', () => {
@@ -66,7 +66,7 @@ describe('injectFilesIntoPrompt', () => {
       { id: '1', name: 'a.txt', size: 0 },
     ])
     // size 0 is typeof number, so it should be included
-    expect(result).toContain('size: 0')
+    expect(result).toContain('"size":0')
   })
 
   it('preserves original prompt text before the metadata block', () => {
@@ -257,8 +257,38 @@ describe('fileMetadata adversarial inputs', () => {
       },
     ])
 
-    expect(result).not.toContain('size:')
-    expect(result).not.toContain('chunks:')
+    expect(result).not.toContain('"size"')
+    expect(result).not.toContain('"chunks"')
+  })
+
+  it('round-trips names that contain field-key substrings like ", size:"', () => {
+    const originals: FileMetadata[] = [
+      { id: '1', name: 'report, size: 99.csv', size: 2048 },
+      { id: '2', name: 'draft, mode: final.pdf', injectionMode: 'inline' },
+    ]
+    const injected = injectFilesIntoPrompt('prompt', originals)
+    const { files } = extractFilesFromPrompt(injected)
+    expect(files).toEqual(originals)
+  })
+
+  it('extracts the appended block when user text mentions metadata markers', () => {
+    const withEndMention = injectFilesIntoPrompt(
+      'What does [/ATTACHED_FILES] mean?',
+      [{ id: '1', name: 'a.txt' }]
+    )
+    const endMention = extractFilesFromPrompt(withEndMention)
+    expect(endMention.files).toEqual([{ id: '1', name: 'a.txt' }])
+    expect(endMention.cleanPrompt).toBe('What does [/ATTACHED_FILES] mean?')
+
+    const withStartMention = injectFilesIntoPrompt(
+      'Explain [ATTACHED_FILES] format please',
+      [{ id: '2', name: 'b.txt' }]
+    )
+    const startMention = extractFilesFromPrompt(withStartMention)
+    expect(startMention.files).toEqual([{ id: '2', name: 'b.txt' }])
+    expect(startMention.cleanPrompt).toBe(
+      'Explain [ATTACHED_FILES] format please'
+    )
   })
 
   it('strips whitespace from clean prompt', () => {

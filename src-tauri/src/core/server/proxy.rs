@@ -277,6 +277,23 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
     Some(finalize_response(response, Body::empty()))
 }
 
+/// Extract the token from an Authorization header value.
+/// Scheme matching is case-insensitive per RFC 7235 (`Bearer` / `bearer` / `BEARER`).
+fn extract_bearer_token(auth_str: &str) -> Option<&str> {
+    let trimmed = auth_str.trim();
+    let mut parts = trimmed.splitn(2, char::is_whitespace);
+    let scheme = parts.next().unwrap_or_default();
+    if !scheme.eq_ignore_ascii_case("Bearer") {
+        return None;
+    }
+    let token = parts.next()?.trim();
+    if token.is_empty() {
+        None
+    } else {
+        Some(token)
+    }
+}
+
 /// Validate host header, API key, and blocked paths.
 /// Returns `Some(response)` on validation failure (caller should return immediately), `None` to continue.
 fn validate_request(
@@ -342,7 +359,7 @@ fn validate_request(
         let auth_valid = headers
             .get(hyper::header::AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
-            .and_then(|auth_str| auth_str.strip_prefix("Bearer "))
+            .and_then(extract_bearer_token)
             .map(|token| {
                 token
                     .as_bytes()
@@ -789,6 +806,51 @@ mod tests {
             "client-f",
         );
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_extract_bearer_token_is_case_insensitive() {
+        assert_eq!(
+            extract_bearer_token("Bearer my-secret"),
+            Some("my-secret")
+        );
+        assert_eq!(
+            extract_bearer_token("bearer my-secret"),
+            Some("my-secret")
+        );
+        assert_eq!(
+            extract_bearer_token("BEARER my-secret"),
+            Some("my-secret")
+        );
+        assert_eq!(
+            extract_bearer_token("  BeArEr   my-secret  "),
+            Some("my-secret")
+        );
+        assert_eq!(extract_bearer_token("Basic my-secret"), None);
+        assert_eq!(extract_bearer_token("Bearer"), None);
+        assert_eq!(extract_bearer_token("my-secret"), None);
+    }
+
+    #[test]
+    fn test_validate_request_api_key_via_lowercase_bearer() {
+        let config = test_config(false, "my-secret");
+        let mut headers = hyper::HeaderMap::new();
+        headers.insert(
+            hyper::header::AUTHORIZATION,
+            "bearer my-secret".parse().unwrap(),
+        );
+        let result = validate_request(
+            "/chat/completions",
+            "localhost:1337",
+            "",
+            &headers,
+            &config,
+            "client-f-lower",
+        );
+        assert!(
+            result.is_none(),
+            "RFC 7235 auth schemes are case-insensitive"
+        );
     }
 
     #[test]

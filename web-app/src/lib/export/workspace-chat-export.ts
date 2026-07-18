@@ -51,7 +51,8 @@ const toIsoDateOrEmpty = (timestamp: number): string => {
 
 const escapeCsv = (value: unknown): string => {
   const raw = value == null ? '' : String(value)
-  if (/[",\n]/.test(raw)) {
+  // RFC 4180: quote when the field contains comma, quote, CR, or LF.
+  if (/[",\n\r]/.test(raw)) {
     return `"${raw.replace(/"/g, '""')}"`
   }
   return raw
