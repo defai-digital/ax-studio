@@ -27,6 +27,7 @@ import { Link } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { PlatformMetaKey } from '@/components/common/PlatformMetaKey'
+import { Kbd, KbdGroup } from '@/components/ui/kbd'
 
 export function LeftSidebar() {
   const { t } = useTranslation()
@@ -42,14 +43,20 @@ export function LeftSidebar() {
           {/* Collapsed: logo icon only */}
           <div className="hidden group-data-[collapsible=icon]:flex justify-center mb-1">
             <div className="size-7 rounded-lg bg-brand-gradient flex items-center justify-center shadow-brand">
-              <Zap className="size-3.5 text-primary-foreground" strokeWidth={2.5} />
+              <Zap
+                className="size-3.5 text-primary-foreground"
+                strokeWidth={2.5}
+              />
             </div>
           </div>
           {/* Expanded: logo + title + actions */}
           <div className="flex items-center w-full justify-between group-data-[collapsible=icon]:hidden">
             <div className="flex items-center gap-2 min-w-0">
               <div className="size-6 shrink-0 rounded-md bg-brand-gradient flex items-center justify-center">
-                <Zap className="size-3 text-primary-foreground" strokeWidth={2.5} />
+                <Zap
+                  className="size-3 text-primary-foreground"
+                  strokeWidth={2.5}
+                />
               </div>
               <span className="text-sidebar-foreground font-semibold tracking-tight whitespace-nowrap text-[13px]">
                 AX Studio
@@ -100,9 +107,14 @@ export function LeftSidebar() {
                   <span className="group-data-[collapsible=icon]:hidden">
                     {t('common:settings')}
                   </span>
-                  <span className="ml-auto text-xs text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden">
-                    <PlatformMetaKey />,
-                  </span>
+                  <KbdGroup className="ml-auto group-data-[collapsible=icon]:hidden">
+                    <Kbd className="bg-transparent text-sidebar-foreground/40">
+                      <PlatformMetaKey />
+                    </Kbd>
+                    <Kbd className="bg-transparent text-sidebar-foreground/40">
+                      ,
+                    </Kbd>
+                  </KbdGroup>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

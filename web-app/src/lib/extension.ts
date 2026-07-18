@@ -68,6 +68,17 @@ export class ExtensionManager {
   // Registered inference engines
   private engines = new Map<string, AIEngine>()
 
+  // Names of extensions that failed to activate/load during the last setup pass
+  private failedExtensionNames = new Set<string>()
+
+  /**
+   * Returns display names of extensions that failed to activate or load
+   * during the most recent register/load pass.
+   */
+  getFailedExtensionNames(): string[] {
+    return [...this.failedExtensionNames]
+  }
+
   /**
    * Registers an extension.
    * @param extension - The extension to register.
@@ -124,14 +135,17 @@ export class ExtensionManager {
    * Loads all registered extension.
    */
   async load() {
+    const extensions = this.listExtensions()
     const results = await Promise.allSettled(
-      this.listExtensions().map((ext) => ext.onLoad())
+      extensions.map((ext) => ext.onLoad())
     )
-    for (const result of results) {
+    results.forEach((result, index) => {
       if (result.status === 'rejected') {
+        const ext = extensions[index]
+        this.failedExtensionNames.add(ext.productName || ext.name)
         console.error('Extension load failed:', result.reason)
       }
-    }
+    })
   }
 
   /**
@@ -219,6 +233,7 @@ export class ExtensionManager {
         )
       }
     } catch (error) {
+      this.failedExtensionNames.add(extension.productName || extension.name)
       console.error(`Failed to import extension "${extension.name}":`, error)
     }
   }
@@ -228,6 +243,8 @@ export class ExtensionManager {
    * @returns {void}
    */
   async registerActive() {
+    // Reset failure tracking for this setup pass
+    this.failedExtensionNames.clear()
     // Get active extensions
     const activeExtensions = await this.getActive()
     // Activate all

@@ -1,15 +1,44 @@
 import { ExtensionManager } from '@/lib/extension'
 import { ensureCoreBridge } from '@/lib/bootstrap/core-bridge'
 import { AppEvent, EngineManager, events, ModelManager } from '@ax-studio/core'
-import { PropsWithChildren, useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  PropsWithChildren,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
 import { withTimeout } from '@/lib/utils/async'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { isApiOnlyPlatform } from '@/lib/platform/utils'
+import { toast } from 'sonner'
 
 const EXTENSION_START_TIMEOUT_MS = 8000
 const EXTENSIONS_UPDATED_EVENT = 'extensions-updated'
 const EXTENSION_START_RETRY_DELAYS_MS = [1500, 5000] as const
 let extensionSetupWork: Promise<void> | null = null
+
+// Extensions that already triggered a load-failure toast (fires once per extension)
+const extensionFailureToastShown = new Set<string>()
+
+function notifyExtensionLoadFailures() {
+  const failedNames = ExtensionManager.getInstance().getFailedExtensionNames()
+  if (failedNames.length === 0) {
+    // Setup failed without an identifiable extension (e.g. startup timeout)
+    if (!extensionFailureToastShown.has('*')) {
+      extensionFailureToastShown.add('*')
+      toast.error(
+        'Some extensions failed to load; related features may be unavailable'
+      )
+    }
+    return
+  }
+  for (const name of failedNames) {
+    if (extensionFailureToastShown.has(name)) continue
+    extensionFailureToastShown.add(name)
+    toast.error(`${name} failed to load; related features may be unavailable`)
+  }
+}
 
 function notifyProvidersChanged(source: string) {
   window.setTimeout(() => {
@@ -49,23 +78,26 @@ export function ExtensionProvider({ children }: PropsWithChildren) {
     )
   }, [])
 
-  const runSetup = useCallback(async (isCancelled: () => boolean) => {
-    try {
-      await setupExtensions()
-      if (isCancelled()) return false
+  const runSetup = useCallback(
+    async (isCancelled: () => boolean) => {
+      try {
+        await setupExtensions()
+        if (isCancelled()) return false
 
-      console.info('[ExtensionProvider] Extension setup finished')
-      setInitError(null)
-      return true
-    } catch (err) {
-      if (isCancelled()) return false
+        console.info('[ExtensionProvider] Extension setup finished')
+        setInitError(null)
+        return true
+      } catch (err) {
+        if (isCancelled()) return false
 
-      const message = err instanceof Error ? err.message : String(err)
-      console.error('Extension setup failed, rendering app anyway:', err)
-      setInitError(message)
-      return false
-    }
-  }, [setupExtensions])
+        const message = err instanceof Error ? err.message : String(err)
+        console.error('Extension setup failed, rendering app anyway:', err)
+        setInitError(message)
+        return false
+      }
+    },
+    [setupExtensions]
+  )
 
   useEffect(() => {
     if (!initError) return
@@ -88,22 +120,32 @@ export function ExtensionProvider({ children }: PropsWithChildren) {
         notifyProvidersChanged('extensions-ready')
       }
       if (ok) return
-      for (const delayMs of EXTENSION_START_RETRY_DELAYS_MS) {
-        retryTimers.push(setTimeout(() => {
-          if (cancelled) return
-          void runSetup(isCancelled).then((retryOk) => {
-            if (!cancelled && retryOk) {
-              notifyProvidersChanged('extensions-ready')
-            }
-          })
-        }, delayMs))
-      }
+      EXTENSION_START_RETRY_DELAYS_MS.forEach((delayMs, index) => {
+        retryTimers.push(
+          setTimeout(() => {
+            if (cancelled) return
+            void runSetup(isCancelled).then((retryOk) => {
+              if (cancelled) return
+              if (retryOk) {
+                notifyProvidersChanged('extensions-ready')
+                return
+              }
+              // Retries exhausted — surface the failure once per extension
+              if (index === EXTENSION_START_RETRY_DELAYS_MS.length - 1) {
+                notifyExtensionLoadFailures()
+              }
+            })
+          }, delayMs)
+        )
+      })
     })
 
     serviceHub
       .events()
       ?.listen(EXTENSIONS_UPDATED_EVENT, () => {
-        console.info('[ExtensionProvider] Extensions updated; refreshing active extensions')
+        console.info(
+          '[ExtensionProvider] Extensions updated; refreshing active extensions'
+        )
         void runSetup(isCancelled).then((ok) => {
           if (ok) {
             notifyProvidersChanged(EXTENSIONS_UPDATED_EVENT)
@@ -118,7 +160,10 @@ export function ExtensionProvider({ children }: PropsWithChildren) {
         }
       })
       .catch((error) => {
-        console.error('[ExtensionProvider] Failed to subscribe to extension updates:', error)
+        console.error(
+          '[ExtensionProvider] Failed to subscribe to extension updates:',
+          error
+        )
       })
 
     return () => {

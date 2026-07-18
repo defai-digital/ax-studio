@@ -1,5 +1,23 @@
 import { localStorageKey } from '@/constants/localStorage'
+import { safeStorageSetItem } from '@/lib/storage/storage'
 import type { ModelInfo } from '@ax-studio/core'
+
+/**
+ * Persist the last used model — the same mechanism the composer's model
+ * dropdown uses. The new-chat home composer reads this via `getLastUsedModel`.
+ */
+export const setLastUsedModel = (provider: string, model: string) => {
+  try {
+    safeStorageSetItem(
+      localStorage,
+      localStorageKey.lastUsedModel,
+      JSON.stringify({ provider, model }),
+      'setLastUsedModel'
+    )
+  } catch (error) {
+    console.debug('Failed to set last used model in localStorage:', error)
+  }
+}
 
 export const getLastUsedModel = (): {
   provider: string

@@ -21,6 +21,7 @@ import {
 import {
   Download,
   GripVertical,
+  MessageSquarePlus,
   MoreHorizontal,
   Pin,
   PinOff,
@@ -47,6 +48,7 @@ import { DeleteAllThreadsDialog } from '@/containers/dialogs/thread/DeleteAllThr
 import { groupByDate, type DateGroup } from '@/lib/utils/date-group'
 import { usePinnedThreads } from '@/hooks/threads/usePinnedThreads'
 import { Link } from '@tanstack/react-router'
+import { route } from '@/constants/routes'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { RenameThreadDialog, DeleteThreadDialog } from '@/containers/dialogs'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
@@ -84,7 +86,20 @@ export function NavChats() {
   }, [pinnedIds, threadsWithoutProject])
 
   if (threadsWithoutProject.length === 0) {
-    return null
+    return (
+      <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+        <SidebarGroupLabel>{t('common:chats')}</SidebarGroupLabel>
+        <div className="flex flex-col items-center gap-2 px-2 py-4 text-center">
+          <p className="text-xs text-sidebar-foreground/50">No chats yet</p>
+          <SidebarMenuButton asChild className="w-auto">
+            <Link to={route.home}>
+              <MessageSquarePlus className="size-4" />
+              <span>New Chat</span>
+            </Link>
+          </SidebarMenuButton>
+        </div>
+      </SidebarGroup>
+    )
   }
 
   const nonPinnedGroups = groupedThreads.filter((g) => g.group !== 'Pinned')

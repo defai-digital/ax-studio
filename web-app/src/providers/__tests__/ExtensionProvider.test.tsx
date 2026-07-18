@@ -1,5 +1,6 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 import { ExtensionProvider } from '../ExtensionProvider'
 
 const mocks = vi.hoisted(() => {
@@ -7,6 +8,7 @@ const mocks = vi.hoisted(() => {
     load: vi.fn(),
     registerActive: vi.fn(),
     unload: vi.fn(),
+    getFailedExtensionNames: vi.fn(() => [] as string[]),
   }
   const listen = vi.fn()
   const core: Record<string, unknown> = {}
@@ -55,6 +57,10 @@ vi.mock('@ax-studio/core', () => ({
 
 vi.mock('@/hooks/useServiceHub', () => ({
   useServiceHub: () => mocks.serviceHub,
+}))
+
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
 }))
 
 describe('ExtensionProvider', () => {
@@ -203,5 +209,45 @@ describe('ExtensionProvider', () => {
         source: 'extensions-updated',
       })
     })
+  })
+
+  it('shows a load-failure toast once per extension after retries are exhausted', async () => {
+    vi.useFakeTimers()
+    try {
+      mocks.extensionManager.registerActive.mockRejectedValue(
+        new Error('extension boom')
+      )
+      mocks.extensionManager.getFailedExtensionNames.mockReturnValue([
+        'Conversational',
+        'Download',
+      ])
+
+      render(
+        <ExtensionProvider>
+          <div data-testid="child">App shell</div>
+        </ExtensionProvider>
+      )
+
+      // Let the initial setup attempt settle and schedule retries
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+
+      // Fire both retry timers (1500ms and 5000ms); the last one notifies
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(6000)
+      })
+
+      expect(toast.error).toHaveBeenCalledTimes(2)
+      expect(toast.error).toHaveBeenCalledWith(
+        'Conversational failed to load; related features may be unavailable'
+      )
+      expect(toast.error).toHaveBeenCalledWith(
+        'Download failed to load; related features may be unavailable'
+      )
+      expect(screen.getByTestId('child')).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

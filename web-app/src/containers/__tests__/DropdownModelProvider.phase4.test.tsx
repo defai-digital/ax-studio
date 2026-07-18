@@ -121,6 +121,7 @@ vi.mock('@/constants/providers', () => ({
 
 vi.mock('@/lib/utils/getModelToStart', () => ({
   getLastUsedModel: mockGetLastUsedModel,
+  setLastUsedModel: vi.fn(),
 }))
 
 vi.mock('@/lib/utils/highlight', () => ({

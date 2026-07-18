@@ -18,8 +18,6 @@ import { route } from '@/constants/routes'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { ModelSetting } from '@/containers/ModelSetting'
 import Fuse, { type FuseResult } from 'fuse.js'
-import { localStorageKey } from '@/constants/localStorage'
-import { safeStorageSetItem } from '@/lib/storage/storage'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useFavoriteModel } from '@/hooks/models/useFavoriteModel'
 import { predefinedProviders } from '@/constants/providers'
@@ -33,7 +31,7 @@ import {
   X,
   Route,
 } from 'lucide-react'
-import { getLastUsedModel } from '@/lib/utils/getModelToStart'
+import { getLastUsedModel, setLastUsedModel } from '@/lib/utils/getModelToStart'
 import { formatCompactNumber } from '@/lib/utils/number'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useRouterSettings } from '@/hooks/settings/useRouterSettings'
@@ -126,20 +124,6 @@ function estimateRowHeight(row: FlatRow) {
       return ROW_HEIGHT_DIVIDER
     case 'empty-search':
       return ROW_HEIGHT_EMPTY
-  }
-}
-
-// Helper functions for localStorage
-const setLastUsedModel = (provider: string, model: string) => {
-  try {
-    safeStorageSetItem(
-      localStorage,
-      localStorageKey.lastUsedModel,
-      JSON.stringify({ provider, model }),
-      'DropdownModelProvider'
-    )
-  } catch (error) {
-    console.debug('Failed to set last used model in localStorage:', error)
   }
 }
 

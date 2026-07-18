@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 
 const mocks = vi.hoisted(() => ({
   location: { pathname: '/' },
@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => ({
   deleteAllThreadsByProject: vi.fn(),
   hideInitialLoader: vi.fn(),
   threads: {} as Record<string, unknown>,
+  routerHistoryBack: vi.fn(),
+  routerNavigate: vi.fn(),
+  routerCanGoBack: vi.fn(() => true),
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -19,6 +22,13 @@ vi.mock('@tanstack/react-router', () => ({
   Outlet: () => <main data-testid="outlet" />,
   useLocation: () => mocks.location,
   useParams: () => ({ projectId: 'missing-project' }),
+  useRouter: () => ({
+    history: {
+      back: mocks.routerHistoryBack,
+      canGoBack: mocks.routerCanGoBack,
+    },
+    navigate: mocks.routerNavigate,
+  }),
 }))
 
 vi.mock('@/constants/routes', () => ({
@@ -27,6 +37,7 @@ vi.mock('@/constants/routes', () => ({
     axBi: '/ax-bi',
     localApiServerlogs: '/local-api-server/logs',
     systemMonitor: '/system-monitor',
+    settings: { general: '/settings/general' },
   },
 }))
 
@@ -258,7 +269,9 @@ vi.mock('@/containers/dialogs/AddProjectDialog', () => ({
   }) => (
     <button
       type="button"
-      onClick={() => onSave('Updated project', 'assistant-1', 'logo.png', 'Use BI context')}
+      onClick={() =>
+        onSave('Updated project', 'assistant-1', 'logo.png', 'Use BI context')
+      }
     >
       save project
     </button>
@@ -290,6 +303,7 @@ vi.mock('@/containers/dialogs/thread/DeleteAllThreadsInProjectDialog', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  ArrowLeft: () => <span data-testid="arrow-left-icon" />,
   FolderOpen: () => <span data-testid="folder-icon" />,
   FolderPenIcon: () => <span data-testid="folder-pen-icon" />,
   MessageCircle: () => <span data-testid="message-icon" />,
@@ -308,6 +322,7 @@ describe('root, project, and ax-bi routes', () => {
     mocks.location.pathname = '/'
     mocks.getFolderById.mockReturnValue(undefined)
     mocks.threads = {}
+    mocks.routerCanGoBack.mockReturnValue(true)
   })
 
   it('renders the root app layout for normal app routes', () => {
@@ -328,6 +343,33 @@ describe('root, project, and ax-bi routes', () => {
     expect(screen.getByTestId('service-hub-provider')).toBeInTheDocument()
     expect(screen.queryByTestId('sidebar-provider')).not.toBeInTheDocument()
     expect(screen.getByTestId('outlet')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument()
+  })
+
+  it('logs layout back control navigates back in history when possible', () => {
+    mocks.location.pathname = '/logs'
+    mocks.routerCanGoBack.mockReturnValue(true)
+
+    const Component = RootRoute.component as React.ComponentType
+    render(<Component />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(mocks.routerHistoryBack).toHaveBeenCalled()
+    expect(mocks.routerNavigate).not.toHaveBeenCalled()
+  })
+
+  it('logs layout back control falls back to general settings without history', () => {
+    mocks.location.pathname = '/logs'
+    mocks.routerCanGoBack.mockReturnValue(false)
+
+    const Component = RootRoute.component as React.ComponentType
+    render(<Component />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(mocks.routerHistoryBack).not.toHaveBeenCalled()
+    expect(mocks.routerNavigate).toHaveBeenCalledWith({
+      to: '/settings/general',
+    })
   })
 
   it('renders root route errors through the global error boundary', () => {
@@ -390,7 +432,9 @@ describe('root, project, and ax-bi routes', () => {
     expect(screen.getByText('Project Assistant')).toBeInTheDocument()
 
     screen.getByText('delete all threads').click()
-    expect(mocks.deleteAllThreadsByProject).toHaveBeenCalledWith('missing-project')
+    expect(mocks.deleteAllThreadsByProject).toHaveBeenCalledWith(
+      'missing-project'
+    )
 
     screen.getByText('save project').click()
     expect(mocks.updateFolder).toHaveBeenCalledWith(

@@ -6,6 +6,7 @@ import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useDownloadStore } from '@/hooks/models/useDownloadStore'
 import { useAppState } from '@/hooks/settings/useAppState'
+import { autoSelectDownloadedModel } from '@/lib/models/auto-select-downloaded-model'
 import { toast } from 'sonner'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 
@@ -297,6 +298,21 @@ export function GlobalEventHandler() {
       const downloadId = getDownloadId(state)
       removeDownload(downloadId)
       removeLocalDownloadingModel(downloadId)
+
+      // S1.1 — auto-select the freshly downloaded model so the home composer
+      // is ready to chat. Never opens a chat and never switches the model of
+      // a thread the user is currently viewing (handled inside the helper).
+      void autoSelectDownloadedModel(state.modelId ?? downloadId).then(
+        (result) => {
+          if (!result.showFirstModelToast) return
+          toast.success(`${result.modelId} is ready — start chatting`, {
+            action: {
+              label: 'New chat',
+              onClick: () => navigate({ to: route.home }),
+            },
+          })
+        }
+      )
     }
 
     const onFileDownloadError = (state: DownloadState) => {
@@ -326,7 +342,7 @@ export function GlobalEventHandler() {
       events.off(DownloadEvent.onFileDownloadStopped, onFileDownloadStopped)
       events.off(DownloadEvent.onFileDownloadAndVerificationSuccess, onFileDownloadSuccess)
     }
-  }, [updateProgress, removeDownload, removeLocalDownloadingModel])
+  }, [updateProgress, removeDownload, removeLocalDownloadingModel, navigate])
 
   // ─── Backend update available ───────────────────────────────────────────────
 

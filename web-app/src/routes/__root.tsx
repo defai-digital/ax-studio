@@ -1,4 +1,9 @@
-import { createRootRoute, Outlet, useLocation } from '@tanstack/react-router'
+import {
+  createRootRoute,
+  Outlet,
+  useLocation,
+  useRouter,
+} from '@tanstack/react-router'
 import { Fragment } from 'react/jsx-runtime'
 import { useCallback, useEffect, type MouseEvent, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
@@ -30,6 +35,8 @@ import {
 } from '@/lib/utils/animations'
 import { hideInitialLoader } from '@/lib/bootstrap/app-startup'
 import { startWindowDragFromMouseEvent } from '@/lib/window-drag'
+import { Button } from '@/components/ui/button'
+import { ArrowLeft } from 'lucide-react'
 
 const MACOS_WINDOW_CHROME_HEIGHT = 60
 
@@ -123,15 +130,45 @@ const AppLayout = () => {
   )
 }
 
+const LogsLayoutHeader = () => {
+  const router = useRouter()
+
+  const handleBack = useCallback(() => {
+    if (router.history.canGoBack()) {
+      router.history.back()
+    } else {
+      void router.navigate({ to: route.settings.general })
+    }
+  }, [router])
+
+  return (
+    <header className="flex h-11 shrink-0 items-center border-b border-border/60 bg-background px-2">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleBack}
+        className="gap-1.5 text-muted-foreground hover:text-foreground"
+        aria-label="Back"
+      >
+        <ArrowLeft className="size-4" />
+        Back
+      </Button>
+    </header>
+  )
+}
+
 const LogsLayout = () => {
   return (
     <Fragment>
       <main className="relative h-svh text-sm antialiased select-text bg-app">
-        <div className="flex h-full">
+        <div className="flex h-full flex-col">
+          <LogsLayoutHeader />
           {/* Main content panel */}
-          <div className="h-full flex w-full">
-            <div className="bg-background text-foreground border w-full overflow-hidden">
-              <Outlet />
+          <div className="flex min-h-0 flex-1">
+            <div className="h-full flex w-full">
+              <div className="bg-background text-foreground border w-full overflow-hidden">
+                <Outlet />
+              </div>
             </div>
           </div>
         </div>

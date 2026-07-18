@@ -16,6 +16,7 @@ const {
   mockUpdateProgress,
   mockRemoveDownload,
   mockRemoveLocalDownloadingModel,
+  mockAutoSelectDownloadedModel,
 } = vi.hoisted(() => {
   const eventHandlers = new Map<string, Set<(payload?: any) => void>>()
 
@@ -43,6 +44,7 @@ const {
     mockUpdateProgress: vi.fn(),
     mockRemoveDownload: vi.fn(),
     mockRemoveLocalDownloadingModel: vi.fn(),
+    mockAutoSelectDownloadedModel: vi.fn(),
   }
 })
 
@@ -95,6 +97,10 @@ vi.mock('@/hooks/models/useDownloadStore', () => ({
   }),
 }))
 
+vi.mock('@/lib/models/auto-select-downloaded-model', () => ({
+  autoSelectDownloadedModel: mockAutoSelectDownloadedModel,
+}))
+
 vi.mock('@/hooks/useServiceHub', () => ({
   useServiceHub: () => ({
     providers: () => ({
@@ -139,6 +145,12 @@ describe('GlobalEventHandler', () => {
     mockGetProviders.mockResolvedValue([{ provider: 'llamacpp', models: [] }])
     mockGetActiveModels.mockResolvedValue(['model-a'])
     mockCoreInvoke.mockResolvedValue(undefined)
+    mockAutoSelectDownloadedModel.mockResolvedValue({
+      status: 'selected',
+      showFirstModelToast: false,
+      modelId: 'model-a',
+      providerId: 'llamacpp',
+    })
   })
 
   it('refreshes providers on version_backend settings change', async () => {
@@ -286,5 +298,46 @@ describe('GlobalEventHandler', () => {
       75,
       100
     )
+  })
+
+  it('auto-selects the model when a download completes', async () => {
+    render(<GlobalEventHandler />)
+
+    emit('onFileDownloadSuccess', {
+      downloadId: 'model-a',
+      modelId: 'model-a',
+    })
+
+    await waitFor(() => {
+      expect(mockAutoSelectDownloadedModel).toHaveBeenCalledWith('model-a')
+    })
+    expect(mockRemoveDownload).toHaveBeenCalledWith('model-a')
+    expect(mockRemoveLocalDownloadingModel).toHaveBeenCalledWith('model-a')
+    expect(mockToastSuccess).not.toHaveBeenCalled()
+  })
+
+  it('greets the user when their first model finishes downloading', async () => {
+    mockAutoSelectDownloadedModel.mockResolvedValue({
+      status: 'selected',
+      showFirstModelToast: true,
+      modelId: 'model-a',
+      providerId: 'llamacpp',
+    })
+
+    render(<GlobalEventHandler />)
+
+    emit('onFileDownloadSuccess', {
+      downloadId: 'model-a',
+      modelId: 'model-a',
+    })
+
+    await waitFor(() => {
+      expect(mockToastSuccess).toHaveBeenCalledWith(
+        'model-a is ready — start chatting',
+        expect.objectContaining({
+          action: expect.objectContaining({ label: 'New chat' }),
+        })
+      )
+    })
   })
 })

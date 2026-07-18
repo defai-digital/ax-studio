@@ -168,12 +168,22 @@ vi.mock('@/lib/utils', () => ({
 
 import { useParams } from '@tanstack/react-router'
 import { sanitizeModelId } from '@/lib/utils'
+import { useHardware } from '@/hooks/settings/useHardware'
+
+const emptyHardwareData = {
+  cpu: { arch: '', core_count: 0, extensions: [], name: '', usage: 0 },
+  gpus: [],
+  os_type: '',
+  os_name: '',
+  total_memory: 0,
+}
 
 describe('Hub Model Detail Route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.fetchHuggingFaceRepo.mockResolvedValue(null)
     mocks.isModelSupported.mockResolvedValue('GREEN')
+    useHardware.setState({ hardwareData: emptyHardwareData })
   })
 
   it('should use raw modelId parameter for catalog lookup', () => {
@@ -243,5 +253,62 @@ describe('Hub Model Detail Route', () => {
     render(<Component />)
 
     expect(screen.getByText('Model not found')).toBeInTheDocument()
+  })
+
+  it('shows memory estimate and label per variant when hardware info is available', async () => {
+    useHardware.setState({
+      hardwareData: { ...emptyHardwareData, total_memory: 16 * 1024 },
+    })
+    mocks.fetchHuggingFaceRepo.mockResolvedValueOnce({ id: 'repo' })
+    mocks.convertHfRepoToCatalogModel.mockReturnValue({
+      model_name: 'user/model',
+      developer: 'user',
+      downloads: 0,
+      quants: [
+        {
+          model_id: 'model-Q4_K_M-GGUF',
+          path: 'https://huggingface.co/user/model/resolve/main/model-Q4_K_M.gguf',
+          file_size: '4.0 GB',
+        },
+        {
+          model_id: 'model-Q8_0-GGUF',
+          path: 'https://huggingface.co/user/model/resolve/main/model-Q8_0.gguf',
+          file_size: '14.0 GB',
+        },
+      ],
+    })
+    ;(useParams as any).mockReturnValue({ modelId: 'user/model' })
+
+    const Component = Route.component as React.ComponentType
+    render(<Component />)
+
+    expect(await screen.findByText('Recommended')).toBeInTheDocument()
+    expect(screen.getByText('Exceeds your RAM')).toBeInTheDocument()
+    expect(screen.getByText('≈ 4.8 GB')).toBeInTheDocument()
+    expect(screen.getByText('≈ 17 GB')).toBeInTheDocument()
+  })
+
+  it('degrades to file size only when hardware info is unavailable', async () => {
+    mocks.fetchHuggingFaceRepo.mockResolvedValueOnce({ id: 'repo' })
+    mocks.convertHfRepoToCatalogModel.mockReturnValue({
+      model_name: 'user/model',
+      developer: 'user',
+      downloads: 0,
+      quants: [
+        {
+          model_id: 'model-Q4_K_M-GGUF',
+          path: 'https://huggingface.co/user/model/resolve/main/model-Q4_K_M.gguf',
+          file_size: '4.0 GB',
+        },
+      ],
+    })
+    ;(useParams as any).mockReturnValue({ modelId: 'user/model' })
+
+    const Component = Route.component as React.ComponentType
+    render(<Component />)
+
+    expect(await screen.findByText('4.0 GB')).toBeInTheDocument()
+    expect(screen.queryByText('Recommended')).not.toBeInTheDocument()
+    expect(screen.queryByText(/≈/)).not.toBeInTheDocument()
   })
 })

@@ -226,7 +226,7 @@ describe('NavChats', () => {
     expect(screen.getByTestId('delete-all')).toBeInTheDocument()
   })
 
-  it('returns null when there are no threads without projects', async () => {
+  it('renders an empty state when there are no threads without projects', async () => {
     const { useThreads } = (await import('@/hooks/threads/useThreads')) as {
       useThreads: ReturnType<typeof vi.fn>
     }
@@ -240,8 +240,9 @@ describe('NavChats', () => {
           deleteThread: vi.fn(),
         })
     )
-    const { container } = render(<NavChats />)
-    expect(container.firstChild).toBeNull()
+    render(<NavChats />)
+    expect(screen.getByText('No chats yet')).toBeInTheDocument()
+    expect(screen.getByText('New Chat')).toBeInTheDocument()
   })
 
   it('renders pinned section when there are pinned threads', async () => {

@@ -49,6 +49,11 @@ import { findDownloadedLocalModel } from '@/lib/models/downloaded'
 import { extractErrorMessage } from '@/lib/utils/error'
 import { isMlxSupported } from '@/lib/platform/utils'
 import { useModelSupportStatus } from '@/hooks/models/useModelSupportStatus'
+import { useHardwareTotalMemory } from '@/hooks/settings/useHardwareTotalMemory'
+import {
+  getVariantMemoryInfo,
+  VARIANT_MEMORY_LABEL_CLASSES,
+} from '@/lib/models/variant-memory'
 
 type SearchParams = {
   repo: string
@@ -103,6 +108,7 @@ function HubModelDetailContent() {
   const modelId = useMemo(() => decodeHubRouteParam(rawModelId), [rawModelId])
 
   const { modelSupportStatus, checkModelSupport } = useModelSupportStatus()
+  const totalMemoryMB = useHardwareTotalMemory()
 
   useEffect(() => {
     fetchSources()
@@ -441,7 +447,7 @@ function HubModelDetailContent() {
 
               <div className="rounded-2xl border border-border/50 overflow-hidden shadow-sm">
                 {/* Header row */}
-                <div className="grid grid-cols-[1fr_100px_100px_60px_140px] px-5 py-2.5 bg-muted/30 border-b border-border/30 text-[11px] tracking-wider uppercase text-muted-foreground/60">
+                <div className="grid grid-cols-[1fr_90px_140px_60px_140px] px-5 py-2.5 bg-muted/30 border-b border-border/30 text-[11px] tracking-wider uppercase text-muted-foreground/60">
                   <span>Version</span>
                   <span>Format</span>
                   <span>Size</span>
@@ -478,10 +484,18 @@ function HubModelDetailContent() {
                     .replace(/_TensorRT$/i, '')
                     .replace(/-TensorRT$/i, '')
 
+                  // S1.2 — estimated runtime memory + human label; null when
+                  // hardware info is unavailable (degrade to file size only).
+                  const memoryInfo = getVariantMemoryInfo(
+                    variant.file_size,
+                    format === 'MLX',
+                    totalMemoryMB
+                  )
+
                   return (
                     <div
                       key={variant.model_id}
-                      className="grid grid-cols-[1fr_100px_100px_60px_140px] items-center px-5 py-3 border-b border-border/20 last:border-0 hover:bg-muted/10 transition-colors"
+                      className="grid grid-cols-[1fr_90px_140px_60px_140px] items-center px-5 py-3 border-b border-border/20 last:border-0 hover:bg-muted/10 transition-colors"
                     >
                       <span className="text-[14px]" style={{ fontWeight: 500 }}>
                         {versionName}
@@ -491,9 +505,23 @@ function HubModelDetailContent() {
                           {format}
                         </span>
                       </span>
-                      <span className="text-[13px] text-muted-foreground flex items-center gap-1">
-                        <HardDrive className="size-3" />
-                        {variant.file_size}
+                      <span className="text-[13px] text-muted-foreground flex flex-col gap-0.5">
+                        <span className="flex items-center gap-1">
+                          <HardDrive className="size-3" />
+                          {variant.file_size}
+                        </span>
+                        {memoryInfo && (
+                          <>
+                            <span className="text-[11px] text-muted-foreground/60">
+                              {memoryInfo.estimatedText}
+                            </span>
+                            <span
+                              className={`text-[11px] font-medium ${VARIANT_MEMORY_LABEL_CLASSES[memoryInfo.label]}`}
+                            >
+                              {memoryInfo.label}
+                            </span>
+                          </>
+                        )}
                       </span>
                       <span>
                         <ModelInfoHoverCard

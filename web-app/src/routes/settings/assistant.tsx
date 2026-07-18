@@ -85,60 +85,86 @@ function AssistantContent() {
         >
           <SettingsPageLayout icon={Bot} title={t('common:assistants')} />
           <div className="px-8 py-7">
-            <div className="max-w-2xl space-y-6">
-              {assistants
-                .slice()
-                .sort((a, b) => a.created_at - b.created_at)
-                .map((assistant) => (
-                  <div
-                    className="bg-secondary dark:bg-secondary/20 p-4 rounded-lg flex items-center gap-4"
-                    key={assistant.id}
-                  >
-                    <div className="flex items-start gap-3 flex-1">
-                      {assistant?.avatar && (
-                        <div className="shrink-0 w-8 h-8 relative flex items-center justify-center bg-secondary rounded-md">
-                          <AvatarEmoji
-                            avatar={assistant?.avatar}
-                            imageClassName="w-5 h-5 object-contain"
-                            textClassName="text-lg"
-                          />
+            {assistants.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-24 text-center">
+                <div className="size-14 rounded-2xl bg-muted flex items-center justify-center mb-4">
+                  <Bot className="size-6 text-muted-foreground/40" />
+                </div>
+                <p className="text-[15px] font-medium text-foreground/70 mb-2">
+                  No assistants yet
+                </p>
+                <p className="text-[13px] text-muted-foreground mb-4">
+                  Create a custom assistant to tailor its behavior and
+                  instructions.
+                </p>
+                <Button
+                  onClick={() => {
+                    setEditingKey(null)
+                    setOpen(true)
+                  }}
+                  size="sm"
+                  variant="outline"
+                >
+                  <PlusCircle size={16} />
+                  {t('assistants:addAssistant')}
+                </Button>
+              </div>
+            ) : (
+              <div className="max-w-2xl space-y-6">
+                {assistants
+                  .slice()
+                  .sort((a, b) => a.created_at - b.created_at)
+                  .map((assistant) => (
+                    <div
+                      className="bg-secondary dark:bg-secondary/20 p-4 rounded-lg flex items-center gap-4"
+                      key={assistant.id}
+                    >
+                      <div className="flex items-start gap-3 flex-1">
+                        {assistant?.avatar && (
+                          <div className="shrink-0 w-8 h-8 relative flex items-center justify-center bg-secondary rounded-md">
+                            <AvatarEmoji
+                              avatar={assistant?.avatar}
+                              imageClassName="w-5 h-5 object-contain"
+                              textClassName="text-lg"
+                            />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-base font-studio font-medium line-clamp-1">
+                            {assistant.name}
+                          </h3>
+                          <p className="text-muted-foreground leading-normal text-xs line-clamp-2 mt-1">
+                            {assistant.description}
+                          </p>
                         </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-base font-studio font-medium line-clamp-1">
-                          {assistant.name}
-                        </h3>
-                        <p className="text-muted-foreground leading-normal text-xs line-clamp-2 mt-1">
-                          {assistant.description}
-                        </p>
+                      </div>
+                      <div className="flex items-center">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          title={t('assistants:editAssistant')}
+                          aria-label={t('assistants:editAssistant')}
+                          onClick={() => {
+                            setEditingKey(assistant.id)
+                            setOpen(true)
+                          }}
+                        >
+                          <Pencil className="text-muted-foreground size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          title={t('assistants:deleteAssistant')}
+                          aria-label={t('assistants:deleteAssistant')}
+                          onClick={() => handleDelete(assistant.id)}
+                        >
+                          <Trash2 className="text-destructive size-4" />
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex items-center">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        title={t('assistants:editAssistant')}
-                        aria-label={t('assistants:editAssistant')}
-                        onClick={() => {
-                          setEditingKey(assistant.id)
-                          setOpen(true)
-                        }}
-                      >
-                        <Pencil className="text-muted-foreground size-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        title={t('assistants:deleteAssistant')}
-                        aria-label={t('assistants:deleteAssistant')}
-                        onClick={() => handleDelete(assistant.id)}
-                      >
-                        <Trash2 className="text-destructive size-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-            </div>
+                  ))}
+              </div>
+            )}
           </div>
           <AddEditAssistant
             open={open}

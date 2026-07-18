@@ -31,11 +31,7 @@ import { DeleteMessageDialog } from '@/containers/dialogs/message/DeleteMessageD
 import { TokenSpeedIndicator } from '@/containers/TokenSpeedIndicator'
 import { extractFilesFromPrompt, FileMetadata } from '@/lib/fileMetadata'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import {
   ChevronLeft,
   ChevronRight,
@@ -93,6 +89,42 @@ export type MessageItemProps = {
   versionInfo?: VersionInfo
   onSwitchVersion?: (groupId: string, direction: 'prev' | 'next') => void
   assistant?: { avatar?: React.ReactNode; name?: string }
+}
+
+type PreviewImage = { url: string; filename?: string }
+
+/** Shared image lightbox — focus-trapped Radix Dialog for keyboard/Esc support. */
+function ImagePreviewDialog({
+  previewImage,
+  onClose,
+}: {
+  previewImage: PreviewImage
+  onClose: () => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose()
+      }}
+    >
+      <DialogContent
+        className="max-w-[min(90vw,56rem)] border-none bg-transparent p-2 shadow-none sm:max-w-[min(90vw,56rem)]"
+        showCloseButton
+        aria-describedby={undefined}
+      >
+        <DialogTitle className="sr-only">
+          {previewImage.filename || t('common:preview')}
+        </DialogTitle>
+        <img
+          src={previewImage.url}
+          alt={previewImage.filename || t('common:preview')}
+          className="max-h-[85vh] max-w-full object-contain rounded-lg mx-auto"
+        />
+      </DialogContent>
+    </Dialog>
+  )
 }
 
 export const MessageItem = memo(
@@ -583,27 +615,10 @@ export const MessageItem = memo(
 
           {/* Image preview — focus-trapped dialog for keyboard/Esc support */}
           {previewImage && (
-            <Dialog
-              open={Boolean(previewImage)}
-              onOpenChange={(open) => {
-                if (!open) setPreviewImage(null)
-              }}
-            >
-              <DialogContent
-                className="max-w-[min(90vw,56rem)] border-none bg-transparent p-2 shadow-none sm:max-w-[min(90vw,56rem)]"
-                showCloseButton
-                aria-describedby={undefined}
-              >
-                <DialogTitle className="sr-only">
-                  {previewImage.filename || t('common:preview')}
-                </DialogTitle>
-                <img
-                  src={previewImage.url}
-                  alt={previewImage.filename || t('common:preview')}
-                  className="max-h-[85vh] max-w-full object-contain rounded-lg mx-auto"
-                />
-              </DialogContent>
-            </Dialog>
+            <ImagePreviewDialog
+              previewImage={previewImage}
+              onClose={() => setPreviewImage(null)}
+            />
           )}
         </div>
       )
@@ -769,17 +784,10 @@ export const MessageItem = memo(
 
         {/* Image Preview Dialog */}
         {previewImage && (
-          <div
-            className="fixed inset-0 z-100 bg-black/70 backdrop-blur-md flex items-center justify-center cursor-pointer"
-            onClick={() => setPreviewImage(null)}
-          >
-            <img
-              src={previewImage.url}
-              alt={previewImage.filename || 'Preview'}
-              className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg"
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
+          <ImagePreviewDialog
+            previewImage={previewImage}
+            onClose={() => setPreviewImage(null)}
+          />
         )}
       </div>
     )

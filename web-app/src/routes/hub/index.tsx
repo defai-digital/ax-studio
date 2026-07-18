@@ -56,6 +56,11 @@ import { formatCompactNumber } from '@/lib/utils/number'
 import { z } from 'zod/v4'
 import { findDownloadedCatalogModel } from '@/lib/models/downloaded'
 import { useModelSupportStatus } from '@/hooks/models/useModelSupportStatus'
+import { useHardwareTotalMemory } from '@/hooks/settings/useHardwareTotalMemory'
+import {
+  getVariantMemoryInfo,
+  VARIANT_MEMORY_LABEL_CLASSES,
+} from '@/lib/models/variant-memory'
 
 type FilterTag = 'all' | 'downloaded' | 'mlx' | 'tools' | 'vision' | 'reasoning'
 
@@ -116,6 +121,7 @@ function HubContent() {
     null
   )
   const { modelSupportStatus, checkModelSupport } = useModelSupportStatus()
+  const totalMemoryMB = useHardwareTotalMemory()
   const [isInitialLoad, setIsInitialLoad] = useState(true)
   const addModelSourceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
@@ -629,6 +635,17 @@ function HubContent() {
                             ? 'Incompatible'
                             : undefined
 
+                    // S1.2 — estimated runtime memory + human label for the
+                    // default variant; null when hardware info is unavailable
+                    // (card then shows only the file size, as before).
+                    const defaultMemoryInfo = defaultQuant
+                      ? getVariantMemoryInfo(
+                          defaultQuant.file_size,
+                          defaultFormat === 'MLX',
+                          totalMemoryMB
+                        )
+                      : null
+
                     return (
                       <motion.div
                         key={model.model_name}
@@ -681,6 +698,23 @@ function HubContent() {
                               <span className="text-[10px] text-muted-foreground/40">
                                 {defaultFormat}
                               </span>
+                              {defaultMemoryInfo && (
+                                <>
+                                  <span className="text-[10px] text-muted-foreground/40">
+                                    {defaultMemoryInfo.estimatedText}
+                                  </span>
+                                  <span
+                                    className={cn(
+                                      'text-[10px] font-medium',
+                                      VARIANT_MEMORY_LABEL_CLASSES[
+                                        defaultMemoryInfo.label
+                                      ]
+                                    )}
+                                  >
+                                    {defaultMemoryInfo.label}
+                                  </span>
+                                </>
+                              )}
                             </div>
                           )}
                         </div>
@@ -829,7 +863,14 @@ function HubContent() {
                               className="mt-3 border-t border-border/30 pt-3"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              {model.quants?.map((variant) => (
+                              {model.quants?.map((variant) => {
+                                const variantMemoryInfo = getVariantMemoryInfo(
+                                  variant.file_size,
+                                  model.is_mlx ||
+                                    variant.path.startsWith('hf://'),
+                                  totalMemoryMB
+                                )
+                                return (
                                 <CardItem
                                   key={variant.model_id}
                                   title={
@@ -851,9 +892,27 @@ function HubContent() {
                                   }
                                   actions={
                                     <div className="flex items-center gap-2">
-                                      <p className="text-muted-foreground font-medium text-[11px]">
-                                        {variant.file_size}
-                                      </p>
+                                      <div className="flex flex-col items-end">
+                                        <p className="text-muted-foreground font-medium text-[11px]">
+                                          {variant.file_size}
+                                        </p>
+                                        {variantMemoryInfo && (
+                                          <p className="text-[10px] text-muted-foreground/50">
+                                            {variantMemoryInfo.estimatedText}
+                                            {' · '}
+                                            <span
+                                              className={cn(
+                                                'font-medium',
+                                                VARIANT_MEMORY_LABEL_CLASSES[
+                                                  variantMemoryInfo.label
+                                                ]
+                                              )}
+                                            >
+                                              {variantMemoryInfo.label}
+                                            </span>
+                                          </p>
+                                        )}
+                                      </div>
                                       <ModelInfoHoverCard
                                         model={model}
                                         variant={variant}
@@ -870,7 +929,8 @@ function HubContent() {
                                     </div>
                                   }
                                 />
-                              ))}
+                                )
+                              })}
                             </div>
                           )}
                       </motion.div>
