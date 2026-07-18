@@ -116,10 +116,8 @@ mod tests {
 
     #[test]
     fn paths_from_opened_urls_handles_spaces_and_unicode() {
-        let urls = vec![url::Url::parse(
-            "file:///Users/alice/My%20Documents/n%C3%A9%20file.txt",
-        )
-        .unwrap()];
+        let urls =
+            vec![url::Url::parse("file:///Users/alice/My%20Documents/n%C3%A9%20file.txt").unwrap()];
         let paths = paths_from_opened_urls(urls);
         assert_eq!(paths, vec!["/Users/alice/My Documents/né file.txt"]);
     }
