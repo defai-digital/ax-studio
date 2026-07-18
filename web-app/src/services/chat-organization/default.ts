@@ -66,6 +66,7 @@ export class DefaultChatOrganizationService implements ChatOrganizationService {
       localStorage.setItem(this.storageKey, JSON.stringify(stored))
     } catch (error) {
       console.error('Error saving chat organization to localStorage:', error)
+      throw error
     }
   }
 

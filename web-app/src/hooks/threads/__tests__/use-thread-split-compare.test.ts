@@ -186,8 +186,9 @@ describe('useThreadSplit — compare mode', () => {
   })
 
   it('handleCompare reports errors via toast and keeps compare mode off', async () => {
-    const { createThread } = useThreads.getState() as unknown as {
+    const { createThread, updateThread } = useThreads.getState() as unknown as {
       createThread: ReturnType<typeof vi.fn>
+      updateThread: ReturnType<typeof vi.fn>
     }
     createThread.mockRejectedValueOnce(new Error('boom'))
 
@@ -205,5 +206,6 @@ describe('useThreadSplit — compare mode', () => {
 
     expect(result.current.compareModels).toBeNull()
     expect(result.current.splitThreadId).toBeNull()
+    expect(updateThread).not.toHaveBeenCalled()
   })
 })

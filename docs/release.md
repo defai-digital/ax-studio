@@ -77,11 +77,44 @@ assessment.
 
 ## Stable Release Procedure
 
-Create an annotated release tag from a tested `main` commit and push it:
+### 1. Commit the app version on `main` before tagging
+
+Release CI still runs `scripts/release/set-version.mjs` when building artifacts,
+but that rewrite is ephemeral. Local `yarn dev` and Settings → App Version read
+the **committed** manifests (`web-app/package.json`, `src-tauri/tauri.conf.json`,
+and related Cargo/`package.json` files). If those stay on an older number (for
+example `1.3.24`) while the git tag is `v2.1.0`, developers see the wrong version.
+
+Before cutting a release tag:
 
 ```bash
-git tag -a v2.0.3 -m "AX Studio 2.0.3"
-git push origin v2.0.3
+# Rewrite every app-version manifest to the release semver (no leading "v")
+yarn set-version --version 2.1.0
+
+# Confirm lockstep (fails if any manifest disagrees)
+yarn validate:version
+# optional: require an exact version
+yarn validate:version --expect 2.1.0
+
+git add package.json web-app/package.json \
+  src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock \
+  src-tauri/plugins/tauri-plugin-hardware/package.json \
+  src-tauri/plugins/tauri-plugin-hardware/Cargo.toml \
+  src-tauri/plugins/tauri-plugin-llamacpp/package.json \
+  src-tauri/plugins/tauri-plugin-llamacpp/Cargo.toml
+git commit -m "chore(release): bump version to 2.1.0"
+git push origin main
+```
+
+`yarn validate:version` must pass on `main` after the bump.
+
+### 2. Tag the bumped commit
+
+Create an annotated release tag from that tested `main` commit and push it:
+
+```bash
+git tag -a v2.1.0 -m "AX Studio 2.1.0"
+git push origin v2.1.0
 ```
 
 The tag starts `Tauri Builder - Tag`. The workflow creates a draft release and

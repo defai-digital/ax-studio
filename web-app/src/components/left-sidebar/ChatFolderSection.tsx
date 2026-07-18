@@ -23,7 +23,7 @@ import { useSidebar } from '@/components/ui/sidebar-context'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { toast } from 'sonner'
 import { ThreadList } from '@/containers/ThreadList'
-import { useChatOrganization } from '@/hooks/threads/useChatOrganization'
+import { useChatOrganizationStore } from '@/hooks/threads/useChatOrganization'
 import type { ChatFolder } from '@/services/chat-organization/types'
 import { NamePromptDialog } from '@/containers/dialogs/chat-organization/NamePromptDialog'
 import { DeleteChatFolderDialog } from '@/containers/dialogs/chat-organization/DeleteChatFolderDialog'
@@ -139,7 +139,7 @@ export function ChatFolderSection({
   const { t } = useTranslation()
   const { isMobile } = useSidebar()
   const { collapsedFolderIds, toggleFolderCollapsed, renameFolder } =
-    useChatOrganization()
+    useChatOrganizationStore()
   const [renameTarget, setRenameTarget] = useState<ChatFolder | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ChatFolder | null>(null)
 

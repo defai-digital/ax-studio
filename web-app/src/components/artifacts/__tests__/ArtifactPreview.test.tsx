@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { ArtifactPreview } from '../ArtifactPreview'
 import {
-  ArtifactPreview,
   wrapWithCsp,
   wrapSvgDocument,
   ARTIFACT_PREVIEW_CSP,
-} from '../ArtifactPreview'
+} from '@/lib/artifacts/artifact-preview'
 import type { Artifact } from '@/lib/artifacts/extract-artifacts'
 
 const makeArtifact = (overrides: Partial<Artifact> = {}): Artifact => ({

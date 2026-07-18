@@ -149,9 +149,6 @@ export function useThreadSplit({ thread, selectedModel, selectedProvider }: Inpu
   const handleCompare = useCallback(
     async (modelA: ThreadModel, modelB: ThreadModel) => {
       try {
-        if (thread?.id) {
-          updateThread(thread.id, { model: modelA })
-        }
         if (splitThreadId) {
           updateThread(splitThreadId, { model: modelB })
         } else {
@@ -162,6 +159,11 @@ export function useThreadSplit({ thread, selectedModel, selectedProvider }: Inpu
             thread?.metadata?.project
           )
           setSplitThreadId(newThread.id)
+        }
+        // Rebind the main pane only after the second pane is ready. A failed
+        // create must not leave the existing conversation on a surprise model.
+        if (thread?.id) {
+          updateThread(thread.id, { model: modelA })
         }
         // Main pane stays on the left, compare pane on the right.
         setSplitDirection('right')

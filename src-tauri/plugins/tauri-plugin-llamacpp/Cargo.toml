@@ -1,6 +1,6 @@
 [package]
 name = "tauri-plugin-llamacpp"
-version = "0.6.599"
+version = "2.1.0"
 authors = ["AX Studio <service@axstudio.ai>"]
 description = "Tauri plugin for managing AX Studio LlamaCpp server processes and model loading"
 license = "Apache-2.0"

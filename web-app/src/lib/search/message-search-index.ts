@@ -45,14 +45,15 @@ let queuedBuild: {
 } | null = null
 
 const computeFingerprint = (threads: Record<string, Thread>): string => {
-  let count = 0
-  let maxUpdated = 0
-  for (const thread of Object.values(threads)) {
-    if (thread.id === TEMPORARY_CHAT_ID) continue
-    count += 1
-    if (thread.updated > maxUpdated) maxUpdated = thread.updated
-  }
-  return `${count}:${maxUpdated}`
+  // Count + max(updated) misses replacements and updates below the current
+  // maximum. Include every searchable thread revision, sorted so insertion
+  // order cannot trigger unnecessary rebuilds.
+  return JSON.stringify(
+    Object.values(threads)
+      .filter((thread) => thread.id !== TEMPORARY_CHAT_ID)
+      .map((thread) => [thread.id, thread.updated] as const)
+      .sort(([leftId], [rightId]) => leftId.localeCompare(rightId))
+  )
 }
 
 const extractThreadText = (messages: ThreadMessage[]): string => {

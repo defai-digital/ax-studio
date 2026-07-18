@@ -82,6 +82,7 @@ const mockChatOrganization = vi.hoisted(() => ({
 
 vi.mock('@/hooks/threads/useChatOrganization', () => ({
   useChatOrganization: () => mockChatOrganization,
+  useChatOrganizationStore: () => mockChatOrganization,
 }))
 
 vi.mock('@/i18n/react-i18next-compat', () => ({
@@ -489,6 +490,20 @@ describe('NavChats folders and tags', () => {
     expect(
       screen.getByText('No chats yet — use Move to folder on any chat')
     ).toBeInTheDocument()
+  })
+
+  it('keeps saved folders manageable when no chats remain', async () => {
+    mockChatOrganization.folders = [
+      { id: 'f1', name: 'Saved folder', updatedAt: 100 },
+    ]
+    await mockThreadList([])
+
+    render(<NavChats />)
+
+    expect(screen.getByTestId('chat-folder-section')).toBeInTheDocument()
+    expect(screen.getByText('Saved folder')).toBeInTheDocument()
+    expect(screen.getByText('Rename folder')).toBeInTheDocument()
+    expect(screen.getByText('Delete folder')).toBeInTheDocument()
   })
 
   it('renders tag chips and toggles the filter on click', async () => {

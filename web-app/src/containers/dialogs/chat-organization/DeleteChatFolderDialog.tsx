@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { useChatOrganization } from '@/hooks/threads/useChatOrganization'
+import { useChatOrganizationStore } from '@/hooks/threads/useChatOrganization'
 import type { ChatFolder } from '@/services/chat-organization/types'
 
 interface DeleteChatFolderDialogProps {
@@ -32,7 +32,7 @@ export function DeleteChatFolderDialog({
   // Focus Cancel instead of the destructive button so Enter-to-dismiss
   // doesn't accidentally delete the folder.
   const cancelButtonRef = useRef<HTMLButtonElement>(null)
-  const { deleteFolder } = useChatOrganization()
+  const { deleteFolder } = useChatOrganizationStore()
 
   const handleConfirm = async () => {
     if (!folder) return

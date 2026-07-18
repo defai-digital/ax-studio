@@ -11,10 +11,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import '@testing-library/jest-dom'
 import { ThreadView, type ThreadViewProps } from '../ThreadView'
 
-const { mockSplitSend, mainPaneProps, splitPaneProps } = vi.hoisted(() => ({
+const { mockSplitSend, mainPaneProps, splitPaneProps, splitRegistration } = vi.hoisted(() => ({
   mockSplitSend: vi.fn(),
   mainPaneProps: [] as Record<string, unknown>[],
   splitPaneProps: [] as Record<string, unknown>[],
+  splitRegistration: { enabled: true },
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -38,7 +39,7 @@ vi.mock('@/containers/threads/SplitThreadContainer', async () => {
       // Mirror the real container: register the pane's send handler while
       // compare mode is active, unregister on cleanup.
       React.useEffect(() => {
-        if (!props.registerSend) return
+        if (!props.registerSend || !splitRegistration.enabled) return
         props.registerSend(mockSplitSend)
         return () => props.registerSend?.(null)
       }, [props.registerSend])
@@ -116,6 +117,7 @@ describe('ThreadView — compare mode', () => {
     vi.clearAllMocks()
     mainPaneProps.length = 0
     splitPaneProps.length = 0
+    splitRegistration.enabled = true
     mockSplitSend.mockResolvedValue(undefined)
   })
 
@@ -174,8 +176,8 @@ describe('ThreadView — compare mode', () => {
     })
   })
 
-  it('still sends to the main thread if the split pane has not registered yet', async () => {
-    const user = userEvent.setup()
+  it('keeps send disabled until the split pane has registered', () => {
+    splitRegistration.enabled = false
     const props = makeProps({
       splitPaneOrder: ['main', 'split'],
       splitThreadId: 'thread-2',
@@ -184,12 +186,12 @@ describe('ThreadView — compare mode', () => {
     render(<ThreadView {...props} />)
 
     const textarea = screen.getByLabelText('Compare models composer')
-    await user.type(textarea, 'early send')
-    await user.click(screen.getByRole('button', { name: 'Send to both models' }))
-
-    await waitFor(() => {
-      expect(props.handleSubmit).toHaveBeenCalledWith('early send')
-    })
+    expect(textarea).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: 'Send to both models' })
+    ).toBeDisabled()
+    expect(props.handleSubmit).not.toHaveBeenCalled()
+    expect(mockSplitSend).not.toHaveBeenCalled()
   })
 
   it('disables the shared composer while a pane is generating', () => {

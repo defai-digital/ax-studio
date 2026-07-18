@@ -40,6 +40,7 @@ const mockChatOrganization = vi.hoisted(() => ({
 
 vi.mock('@/hooks/threads/useChatOrganization', () => ({
   useChatOrganization: () => mockChatOrganization,
+  useChatOrganizationStore: () => mockChatOrganization,
 }))
 
 const namePromptProps = vi.hoisted(() => ({

@@ -1,6 +1,6 @@
 {
   "name": "@ax-studio/tauri-plugin-llamacpp-api",
-  "version": "0.6.6",
+  "version": "2.1.0",
   "private": true,
   "description": "",
   "license": "Apache-2.0",

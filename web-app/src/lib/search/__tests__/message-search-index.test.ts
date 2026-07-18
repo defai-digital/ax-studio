@@ -177,6 +177,44 @@ describe('message-search-index', () => {
     expect(mocks.fetchMessages).toHaveBeenCalledTimes(7)
   })
 
+  it('rebuilds when a non-maximum thread changes or a thread is replaced', async () => {
+    const threads = makeThreads(2)
+    threads['thread-2'] = { ...threads['thread-2'], updated: 500 }
+
+    let promise = ensureMessageSearchIndex(threads)
+    await vi.runAllTimersAsync()
+    await promise
+    expect(mocks.fetchMessages).toHaveBeenCalledTimes(2)
+
+    const bumpedBelowMaximum = {
+      ...threads,
+      'thread-1': { ...threads['thread-1'], updated: 200 },
+    }
+    promise = ensureMessageSearchIndex(bumpedBelowMaximum)
+    await vi.runAllTimersAsync()
+    await promise
+    expect(mocks.fetchMessages).toHaveBeenCalledTimes(4)
+
+    const { 'thread-1': _removed, ...withoutThreadOne } = bumpedBelowMaximum
+    const replaced = {
+      ...withoutThreadOne,
+      replacement: {
+        id: 'replacement',
+        title: 'Replacement',
+        updated: 200,
+        metadata: {},
+      },
+    }
+    promise = ensureMessageSearchIndex(replaced)
+    await vi.runAllTimersAsync()
+    await promise
+    expect(mocks.fetchMessages).toHaveBeenCalledTimes(6)
+    expect(getMessageSearchContent('thread-1')).toBeUndefined()
+    expect(getMessageSearchContent('replacement')).toBe(
+      'hello from replacement'
+    )
+  })
+
   it('queues a rebuild requested while another build is in flight', async () => {
     const threads = makeThreads(11)
 

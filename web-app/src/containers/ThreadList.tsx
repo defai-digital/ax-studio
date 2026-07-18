@@ -18,7 +18,7 @@ import { CHAT_EXPORT_OPTIONS, exportThread } from '@/lib/export/thread-export'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { useMessages } from '@/hooks/chat/useMessages'
 import { useThreadManagement } from '@/hooks/threads/useThreadManagement'
-import { useChatOrganization } from '@/hooks/threads/useChatOrganization'
+import { useChatOrganizationStore } from '@/hooks/threads/useChatOrganization'
 import { NamePromptDialog } from '@/containers/dialogs/chat-organization/NamePromptDialog'
 import { memo, useCallback, useMemo, useState } from 'react'
 
@@ -168,7 +168,7 @@ const ThreadItem = memo(
       addTag: addChatTag,
       assignFolder,
       setThreadTags,
-    } = useChatOrganization()
+    } = useChatOrganizationStore()
     const { t } = useTranslation()
     const [renameOpen, setRenameOpen] = useState(false)
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)

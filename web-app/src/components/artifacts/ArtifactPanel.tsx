@@ -31,6 +31,7 @@ import {
 } from '@/lib/artifacts/extract-artifacts'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { cn } from '@/lib/utils'
+import { buildRevisePrompt } from '@/lib/artifacts/revise-artifact'
 
 /**
  * ArtifactPanel — right-hand side panel rendering artifact candidates
@@ -70,43 +71,6 @@ function artifactExtension(artifact: Artifact): string {
   if (artifact.kind === 'svg') return 'svg'
   if (artifact.kind === 'mermaid') return 'mmd'
   return LANGUAGE_EXTENSIONS[artifact.language] ?? (artifact.language || 'txt')
-}
-
-export const REVISE_CONTEXT_LIMIT = 4000
-export const REVISE_CONTEXT_WINDOW = 500
-
-/**
- * Build the composer prefill for a targeted ("revise this selection") edit.
- * Artifacts longer than REVISE_CONTEXT_LIMIT are narrowed to ±500 chars
- * around the selection (when it can be located) to keep the prompt small.
- */
-export function buildRevisePrompt({
-  kind,
-  content,
-  selection,
-  instruction,
-}: {
-  kind: ArtifactKind
-  content: string
-  selection: string
-  instruction: string
-}): string {
-  let artifactBody = content
-  if (content.length > REVISE_CONTEXT_LIMIT) {
-    const at = content.indexOf(selection)
-    if (at !== -1) {
-      const start = Math.max(0, at - REVISE_CONTEXT_WINDOW)
-      const end = Math.min(
-        content.length,
-        at + selection.length + REVISE_CONTEXT_WINDOW
-      )
-      artifactBody = `${start > 0 ? '…\n' : ''}${content.slice(start, end)}${
-        end < content.length ? '\n…' : ''
-      }`
-    }
-  }
-
-  return `Regarding this ${kind} artifact:\n\n<artifact>\n${artifactBody}\n</artifact>\n\nFor this part:\n<selection>\n${selection}\n</selection>\n\n${instruction}`
 }
 
 export type ArtifactPanelProps = {

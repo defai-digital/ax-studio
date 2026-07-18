@@ -216,21 +216,25 @@ describe('DefaultChatOrganizationService', () => {
   })
 
   describe('localStorage error handling', () => {
-    it('should not throw when localStorage.setItem throws', async () => {
+    it('should reject mutations when localStorage.setItem throws', async () => {
       const consoleSpy = vi
         .spyOn(console, 'error')
         .mockImplementation(() => {})
-      const setItemSpy = vi
-        .spyOn(Storage.prototype, 'setItem')
-        .mockImplementation(() => {
+      vi.stubGlobal('localStorage', {
+        getItem: vi.fn(() => null),
+        setItem: vi.fn(() => {
           throw new Error('QuotaExceededError')
-        })
+        }),
+      })
 
-      // Should not throw, just log
-      await service.addFolder('Will Fail Save')
-
-      consoleSpy.mockRestore()
-      setItemSpy.mockRestore()
+      try {
+        await expect(service.addFolder('Will Fail Save')).rejects.toThrow(
+          'QuotaExceededError'
+        )
+      } finally {
+        vi.unstubAllGlobals()
+        consoleSpy.mockRestore()
+      }
     })
 
     it('should return empty arrays when localStorage.getItem throws', async () => {

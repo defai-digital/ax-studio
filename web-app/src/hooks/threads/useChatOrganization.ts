@@ -57,6 +57,12 @@ const useChatOrganizationStore = create<ChatOrganizationState>()((set) => ({
   },
 
   deleteFolder: async (id) => {
+    // Delete the folder first. If persistence fails, member threads must keep
+    // their assignment rather than being silently unfiled from a folder that
+    // still exists on disk.
+    const service = getServiceHub().chatOrganization()
+    await service.deleteFolder(id)
+
     // Clear membership on member threads — never delete the threads.
     const threadsState = useThreads.getState()
     Object.values(threadsState.threads)
@@ -67,8 +73,6 @@ const useChatOrganizationStore = create<ChatOrganizationState>()((set) => ({
         })
       })
 
-    const service = getServiceHub().chatOrganization()
-    await service.deleteFolder(id)
     const { folders, tags } = await service.getOrganization()
     set((state) => ({
       folders,
@@ -95,6 +99,11 @@ const useChatOrganizationStore = create<ChatOrganizationState>()((set) => ({
   },
 
   deleteTag: async (id) => {
+    // Preserve thread metadata if the tag itself could not be persisted as
+    // deleted; otherwise the UI and storage disagree after a reload.
+    const service = getServiceHub().chatOrganization()
+    await service.deleteTag(id)
+
     // Clear membership on member threads — never delete the threads.
     const threadsState = useThreads.getState()
     Object.values(threadsState.threads)
@@ -111,8 +120,6 @@ const useChatOrganizationStore = create<ChatOrganizationState>()((set) => ({
         })
       })
 
-    const service = getServiceHub().chatOrganization()
-    await service.deleteTag(id)
     const { folders, tags } = await service.getOrganization()
     set((state) => ({
       folders,

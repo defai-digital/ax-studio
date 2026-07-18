@@ -1,19 +1,25 @@
 /**
  * Centralized version-bumping script for AX Studio.
  *
- * Updates version strings across tauri.conf.json, Cargo.toml files,
- * package.json files, and optionally configures updater artifacts and
- * Windows code-signing — replacing duplicated shell blocks in CI.
+ * Updates version strings across tauri.conf.json, root + web-app + plugin
+ * package.json files, Cargo.toml files, and optionally configures updater
+ * artifacts and Windows code-signing — replacing duplicated shell blocks in CI.
+ *
+ * Prefer committing the result on `main` before tagging a release so local
+ * `yarn dev` (UI VERSION + Tauri app version) matches the git tag. Release CI
+ * still re-runs this script when building artifacts. Use
+ * `yarn validate:version` to assert lockstep after a bump.
  *
  * All inputs and target files are validated before any file is changed. Each
  * write is staged beside its destination and atomically renamed into place so
  * a terminated release job cannot leave a truncated manifest behind.
  *
  * Usage:
+ *   yarn set-version -- --version <version> [options]
  *   node scripts/release/set-version.mjs --version <version> [options]
  *
  * Options:
- *   --version <ver>          Required. Semantic version (e.g. 1.3.3)
+ *   --version <ver>          Required. Semantic version (e.g. 2.1.0)
  *   --channel <name>         Release channel: stable | beta | nightly (default: stable)
  *   --updater-pubkey <key>   Enables createUpdaterArtifacts and sets the pubkey
  *   --windows-sign-command   Adds signCommand to tauri.windows.conf.json
@@ -30,17 +36,23 @@ const booleanArguments = new Set(['windows-sign-command'])
 const releaseChannels = new Set(['stable', 'beta', 'nightly'])
 export const WINDOWS_SIGN_COMMAND = 'powershell -ExecutionPolicy Bypass -File ./sign.ps1 %1'
 
-const packageJsonFiles = [
+/** App-version package.json files kept in lockstep by set-version / check-version-sync. */
+export const packageJsonFiles = [
+  'package.json',
   'web-app/package.json',
   'src-tauri/plugins/tauri-plugin-hardware/package.json',
   'src-tauri/plugins/tauri-plugin-llamacpp/package.json',
 ]
 
-const cargoFiles = [
+/** App-version Cargo.toml files kept in lockstep by set-version / check-version-sync. */
+export const cargoFiles = [
   'src-tauri/Cargo.toml',
   'src-tauri/plugins/tauri-plugin-hardware/Cargo.toml',
   'src-tauri/plugins/tauri-plugin-llamacpp/Cargo.toml',
 ]
+
+/** Tauri app version lives here; UI VERSION is injected from web-app/package.json. */
+export const tauriConfigPath = 'src-tauri/tauri.conf.json'
 
 export class CliUsageError extends Error {}
 
@@ -62,7 +74,10 @@ export function parseCliArguments(argv) {
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index]
 
-    if (!token.startsWith('--') || token === '--') {
+    // Yarn/npm often forward a bare `--` separator; ignore it.
+    if (token === '--') continue
+
+    if (!token.startsWith('--')) {
       throw new CliUsageError(`unexpected positional argument: ${token}`)
     }
 
@@ -193,10 +208,9 @@ export function prepareVersionChanges(repoRoot, options) {
   const { version, channel, updaterPubkey, windowsSignCommand } = options
   const changes = []
 
-  const tauriPath = 'src-tauri/tauri.conf.json'
-  const { source: tauriSource, value: tauriValue } = readJson(repoRoot, tauriPath)
-  const tauriConfig = requireRecord(tauriValue, tauriPath)
-  const bundle = requireRecord(tauriConfig.bundle, `${tauriPath} bundle`)
+  const { source: tauriSource, value: tauriValue } = readJson(repoRoot, tauriConfigPath)
+  const tauriConfig = requireRecord(tauriValue, tauriConfigPath)
+  const bundle = requireRecord(tauriConfig.bundle, `${tauriConfigPath} bundle`)
   const updatedTauriConfig = {
     ...tauriConfig,
     version,
@@ -207,8 +221,8 @@ export function prepareVersionChanges(repoRoot, options) {
   }
 
   if (updaterPubkey) {
-    const plugins = requireRecord(tauriConfig.plugins, `${tauriPath} plugins`)
-    const updater = requireRecord(plugins.updater, `${tauriPath} plugins.updater`)
+    const plugins = requireRecord(tauriConfig.plugins, `${tauriConfigPath} plugins`)
+    const updater = requireRecord(plugins.updater, `${tauriConfigPath} plugins.updater`)
     updatedTauriConfig.plugins = {
       ...plugins,
       updater: { ...updater, pubkey: updaterPubkey },
@@ -216,7 +230,7 @@ export function prepareVersionChanges(repoRoot, options) {
   }
 
   changes.push({
-    relativePath: tauriPath,
+    relativePath: tauriConfigPath,
     originalContent: tauriSource,
     content: serializeJson(updatedTauriConfig),
   })
@@ -317,7 +331,7 @@ export function setReleaseVersion(repoRoot, options) {
   writeVersionChanges(repoRoot, changes)
 
   log(
-    `src-tauri/tauri.conf.json → ${options.version} (updater: ${options.updaterPubkey ? 'enabled' : 'disabled'})`,
+    `${tauriConfigPath} → ${options.version} (updater: ${options.updaterPubkey ? 'enabled' : 'disabled'})`,
   )
   for (const relativePath of [...packageJsonFiles, ...cargoFiles]) {
     log(`${relativePath} → ${options.version}`)

@@ -34,6 +34,7 @@ function createReleaseFixture({ invalidLastCargo = false } = {}) {
       updater: { pubkey: 'old-key', endpoints: ['https://updates.example/latest.json'] },
     },
   })
+  writeFixtureFile(root, 'package.json', { name: 'ax-studio-app', version: '1.0.0' })
   writeFixtureFile(root, 'web-app/package.json', { name: 'web-app', version: '1.0.0' })
   writeFixtureFile(root, 'src-tauri/plugins/tauri-plugin-hardware/package.json', {
     name: 'hardware',
@@ -160,6 +161,8 @@ describe('set-version release boundary', () => {
 
     writeVersionChanges(root, changes)
 
+    expect(JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version)
+      .toBe('2.3.4')
     expect(JSON.parse(fs.readFileSync(path.join(root, 'web-app/package.json'), 'utf8')).version)
       .toBe('2.3.4')
     expect(fs.readFileSync(path.join(root, 'src-tauri/Cargo.toml'), 'utf8'))

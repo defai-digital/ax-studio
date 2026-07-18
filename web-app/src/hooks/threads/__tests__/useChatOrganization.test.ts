@@ -140,6 +140,27 @@ describe('useChatOrganization', () => {
     expect(result.current.collapsedFolderIds).toEqual([])
   })
 
+  it('preserves folder membership when deleting the folder fails', async () => {
+    mockThreads = {
+      'thread-1': {
+        id: 'thread-1',
+        title: 'In folder',
+        updated: 1,
+        metadata: { folderId: 'folder-1' },
+      } as Thread,
+    }
+    mockDeleteFolder.mockRejectedValueOnce(new Error('storage unavailable'))
+    const { result } = renderHook(() => useChatOrganization())
+
+    await act(async () => {
+      await expect(result.current.deleteFolder('folder-1')).rejects.toThrow(
+        'storage unavailable'
+      )
+    })
+
+    expect(mockUpdateThread).not.toHaveBeenCalled()
+  })
+
   it('adds a tag and refreshes from the service', async () => {
     mockGetOrganization.mockResolvedValue({ folders: [], tags: [mockTag] })
     const { result } = renderHook(() => useChatOrganization())

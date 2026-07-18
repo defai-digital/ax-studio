@@ -23,10 +23,10 @@ pub enum WakeAction {
     Wake,
 }
 
-/// Toggle decision: a visible window hides, anything else (hidden or
-/// minimized) runs the wake sequence.
-pub fn wake_action(is_visible: bool) -> WakeAction {
-    if is_visible {
+/// Toggle decision: a visible, non-minimized window hides; hidden or
+/// minimized windows run the wake sequence.
+pub fn wake_action(is_visible: bool, is_minimized: bool) -> WakeAction {
+    if is_visible && !is_minimized {
         WakeAction::Hide
     } else {
         WakeAction::Wake
@@ -43,7 +43,8 @@ pub fn handle_shortcut(app: &AppHandle, _shortcut: &Shortcut, event: ShortcutEve
         return;
     };
     let is_visible = window.is_visible().unwrap_or(false);
-    match wake_action(is_visible) {
+    let is_minimized = window.is_minimized().unwrap_or(false);
+    match wake_action(is_visible, is_minimized) {
         WakeAction::Hide => {
             let _ = window.hide();
         }
@@ -63,12 +64,14 @@ mod tests {
 
     #[test]
     fn visible_window_hides() {
-        assert_eq!(wake_action(true), WakeAction::Hide);
+        assert_eq!(wake_action(true, false), WakeAction::Hide);
     }
 
     #[test]
     fn hidden_or_minimized_window_wakes() {
-        assert_eq!(wake_action(false), WakeAction::Wake);
+        assert_eq!(wake_action(false, false), WakeAction::Wake);
+        assert_eq!(wake_action(false, true), WakeAction::Wake);
+        assert_eq!(wake_action(true, true), WakeAction::Wake);
     }
 
     #[test]

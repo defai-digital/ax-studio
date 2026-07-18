@@ -91,11 +91,13 @@ export function ThreadView({
   // while compare mode is active. Sending from the shared composer is two
   // independent calls through each thread's existing send path.
   const splitSendRef = useRef<((text: string) => Promise<void>) | null>(null)
+  const [splitSendReady, setSplitSendReady] = useState(false)
   const [splitBusy, setSplitBusy] = useState(false)
 
   const registerSplitSend = useCallback(
     (send: ((text: string) => Promise<void>) | null) => {
       splitSendRef.current = send
+      setSplitSendReady(send !== null)
     },
     []
   )
@@ -107,9 +109,9 @@ export function ThreadView({
 
   const handleCompareSubmit = useCallback(
     async (text: string) => {
-      const sends: Promise<void>[] = [handleSubmit(text)]
       const splitSend = splitSendRef.current
-      if (splitSend) sends.push(splitSend(text))
+      if (!splitSend) return
+      const sends: Promise<void>[] = [handleSubmit(text), splitSend(text)]
       // Independent calls: one pane failing must not cancel the other.
       await Promise.allSettled(sends)
     },
@@ -276,7 +278,7 @@ export function ThreadView({
                 <CompareComposer
                   modelALabel={compareModels[0].id}
                   modelBLabel={compareModels[1].id}
-                  disabled={mainBusy || splitBusy}
+                  disabled={mainBusy || splitBusy || !splitSendReady}
                   onSubmit={handleCompareSubmit}
                 />
               </div>

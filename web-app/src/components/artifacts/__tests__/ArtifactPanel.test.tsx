@@ -58,7 +58,8 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   ),
 }))
 
-import { ArtifactPanel, buildRevisePrompt } from '../ArtifactPanel'
+import { ArtifactPanel } from '../ArtifactPanel'
+import { buildRevisePrompt } from '@/lib/artifacts/revise-artifact'
 import { useArtifactPanel } from '@/stores/artifact-panel-store'
 import { usePrompt } from '@/hooks/ui/usePrompt'
 

@@ -151,7 +151,11 @@ export function NavChats() {
       .filter((t): t is Thread => t != null)
   }, [pinnedIds, unfiledThreads])
 
-  if (threadsWithoutProject.length === 0) {
+  if (
+    threadsWithoutProject.length === 0 &&
+    chatFolders.length === 0 &&
+    chatTags.length === 0
+  ) {
     return (
       <SidebarGroup className="group-data-[collapsible=icon]:hidden">
         <SidebarGroupLabel>{t('common:chats')}</SidebarGroupLabel>
