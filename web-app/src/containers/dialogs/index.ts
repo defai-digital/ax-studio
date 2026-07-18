@@ -7,6 +7,10 @@ export { DeleteAllThreadsDialog } from './thread/DeleteAllThreadsDialog'
 export { EditMessageDialog } from './message/EditMessageDialog'
 export { DeleteMessageDialog } from './message/DeleteMessageDialog'
 
+// Chat organization dialogs
+export { NamePromptDialog } from './chat-organization/NamePromptDialog'
+export { DeleteChatFolderDialog } from './chat-organization/DeleteChatFolderDialog'
+
 // System / app-level dialogs (still top-level)
 export { FactoryResetDialog } from './FactoryResetDialog'
 export { DeleteAssistantDialog } from './DeleteAssistantDialog'

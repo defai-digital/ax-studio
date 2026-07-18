@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockThreads: Thread[] = [
@@ -69,6 +69,21 @@ vi.mock('@/hooks/threads/usePinnedThreads', () => ({
   }),
 }))
 
+const mockChatOrganization = vi.hoisted(() => ({
+  folders: [] as Array<{ id: string; name: string; updatedAt: number }>,
+  tags: [] as Array<{ id: string; name: string }>,
+  activeTagId: null as string | null,
+  setActiveTagId: vi.fn(),
+  collapsedFolderIds: [] as string[],
+  toggleFolderCollapsed: vi.fn(),
+  renameFolder: vi.fn(),
+  deleteFolder: vi.fn(),
+}))
+
+vi.mock('@/hooks/threads/useChatOrganization', () => ({
+  useChatOrganization: () => mockChatOrganization,
+}))
+
 vi.mock('@/i18n/react-i18next-compat', () => ({
   useTranslation: () => ({
     t: (key: string) => {
@@ -77,6 +92,11 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
         'common:newThread': 'New Thread',
         'common:rename': 'Rename',
         'common:delete': 'Delete',
+        'common:chatOrganization.folders': 'Folders',
+        'common:chatOrganization.emptyFolderHint':
+          'No chats yet — use Move to folder on any chat',
+        'common:chatOrganization.renameFolder': 'Rename folder',
+        'common:chatOrganization.deleteFolder': 'Delete folder',
       }
       return map[key] || key
     },
@@ -151,8 +171,21 @@ vi.mock('@/components/ui/sidebar', () => ({
   SidebarMenu: ({ children }: { children: React.ReactNode }) => (
     <ul data-testid="sidebar-menu">{children}</ul>
   ),
-  SidebarMenuButton: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
+  SidebarMenuButton: ({
+    children,
+    onClick,
+    ...props
+  }: {
+    children: React.ReactNode
+    onClick?: () => void
+  }) => (
+    <div
+      onClick={onClick}
+      aria-expanded={(props as Record<string, unknown>)['aria-expanded'] as string}
+      aria-label={(props as Record<string, unknown>)['aria-label'] as string}
+    >
+      {children}
+    </div>
   ),
   SidebarMenuItem: ({ children }: { children: React.ReactNode }) => (
     <li>{children}</li>
@@ -342,5 +375,170 @@ describe('NavChats', () => {
     } finally {
       rectSpy.mockRestore()
     }
+  })
+})
+
+describe('NavChats folders and tags', () => {
+  const folderedThread: Thread = {
+    id: 'tf1',
+    title: 'Foldered Chat',
+    updated: Date.now() / 1000 - 30,
+    created: Date.now() / 1000 - 3000,
+    metadata: { folderId: 'f1' },
+  } as Thread
+
+  const folderedThread2: Thread = {
+    id: 'tf2',
+    title: 'Tagged Foldered Chat',
+    updated: Date.now() / 1000 - 20,
+    created: Date.now() / 1000 - 2000,
+    metadata: { folderId: 'f1', tagIds: ['tag1'] },
+  } as Thread
+
+  const taggedThread: Thread = {
+    id: 'tt1',
+    title: 'Tagged Chat',
+    updated: Date.now() / 1000 - 10,
+    created: Date.now() / 1000 - 1000,
+    metadata: { tagIds: ['tag1'] },
+  } as Thread
+
+  async function mockThreadList(threads: Thread[]) {
+    const { useThreads } = (await import('@/hooks/threads/useThreads')) as {
+      useThreads: ReturnType<typeof vi.fn>
+    }
+    vi.mocked(useThreads).mockImplementation(
+      (selector: (state: Record<string, unknown>) => unknown) =>
+        selector({
+          getFilteredThreads: () => threads,
+          threads: toThreadRecord(threads),
+          deleteAllThreads: vi.fn(),
+          renameThread: vi.fn(),
+          deleteThread: vi.fn(),
+        })
+    )
+
+    // Reset any pinned-state implementation leaked by earlier tests
+    const { usePinnedThreads } = (await import(
+      '@/hooks/threads/usePinnedThreads'
+    )) as { usePinnedThreads: ReturnType<typeof vi.fn> }
+    vi.mocked(usePinnedThreads).mockReturnValue({
+      pinnedIds: [],
+      pinnedSet: new Set(),
+      togglePin: vi.fn(),
+      reorder: vi.fn(),
+    })
+  }
+
+  beforeEach(() => {
+    mockChatOrganization.folders = []
+    mockChatOrganization.tags = []
+    mockChatOrganization.activeTagId = null
+    mockChatOrganization.collapsedFolderIds = []
+  })
+
+  it('renders folder rows with counts and keeps members out of date groups', async () => {
+    mockChatOrganization.folders = [{ id: 'f1', name: 'Work', updatedAt: 100 }]
+    await mockThreadList([...mockThreads, folderedThread])
+
+    render(<NavChats />)
+
+    const section = screen.getByTestId('chat-folder-section')
+    expect(within(section).getByText('Folders')).toBeInTheDocument()
+    expect(within(section).getByText('Work')).toBeInTheDocument()
+    // Member count badge
+    expect(within(section).getByText('1')).toBeInTheDocument()
+    // Member renders under the folder...
+    expect(within(section).getByTestId('thread-tf1')).toBeInTheDocument()
+    // ...and nowhere else (date groups would render a second copy)
+    expect(screen.getAllByTestId('thread-tf1')).toHaveLength(1)
+    // Unfiled chats still render in date groups
+    expect(screen.getByTestId('thread-t1')).toBeInTheDocument()
+    // Folder row menu actions
+    expect(screen.getByText('Rename folder')).toBeInTheDocument()
+    expect(screen.getByText('Delete folder')).toBeInTheDocument()
+  })
+
+  it('does not render the folder section when there are no folders', async () => {
+    await mockThreadList(mockThreads)
+    render(<NavChats />)
+    expect(screen.queryByTestId('chat-folder-section')).toBeNull()
+  })
+
+  it('hides members of collapsed folders and toggles collapse on row click', async () => {
+    mockChatOrganization.folders = [{ id: 'f1', name: 'Work', updatedAt: 100 }]
+    mockChatOrganization.collapsedFolderIds = ['f1']
+    await mockThreadList([...mockThreads, folderedThread])
+
+    render(<NavChats />)
+
+    expect(screen.queryByTestId('thread-tf1')).toBeNull()
+
+    fireEvent.click(screen.getByText('Work'))
+    expect(mockChatOrganization.toggleFolderCollapsed).toHaveBeenCalledWith(
+      'f1'
+    )
+  })
+
+  it('shows the empty-folder hint for expanded folders without members', async () => {
+    mockChatOrganization.folders = [{ id: 'f1', name: 'Empty', updatedAt: 100 }]
+    await mockThreadList(mockThreads)
+
+    render(<NavChats />)
+
+    expect(
+      screen.getByText('No chats yet — use Move to folder on any chat')
+    ).toBeInTheDocument()
+  })
+
+  it('renders tag chips and toggles the filter on click', async () => {
+    mockChatOrganization.tags = [{ id: 'tag1', name: 'urgent' }]
+    await mockThreadList(mockThreads)
+
+    render(<NavChats />)
+
+    const chip = screen.getByRole('button', { name: 'urgent' })
+    expect(chip).toHaveAttribute('aria-pressed', 'false')
+
+    fireEvent.click(chip)
+    expect(mockChatOrganization.setActiveTagId).toHaveBeenCalledWith('tag1')
+  })
+
+  it('clears the filter when the active chip is clicked again', async () => {
+    mockChatOrganization.tags = [{ id: 'tag1', name: 'urgent' }]
+    mockChatOrganization.activeTagId = 'tag1'
+    await mockThreadList([taggedThread])
+
+    render(<NavChats />)
+
+    const chip = screen.getByRole('button', { name: 'urgent' })
+    expect(chip).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(chip)
+    expect(mockChatOrganization.setActiveTagId).toHaveBeenCalledWith(null)
+  })
+
+  it('filters date groups and folder members by the active tag', async () => {
+    mockChatOrganization.tags = [{ id: 'tag1', name: 'urgent' }]
+    mockChatOrganization.activeTagId = 'tag1'
+    mockChatOrganization.folders = [{ id: 'f1', name: 'Work', updatedAt: 100 }]
+    await mockThreadList([
+      ...mockThreads, // t1, t2 — no tags
+      taggedThread, // tt1 — tagged
+      folderedThread, // tf1 — foldered, no tags
+      folderedThread2, // tf2 — foldered + tagged
+    ])
+
+    render(<NavChats />)
+
+    // Date groups only show the tagged unfiled chat
+    expect(screen.queryByTestId('thread-t1')).toBeNull()
+    expect(screen.queryByTestId('thread-t2')).toBeNull()
+    expect(screen.getByTestId('thread-tt1')).toBeInTheDocument()
+
+    // Folder section only shows the tagged member
+    const section = screen.getByTestId('chat-folder-section')
+    expect(within(section).queryByTestId('thread-tf1')).toBeNull()
+    expect(within(section).getByTestId('thread-tf2')).toBeInTheDocument()
   })
 })

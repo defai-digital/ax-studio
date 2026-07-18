@@ -24,6 +24,19 @@ const mocks = vi.hoisted(() => ({
       metadata: {},
     },
   } as Record<string, Thread>,
+  folders: [] as { id: string; name: string; updatedAt: number }[],
+  tags: [] as { id: string; name: string }[],
+  pinnedIds: [] as string[],
+  indexSnapshot: {
+    status: 'idle',
+    version: 0,
+    documents: new Map<string, string>(),
+  } as {
+    status: 'idle' | 'indexing' | 'ready'
+    version: number
+    documents: Map<string, string>
+  },
+  ensureIndex: vi.fn(() => Promise.resolve()),
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -52,6 +65,31 @@ vi.mock('@/hooks/ui/useProjectDialog', () => ({
   useProjectDialog: () => ({ setOpen: mocks.setProjectDialogOpen }),
 }))
 
+vi.mock('@/hooks/threads/useChatOrganization', () => ({
+  useChatOrganizationStore: (
+    selector: (state: { folders: unknown[]; tags: unknown[] }) => unknown
+  ) => selector({ folders: mocks.folders, tags: mocks.tags }),
+}))
+
+vi.mock('@/hooks/threads/usePinnedThreads', () => ({
+  usePinnedThreads: () => ({
+    pinnedIds: mocks.pinnedIds,
+    pinnedSet: new Set(mocks.pinnedIds),
+    togglePin: vi.fn(),
+    isPinned: (threadId: string) => mocks.pinnedIds.includes(threadId),
+    reorder: vi.fn(),
+  }),
+}))
+
+vi.mock('@/lib/search/message-search-index', () => ({
+  ensureMessageSearchIndex: (threads: Record<string, Thread>) =>
+    mocks.ensureIndex(threads),
+  subscribeMessageSearchIndex: () => () => {},
+  getMessageSearchIndexSnapshot: () => mocks.indexSnapshot,
+  getMessageSearchContent: (threadId: string) =>
+    mocks.indexSnapshot.documents.get(threadId),
+}))
+
 vi.mock('@/i18n/react-i18next-compat', () => ({
   useTranslation: () => ({
     t: (key: string, options?: { defaultValue?: string }) =>
@@ -60,13 +98,8 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
 }))
 
 vi.mock('@/components/ui/dialog', () => ({
-  Dialog: ({
-    children,
-    open,
-  }: {
-    children: React.ReactNode
-    open: boolean
-  }) => (open ? <div data-testid="search-dialog-root">{children}</div> : null),
+  Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
+    open ? <div data-testid="search-dialog-root">{children}</div> : null,
   DialogContent: ({ children }: { children: React.ReactNode }) => (
     <div role="dialog">{children}</div>
   ),
@@ -123,6 +156,7 @@ const translations: Record<string, string> = {
   'common:clearRecent': 'Clear recent',
   'common:commands': 'Commands',
   'common:filter': 'Filter',
+  'common:indexingMessages': 'Indexing messages…',
   'common:navigate': 'Navigate',
   'common:newChat': 'New Chat',
   'common:noResultsFound': 'No results found',
@@ -157,6 +191,10 @@ describe('SearchDialog', () => {
         metadata: {},
       },
     } as Record<string, Thread>
+    mocks.folders = []
+    mocks.tags = []
+    mocks.pinnedIds = []
+    mocks.indexSnapshot = { status: 'idle', version: 0, documents: new Map() }
     Element.prototype.scrollIntoView = vi.fn()
   })
 
@@ -236,7 +274,9 @@ describe('SearchDialog', () => {
 
     render(<SearchDialog open onOpenChange={mocks.onOpenChange} />)
 
-    expect(screen.getByRole('option', { name: 'Alpha roadmap' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('option', { name: 'Alpha roadmap' })
+    ).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear recent' }))
 
@@ -279,12 +319,174 @@ describe('SearchDialog', () => {
 
   it('excludes models from inactive providers even when searched', () => {
     mocks.providers = [
-      { provider: 'disabled-co', active: false, models: [{ id: 'secret-model' }] },
+      {
+        provider: 'disabled-co',
+        active: false,
+        models: [{ id: 'secret-model' }],
+      },
     ]
     render(<SearchDialog open onOpenChange={mocks.onOpenChange} />)
     fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), {
       target: { value: 'secret-model' },
     })
     expect(screen.queryByRole('option', { name: /secret-model/ })).toBeNull()
+  })
+
+  it('filters chats by folder: prefix, resolving names case-insensitively', () => {
+    mocks.folders = [{ id: 'folder-work', name: 'Work', updatedAt: 1 }]
+    mocks.threads['thread-alpha'].metadata = { folderId: 'folder-work' }
+
+    render(<SearchDialog open onOpenChange={mocks.onOpenChange} />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), {
+      target: { value: 'folder:work' },
+    })
+
+    expect(
+      screen.getByRole('option', { name: 'Alpha roadmap' })
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Beta notes' })).toBeNull()
+  })
+
+  it('filters chats by tag: prefix', () => {
+    mocks.tags = [{ id: 'tag-urgent', name: 'urgent' }]
+    mocks.threads['thread-beta'].metadata = { tagIds: ['tag-urgent'] }
+
+    render(<SearchDialog open onOpenChange={mocks.onOpenChange} />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), {
+      target: { value: 'tag:urgent' },
+    })
+
+    expect(
+      screen.getByRole('option', { name: 'Beta notes' })
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Alpha roadmap' })).toBeNull()
+  })
+
+  it('filters chats by is:pinned', () => {
+    mocks.pinnedIds = ['thread-alpha']
+
+    render(<SearchDialog open onOpenChange={mocks.onOpenChange} />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), {
+      target: { value: 'is:pinned' },
+    })
+
+    expect(
+      screen.getByRole('option', { name: 'Alpha roadmap' })
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Beta notes' })).toBeNull()
+  })
+
+  it('combines prefix filters with free text', () => {
+    mocks.folders = [{ id: 'folder-work', name: 'Work', updatedAt: 1 }]
+    mocks.threads['thread-alpha'].metadata = { folderId: 'folder-work' }
+    mocks.threads['thread-beta'].metadata = { folderId: 'folder-work' }
+
+    render(<SearchDialog open onOpenChange={mocks.onOpenChange} />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), {
+      target: { value: 'folder:Work roadmap' },
+    })
+
+    expect(
+      screen.getByRole('option', { name: 'Alpha roadmap' })
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Beta notes' })).toBeNull()
+  })
+
+  it('shows no chat results when a folder name matches nothing', () => {
+    render(<SearchDialog open onOpenChange={mocks.onOpenChange} />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), {
+      target: { value: 'folder:Ghost' },
+    })
+
+    expect(screen.queryByRole('option', { name: 'Alpha roadmap' })).toBeNull()
+    expect(screen.queryByRole('option', { name: 'Beta notes' })).toBeNull()
+    expect(screen.getByText('No results found')).toBeInTheDocument()
+  })
+
+  it('renders a highlighted snippet when message content matches', () => {
+    mocks.indexSnapshot = {
+      status: 'ready',
+      version: 1,
+      documents: new Map([
+        [
+          'thread-alpha',
+          'some long prefix text about roadmap planning and more text here',
+        ],
+      ]),
+    }
+
+    const { container } = render(
+      <SearchDialog open onOpenChange={mocks.onOpenChange} />
+    )
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), {
+      target: { value: 'planning' },
+    })
+
+    expect(
+      screen.getByRole('option', { name: /Alpha roadmap/ })
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: /Beta notes/ })).toBeNull()
+    const mark = container.querySelector('mark')
+    expect(mark).not.toBeNull()
+    expect(mark?.textContent).toBe('planning')
+  })
+
+  it('orders chat results by most recently updated', () => {
+    render(<SearchDialog open onOpenChange={mocks.onOpenChange} />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), {
+      target: { value: 'a' },
+    })
+
+    const options = screen
+      .getAllByRole('option')
+      .map((element) => element.textContent ?? '')
+    const betaIndex = options.findIndex((text) => text.includes('Beta notes'))
+    const alphaIndex = options.findIndex((text) =>
+      text.includes('Alpha roadmap')
+    )
+    expect(betaIndex).toBeGreaterThanOrEqual(0)
+    expect(alphaIndex).toBeGreaterThan(betaIndex)
+  })
+
+  it('shows an indexing hint in the footer while the content index builds', () => {
+    mocks.indexSnapshot = {
+      status: 'indexing',
+      version: 0,
+      documents: new Map(),
+    }
+
+    render(<SearchDialog open onOpenChange={mocks.onOpenChange} />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), {
+      target: { value: 'Al' },
+    })
+
+    expect(screen.getByTestId('indexing-indicator')).toHaveTextContent(
+      'Indexing messages…'
+    )
+  })
+
+  it('triggers content indexing only once free text reaches 2 characters', () => {
+    render(<SearchDialog open onOpenChange={mocks.onOpenChange} />)
+    const input = screen.getByRole('textbox', { name: 'Search' })
+
+    fireEvent.change(input, { target: { value: 'A' } })
+    expect(mocks.ensureIndex).not.toHaveBeenCalled()
+
+    fireEvent.change(input, { target: { value: 'Al' } })
+    expect(mocks.ensureIndex).toHaveBeenCalledWith(mocks.threads)
+  })
+
+  it('degrades to title-only results while no content is indexed', () => {
+    const { container } = render(
+      <SearchDialog open onOpenChange={mocks.onOpenChange} />
+    )
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), {
+      target: { value: 'Beta' },
+    })
+
+    expect(
+      screen.getByRole('option', { name: 'Beta notes' })
+    ).toBeInTheDocument()
+    expect(container.querySelector('mark')).toBeNull()
   })
 })

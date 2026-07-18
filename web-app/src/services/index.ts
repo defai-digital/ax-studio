@@ -10,6 +10,7 @@ import { isPlatformTauri } from '@/lib/platform/utils'
 import { DefaultMessagesService } from './messages/default'
 import { DefaultAssistantsService } from './assistants/default'
 import { DefaultProjectsService } from './projects/default'
+import { DefaultChatOrganizationService } from './chat-organization/default'
 import { DefaultModelsService } from './models/default'
 import { DefaultRAGService } from './rag/default'
 import type { RAGService } from './rag/types'
@@ -42,6 +43,7 @@ import type { PathService } from './path/types'
 import type { CoreService } from './core/types'
 import type { DeepLinkService } from './deeplink/types'
 import type { ProjectsService } from './projects/types'
+import type { ChatOrganizationService } from './chat-organization/types'
 
 class LazyTauriProvidersService implements ProvidersService {
   private servicePromise: Promise<ProvidersService> | null = null
@@ -92,6 +94,7 @@ export interface ServiceHub {
   core(): CoreService
   deeplink(): DeepLinkService
   projects(): ProjectsService
+  chatOrganization(): ChatOrganizationService
   rag(): RAGService
   uploads(): UploadsService
 }
@@ -115,6 +118,8 @@ class PlatformServiceHub implements ServiceHub {
   private coreService!: CoreService
   private deepLinkService!: DeepLinkService
   private projectsService: ProjectsService = new DefaultProjectsService()
+  private chatOrganizationService: ChatOrganizationService =
+    new DefaultChatOrganizationService()
   private ragService: RAGService = new DefaultRAGService()
   private uploadsService: UploadsService = new DefaultUploadsService()
   private initialized = false
@@ -424,6 +429,11 @@ class PlatformServiceHub implements ServiceHub {
   projects(): ProjectsService {
     this.ensureInitialized()
     return this.projectsService
+  }
+
+  chatOrganization(): ChatOrganizationService {
+    this.ensureInitialized()
+    return this.chatOrganizationService
   }
 
   rag(): RAGService {

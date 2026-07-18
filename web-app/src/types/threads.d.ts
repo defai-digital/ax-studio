@@ -22,6 +22,8 @@ type Thread = {
       projectPrompt?: string | null
     }
     threadPrompt?: string | null
+    folderId?: string
+    tagIds?: string[]
     [key: string]: unknown
   }
 }

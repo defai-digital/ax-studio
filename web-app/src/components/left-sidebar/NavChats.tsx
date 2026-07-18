@@ -63,6 +63,9 @@ import { ThreadList } from '@/containers/ThreadList'
 import { DeleteAllThreadsDialog } from '@/containers/dialogs/thread/DeleteAllThreadsDialog'
 import { groupByDate, type DateGroup } from '@/lib/utils/date-group'
 import { usePinnedThreads } from '@/hooks/threads/usePinnedThreads'
+import { useChatOrganization } from '@/hooks/threads/useChatOrganization'
+import { ChatFolderSection } from '@/components/left-sidebar/ChatFolderSection'
+import { cn } from '@/lib/utils'
 import { Link } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { useTranslation } from '@/i18n/react-i18next-compat'
@@ -77,6 +80,12 @@ export function NavChats() {
   const deleteThread = useThreads((state) => state.deleteThread)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const { pinnedIds, pinnedSet, togglePin, reorder } = usePinnedThreads()
+  const {
+    folders: chatFolders,
+    tags: chatTags,
+    activeTagId,
+    setActiveTagId,
+  } = useChatOrganization()
 
   const threadsWithoutProject = useMemo(() => {
     return Object.values(threads).filter(
@@ -84,22 +93,63 @@ export function NavChats() {
     )
   }, [threads])
 
+  // Folder membership only counts for folders that still exist in the store;
+  // a dangling folderId (e.g. mid-deletion) leaves the chat unfiled.
+  const folderIdSet = useMemo(
+    () => new Set(chatFolders.map((folder) => folder.id)),
+    [chatFolders]
+  )
+
+  const matchesTagFilter = useCallback(
+    (thread: Thread) =>
+      !activeTagId || (thread.metadata?.tagIds ?? []).includes(activeTagId),
+    [activeTagId]
+  )
+
+  // Folders sorted by updatedAt desc (v1: no manual reorder)
+  const sortedChatFolders = useMemo(() => {
+    return [...chatFolders].sort((a, b) => b.updatedAt - a.updatedAt)
+  }, [chatFolders])
+
+  // Member chats per folder, tag-filtered. Members are removed from the
+  // pinned/date groups below (same filter point as project chats).
+  const folderMembers = useMemo(() => {
+    const members = new Map<string, Thread[]>()
+    for (const thread of threadsWithoutProject) {
+      const folderId = thread.metadata?.folderId
+      if (!folderId || !folderIdSet.has(folderId)) continue
+      if (!matchesTagFilter(thread)) continue
+      const list = members.get(folderId)
+      if (list) list.push(thread)
+      else members.set(folderId, [thread])
+    }
+    return members
+  }, [threadsWithoutProject, folderIdSet, matchesTagFilter])
+
+  const unfiledThreads = useMemo(() => {
+    return threadsWithoutProject.filter((thread) => {
+      const folderId = thread.metadata?.folderId
+      if (folderId && folderIdSet.has(folderId)) return false
+      return matchesTagFilter(thread)
+    })
+  }, [threadsWithoutProject, folderIdSet, matchesTagFilter])
+
   const groupedThreads = useMemo(() => {
     return groupByDate(
-      threadsWithoutProject,
+      unfiledThreads,
       (thread) => (thread.updated || 0) * 1000 || Date.now(),
       pinnedSet,
       (thread) => thread.id
     )
-  }, [threadsWithoutProject, pinnedSet])
+  }, [unfiledThreads, pinnedSet])
 
   // Resolve pinned threads in order
   const pinnedThreads = useMemo(() => {
-    const threadMap = new Map(threadsWithoutProject.map((t) => [t.id, t]))
+    const threadMap = new Map(unfiledThreads.map((t) => [t.id, t]))
     return pinnedIds
       .map((id) => threadMap.get(id))
       .filter((t): t is Thread => t != null)
-  }, [pinnedIds, threadsWithoutProject])
+  }, [pinnedIds, unfiledThreads])
 
   if (threadsWithoutProject.length === 0) {
     return (
@@ -123,6 +173,33 @@ export function NavChats() {
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
       <SidebarGroupLabel>{t('common:chats')}</SidebarGroupLabel>
+      {chatTags.length > 0 && (
+        <div
+          className="flex flex-wrap gap-1 px-2 pb-2"
+          role="group"
+          aria-label={t('common:chatOrganization.filterByTag')}
+        >
+          {chatTags.map((tag) => {
+            const active = activeTagId === tag.id
+            return (
+              <button
+                key={tag.id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setActiveTagId(active ? null : tag.id)}
+                className={cn(
+                  'rounded-full border px-2 py-0.5 text-[11px] transition-colors',
+                  active
+                    ? 'bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-primary'
+                    : 'text-sidebar-foreground/60 border-sidebar-border hover:bg-sidebar-foreground/8'
+                )}
+              >
+                {tag.name}
+              </button>
+            )
+          })}
+        </div>
+      )}
       <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
         <DropdownMenuTrigger asChild>
           <SidebarGroupAction className="hover:bg-sidebar-foreground/8">
@@ -171,6 +248,15 @@ export function NavChats() {
             />
           </PinnedGroupSection>
         )}
+
+        {/* Chat folders (plain organization; project chats stay excluded) */}
+        <ChatFolderSection
+          folders={sortedChatFolders}
+          membersByFolder={folderMembers}
+          showEmptyHints={!activeTagId}
+          onTogglePin={togglePin}
+          pinnedSet={pinnedSet}
+        />
 
         {/* Regular date-grouped threads */}
         {nonPinnedGroups.map((group) => (

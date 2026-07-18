@@ -1,12 +1,16 @@
 import {
+  Check,
   Download,
   Folder,
+  FolderInput,
   ImagePlus,
   MessageCircle,
   MoreHorizontal,
   Pencil,
   Pin,
   PinOff,
+  Plus,
+  Tag,
   Trash2,
   X,
 } from 'lucide-react'
@@ -14,10 +18,13 @@ import { CHAT_EXPORT_OPTIONS, exportThread } from '@/lib/export/thread-export'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { useMessages } from '@/hooks/chat/useMessages'
 import { useThreadManagement } from '@/hooks/threads/useThreadManagement'
+import { useChatOrganization } from '@/hooks/threads/useChatOrganization'
+import { NamePromptDialog } from '@/containers/dialogs/chat-organization/NamePromptDialog'
 import { memo, useCallback, useMemo, useState } from 'react'
 
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -28,9 +35,13 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   ContextMenu,
+  ContextMenuCheckboxItem,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
 import {
@@ -150,11 +161,21 @@ const ThreadItem = memo(
     const updateThread = useThreads((state) => state.updateThread)
     const getFolderById = useThreadManagement().getFolderById
     const { folders } = useThreadManagement()
+    const {
+      folders: chatFolders,
+      tags: chatTags,
+      addFolder: addChatFolder,
+      addTag: addChatTag,
+      assignFolder,
+      setThreadTags,
+    } = useChatOrganization()
     const { t } = useTranslation()
     const [renameOpen, setRenameOpen] = useState(false)
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
     const [logoDialogOpen, setLogoDialogOpen] = useState(false)
     const [chatLogo, setChatLogo] = useState('')
+    const [newFolderDialogOpen, setNewFolderDialogOpen] = useState(false)
+    const [newTagDialogOpen, setNewTagDialogOpen] = useState(false)
     const threadTitle = thread.title || t('common:newThread')
 
     // Read messages from store only if already loaded (no fetching in sidebar)
@@ -222,6 +243,87 @@ const ThreadItem = memo(
         }
       },
       [getFolderById, updateThread, thread.metadata]
+    )
+
+    // Chat folders/tags (plain organization; exclusive folder membership).
+    // Folders only apply to non-project chats — project chats stay under
+    // their project page, so the "Move to folder" menu is hidden for them.
+    const currentChatFolderId = thread.metadata?.folderId
+    const threadTagIds = useMemo(
+      () => thread.metadata?.tagIds ?? [],
+      [thread.metadata]
+    )
+    const sortedChatFolders = useMemo(
+      () => [...chatFolders].sort((a, b) => b.updatedAt - a.updatedAt),
+      [chatFolders]
+    )
+
+    const handleAssignFolder = useCallback(
+      (folderId: string | null) => {
+        if (folderId === (currentChatFolderId ?? null)) return
+        assignFolder(thread.id, folderId)
+        const folderName = folderId
+          ? chatFolders.find((folder) => folder.id === folderId)?.name
+          : undefined
+        toast.success(
+          folderId && folderName
+            ? t('common:chatOrganization.movedToFolder', { folderName })
+            : t('common:chatOrganization.removedFromFolder')
+        )
+      },
+      [assignFolder, thread.id, chatFolders, currentChatFolderId, t]
+    )
+
+    const handleToggleTag = useCallback(
+      (tagId: string) => {
+        const current = thread.metadata?.tagIds ?? []
+        const next = current.includes(tagId)
+          ? current.filter((id) => id !== tagId)
+          : [...current, tagId]
+        setThreadTags(thread.id, next)
+      },
+      [setThreadTags, thread.id, thread.metadata]
+    )
+
+    const handleCreateFolder = useCallback(
+      async (name: string) => {
+        try {
+          const folder = await addChatFolder(name)
+          assignFolder(thread.id, folder.id)
+          toast.success(
+            t('common:chatOrganization.folderCreated', {
+              folderName: folder.name,
+            })
+          )
+          setNewFolderDialogOpen(false)
+        } catch (error) {
+          console.error('Create folder error:', error)
+          toast.error(t('common:error'))
+        }
+      },
+      [addChatFolder, assignFolder, thread.id, t]
+    )
+
+    const handleCreateTag = useCallback(
+      async (name: string) => {
+        try {
+          const tag = await addChatTag(name)
+          const current = thread.metadata?.tagIds ?? []
+          if (!current.includes(tag.id)) {
+            setThreadTags(thread.id, [...current, tag.id])
+          }
+          toast.success(
+            t('common:chatOrganization.tagCreated', { tagName: tag.name })
+          )
+          setNewTagDialogOpen(false)
+        } catch (error) {
+          console.error('Create tag error:', error)
+          toast.error(
+            t('common:chatOrganization.tagAlreadyExists', { tagName: name })
+          )
+        }
+      },
+      [addChatTag, setThreadTags, thread.id, thread.metadata, t]
     )
 
     const handleSaveChatLogo = useCallback(() => {
@@ -381,6 +483,84 @@ const ThreadItem = memo(
                     )}
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
+                {!thread.metadata?.project && (
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="gap-2">
+                      <FolderInput className="size-4" />
+                      <span>{t('common:chatOrganization.moveToFolder')}</span>
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="max-h-60 min-w-44 overflow-y-auto">
+                      <DropdownMenuItem
+                        onSelect={() => handleAssignFolder(null)}
+                      >
+                        <Check
+                          className={cn(
+                            'size-4',
+                            currentChatFolderId && 'invisible'
+                          )}
+                        />
+                        <span>{t('common:chatOrganization.noFolder')}</span>
+                      </DropdownMenuItem>
+                      {sortedChatFolders.map((folder) => (
+                        <DropdownMenuItem
+                          key={folder.id}
+                          onSelect={() => handleAssignFolder(folder.id)}
+                        >
+                          <Check
+                            className={cn(
+                              'size-4',
+                              currentChatFolderId !== folder.id && 'invisible'
+                            )}
+                          />
+                          <span className="truncate max-w-[200px]">
+                            {folder.name}
+                          </span>
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onSelect={() => setNewFolderDialogOpen(true)}
+                      >
+                        <Plus className="size-4" />
+                        <span>{t('common:chatOrganization.newFolder')}…</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                )}
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger className="gap-2">
+                    <Tag className="size-4" />
+                    <span>{t('common:chatOrganization.editTags')}</span>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="max-h-60 min-w-44 overflow-y-auto">
+                    {chatTags.length === 0 ? (
+                      <DropdownMenuItem disabled>
+                        <span className="text-muted-foreground">
+                          {t('common:chatOrganization.noTagsYet')}
+                        </span>
+                      </DropdownMenuItem>
+                    ) : (
+                      chatTags.map((tag) => (
+                        <DropdownMenuCheckboxItem
+                          key={tag.id}
+                          checked={threadTagIds.includes(tag.id)}
+                          onCheckedChange={() => handleToggleTag(tag.id)}
+                          // Keep the submenu open so several tags can be toggled.
+                          onSelect={(e) => e.preventDefault()}
+                        >
+                          <span className="truncate max-w-[200px]">
+                            {tag.name}
+                          </span>
+                        </DropdownMenuCheckboxItem>
+                      ))
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={() => setNewTagDialogOpen(true)}>
+                      <Plus className="size-4" />
+                      <span>{t('common:chatOrganization.newTag')}…</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger className="gap-2">
                     <Download className="size-4" />
@@ -498,6 +678,22 @@ const ThreadItem = memo(
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+
+            <NamePromptDialog
+              open={newFolderDialogOpen}
+              onOpenChange={setNewFolderDialogOpen}
+              title={t('common:chatOrganization.newFolder')}
+              placeholder={t('common:chatOrganization.folderNamePlaceholder')}
+              onSubmit={handleCreateFolder}
+            />
+
+            <NamePromptDialog
+              open={newTagDialogOpen}
+              onOpenChange={setNewTagDialogOpen}
+              title={t('common:chatOrganization.newTag')}
+              placeholder={t('common:chatOrganization.tagNamePlaceholder')}
+              onSubmit={handleCreateTag}
+            />
           </SidebarMenuItem>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-48">
@@ -510,6 +706,78 @@ const ThreadItem = memo(
               <PinActionContent isPinned={isPinned} iconClassName="mr-2" />
             </ContextMenuItem>
           )}
+          {!thread.metadata?.project && (
+            <ContextMenuSub>
+              <ContextMenuSubTrigger className="gap-2">
+                <FolderInput className="size-4 mr-2" />
+                <span>{t('common:chatOrganization.moveToFolder')}</span>
+              </ContextMenuSubTrigger>
+              <ContextMenuSubContent className="w-48 max-h-60 overflow-y-auto">
+                <ContextMenuItem onSelect={() => handleAssignFolder(null)}>
+                  <Check
+                    className={cn(
+                      'size-4 mr-2',
+                      currentChatFolderId && 'invisible'
+                    )}
+                  />
+                  <span>{t('common:chatOrganization.noFolder')}</span>
+                </ContextMenuItem>
+                {sortedChatFolders.map((folder) => (
+                  <ContextMenuItem
+                    key={folder.id}
+                    onSelect={() => handleAssignFolder(folder.id)}
+                  >
+                    <Check
+                      className={cn(
+                        'size-4 mr-2',
+                        currentChatFolderId !== folder.id && 'invisible'
+                      )}
+                    />
+                    <span className="truncate max-w-[200px]">
+                      {folder.name}
+                    </span>
+                  </ContextMenuItem>
+                ))}
+                <ContextMenuSeparator />
+                <ContextMenuItem onSelect={() => setNewFolderDialogOpen(true)}>
+                  <Plus className="size-4 mr-2" />
+                  <span>{t('common:chatOrganization.newFolder')}…</span>
+                </ContextMenuItem>
+              </ContextMenuSubContent>
+            </ContextMenuSub>
+          )}
+          <ContextMenuSub>
+            <ContextMenuSubTrigger className="gap-2">
+              <Tag className="size-4 mr-2" />
+              <span>{t('common:chatOrganization.editTags')}</span>
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-48 max-h-60 overflow-y-auto">
+              {chatTags.length === 0 ? (
+                <ContextMenuItem disabled>
+                  <span className="text-muted-foreground">
+                    {t('common:chatOrganization.noTagsYet')}
+                  </span>
+                </ContextMenuItem>
+              ) : (
+                chatTags.map((tag) => (
+                  <ContextMenuCheckboxItem
+                    key={tag.id}
+                    checked={threadTagIds.includes(tag.id)}
+                    onCheckedChange={() => handleToggleTag(tag.id)}
+                    // Keep the submenu open so several tags can be toggled.
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    <span className="truncate max-w-[200px]">{tag.name}</span>
+                  </ContextMenuCheckboxItem>
+                ))
+              )}
+              <ContextMenuSeparator />
+              <ContextMenuItem onSelect={() => setNewTagDialogOpen(true)}>
+                <Plus className="size-4 mr-2" />
+                <span>{t('common:chatOrganization.newTag')}…</span>
+              </ContextMenuItem>
+            </ContextMenuSubContent>
+          </ContextMenuSub>
           <ContextMenuSeparator />
           <ContextMenuItem
             className="text-destructive focus:text-destructive"

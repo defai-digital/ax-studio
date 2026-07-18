@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock all external dependencies
@@ -21,6 +21,38 @@ vi.mock('@/hooks/threads/useThreadManagement', () => ({
     getFolderById: vi.fn(),
     folders: [],
   }),
+}))
+
+const mockChatOrganization = vi.hoisted(() => ({
+  folders: [
+    { id: 'f1', name: 'Work', updatedAt: 200 },
+    { id: 'f2', name: 'Personal', updatedAt: 100 },
+  ],
+  tags: [
+    { id: 'tag1', name: 'urgent' },
+    { id: 'tag2', name: 'later' },
+  ],
+  addFolder: vi.fn(),
+  addTag: vi.fn(),
+  assignFolder: vi.fn(),
+  setThreadTags: vi.fn(),
+}))
+
+vi.mock('@/hooks/threads/useChatOrganization', () => ({
+  useChatOrganization: () => mockChatOrganization,
+}))
+
+const namePromptProps = vi.hoisted(() => ({
+  calls: [] as Array<Record<string, unknown>>,
+}))
+
+vi.mock('@/containers/dialogs/chat-organization/NamePromptDialog', () => ({
+  NamePromptDialog: (props: Record<string, unknown>) => {
+    namePromptProps.calls.push(props)
+    return props.open ? (
+      <div data-testid="name-prompt-dialog">{String(props.title)}</div>
+    ) : null
+  },
 }))
 
 vi.mock('@/components/ui/sidebar', () => ({
@@ -77,10 +109,51 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
     <>{children}</>
   ),
   DropdownMenuContent: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
+    <div data-testid="dropdown-content">{children}</div>
   ),
-  DropdownMenuItem: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
+  DropdownMenuItem: ({
+    children,
+    onSelect,
+    onClick,
+    disabled,
+  }: {
+    children: React.ReactNode
+    onSelect?: (e: React.MouseEvent) => void
+    onClick?: (e: React.MouseEvent) => void
+    disabled?: boolean
+  }) => (
+    <div
+      aria-disabled={disabled}
+      onClick={(e) => {
+        if (disabled) return
+        onClick?.(e)
+        onSelect?.(e)
+      }}
+    >
+      {children}
+    </div>
+  ),
+  DropdownMenuCheckboxItem: ({
+    children,
+    checked,
+    onCheckedChange,
+    onSelect,
+  }: {
+    children: React.ReactNode
+    checked?: boolean
+    onCheckedChange?: (checked: boolean) => void
+    onSelect?: (e: React.MouseEvent) => void
+  }) => (
+    <div
+      role="menuitemcheckbox"
+      aria-checked={checked}
+      onClick={(e) => {
+        onSelect?.(e)
+        onCheckedChange?.(!checked)
+      }}
+    >
+      {children}
+    </div>
   ),
   DropdownMenuSeparator: () => <hr />,
   DropdownMenuSub: ({ children }: { children: React.ReactNode }) => (
@@ -100,12 +173,59 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 vi.mock('@/components/ui/context-menu', () => ({
   ContextMenu: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   ContextMenuContent: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
+    <div data-testid="context-menu-content">{children}</div>
   ),
-  ContextMenuItem: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
+  ContextMenuItem: ({
+    children,
+    onSelect,
+    disabled,
+  }: {
+    children: React.ReactNode
+    onSelect?: (e: React.MouseEvent) => void
+    disabled?: boolean
+  }) => (
+    <div
+      aria-disabled={disabled}
+      onClick={(e) => {
+        if (disabled) return
+        onSelect?.(e)
+      }}
+    >
+      {children}
+    </div>
+  ),
+  ContextMenuCheckboxItem: ({
+    children,
+    checked,
+    onCheckedChange,
+    onSelect,
+  }: {
+    children: React.ReactNode
+    checked?: boolean
+    onCheckedChange?: (checked: boolean) => void
+    onSelect?: (e: React.MouseEvent) => void
+  }) => (
+    <div
+      role="menuitemcheckbox"
+      aria-checked={checked}
+      onClick={(e) => {
+        onSelect?.(e)
+        onCheckedChange?.(!checked)
+      }}
+    >
+      {children}
+    </div>
   ),
   ContextMenuSeparator: () => <hr />,
+  ContextMenuSub: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
+  ContextMenuSubContent: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  ContextMenuSubTrigger: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   ContextMenuTrigger: ({ children }: { children: React.ReactNode }) => (
     <>{children}</>
   ),
@@ -258,5 +378,199 @@ describe('formatRelativeTime (via ThreadItem)', () => {
     ]
     render(<ThreadList threads={threads} currentProjectId="proj1" />)
     expect(screen.getByText('common:time.daysAgo')).toBeInTheDocument()
+  })
+})
+
+describe('ThreadItem folder and tag menus', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    namePromptProps.calls.length = 0
+  })
+
+  it('renders Move to folder with None, folders sorted by updatedAt desc, and New folder', () => {
+    render(<ThreadList threads={[makeThread({ id: 't1' })]} />)
+
+    const dropdown = screen.getByTestId('dropdown-content')
+    expect(
+      within(dropdown).getByText('common:chatOrganization.moveToFolder')
+    ).toBeInTheDocument()
+    expect(
+      within(dropdown).getByText('common:chatOrganization.noFolder')
+    ).toBeInTheDocument()
+    expect(within(dropdown).getByText('Work')).toBeInTheDocument()
+    expect(within(dropdown).getByText('Personal')).toBeInTheDocument()
+    expect(
+      within(dropdown).getByText('common:chatOrganization.newFolder…')
+    ).toBeInTheDocument()
+
+    // Work (updatedAt 200) sorts before Personal (updatedAt 100)
+    const text = dropdown.textContent ?? ''
+    expect(text.indexOf('Work')).toBeLessThan(text.indexOf('Personal'))
+  })
+
+  it('assigns a folder from the dropdown menu', () => {
+    render(<ThreadList threads={[makeThread({ id: 't1' })]} />)
+
+    fireEvent.click(
+      within(screen.getByTestId('dropdown-content')).getByText('Work')
+    )
+
+    expect(mockChatOrganization.assignFolder).toHaveBeenCalledWith('t1', 'f1')
+  })
+
+  it('clears the folder via the None option', () => {
+    render(
+      <ThreadList
+        threads={[makeThread({ id: 't1', metadata: { folderId: 'f1' } })]}
+      />
+    )
+
+    fireEvent.click(
+      within(screen.getByTestId('dropdown-content')).getByText(
+        'common:chatOrganization.noFolder'
+      )
+    )
+
+    expect(mockChatOrganization.assignFolder).toHaveBeenCalledWith('t1', null)
+  })
+
+  it('does not reassign when selecting the current folder', () => {
+    render(
+      <ThreadList
+        threads={[makeThread({ id: 't1', metadata: { folderId: 'f1' } })]}
+      />
+    )
+
+    fireEvent.click(
+      within(screen.getByTestId('dropdown-content')).getByText('Work')
+    )
+
+    expect(mockChatOrganization.assignFolder).not.toHaveBeenCalled()
+  })
+
+  it('hides Move to folder for project threads but keeps Edit tags', () => {
+    render(
+      <ThreadList
+        threads={[
+          makeThread({
+            id: 't1',
+            metadata: { project: { id: 'p1', name: 'Proj' } },
+          }),
+        ]}
+      />
+    )
+
+    expect(
+      screen.queryByText('common:chatOrganization.moveToFolder')
+    ).toBeNull()
+    expect(
+      screen.getAllByText('common:chatOrganization.editTags').length
+    ).toBeGreaterThan(0)
+  })
+
+  it('toggles tags from the Edit tags submenu', () => {
+    render(
+      <ThreadList
+        threads={[makeThread({ id: 't1', metadata: { tagIds: ['tag1'] } })]}
+      />
+    )
+
+    const dropdown = screen.getByTestId('dropdown-content')
+    const urgent = within(dropdown).getByRole('menuitemcheckbox', {
+      name: 'urgent',
+    })
+    const later = within(dropdown).getByRole('menuitemcheckbox', {
+      name: 'later',
+    })
+
+    expect(urgent).toHaveAttribute('aria-checked', 'true')
+    expect(later).toHaveAttribute('aria-checked', 'false')
+
+    fireEvent.click(later)
+    expect(mockChatOrganization.setThreadTags).toHaveBeenCalledWith('t1', [
+      'tag1',
+      'tag2',
+    ])
+
+    fireEvent.click(urgent)
+    expect(mockChatOrganization.setThreadTags).toHaveBeenCalledWith('t1', [])
+  })
+
+  it('creates a new folder from the dialog and assigns the thread to it', async () => {
+    mockChatOrganization.addFolder.mockResolvedValue({
+      id: 'f3',
+      name: 'Fresh',
+      updatedAt: 1,
+    })
+    render(<ThreadList threads={[makeThread({ id: 't1' })]} />)
+
+    fireEvent.click(
+      within(screen.getByTestId('dropdown-content')).getByText(
+        'common:chatOrganization.newFolder…'
+      )
+    )
+
+    expect(screen.getByTestId('name-prompt-dialog')).toHaveTextContent(
+      'common:chatOrganization.newFolder'
+    )
+
+    const openCall = namePromptProps.calls.findLast(
+      (call) => call.open === true && call.title === 'common:chatOrganization.newFolder'
+    )
+    expect(openCall).toBeDefined()
+
+    await act(async () => {
+      await (openCall!.onSubmit as (name: string) => Promise<void>)('Fresh')
+    })
+
+    expect(mockChatOrganization.addFolder).toHaveBeenCalledWith('Fresh')
+    expect(mockChatOrganization.assignFolder).toHaveBeenCalledWith('t1', 'f3')
+  })
+
+  it('creates a new tag from the dialog and applies it to the thread', async () => {
+    mockChatOrganization.addTag.mockResolvedValue({ id: 'tag3', name: 'Fresh' })
+    render(<ThreadList threads={[makeThread({ id: 't1' })]} />)
+
+    fireEvent.click(
+      within(screen.getByTestId('dropdown-content')).getByText(
+        'common:chatOrganization.newTag…'
+      )
+    )
+
+    const openCall = namePromptProps.calls.findLast(
+      (call) => call.open === true && call.title === 'common:chatOrganization.newTag'
+    )
+    expect(openCall).toBeDefined()
+
+    await act(async () => {
+      await (openCall!.onSubmit as (name: string) => Promise<void>)('Fresh')
+    })
+
+    expect(mockChatOrganization.addTag).toHaveBeenCalledWith('Fresh')
+    expect(mockChatOrganization.setThreadTags).toHaveBeenCalledWith('t1', [
+      'tag3',
+    ])
+  })
+
+  it('offers the same folder and tag menus in the right-click context menu', () => {
+    render(<ThreadList threads={[makeThread({ id: 't1' })]} />)
+
+    const contextMenu = screen.getByTestId('context-menu-content')
+    expect(
+      within(contextMenu).getByText('common:chatOrganization.moveToFolder')
+    ).toBeInTheDocument()
+    expect(
+      within(contextMenu).getByText('common:chatOrganization.editTags')
+    ).toBeInTheDocument()
+
+    fireEvent.click(within(contextMenu).getByText('Personal'))
+    expect(mockChatOrganization.assignFolder).toHaveBeenCalledWith('t1', 'f2')
+
+    fireEvent.click(
+      within(contextMenu).getByRole('menuitemcheckbox', { name: 'urgent' })
+    )
+    expect(mockChatOrganization.setThreadTags).toHaveBeenCalledWith('t1', [
+      'tag1',
+    ])
   })
 })

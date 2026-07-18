@@ -23,6 +23,7 @@ export const localStorageKey = {
   setupCompleted: 'setup-completed',
   workspaceMode: 'workspace-mode',
   threadManagement: 'thread-management',
+  chatOrganization: 'chat-organization',
   modelSupportCache: 'ax-studio-model-support-cache',
   recentSearches: 'recent-searches',
   memoryStore: 'memory-store',

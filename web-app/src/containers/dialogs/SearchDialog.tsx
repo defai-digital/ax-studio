@@ -1,11 +1,14 @@
-import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
+import {
+  useEffect,
+  useState,
+  useMemo,
+  useRef,
+  useCallback,
+  useSyncExternalStore,
+} from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import {
   MessageSquare,
   Search,
@@ -48,6 +51,17 @@ import {
 } from '@/lib/storage/storage'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
+import { useChatOrganizationStore } from '@/hooks/threads/useChatOrganization'
+import { usePinnedThreads } from '@/hooks/threads/usePinnedThreads'
+import {
+  parseSearchQuery,
+  resolveSearchFilters,
+} from '@/lib/search/parse-search-query'
+import {
+  ensureMessageSearchIndex,
+  getMessageSearchIndexSnapshot,
+  subscribeMessageSearchIndex,
+} from '@/lib/search/message-search-index'
 
 const MAX_RECENT_SEARCHES = 5
 
@@ -66,6 +80,45 @@ interface CommandItem {
 interface SearchDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+}
+
+const SNIPPET_CONTEXT_CHARS = 40
+
+type SnippetSegment = { text: string; matched: boolean }
+
+/**
+ * Build snippet segments for a Fuse content match: a window of
+ * ~`contextChars` around the most significant matched range, flagged for
+ * <mark> highlighting.
+ */
+const buildContentSnippet = (
+  content: string,
+  indices: ReadonlyArray<readonly [number, number]>,
+  contextChars: number = SNIPPET_CONTEXT_CHARS
+): SnippetSegment[] => {
+  if (indices.length === 0) return []
+
+  // Fuse reports every scattered character hit in the field; the longest
+  // contiguous range is the meaningful match to center the snippet on.
+  const [anchorStart, anchorEnd] = indices.reduce((longest, range) =>
+    range[1] - range[0] > longest[1] - longest[0] ? range : longest
+  )
+  const windowStart = Math.max(0, anchorStart - contextChars)
+  // Fuse ranges are inclusive.
+  const windowEnd = Math.min(content.length, anchorEnd + 1 + contextChars)
+
+  const segments: SnippetSegment[] = []
+  const pushText = (text: string, matched: boolean) => {
+    if (text) segments.push({ text, matched })
+  }
+
+  if (windowStart > 0) pushText('…', false)
+  pushText(content.slice(windowStart, anchorStart), false)
+  pushText(content.slice(anchorStart, anchorEnd + 1), true)
+  pushText(content.slice(anchorEnd + 1, windowEnd), false)
+  if (windowEnd < content.length) pushText('…', false)
+
+  return segments
 }
 
 function readRecentSearchThreadIds() {
@@ -111,6 +164,14 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
   const threads = useThreads((state) => state.threads)
   const updateCurrentThreadModel = useThreads(
     (state) => state.updateCurrentThreadModel
+  )
+  const folders = useChatOrganizationStore((state) => state.folders)
+  const tags = useChatOrganizationStore((state) => state.tags)
+  const { pinnedSet } = usePinnedThreads()
+  const messageIndex = useSyncExternalStore(
+    subscribeMessageSearchIndex,
+    getMessageSearchIndexSnapshot,
+    getMessageSearchIndexSnapshot
   )
   const providers = useModelProvider((state) => state.providers)
   const selectModelProvider = useModelProvider(
@@ -224,7 +285,13 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
       {
         id: 'assistants',
         label: t('common:assistants', { defaultValue: 'Assistants' }),
-        keywords: ['assistant', 'assistants', 'persona', 'agent', 'system prompt'],
+        keywords: [
+          'assistant',
+          'assistants',
+          'persona',
+          'agent',
+          'system prompt',
+        ],
         icon: Bot,
         category: t('common:settings'),
         action: () => {
@@ -347,7 +414,7 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
         },
       },
     ],
-    [t, handleClose, navigate, setProjectDialogOpen],
+    [t, handleClose, navigate, setProjectDialogOpen]
   )
 
   // Dynamic commands: one per model of every active provider. These are only
@@ -386,28 +453,76 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
       }
     }
     return items
-  }, [
-    providers,
-    t,
-    handleClose,
-    selectModelProvider,
-    updateCurrentThreadModel,
-  ])
+  }, [providers, t, handleClose, selectModelProvider, updateCurrentThreadModel])
 
   // Build thread list for Fuse search
   const threadList = useMemo(() => {
     return Object.values(threads).filter((t) => t.id !== TEMPORARY_CHAT_ID)
   }, [threads])
 
+  // Query syntax: `folder:` / `tag:` / `is:pinned` prefixes + free text.
+  const parsedQuery = useMemo(
+    () => parseSearchQuery(searchQuery),
+    [searchQuery]
+  )
+  const filters = useMemo(
+    () => resolveSearchFilters(parsedQuery, { folders, tags }),
+    [parsedQuery, folders, tags]
+  )
+  const hasPrefixFilters =
+    filters.folderId !== undefined ||
+    filters.tagId !== undefined ||
+    filters.pinnedOnly
+
+  // Kick off background message-content indexing once the free text is
+  // specific enough; a stale fingerprint rebuilds automatically.
+  useEffect(() => {
+    if (open && parsedQuery.freeText.trim().length >= 2) {
+      ensureMessageSearchIndex(threads)
+    }
+  }, [open, parsedQuery.freeText, threads])
+
+  // Apply prefix filters as predicates BEFORE Fuse, then attach each
+  // thread's indexed message content as a searchable field.
+  const threadSearchDocs = useMemo(() => {
+    return threadList
+      .filter((thread) => {
+        if (filters.folderId !== undefined) {
+          if (filters.folderId === null) return false
+          if (thread.metadata?.folderId !== filters.folderId) return false
+        }
+        if (filters.tagId !== undefined) {
+          if (filters.tagId === null) return false
+          if (!(thread.metadata?.tagIds ?? []).includes(filters.tagId)) {
+            return false
+          }
+        }
+        if (filters.pinnedOnly && !pinnedSet.has(thread.id)) return false
+        return true
+      })
+      .map((thread) => ({
+        thread,
+        title: thread.title,
+        content: messageIndex.documents.get(thread.id) ?? '',
+      }))
+  }, [threadList, filters, pinnedSet, messageIndex])
+
   // Fuse instances
   const threadFuse = useMemo(
     () =>
-      new Fuse(threadList, {
-        keys: [{ name: 'title', weight: 1.0 }],
+      new Fuse(threadSearchDocs, {
+        keys: [
+          { name: 'title', weight: 1.0 },
+          { name: 'content', weight: 0.5 },
+        ],
         threshold: 0.4,
         includeScore: true,
+        includeMatches: true,
+        // Long content fields: don't penalize matches far from index 0 —
+        // otherwise fuzzy near-misses at the top outscore exact substrings.
+        ignoreLocation: true,
       }),
-    [threadList],
+    [threadSearchDocs]
   )
 
   const commandFuse = useMemo(
@@ -423,7 +538,7 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
         threshold: 0.3,
         includeScore: true,
       }),
-    [commands, modelCommands],
+    [commands, modelCommands]
   )
 
   // Focus input when dialog opens
@@ -485,16 +600,44 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
     [handleClose, navigate, threads]
   )
 
-  // Filtered results
-  const filteredThreads = useMemo(() => {
+  // Filtered chat results: prefix-only queries list every matching thread;
+  // free text goes through Fuse. Results are recency-biased (updated desc)
+  // and carry a content snippet when they matched on message content.
+  const chatResults = useMemo(() => {
     if (!searchQuery) return []
-    return threadFuse.search(searchQuery).map((r) => r.item)
-  }, [searchQuery, threadFuse])
+    const freeText = parsedQuery.freeText.trim()
+    if (!freeText && !hasPrefixFilters) return []
+
+    const results = freeText
+      ? threadFuse.search(freeText)
+      : threadSearchDocs.map((item) => ({ item, matches: undefined }))
+
+    return results
+      .map((result) => {
+        const contentMatch = result.matches?.find(
+          (match) => match.key === 'content' && match.indices.length > 0
+        )
+        return {
+          thread: result.item.thread,
+          snippet: contentMatch
+            ? buildContentSnippet(
+                contentMatch.value ?? result.item.content,
+                contentMatch.indices
+              )
+            : undefined,
+        }
+      })
+      .sort((a, b) => b.thread.updated - a.thread.updated)
+  }, [searchQuery, parsedQuery, hasPrefixFilters, threadFuse, threadSearchDocs])
 
   const filteredCommands = useMemo(() => {
     if (!searchQuery) return commands
+    const freeText = parsedQuery.freeText.trim()
+    if (freeText) return commandFuse.search(freeText).map((r) => r.item)
+    // Prefix-only queries filter chats; they don't apply to commands.
+    if (hasPrefixFilters) return []
     return commandFuse.search(searchQuery).map((r) => r.item)
-  }, [searchQuery, commandFuse, commands])
+  }, [searchQuery, parsedQuery, hasPrefixFilters, commandFuse, commands])
 
   // Build all items list for keyboard navigation
   const allItems = useMemo(() => {
@@ -520,7 +663,7 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
     } else {
       // With query: show filtered results
       if (activeTab === 'all' || activeTab === 'chats') {
-        filteredThreads.forEach((thread) => {
+        chatResults.forEach(({ thread }) => {
           items.push({ type: 'chat', id: thread.id, thread })
         })
       }
@@ -537,7 +680,7 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
     activeTab,
     commands,
     recentSearches,
-    filteredThreads,
+    chatResults,
     filteredCommands,
   ])
 
@@ -550,7 +693,7 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
   useEffect(() => {
     if (listRef.current) {
       const selectedElement = listRef.current.querySelector(
-        `[data-index="${selectedIndex}"]`,
+        `[data-index="${selectedIndex}"]`
       )
       selectedElement?.scrollIntoView({ block: 'nearest' })
     }
@@ -581,7 +724,7 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
       e.preventDefault()
       // Cycle tabs: all → chats → commands → all
       setActiveTab((prev) =>
-        prev === 'all' ? 'chats' : prev === 'chats' ? 'commands' : 'all',
+        prev === 'all' ? 'chats' : prev === 'chats' ? 'commands' : 'all'
       )
     }
   }
@@ -645,7 +788,10 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
         </div>
 
         {/* Tab Filter */}
-        <div className="flex items-center gap-1 px-3 py-2 border-b border-border/50" role="tablist">
+        <div
+          className="flex items-center gap-1 px-3 py-2 border-b border-border/50"
+          role="tablist"
+        >
           {tabs.map((tab) => (
             <button
               key={tab.key}
@@ -656,7 +802,7 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
                 'px-3 py-1 rounded-lg text-[12px] font-medium transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
                 activeTab === tab.key
                   ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
               )}
             >
               {tab.label}
@@ -665,20 +811,23 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
         </div>
 
         {/* Results */}
-        <div ref={listRef} className="max-h-80 overflow-y-auto px-1 py-2" role="listbox">
+        <div
+          ref={listRef}
+          className="max-h-80 overflow-y-auto px-1 py-2"
+          role="listbox"
+        >
           {/* Empty state */}
-          {searchQuery &&
-            allItems.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-                <Search className="size-6 text-muted-foreground mb-2" />
-                <h3 className="text-base font-medium mb-1">
-                  {t('common:noResultsFound')}
-                </h3>
-                <p className="text-xs leading-relaxed text-muted-foreground w-1/2 mx-auto">
-                  {t('common:noResultsFoundDesc')}
-                </p>
-              </div>
-            )}
+          {searchQuery && allItems.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+              <Search className="size-6 text-muted-foreground mb-2" />
+              <h3 className="text-base font-medium mb-1">
+                {t('common:noResultsFound')}
+              </h3>
+              <p className="text-xs leading-relaxed text-muted-foreground w-1/2 mx-auto">
+                {t('common:noResultsFoundDesc')}
+              </p>
+            </div>
+          )}
 
           {/* Commands section */}
           {showCommands &&
@@ -701,7 +850,7 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
                       onClick={() => cmd.action()}
                       className={cn(
                         'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-muted/50 transition-colors cursor-pointer',
-                        selectedIndex === itemIndex && 'bg-muted/50',
+                        selectedIndex === itemIndex && 'bg-muted/50'
                       )}
                     >
                       <Icon className="size-4 text-muted-foreground shrink-0" />
@@ -737,13 +886,11 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
                     onClick={() => handleSelectThread(thread.id)}
                     className={cn(
                       'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-muted/50 transition-colors cursor-pointer',
-                      selectedIndex === itemIndex && 'bg-muted/50',
+                      selectedIndex === itemIndex && 'bg-muted/50'
                     )}
                   >
                     <History className="size-4 text-muted-foreground shrink-0" />
-                    <span className="text-[13px] truncate">
-                      {thread.title}
-                    </span>
+                    <span className="text-[13px] truncate">{thread.title}</span>
                   </button>
                 )
               })}
@@ -751,14 +898,14 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
           )}
 
           {/* Search results - chats */}
-          {searchQuery && showChats && filteredThreads.length > 0 && (
+          {searchQuery && showChats && chatResults.length > 0 && (
             <div className="p-1">
               <div className="px-3 pt-1.5 mb-1">
                 <span className="text-[11px] font-medium text-muted-foreground/70 uppercase tracking-wider">
                   {t('common:chats', { defaultValue: 'Chats' })}
                 </span>
               </div>
-              {filteredThreads.map((thread) => {
+              {chatResults.map(({ thread, snippet }) => {
                 const itemIndex = getThreadIndex(thread.id)
                 const projectName = thread.metadata?.project?.name
                 return (
@@ -770,21 +917,39 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
                     onClick={() => handleSelectThread(thread.id)}
                     className={cn(
                       'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-muted/50 transition-colors cursor-pointer',
-                      selectedIndex === itemIndex && 'bg-muted/50',
+                      selectedIndex === itemIndex && 'bg-muted/50'
                     )}
                   >
-                    <MessageSquare className="size-4 text-muted-foreground shrink-0" />
-                    <div className="flex items-center min-w-0">
-                      {projectName && (
-                        <span className="text-[11px] text-muted-foreground flex items-center gap-1 mr-1.5">
-                          <FolderOpen className="size-3" />
-                          {projectName}
-                          <span className="mx-0.5">·</span>
+                    <MessageSquare className="size-4 text-muted-foreground shrink-0 self-start mt-0.5" />
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-center min-w-0">
+                        {projectName && (
+                          <span className="text-[11px] text-muted-foreground flex items-center gap-1 mr-1.5">
+                            <FolderOpen className="size-3" />
+                            {projectName}
+                            <span className="mx-0.5">·</span>
+                          </span>
+                        )}
+                        <span className="text-[13px] truncate">
+                          {thread.title}
+                        </span>
+                      </div>
+                      {snippet && (
+                        <span className="text-[12px] text-muted-foreground truncate">
+                          {snippet.map((segment, segmentIndex) =>
+                            segment.matched ? (
+                              <mark
+                                key={segmentIndex}
+                                className="bg-primary/25 text-foreground rounded-[3px]"
+                              >
+                                {segment.text}
+                              </mark>
+                            ) : (
+                              <span key={segmentIndex}>{segment.text}</span>
+                            )
+                          )}
                         </span>
                       )}
-                      <span className="text-[13px] truncate">
-                        {thread.title}
-                      </span>
                     </div>
                   </button>
                 )
@@ -814,6 +979,14 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
               </kbd>
               {t('common:filter', { defaultValue: 'Filter' })}
             </span>
+            {messageIndex.status === 'indexing' && (
+              <span
+                className="flex items-center gap-1"
+                data-testid="indexing-indicator"
+              >
+                {t('common:indexingMessages')}
+              </span>
+            )}
           </div>
           <span className="flex items-center gap-1">
             <kbd className="px-1.5 py-0.5 bg-muted/50 border border-border/50 rounded text-[10px]">
