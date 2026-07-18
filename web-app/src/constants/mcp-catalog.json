@@ -1,0 +1,166 @@
+[
+  {
+    "name": "filesystem",
+    "title": "Filesystem",
+    "description": "Read, write, and manage files in directories you allow. The reference MCP server for local file access.",
+    "publisher": "Model Context Protocol",
+    "repoUrl": "https://github.com/modelcontextprotocol/servers",
+    "version": "2026.7.10",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-filesystem@2026.7.10",
+      "~/Desktop"
+    ],
+    "capabilitiesNote": "Can read, create, edit, move, and delete files and directories inside the folders listed in its arguments (by default your Desktop). Anything outside those folders is unreachable."
+  },
+  {
+    "name": "memory",
+    "title": "Memory",
+    "description": "Knowledge-graph-based persistent memory. Lets the assistant remember facts, entities, and relations across chats.",
+    "publisher": "Model Context Protocol",
+    "repoUrl": "https://github.com/modelcontextprotocol/servers",
+    "version": "2026.7.4",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-memory@2026.7.4"],
+    "capabilitiesNote": "Can create, read, update, and delete a persistent knowledge graph stored in a local file on your machine."
+  },
+  {
+    "name": "sequential-thinking",
+    "title": "Sequential Thinking",
+    "description": "Structured step-by-step reasoning tool for planning and working through complex problems.",
+    "publisher": "Model Context Protocol",
+    "repoUrl": "https://github.com/modelcontextprotocol/servers",
+    "version": "2026.7.4",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-sequential-thinking@2026.7.4"
+    ],
+    "capabilitiesNote": "Records and revises sequences of reasoning steps. It does not access your files, network, or any external data."
+  },
+  {
+    "name": "everything",
+    "title": "Everything (Test Server)",
+    "description": "Reference test server that exercises every MCP feature: tools, resources, prompts, sampling, and logging.",
+    "publisher": "Model Context Protocol",
+    "repoUrl": "https://github.com/modelcontextprotocol/servers",
+    "version": "2026.7.4",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-everything@2026.7.4"],
+    "capabilitiesNote": "Demo server with sample tools (echo, add, long-running operations). Intended for trying out MCP, not for real data access."
+  },
+  {
+    "name": "github",
+    "title": "GitHub",
+    "description": "Work with GitHub repositories: issues, pull requests, files, search, and code management via the GitHub API.",
+    "publisher": "Model Context Protocol",
+    "repoUrl": "https://github.com/modelcontextprotocol/servers",
+    "version": "2025.4.8",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-github@2025.4.8"],
+    "env": [
+      {
+        "key": "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "description": "A GitHub personal access token. The server can do everything this token is allowed to do — scope it narrowly.",
+        "required": true,
+        "secret": true
+      }
+    ],
+    "capabilitiesNote": "Can read and modify repositories, issues, and pull requests reachable with your access token, using your GitHub identity."
+  },
+  {
+    "name": "brave-search",
+    "title": "Brave Search",
+    "description": "Web and local search powered by the Brave Search API.",
+    "publisher": "Model Context Protocol",
+    "repoUrl": "https://github.com/modelcontextprotocol/servers",
+    "version": "0.6.2",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-brave-search@0.6.2"],
+    "env": [
+      {
+        "key": "BRAVE_API_KEY",
+        "description": "API key from the Brave Search API dashboard (https://brave.com/search/api/).",
+        "required": true,
+        "secret": true
+      }
+    ],
+    "capabilitiesNote": "Sends search queries to Brave's servers and returns web, news, image, and local business results. Your queries leave your machine."
+  },
+  {
+    "name": "everart",
+    "title": "EverArt",
+    "description": "AI image generation using EverArt models. Generate images from text prompts.",
+    "publisher": "Model Context Protocol",
+    "repoUrl": "https://github.com/modelcontextprotocol/servers",
+    "version": "0.6.2",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-everart@0.6.2"],
+    "env": [
+      {
+        "key": "EVERART_API_KEY",
+        "description": "API key from your EverArt account.",
+        "required": true,
+        "secret": true
+      }
+    ],
+    "capabilitiesNote": "Sends your prompts to EverArt's servers to generate images. Prompts leave your machine; generated images are returned as URLs."
+  },
+  {
+    "name": "slack",
+    "title": "Slack",
+    "description": "Read and post messages, list channels, and manage threads in your Slack workspace.",
+    "publisher": "Model Context Protocol",
+    "repoUrl": "https://github.com/modelcontextprotocol/servers",
+    "version": "2025.4.25",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-slack@2025.4.25"],
+    "env": [
+      {
+        "key": "SLACK_BOT_TOKEN",
+        "description": "Bot token (xoxb-…) from your Slack app. The server acts with this bot's permissions.",
+        "required": true,
+        "secret": true
+      },
+      {
+        "key": "SLACK_TEAM_ID",
+        "description": "Your Slack workspace team ID (starts with T).",
+        "required": true,
+        "secret": false
+      }
+    ],
+    "capabilitiesNote": "Can read channel history and post, edit, and delete messages as the bot in any channel it has been invited to."
+  },
+  {
+    "name": "puppeteer",
+    "title": "Puppeteer",
+    "description": "Browser automation: navigate pages, take screenshots, fill forms, and execute JavaScript in a real browser.",
+    "publisher": "Model Context Protocol",
+    "repoUrl": "https://github.com/modelcontextprotocol/servers",
+    "version": "2025.5.12",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-puppeteer@2025.5.12"],
+    "capabilitiesNote": "Launches a browser on your machine that can visit any URL, interact with pages, and run JavaScript, including on sites you are logged into."
+  },
+  {
+    "name": "exa",
+    "title": "Exa Search",
+    "description": "Web search built for AI: semantic search over the web with clean, parsed content. Hosted remote server — no install needed.",
+    "publisher": "Exa",
+    "repoUrl": "https://github.com/exa-labs/exa-mcp-server",
+    "version": "3.2.1",
+    "transport": "http",
+    "url": "https://mcp.exa.ai/mcp",
+    "capabilitiesNote": "Sends search queries to Exa's hosted service and returns web results and page contents. Your queries leave your machine."
+  }
+]

@@ -15,6 +15,7 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { AddEditMCPServer } from '@/containers/dialogs/mcp/AddEditMCPServer'
 import { DeleteMCPServerConfirm } from '@/containers/dialogs/mcp/DeleteMCPServerConfirm'
 import { EditJsonMCPserver } from '@/containers/dialogs/mcp/EditJsonMCPserver'
+import { McpCatalogSection } from '@/components/settings/McpCatalogSection'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { twMerge } from 'tailwind-merge'
@@ -497,6 +498,7 @@ function MCPServersDesktop() {
             <SettingsPageLayout icon={Wrench} title={t('common:mcp-servers')} />
             <div className="px-8 py-7">
               <div className="max-w-2xl space-y-6">
+                <McpCatalogSection />
                 <Card
                   header={
                     <div className="flex flex-col mb-4">

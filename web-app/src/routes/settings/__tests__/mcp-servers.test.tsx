@@ -171,6 +171,10 @@ vi.mock('@/containers/dialogs/mcp/EditJsonMCPserver', () => ({
   EditJsonMCPserver: () => null,
 }))
 
+vi.mock('@/components/settings/McpCatalogSection', () => ({
+  McpCatalogSection: () => null,
+}))
+
 vi.mock('@/hooks/tools/useMCPServers', () => ({
   DEFAULT_MCP_SETTINGS: {
     toolCallTimeoutSeconds: 60,

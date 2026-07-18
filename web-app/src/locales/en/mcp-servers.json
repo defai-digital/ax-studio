@@ -59,5 +59,24 @@
     "description": "Configure how AX Studio manages and retries MCP servers.",
     "toolCallTimeout": "Tool call timeout (seconds)",
     "toolCallTimeoutDesc": "Maximum time to wait for an MCP tool response before timing out."
+  },
+  "catalog": {
+    "title": "Browse Catalog",
+    "description": "Curated MCP servers reviewed by the AX Studio team. Install with one click — no JSON editing required.",
+    "reviewedBadge": "Reviewed by AX Studio",
+    "publisher": "Publisher",
+    "install": "Install",
+    "installed": "Installed",
+    "installTitle": "Install {{title}}",
+    "installDescription": "Published by {{publisher}}. Review what this server will run before installing.",
+    "warning": "This server runs code on your machine with AX Studio’s permissions.",
+    "commandToRun": "This command will run on your machine",
+    "remoteServer": "AX Studio will connect to this remote server",
+    "headerKeys": "Header keys",
+    "required": "Required",
+    "optional": "Optional",
+    "secret": "Secret",
+    "confirmInstall": "Install Server",
+    "installSuccess": "{{serverName}} installed. It is turned off — enable it in the server list below when you are ready to use it."
   }
 }
