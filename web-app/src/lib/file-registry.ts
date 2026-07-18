@@ -107,7 +107,7 @@ function normalizeFileRegistryFiles(
 ): Record<string, FileRegistryEntry[]> {
   if (!isPlainRecord(value)) return {}
 
-  const collections: Record<string, FileRegistryEntry[]> = {}
+  const collections = new Map<string, FileRegistryEntry[]>()
   const collectionEntries = Object.entries(value)
     .map(([collectionId, entries]) => [collectionId.trim(), entries] as const)
     .filter(([collectionId]) => collectionId !== '')
@@ -128,11 +128,20 @@ function normalizeFileRegistryFiles(
     }
 
     if (normalizedEntries.length > 0) {
-      collections[collectionId] = normalizedEntries
+      collections.set(collectionId, normalizedEntries)
     }
   }
 
-  return collections
+  return Object.fromEntries(collections)
+}
+
+function getOwnCollection(
+  files: Record<string, FileRegistryEntry[]>,
+  collectionId: string
+): FileRegistryEntry[] | undefined {
+  return Object.prototype.hasOwnProperty.call(files, collectionId)
+    ? files[collectionId]
+    : undefined
 }
 
 function sanitizePersistedFileRegistry(
@@ -163,7 +172,8 @@ export const useFileRegistry = create<FileRegistryState>()(
           )
           if (!normalizedEntry) return state
 
-          const existing = state.files[normalizedCollectionId] ?? []
+          const existing =
+            getOwnCollection(state.files, normalizedCollectionId) ?? []
           // Same path: update metadata in place and keep the original file_id so
           // re-ingest does not mint orphan IDs for callers that always generate
           // a new ULID before calling addFile.
@@ -199,7 +209,7 @@ export const useFileRegistry = create<FileRegistryState>()(
 
       removeFile: (collectionId, fileId) =>
         set((state) => {
-          const existing = state.files[collectionId]
+          const existing = getOwnCollection(state.files, collectionId)
           if (!existing) return state
           const filtered = existing.filter((f) => f.file_id !== fileId)
           if (filtered.length === 0) {
@@ -211,10 +221,13 @@ export const useFileRegistry = create<FileRegistryState>()(
           }
         }),
 
-      listFiles: (collectionId) => get().files[collectionId] ?? [],
+      listFiles: (collectionId) =>
+        getOwnCollection(get().files, collectionId) ?? [],
 
       getFile: (collectionId, fileId) =>
-        (get().files[collectionId] ?? []).find((f) => f.file_id === fileId),
+        (getOwnCollection(get().files, collectionId) ?? []).find(
+          (f) => f.file_id === fileId
+        ),
 
       clearCollection: (collectionId) =>
         set((state) => {
@@ -222,7 +235,8 @@ export const useFileRegistry = create<FileRegistryState>()(
           return { files: rest }
         }),
 
-      hasFiles: (collectionId) => (get().files[collectionId] ?? []).length > 0,
+      hasFiles: (collectionId) =>
+        (getOwnCollection(get().files, collectionId) ?? []).length > 0,
     }),
     {
       name: localStorageKey.fileRegistryStore,

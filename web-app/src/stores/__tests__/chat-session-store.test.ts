@@ -134,6 +134,27 @@ describe('ensureSession', () => {
       .ensureSession('s1', makeTransport(), createChat(chat))
     expect(chat['~registerStatusCallback']).toHaveBeenCalled()
   })
+
+  it('treats prototype-named session ids as ordinary own entries', () => {
+    const chat = makeChat()
+
+    expect(useChatSessions.getState().getSessionData('__proto__')).toBeNull()
+    expect(() =>
+      useChatSessions
+        .getState()
+        .ensureSession('__proto__', makeTransport(), createChat(chat))
+    ).not.toThrow()
+
+    expect(
+      Object.prototype.hasOwnProperty.call(
+        useChatSessions.getState().sessions,
+        '__proto__'
+      )
+    ).toBe(true)
+    expect(useChatSessions.getState().getSessionData('__proto__')).toBe(
+      useChatSessions.getState().sessions['__proto__'].data
+    )
+  })
 })
 
 describe('getSessionData', () => {

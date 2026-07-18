@@ -91,7 +91,10 @@ const ChatInput = memo(function ChatInput({
   )
 
   const isLocalKnowledgeEnabled = effectiveThreadId
-    ? effectiveThreadId in localKnowledgeEnabledPerThread
+    ? Object.prototype.hasOwnProperty.call(
+        localKnowledgeEnabledPerThread,
+        effectiveThreadId
+      )
       ? localKnowledgeEnabledPerThread[effectiveThreadId]
       : globalLocalKnowledgeEnabled
     : globalLocalKnowledgeEnabled
@@ -284,7 +287,12 @@ const ChatInput = memo(function ChatInput({
   const stopStreaming = useCallback(
     (tid: string) => {
       if (onStop) onStop()
-      else useAppState.getState().abortControllers[tid]?.abort()
+      else {
+        const { abortControllers } = useAppState.getState()
+        if (Object.prototype.hasOwnProperty.call(abortControllers, tid)) {
+          abortControllers[tid]?.abort()
+        }
+      }
       cancelToolCall?.()
     },
     [cancelToolCall, onStop]

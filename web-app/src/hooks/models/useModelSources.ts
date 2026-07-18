@@ -219,6 +219,25 @@ function normalizeCatalogModels(value: unknown): CatalogModel[] {
     .map(normalizeCatalogModel)
 }
 
+function normalizeRecentCatalogModels(
+  value: unknown,
+  maxItems: number
+): CatalogModel[] {
+  if (!Array.isArray(value)) return []
+
+  const normalized: CatalogModel[] = []
+  for (let index = value.length - 1; index >= 0; index -= 1) {
+    const catalog = normalizeCatalogInput(value[index])
+    if (!catalog) continue
+
+    normalized.push(normalizeCatalogModel(catalog))
+    if (normalized.length >= maxItems) break
+  }
+
+  normalized.reverse()
+  return normalized
+}
+
 let fetchSourcesRequestId = 0
 
 // Zustand store for model sources
@@ -269,8 +288,9 @@ export const useModelSources = create<ModelSourcesState>()(
           }
         }
 
-        const sources = normalizeCatalogModels(persisted.sources).slice(
-          -MAX_PERSISTED_MODEL_SOURCES
+        const sources = normalizeRecentCatalogModels(
+          persisted.sources,
+          MAX_PERSISTED_MODEL_SOURCES
         )
 
         return {
@@ -281,8 +301,9 @@ export const useModelSources = create<ModelSourcesState>()(
         }
       },
       partialize: (state) => ({
-        sources: normalizeCatalogModels(state.sources).slice(
-          -MAX_PERSISTED_MODEL_SOURCES
+        sources: normalizeRecentCatalogModels(
+          state.sources,
+          MAX_PERSISTED_MODEL_SOURCES
         ),
       }),
     }

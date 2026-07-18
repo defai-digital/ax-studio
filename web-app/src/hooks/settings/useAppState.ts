@@ -62,6 +62,14 @@ type TokenSpeed = {
   message?: string
 }
 
+const getOwnAbortController = (
+  abortControllers: Record<string, AbortController>,
+  threadId: string
+): AbortController | undefined =>
+  Object.prototype.hasOwnProperty.call(abortControllers, threadId)
+    ? abortControllers[threadId]
+    : undefined
+
 export const useAppState = create<AppState>()((set) => ({
   streamingContent: undefined,
   loadingModel: false,
@@ -103,7 +111,7 @@ export const useAppState = create<AppState>()((set) => ({
     set((state) => {
       // Abort any previous controller for this thread so we don't keep
       // signal listeners alive and so a second send cancels an in-flight one.
-      state.abortControllers[threadId]?.abort()
+      getOwnAbortController(state.abortControllers, threadId)?.abort()
       return {
         abortControllers: {
           ...state.abortControllers,
@@ -114,8 +122,9 @@ export const useAppState = create<AppState>()((set) => ({
   },
   clearAbortController: (threadId) => {
     set((state) => {
-      if (!(threadId in state.abortControllers)) return state
-      state.abortControllers[threadId]?.abort()
+      const controller = getOwnAbortController(state.abortControllers, threadId)
+      if (!controller) return state
+      controller.abort()
 
       const { [threadId]: _removed, ...rest } = state.abortControllers
       return { abortControllers: rest }

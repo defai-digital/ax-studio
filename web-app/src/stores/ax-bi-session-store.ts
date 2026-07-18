@@ -158,6 +158,15 @@ function normalizeSessions(value: unknown): Record<string, AxBiSession> {
   )
 }
 
+function getOwnSession(
+  sessions: Record<string, AxBiSession>,
+  sessionId: string
+): AxBiSession | undefined {
+  return Object.prototype.hasOwnProperty.call(sessions, sessionId)
+    ? sessions[sessionId]
+    : undefined
+}
+
 function sanitizePersistedAxBiSessions(
   persisted: unknown,
   current: AxBiSessionState
@@ -167,7 +176,7 @@ function sanitizePersistedAxBiSessions(
   const sessions = normalizeSessions(persisted.sessions)
   const activeSessionId =
     typeof persisted.activeSessionId === 'string' &&
-    persisted.activeSessionId in sessions
+    getOwnSession(sessions, persisted.activeSessionId)
       ? persisted.activeSessionId
       : undefined
 
@@ -220,13 +229,13 @@ export const useAxBiSessions = create<AxBiSessionState>()(
       },
 
       setActiveSession: (sessionId) => {
-        if (!get().sessions[sessionId]) return
+        if (!getOwnSession(get().sessions, sessionId)) return
         set({ activeSessionId: sessionId })
       },
 
       updateSession: (sessionId, patch) => {
         set((state) => {
-          const session = state.sessions[sessionId]
+          const session = getOwnSession(state.sessions, sessionId)
           if (!session) return state
           const nextStatus =
             patch.status === undefined
@@ -262,7 +271,7 @@ export const useAxBiSessions = create<AxBiSessionState>()(
 
       deleteSession: (sessionId) => {
         set((state) => {
-          if (!state.sessions[sessionId]) return state
+          if (!getOwnSession(state.sessions, sessionId)) return state
           const { [sessionId]: _removed, ...remainingSessions } = state.sessions
           const nextActiveSessionId =
             state.activeSessionId === sessionId
@@ -278,7 +287,7 @@ export const useAxBiSessions = create<AxBiSessionState>()(
 
       recordRun: (sessionId, outcome) => {
         set((state) => {
-          const session = state.sessions[sessionId]
+          const session = getOwnSession(state.sessions, sessionId)
           const submittedPrompt =
             typeof outcome.prompt === 'string' ? outcome.prompt.trim() : ''
           const prompt = submittedPrompt || session?.prompt.trim()

@@ -171,32 +171,32 @@ function toCoreControllerProps(
 export function buildRuntimeModelSettings(
   settings: Array<SettingComponentProps | LegacyProviderSettingShape>
 ): Record<string, ProviderSetting> {
-  return settings.reduce<Record<string, ProviderSetting>>((acc, setting) => {
-    const converted = toProviderSetting(setting)
+  return Object.fromEntries(
+    settings.map((setting) => {
+      const converted = toProviderSetting(setting)
 
-    if (converted.key === 'ctx_len') {
-      converted.controller_props.value = DEFAULT_CONTEXT_WINDOW_SETTING_VALUE
-    }
+      if (converted.key === 'ctx_len') {
+        converted.controller_props.value = DEFAULT_CONTEXT_WINDOW_SETTING_VALUE
+      }
 
-    acc[converted.key] = converted
-    return acc
-  }, {})
+      return [converted.key, converted]
+    })
+  )
 }
 
 export function cloneProviderSettings(
   settings: Record<string, ProviderSetting>
 ): Record<string, ProviderSetting> {
-  return Object.entries(settings).reduce<Record<string, ProviderSetting>>(
-    (acc, [key, setting]) => {
-      acc[key] = {
+  return Object.fromEntries(
+    Object.entries(settings).map(([key, setting]) => [
+      key,
+      {
         ...setting,
         controller_props: {
           ...(setting.controller_props ?? {}),
         },
-      }
-      return acc
-    },
-    {}
+      },
+    ])
   )
 }
 

@@ -165,18 +165,20 @@ export async function exportAllThreads(
       return
     }
 
-    const messagesByThreadId: Record<string, ThreadMessage[]> = {}
+    const messageEntries: Array<[string, ThreadMessage[]]> = []
     for (const thread of threads) {
       const threadId =
         typeof thread === 'object' && thread !== null
           ? (thread as { id: string }).id
           : ''
       if (threadId) {
-        messagesByThreadId[threadId] = await serviceHub
-          .messages()
-          .fetchMessages(threadId)
+        messageEntries.push([
+          threadId,
+          await serviceHub.messages().fetchMessages(threadId),
+        ])
       }
     }
+    const messagesByThreadId = Object.fromEntries(messageEntries)
 
     const threadList = threads.map((t) => {
       const obj = t as { id: string; title: string; updated: number }

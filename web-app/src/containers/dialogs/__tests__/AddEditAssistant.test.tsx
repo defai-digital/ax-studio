@@ -230,6 +230,34 @@ describe('AddEditAssistant', () => {
     })
   })
 
+  it('preserves prototype-named parameters as own entries', () => {
+    render(
+      <AddEditAssistant
+        open={true}
+        onOpenChange={mockOnOpenChange}
+        editingKey={null}
+        onSave={mockOnSave}
+      />
+    )
+
+    fireEvent.change(screen.getByPlaceholderText('assistants:enterName'), {
+      target: { value: 'My Assistant' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('assistants:key'), {
+      target: { value: '__proto__' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('assistants:value'), {
+      target: { value: 'special' },
+    })
+    fireEvent.click(screen.getByText('assistants:save'))
+
+    const parameters = mockOnSave.mock.calls[0][0].parameters
+    expect(Object.prototype.hasOwnProperty.call(parameters, '__proto__')).toBe(
+      true
+    )
+    expect(parameters['__proto__']).toBe('special')
+  })
+
   it('blocks invalid number parameters instead of coercing them to zero', () => {
     render(
       <AddEditAssistant

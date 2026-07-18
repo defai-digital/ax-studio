@@ -362,22 +362,24 @@ export function AddEditMCPServer({
     setTimeoutError(null)
 
     // Convert env arrays to object
-    const envObj: Record<string, string> = {}
-    envKeys.forEach((key, index) => {
-      const keyName = key.trim()
-      if (keyName !== '') {
-        envObj[keyName] = envValues[index]?.trim() || ''
-      }
-    })
+    const envObj = Object.fromEntries(
+      envKeys
+        .map((key, index) => [
+          key.trim(),
+          envValues[index]?.trim() || '',
+        ])
+        .filter(([keyName]) => keyName !== '')
+    )
 
     // Convert headers arrays to object
-    const headersObj: Record<string, string> = {}
-    headerKeys.forEach((key, index) => {
-      const keyName = key.trim()
-      if (keyName !== '') {
-        headersObj[keyName] = headerValues[index]?.trim() || ''
-      }
-    })
+    const headersObj = Object.fromEntries(
+      headerKeys
+        .map((key, index) => [
+          key.trim(),
+          headerValues[index]?.trim() || '',
+        ])
+        .filter(([keyName]) => keyName !== '')
+    )
 
     // Filter out empty args
     const filteredArgs = args.map((arg) => arg.value.trim()).filter((v) => v)

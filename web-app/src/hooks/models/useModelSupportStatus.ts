@@ -23,7 +23,10 @@ export function useModelSupportStatus() {
 
       if (
         inFlightModelChecks.current.has(modelKey) ||
-        modelSupportStatusRef.current[modelKey]
+        Object.prototype.hasOwnProperty.call(
+          modelSupportStatusRef.current,
+          modelKey
+        )
       ) {
         return
       }

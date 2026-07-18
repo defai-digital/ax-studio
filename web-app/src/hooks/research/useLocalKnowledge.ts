@@ -42,6 +42,15 @@ function normalizeThreadOverrides(value: unknown): Record<string, boolean> {
   )
 }
 
+function getOwnThreadOverride(
+  overrides: Record<string, boolean>,
+  threadId: string
+): boolean | undefined {
+  return Object.prototype.hasOwnProperty.call(overrides, threadId)
+    ? overrides[threadId]
+    : undefined
+}
+
 function sanitizePersistedLocalKnowledge(
   persisted: unknown,
   current: LocalKnowledgeState
@@ -76,9 +85,10 @@ export const useLocalKnowledge = create<LocalKnowledgeState>()(
 
         set((state) => {
           const current =
-            normalizedThreadId in state.localKnowledgeEnabledPerThread
-              ? state.localKnowledgeEnabledPerThread[normalizedThreadId]
-              : state.localKnowledgeEnabled
+            getOwnThreadOverride(
+              state.localKnowledgeEnabledPerThread,
+              normalizedThreadId
+            ) ?? state.localKnowledgeEnabled
           return {
             localKnowledgeEnabledPerThread: {
               ...state.localKnowledgeEnabledPerThread,
@@ -91,11 +101,12 @@ export const useLocalKnowledge = create<LocalKnowledgeState>()(
       isLocalKnowledgeEnabledForThread: (threadId: string) => {
         const normalizedThreadId = normalizeThreadId(threadId)
         const state = get()
-        if (
-          normalizedThreadId &&
-          normalizedThreadId in state.localKnowledgeEnabledPerThread
-        ) {
-          return state.localKnowledgeEnabledPerThread[normalizedThreadId]
+        if (normalizedThreadId) {
+          const override = getOwnThreadOverride(
+            state.localKnowledgeEnabledPerThread,
+            normalizedThreadId
+          )
+          if (override !== undefined) return override
         }
         return state.localKnowledgeEnabled
       },

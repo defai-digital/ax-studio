@@ -136,7 +136,7 @@ export const DropdownToolsAvailable = memo(function DropdownToolsAvailable({
         acc[tool.server].push(tool)
         return acc
       },
-      {} as Record<string, typeof tools>
+      Object.create(null) as Record<string, typeof tools>
     )
 
     return toolsByServer

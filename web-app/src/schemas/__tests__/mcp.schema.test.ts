@@ -155,6 +155,24 @@ describe('parseMcpServersRecord', () => {
     expect(servers).not.toHaveProperty('bad')
     expect(warn).toHaveBeenCalled()
   })
+
+  it('preserves prototype-named servers as own entries', () => {
+    const servers = parseMcpServersRecord(
+      Object.fromEntries([
+        ['__proto__', { type: 'http', url: 'https://mcp.example.com/mcp' }],
+      ])
+    )
+
+    expect(Object.prototype.hasOwnProperty.call(servers, '__proto__')).toBe(
+      true
+    )
+    expect(servers['__proto__']).toEqual(
+      expect.objectContaining({
+        type: 'http',
+        url: 'https://mcp.example.com/mcp',
+      })
+    )
+  })
 })
 
 describe('mcpSettingsSchema', () => {

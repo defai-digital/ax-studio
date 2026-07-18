@@ -138,7 +138,10 @@ export const useRouterSettings = create<RouterSettingsState>()(
         if (!state.enabled || !state.routerModelId || !state.routerProviderId) {
           return false
         }
-        if (threadId && threadId in state.threadOverrides) {
+        if (
+          threadId &&
+          Object.prototype.hasOwnProperty.call(state.threadOverrides, threadId)
+        ) {
           return state.threadOverrides[threadId]
         }
         return state.enabled
@@ -146,10 +149,11 @@ export const useRouterSettings = create<RouterSettingsState>()(
 
       cleanupStaleOverrides: (activeThreadIds) =>
         set((state) => {
-          const cleaned: Record<string, boolean> = {}
-          for (const [id, val] of Object.entries(state.threadOverrides)) {
-            if (activeThreadIds.has(id)) cleaned[id] = val
-          }
+          const cleaned = Object.fromEntries(
+            Object.entries(state.threadOverrides).filter(([id]) =>
+              activeThreadIds.has(id)
+            )
+          )
           return { threadOverrides: cleaned }
         }),
 

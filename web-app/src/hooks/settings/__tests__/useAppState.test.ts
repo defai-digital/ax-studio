@@ -108,6 +108,36 @@ describe('useAppState', () => {
     expect(result.current.abortControllers['thread-123']).toBe(controller)
   })
 
+  it('treats prototype-named threads as ordinary abort-controller entries', () => {
+    const { result } = renderHook(() => useAppState())
+    const controller = new AbortController()
+    const abortSpy = vi.spyOn(controller, 'abort')
+
+    act(() => {
+      result.current.setAbortController('__proto__', controller)
+    })
+
+    expect(
+      Object.prototype.hasOwnProperty.call(
+        result.current.abortControllers,
+        '__proto__'
+      )
+    ).toBe(true)
+    expect(result.current.abortControllers['__proto__']).toBe(controller)
+
+    act(() => {
+      result.current.clearAbortController('__proto__')
+    })
+
+    expect(abortSpy).toHaveBeenCalledOnce()
+    expect(
+      Object.prototype.hasOwnProperty.call(
+        result.current.abortControllers,
+        '__proto__'
+      )
+    ).toBe(false)
+  })
+
   it('should update current tool call', () => {
     const { result } = renderHook(() => useAppState())
 

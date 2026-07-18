@@ -176,6 +176,25 @@ describe('useToolAvailable', () => {
       expect(isDisabled).toBe(true)
     })
 
+    it('uses defaults for a prototype-named thread with no own override', () => {
+      const { result } = renderHook(() => useToolAvailable())
+
+      act(() => {
+        result.current.setDefaultDisabledTools(['server-1::tool-default'])
+      })
+
+      expect(
+        result.current.isToolDisabled(
+          '__proto__',
+          'server-1',
+          'tool-default'
+        )
+      ).toBe(true)
+      expect(result.current.getDisabledToolsForThread('__proto__')).toEqual([
+        'server-1::tool-default',
+      ])
+    })
+
     it('should return false for tools not in default disabled list', () => {
       const { result } = renderHook(() => useToolAvailable())
 

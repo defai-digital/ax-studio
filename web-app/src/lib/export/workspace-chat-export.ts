@@ -38,6 +38,14 @@ export interface WorkspaceChatsExportData {
   threads: WorkspaceChatExportThread[]
 }
 
+const getOwnThreadMessages = (
+  messagesByThreadId: Record<string, ThreadMessage[]>,
+  threadId: string
+): ThreadMessage[] | undefined =>
+  Object.prototype.hasOwnProperty.call(messagesByThreadId, threadId)
+    ? messagesByThreadId[threadId]
+    : undefined
+
 const toIsoDate = (timestamp: number): string => {
   const normalized =
     timestamp < 1_000_000_000_000 ? timestamp * 1000 : timestamp
@@ -112,7 +120,10 @@ export const buildWorkspaceChatsExportData = (
     .slice()
     .sort((a, b) => (b.updated || 0) - (a.updated || 0))
     .map((thread) => {
-      const threadMessages = (messagesByThreadId[thread.id] ?? [])
+      const threadMessages = (getOwnThreadMessages(
+        messagesByThreadId,
+        thread.id
+      ) ?? [])
         .slice()
         .sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
         .map((message) => ({

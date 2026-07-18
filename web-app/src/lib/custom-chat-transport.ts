@@ -374,7 +374,7 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
   }
 
   async refreshTools(_overrideModelSupportsTools?: boolean) {
-    const toolsRecord: Record<string, Tool> = {}
+    const toolsRecord = Object.create(null) as Record<string, Tool>
     const getDisabledToolsForThread =
       useToolAvailable.getState().getDisabledToolsForThread
     const disabledToolKeys = this.threadId

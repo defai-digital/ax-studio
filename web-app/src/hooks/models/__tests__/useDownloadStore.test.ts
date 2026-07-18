@@ -28,6 +28,7 @@ describe('useDownloadStore', () => {
       })
 
       expect(result.current.downloads['test-id']).toEqual({
+        id: 'test-id',
         name: 'test-model',
         progress: 50,
         current: 500,
@@ -49,6 +50,7 @@ describe('useDownloadStore', () => {
       })
 
       expect(result.current.downloads['test-id']).toEqual({
+        id: 'test-id',
         name: 'test-model',
         progress: 75,
         current: 750,
@@ -70,6 +72,7 @@ describe('useDownloadStore', () => {
       })
 
       expect(result.current.downloads['test-id']).toEqual({
+        id: 'test-id',
         name: 'test-model',
         progress: 75,
         current: 250,
@@ -85,6 +88,7 @@ describe('useDownloadStore', () => {
       })
 
       expect(result.current.downloads['test-id']).toEqual({
+        id: 'test-id',
         name: '',
         progress: 50,
         current: 0,
@@ -309,6 +313,18 @@ describe('toDownloadProcesses', () => {
       {
         id: 'model-b',
         name: 'model-b',
+        progress: 0,
+        current: 0,
+        total: 0,
+      },
+    ])
+  })
+
+  it('does not mistake inherited properties for active downloads', () => {
+    expect(toDownloadProcesses({}, new Set(['__proto__']))).toEqual([
+      {
+        id: '__proto__',
+        name: '__proto__',
         progress: 0,
         current: 0,
         total: 0,

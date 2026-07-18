@@ -11,6 +11,18 @@ const latestSuccessfulMutationId = new Map<string, number>()
 const visibleMessageMutationId = new Map<string, number>()
 const pendingMessageMutationIds = new Map<string, Set<number>>()
 
+const getOwnMessages = (
+  messages: Record<string, ThreadMessage[]>,
+  threadId: string
+): ThreadMessage[] | undefined => {
+  if (!Object.prototype.hasOwnProperty.call(messages, threadId)) {
+    return undefined
+  }
+
+  const threadMessages = messages[threadId]
+  return Array.isArray(threadMessages) ? threadMessages : undefined
+}
+
 const trackPersistedMessage = (message: ThreadMessage) => {
   const key = trackedMessageKey(message.thread_id, message.id)
   persistedMessages.set(key, message)
@@ -56,7 +68,7 @@ type MessageState = {
 export const useMessages = create<MessageState>()((set, get) => ({
   messages: {},
   getMessages: (threadId) => {
-    return get().messages[threadId] || []
+    return getOwnMessages(get().messages, threadId) ?? []
   },
   setMessages: (threadId, messages) => {
     clearTrackedThreadMessages(threadId)
@@ -79,7 +91,7 @@ export const useMessages = create<MessageState>()((set, get) => ({
       messages: {
         ...state.messages,
         [message.thread_id]: [
-          ...(state.messages[message.thread_id] || []),
+          ...(getOwnMessages(state.messages, message.thread_id) ?? []),
           newMessage,
         ],
       },
@@ -97,9 +109,11 @@ export const useMessages = create<MessageState>()((set, get) => ({
         set((state) => ({
           messages: {
             ...state.messages,
-            [message.thread_id]: state.messages[message.thread_id]?.map(
-              (existing) =>
-                existing.id === newMessage.id ? createdMessage : existing
+            [message.thread_id]: getOwnMessages(
+              state.messages,
+              message.thread_id
+            )?.map((existing) =>
+              existing.id === newMessage.id ? createdMessage : existing
             ) ?? [createdMessage],
           },
         }))
@@ -111,7 +125,7 @@ export const useMessages = create<MessageState>()((set, get) => ({
           messages: {
             ...state.messages,
             [message.thread_id]: (
-              state.messages[message.thread_id] || []
+              getOwnMessages(state.messages, message.thread_id) ?? []
             ).filter((m) => m.id !== newMessage.id),
           },
         }))
@@ -133,15 +147,17 @@ export const useMessages = create<MessageState>()((set, get) => ({
     // Roll back to the last backend-confirmed version rather than a prior optimistic edit.
     const previousMessage =
       persistedMessages.get(messageKey) ??
-      get().messages[message.thread_id]?.find((m) => m.id === message.id)
+      getOwnMessages(get().messages, message.thread_id)?.find(
+        (m) => m.id === message.id
+      )
 
     // Optimistically update state immediately for instant UI feedback
     set((state) => ({
       messages: {
         ...state.messages,
-        [message.thread_id]: (state.messages[message.thread_id] || []).map(
-          (m) => (m.id === message.id ? updatedMessage : m)
-        ),
+        [message.thread_id]: (
+          getOwnMessages(state.messages, message.thread_id) ?? []
+        ).map((m) => (m.id === message.id ? updatedMessage : m)),
       },
     }))
 
@@ -174,9 +190,9 @@ export const useMessages = create<MessageState>()((set, get) => ({
         set((state) => ({
           messages: {
             ...state.messages,
-            [message.thread_id]: (state.messages[message.thread_id] || []).map(
-              (m) => (m.id === message.id ? persistedMessage : m)
-            ),
+            [message.thread_id]: (
+              getOwnMessages(state.messages, message.thread_id) ?? []
+            ).map((m) => (m.id === message.id ? persistedMessage : m)),
           },
         }))
       })
@@ -201,7 +217,7 @@ export const useMessages = create<MessageState>()((set, get) => ({
             messages: {
               ...state.messages,
               [message.thread_id]: (
-                state.messages[message.thread_id] || []
+                getOwnMessages(state.messages, message.thread_id) ?? []
               ).map((m) => (m.id === message.id ? previousMessage : m)),
             },
           }))
@@ -209,7 +225,7 @@ export const useMessages = create<MessageState>()((set, get) => ({
       })
   },
   deleteMessage: (threadId, messageId) => {
-    const previousMessage = get().messages[threadId]?.find(
+    const previousMessage = getOwnMessages(get().messages, threadId)?.find(
       (m) => m.id === messageId
     )
     // Optimistic update
@@ -217,7 +233,7 @@ export const useMessages = create<MessageState>()((set, get) => ({
       messages: {
         ...state.messages,
         [threadId]:
-          state.messages[threadId]?.filter(
+          getOwnMessages(state.messages, threadId)?.filter(
             (message) => message.id !== messageId
           ) || [],
       },
@@ -236,7 +252,7 @@ export const useMessages = create<MessageState>()((set, get) => ({
         // failed API-call window.
         if (!previousMessage) return
         set((state) => {
-          const currentList = state.messages[threadId] ?? []
+          const currentList = getOwnMessages(state.messages, threadId) ?? []
           if (currentList.some((m) => m.id === messageId)) return state
           const restored = [...currentList, previousMessage].sort(
             (a, b) => (a.created_at || 0) - (b.created_at || 0)

@@ -51,6 +51,12 @@ const mocks = vi.hoisted(() => {
       providers.find((provider) => provider.provider === providerId)
     ),
     providers,
+    mcpTools: [] as Array<{
+      name: string
+      description: string
+      inputSchema: Record<string, unknown>
+      server?: string
+    }>,
     routerModelId: null as string | null,
     routerProviderId: null as string | null,
     selectedModel: { id: 'test-model', capabilities: [] },
@@ -63,13 +69,13 @@ vi.mock('@/hooks/useServiceHub', () => ({
   useServiceStore: {
     getState: () => ({
       serviceHub: {
-        mcp: () => ({ getTools: () => Promise.resolve([]) }),
+        mcp: () => ({ getTools: () => Promise.resolve(mocks.mcpTools) }),
         rag: () => ({ getTools: () => Promise.resolve([]) }),
       },
     }),
   },
   getServiceHub: () => ({
-    mcp: () => ({ getTools: () => Promise.resolve([]) }),
+    mcp: () => ({ getTools: () => Promise.resolve(mocks.mcpTools) }),
     rag: () => ({ getTools: () => Promise.resolve([]) }),
   }),
 }))
@@ -209,6 +215,7 @@ beforeEach(() => {
   consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
   consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
   mocks.autoRouteEnabled = false
+  mocks.mcpTools = []
   mocks.routerModelId = null
   mocks.routerProviderId = null
   mocks.selectedModel = { id: 'test-model', capabilities: [] }
@@ -294,6 +301,25 @@ describe('CustomChatTransport — getTools', () => {
   it('returns empty tools initially', () => {
     const transport = makeTransport()
     expect(transport.getTools()).toEqual({})
+  })
+
+  it('retains MCP tools whose names match object prototype properties', async () => {
+    mocks.mcpTools = [
+      {
+        name: '__proto__',
+        description: 'Special tool name',
+        inputSchema: { type: 'object', properties: {} },
+        server: 'test-server',
+      },
+    ]
+    const transport = makeTransport()
+
+    await transport.refreshTools()
+
+    expect(
+      Object.prototype.hasOwnProperty.call(transport.getTools(), '__proto__')
+    ).toBe(true)
+    expect(transport.getTools()['__proto__']).toBeDefined()
   })
 })
 

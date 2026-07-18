@@ -65,6 +65,20 @@ describe('useThreads', () => {
     expect(result.current.threads['thread1']).toEqual(threads[0])
     expect(result.current.threads['thread2']).toEqual(threads[1])
   })
+
+  it('preserves thread IDs that match object prototype property names', () => {
+    const { result } = renderHook(() => useThreads())
+    const thread = { id: '__proto__', title: 'Special ID', messages: [] }
+
+    expect(result.current.getThreadById('__proto__')).toBeUndefined()
+
+    act(() => {
+      result.current.setThreads([thread])
+    })
+
+    expect(Object.keys(result.current.threads)).toEqual(['__proto__'])
+    expect(result.current.getThreadById('__proto__')).toEqual(thread)
+  })
   it('should set current thread ID', () => {
     const { result } = renderHook(() => useThreads())
 

@@ -61,14 +61,20 @@ const normalizeOptionalString = (value: unknown): string | undefined => {
   return typeof value === 'string' ? value : undefined
 }
 
+const isUnsafeObjectKey = (value: string): boolean => {
+  return value === '__proto__' || value === 'prototype' || value === 'constructor'
+}
+
 const normalizeStringList = (value: unknown, maxItems: number): string[] => {
   if (!Array.isArray(value)) return []
 
   const values: string[] = []
+  const seen = new Set<string>()
   for (const item of value) {
     const normalized = normalizeNonEmptyString(item)
-    if (!normalized || values.includes(normalized)) continue
+    if (!normalized || seen.has(normalized)) continue
 
+    seen.add(normalized)
     values.push(normalized)
     if (values.length >= maxItems) break
   }
@@ -122,7 +128,7 @@ const normalizeProviderSetting = (value: unknown): ProviderSetting | null => {
   if (!isPlainRecord(value)) return null
 
   const key = normalizeNonEmptyString(value.key)
-  if (!key) return null
+  if (!key || isUnsafeObjectKey(key)) return null
 
   return {
     key,
@@ -137,12 +143,12 @@ const normalizeProviderSettings = (value: unknown): ProviderSetting[] => {
   if (!Array.isArray(value)) return []
 
   const settings: ProviderSetting[] = []
+  const seenKeys = new Set<string>()
   for (const item of value) {
     const setting = normalizeProviderSetting(item)
-    if (!setting || settings.some((existing) => existing.key === setting.key)) {
-      continue
-    }
+    if (!setting || seenKeys.has(setting.key)) continue
 
+    seenKeys.add(setting.key)
     settings.push(setting)
     if (settings.length >= MAX_PROVIDER_SETTINGS) break
   }
@@ -156,16 +162,22 @@ const normalizeModelSettings = (
   if (!isPlainRecord(value)) return undefined
 
   const settings: Record<string, ProviderSetting> = {}
+  let settingCount = 0
   for (const [key, item] of Object.entries(value)) {
     const normalizedKey = normalizeNonEmptyString(key)
     const setting = normalizeProviderSetting(item)
-    if (!normalizedKey || !setting) continue
+    if (!normalizedKey || isUnsafeObjectKey(normalizedKey) || !setting) continue
 
+    const isNewKey = !Object.prototype.hasOwnProperty.call(
+      settings,
+      normalizedKey
+    )
     settings[normalizedKey] = setting
-    if (Object.keys(settings).length >= MAX_PROVIDER_SETTINGS) break
+    if (isNewKey) settingCount += 1
+    if (settingCount >= MAX_PROVIDER_SETTINGS) break
   }
 
-  return Object.keys(settings).length > 0 ? settings : undefined
+  return settingCount > 0 ? settings : undefined
 }
 
 const normalizeModel = (value: unknown): Model | null => {
@@ -221,12 +233,12 @@ const normalizeModels = (value: unknown): Model[] => {
   if (!Array.isArray(value)) return []
 
   const models: Model[] = []
+  const seenIds = new Set<string>()
   for (const item of value) {
     const model = normalizeModel(item)
-    if (!model || models.some((existing) => existing.id === model.id)) {
-      continue
-    }
+    if (!model || seenIds.has(model.id)) continue
 
+    seenIds.add(model.id)
     models.push(model)
     if (models.length >= MAX_PERSISTED_MODELS_PER_PROVIDER) break
   }
@@ -253,15 +265,12 @@ const normalizeProviderHeaders = (
   if (!Array.isArray(value)) return undefined
 
   const headers: ProviderCustomHeader[] = []
+  const seenHeaders = new Set<string>()
   for (const item of value) {
     const header = normalizeProviderHeader(item)
-    if (
-      !header ||
-      headers.some((existing) => existing.header === header.header)
-    ) {
-      continue
-    }
+    if (!header || seenHeaders.has(header.header)) continue
 
+    seenHeaders.add(header.header)
     headers.push(header)
     if (headers.length >= MAX_PROVIDER_HEADERS) break
   }
@@ -303,15 +312,12 @@ const normalizeProviders = (value: unknown): ModelProvider[] => {
   if (!Array.isArray(value)) return []
 
   const providers: ModelProvider[] = []
+  const seenNames = new Set<string>()
   for (const item of value) {
     const provider = normalizeProvider(item)
-    if (
-      !provider ||
-      providers.some((existing) => existing.provider === provider.provider)
-    ) {
-      continue
-    }
+    if (!provider || seenNames.has(provider.provider)) continue
 
+    seenNames.add(provider.provider)
     providers.push(provider)
     if (providers.length >= MAX_PERSISTED_PROVIDERS) break
   }

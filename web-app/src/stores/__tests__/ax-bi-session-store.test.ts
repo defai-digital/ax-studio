@@ -190,6 +190,18 @@ describe('useAxBiSessions', () => {
     expect(merged?.activeSessionId).toBe('session-1')
   })
 
+  it('does not accept inherited properties as persisted sessions', () => {
+    const merge = useAxBiSessions.persist.getOptions().merge
+    const current = useAxBiSessions.getState()
+
+    const merged = merge?.(
+      { activeSessionId: '__proto__', sessions: {} },
+      current
+    )
+
+    expect(merged?.activeSessionId).toBeUndefined()
+  })
+
   it('caps persisted sessions and runs', () => {
     const merge = useAxBiSessions.persist.getOptions().merge
     const current = useAxBiSessions.getState()

@@ -95,6 +95,36 @@ describe('useLocalKnowledge', () => {
     expect(result).toBe(false)
   })
 
+  it('treats prototype-named threads as ordinary overrides', () => {
+    act(() => {
+      useLocalKnowledge.setState({ localKnowledgeEnabled: true })
+    })
+
+    expect(
+      useLocalKnowledge
+        .getState()
+        .isLocalKnowledgeEnabledForThread('__proto__')
+    ).toBe(true)
+
+    act(() => {
+      useLocalKnowledge
+        .getState()
+        .toggleLocalKnowledgeForThread('__proto__')
+    })
+
+    expect(
+      useLocalKnowledge
+        .getState()
+        .isLocalKnowledgeEnabledForThread('__proto__')
+    ).toBe(false)
+    expect(
+      Object.prototype.hasOwnProperty.call(
+        useLocalKnowledge.getState().localKnowledgeEnabledPerThread,
+        '__proto__'
+      )
+    ).toBe(true)
+  })
+
   // --- toggleLocalKnowledgeForThread ---
 
   it('should toggle thread from global default false to true', () => {

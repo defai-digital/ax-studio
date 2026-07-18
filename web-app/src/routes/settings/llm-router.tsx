@@ -101,7 +101,10 @@ function LLMRouterSettings() {
 
   // Group models by provider for the command list
   const groupedModels = useMemo(() => {
-    const groups: Record<string, typeof availableModels> = {}
+    const groups = Object.create(null) as Record<
+      string,
+      typeof availableModels
+    >
     for (const model of availableModels) {
       if (!groups[model.provider]) groups[model.provider] = []
       groups[model.provider].push(model)

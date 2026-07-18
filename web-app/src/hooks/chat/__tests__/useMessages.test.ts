@@ -71,6 +71,31 @@ describe('useMessages', () => {
       const messages = result.current.getMessages('thread1')
       expect(messages).toEqual(testMessages)
     })
+
+    it('treats prototype-named threads as ordinary own entries', () => {
+      const { result } = renderHook(() => useMessages())
+      const testMessage: ThreadMessage = {
+        id: 'special-message',
+        thread_id: '__proto__',
+        role: 'user',
+        content: 'Hello',
+        created_at: Date.now(),
+      }
+
+      expect(result.current.getMessages('__proto__')).toEqual([])
+
+      act(() => {
+        result.current.setMessages('__proto__', [testMessage])
+      })
+
+      expect(result.current.getMessages('__proto__')).toEqual([testMessage])
+      expect(
+        Object.prototype.hasOwnProperty.call(
+          result.current.messages,
+          '__proto__'
+        )
+      ).toBe(true)
+    })
   })
 
   describe('setMessages', () => {

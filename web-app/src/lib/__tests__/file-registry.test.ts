@@ -48,6 +48,20 @@ describe('file-registry', () => {
       ).toBe('file-001')
     })
 
+    it('supports collection IDs that match object prototype properties', () => {
+      const entry = makeEntry({ collection_id: '__proto__' })
+
+      useFileRegistry.getState().addFile('__proto__', entry)
+
+      expect(Object.keys(useFileRegistry.getState().files)).toContain(
+        '__proto__'
+      )
+      expect(useFileRegistry.getState().listFiles('__proto__')).toHaveLength(1)
+      expect(useFileRegistry.getState().getFile('__proto__', 'file-001')).toEqual(
+        entry
+      )
+    })
+
     it('adds multiple files to the same collection', () => {
       useFileRegistry
         .getState()

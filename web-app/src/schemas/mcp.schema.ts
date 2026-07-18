@@ -54,11 +54,13 @@ export function parseMcpServersRecord(
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return {}
   }
-  const servers: z.infer<typeof mcpServersSchema> = {}
+  const servers: Array<
+    [string, z.infer<typeof mcpServerConfigSchema>]
+  > = []
   for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
     const parsed = mcpServerConfigSchema.safeParse(value)
     if (parsed.success) {
-      servers[name] = parsed.data
+      servers.push([name, parsed.data])
     } else {
       console.warn(
         `MCP server "${name}" config invalid, skipping:`,
@@ -66,7 +68,7 @@ export function parseMcpServersRecord(
       )
     }
   }
-  return servers
+  return Object.fromEntries(servers)
 }
 
 export const mcpServersSchema = z.record(z.string(), mcpServerConfigSchema)

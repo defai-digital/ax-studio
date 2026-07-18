@@ -8,6 +8,14 @@ export interface DownloadProgressProps {
   total: number
 }
 
+const getOwnDownload = (
+  downloads: Record<string, DownloadProgressProps>,
+  id: string
+): DownloadProgressProps | undefined =>
+  Object.prototype.hasOwnProperty.call(downloads, id)
+    ? downloads[id]
+    : undefined
+
 export const toDownloadProcesses = (
   downloads: Record<string, DownloadProgressProps>,
   localDownloadingModels?: Set<string>
@@ -23,7 +31,7 @@ export const toDownloadProcesses = (
   if (!localDownloadingModels) return downloadsWithProgress
 
   const localDownloadsWithoutProgress = Array.from(localDownloadingModels)
-    .filter((modelId) => !downloads[modelId])
+    .filter((modelId) => !getOwnDownload(downloads, modelId))
     .map((modelId) => ({
       id: modelId,
       name: modelId,
@@ -64,18 +72,22 @@ export const useDownloadStore = create<DownloadState>((set) => ({
     }),
 
   updateProgress: (id, progress, name, current, total) =>
-    set((state) => ({
-      downloads: {
-        ...state.downloads,
-        [id]: {
-          ...state.downloads[id],
-          name: name ?? state.downloads[id]?.name ?? '',
-          progress,
-          current: current ?? state.downloads[id]?.current ?? 0,
-          total: total ?? state.downloads[id]?.total ?? 0,
+    set((state) => {
+      const existing = getOwnDownload(state.downloads, id)
+      return {
+        downloads: {
+          ...state.downloads,
+          [id]: {
+            ...existing,
+            id,
+            name: name ?? existing?.name ?? '',
+            progress,
+            current: current ?? existing?.current ?? 0,
+            total: total ?? existing?.total ?? 0,
+          },
         },
-      },
-    })),
+      }
+    }),
 
   addLocalDownloadingModel: (modelId: string) =>
     set((state) => ({

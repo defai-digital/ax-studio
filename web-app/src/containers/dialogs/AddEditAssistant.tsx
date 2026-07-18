@@ -268,7 +268,7 @@ export function AddEditAssistant({
     }
     setNameError(null)
     // Convert parameters arrays to object
-    const parameters: Record<string, unknown> = {}
+    const parameterEntries: Array<[string, unknown]> = []
     const nextParamsErrors = paramsKeys.map(() => null as string | null)
     let hasParamError = false
 
@@ -283,16 +283,19 @@ export function AddEditAssistant({
           return
         }
 
-        parameters[key] = parsed
+        parameterEntries.push([key, parsed])
       } else if (paramsTypes[index] === 'json' && typeof value === 'string') {
         try {
-          parameters[key] = value.trim() === '' ? {} : JSON.parse(value)
+          parameterEntries.push([
+            key,
+            value.trim() === '' ? {} : JSON.parse(value),
+          ])
         } catch {
           nextParamsErrors[index] = t('assistants:invalidJsonParameter')
           hasParamError = true
         }
       } else {
-        parameters[key] = value
+        parameterEntries.push([key, value])
       }
     })
 
@@ -302,6 +305,7 @@ export function AddEditAssistant({
     }
 
     setParamsErrors(nextParamsErrors)
+    const parameters = Object.fromEntries(parameterEntries)
 
     const assistant: Assistant = {
       avatar,

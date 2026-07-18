@@ -41,10 +41,12 @@ const normalizeToolList = (value: unknown): string[] => {
   if (!Array.isArray(value)) return []
 
   const tools: string[] = []
+  const seen = new Set<string>()
   for (const item of value) {
     const toolKey = normalizeToolKey(item)
-    if (!toolKey || tools.includes(toolKey)) continue
+    if (!toolKey || seen.has(toolKey)) continue
 
+    seen.add(toolKey)
     tools.push(toolKey)
     if (tools.length >= MAX_DISABLED_TOOLS_PER_THREAD) break
   }
@@ -57,16 +59,25 @@ const normalizeDisabledTools = (
 ): Record<string, string[]> => {
   if (!isPlainRecord(value)) return {}
 
-  const disabledTools: Record<string, string[]> = {}
+  const disabledTools = new Map<string, string[]>()
   for (const [threadId, tools] of Object.entries(value)) {
     const normalizedThreadId = normalizeNonEmptyString(threadId)
     if (!normalizedThreadId) continue
 
-    disabledTools[normalizedThreadId] = normalizeToolList(tools)
-    if (Object.keys(disabledTools).length >= MAX_DISABLED_TOOL_THREADS) break
+    disabledTools.set(normalizedThreadId, normalizeToolList(tools))
+    if (disabledTools.size >= MAX_DISABLED_TOOL_THREADS) break
   }
 
-  return disabledTools
+  return Object.fromEntries(disabledTools)
+}
+
+const getOwnToolList = (
+  disabledTools: Record<string, unknown>,
+  threadId: string
+): unknown => {
+  return Object.prototype.hasOwnProperty.call(disabledTools, threadId)
+    ? disabledTools[threadId]
+    : undefined
 }
 
 const isOldFormatKey = (key: string): boolean => {
@@ -206,7 +217,7 @@ export const useToolAvailable = create<ToolDisabledState>()(
         const disabledTools = isPlainRecord(state.disabledTools)
           ? state.disabledTools
           : {}
-        const threadTools = disabledTools[normalizedThreadId]
+        const threadTools = getOwnToolList(disabledTools, normalizedThreadId)
         // If no thread-specific settings, use default
         if (threadTools === undefined) {
           return normalizeToolList(state.defaultDisabledTools).includes(toolKey)
@@ -222,7 +233,7 @@ export const useToolAvailable = create<ToolDisabledState>()(
         const disabledTools = isPlainRecord(state.disabledTools)
           ? state.disabledTools
           : {}
-        const threadTools = disabledTools[normalizedThreadId]
+        const threadTools = getOwnToolList(disabledTools, normalizedThreadId)
         // If no thread-specific settings, use default
         if (threadTools === undefined) {
           return normalizeToolList(state.defaultDisabledTools)
@@ -255,7 +266,7 @@ export const useToolAvailable = create<ToolDisabledState>()(
           ? state.disabledTools
           : {}
         // If thread already has settings, don't override
-        if (disabledTools[normalizedThreadId] !== undefined) {
+        if (getOwnToolList(disabledTools, normalizedThreadId) !== undefined) {
           return
         }
 

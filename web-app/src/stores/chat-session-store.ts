@@ -36,6 +36,12 @@ interface ChatSessionState {
   clearSessions: () => void
 }
 
+const getOwnRecordValue = <T>(
+  record: Record<string, T>,
+  key: string
+): T | undefined =>
+  Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined
+
 export const useChatSessions = create<ChatSessionState>((set, get) => ({
   sessions: {},
   standaloneData: {},
@@ -49,7 +55,7 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
       set({ activeConversationId: sessionId })
     }
 
-    const existing = get().sessions[sessionId]
+    const existing = getOwnRecordValue(get().sessions, sessionId)
     if (existing) {
       const transportChanged = existing.transport !== transport
       const titleChanged = existing.title !== title
@@ -76,7 +82,7 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
       return existing.chat
     }
 
-    const existingData = get().standaloneData[sessionId]
+    const existingData = getOwnRecordValue(get().standaloneData, sessionId)
     const newSession = createSession(
       sessionId,
       transport,
@@ -99,30 +105,31 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
   },
 
   getSessionData: (sessionId) => {
-    const existing = get().sessions[sessionId]
+    const existing = getOwnRecordValue(get().sessions, sessionId)
     if (existing) return existing.data
 
-    return get().standaloneData[sessionId] ?? null
+    return getOwnRecordValue(get().standaloneData, sessionId) ?? null
   },
 
   ensureSessionData: (sessionId) => {
-    const existing = get().sessions[sessionId]
+    const existing = getOwnRecordValue(get().sessions, sessionId)
     if (existing) return existing.data
 
     const standalone = get().standaloneData
-    if (!standalone[sessionId]) {
+    const existingData = getOwnRecordValue(standalone, sessionId)
+    if (!existingData) {
       const newData = createSessionData()
       set((state) => ({
         standaloneData: { ...state.standaloneData, [sessionId]: newData },
       }))
       return newData
     }
-    return standalone[sessionId]
+    return existingData
   },
 
   updateStatus: (sessionId, status) => {
     set((state) => {
-      const existing = state.sessions[sessionId]
+      const existing = getOwnRecordValue(state.sessions, sessionId)
       if (!existing) return state
 
       const updated = applyStatusUpdate(existing, status)
@@ -138,7 +145,7 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
     if (!title) return
 
     set((state) => {
-      const existing = state.sessions[sessionId]
+      const existing = getOwnRecordValue(state.sessions, sessionId)
       if (!existing || existing.title === title) return state
 
       return {
@@ -151,7 +158,7 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
   },
 
   removeSession: (sessionId) => {
-    const existing = get().sessions[sessionId]
+    const existing = getOwnRecordValue(get().sessions, sessionId)
     if (!existing) {
       set((state) => {
         const { [sessionId]: _, ...rest } = state.standaloneData
@@ -162,7 +169,7 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
 
     // Remove from store FIRST — prevents updateStatus from reacting during cleanup
     set((state) => {
-      if (!state.sessions[sessionId]) return state
+      if (!getOwnRecordValue(state.sessions, sessionId)) return state
       const { [sessionId]: _s, ...restSessions } = state.sessions
       const { [sessionId]: _d, ...restStandalone } = state.standaloneData
       return { sessions: restSessions, standaloneData: restStandalone }

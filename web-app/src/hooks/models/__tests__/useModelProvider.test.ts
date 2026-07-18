@@ -400,6 +400,13 @@ describe('useModelProvider migrations', () => {
                 model: 'gpt-4o-mini',
                 displayName: 'Mini',
                 settings: {
+                  ['__proto__']: {
+                    key: 'temperature',
+                    title: 'Unsafe prototype key',
+                    description: '',
+                    controller_type: 'input',
+                    controller_props: { value: 'unsafe' },
+                  },
                   temperature: {
                     key: 'temperature',
                     title: 'Temperature',
@@ -481,6 +488,9 @@ describe('useModelProvider migrations', () => {
     expect(merged.selectedModel?.id).toBe('gpt-4')
     expect(merged.deletedModels).toEqual(['gpt-old'])
     expect(typeof merged.addProvider).toBe('function')
+    expect(
+      Object.getPrototypeOf(merged.providers[0].models[1].settings)
+    ).toBe(Object.prototype)
   })
 
   it('caps persisted providers, models, and deleted model ids', () => {

@@ -75,12 +75,25 @@ function areCitationDataEqual(
   )
 }
 
+const getOwnCitation = (
+  citations: Record<string, CitationData>,
+  messageId: string
+): CitationData | undefined =>
+  Object.prototype.hasOwnProperty.call(citations, messageId)
+    ? citations[messageId]
+    : undefined
+
 export const useCitations = create<CitationState>((set, get) => ({
   citationsByMessage: {},
 
   setCitations: (messageId, data) =>
     set((state) => {
-      if (areCitationDataEqual(state.citationsByMessage[messageId], data)) {
+      if (
+        areCitationDataEqual(
+          getOwnCitation(state.citationsByMessage, messageId),
+          data
+        )
+      ) {
         return state
       }
 
@@ -89,7 +102,8 @@ export const useCitations = create<CitationState>((set, get) => ({
       }
     }),
 
-  getCitations: (messageId) => get().citationsByMessage[messageId],
+  getCitations: (messageId) =>
+    getOwnCitation(get().citationsByMessage, messageId),
 
   hydrate: (messageId, metadata) => {
     if (!isCitationData(metadata?.citationData)) return
@@ -97,7 +111,7 @@ export const useCitations = create<CitationState>((set, get) => ({
     set((state) => {
       if (
         areCitationDataEqual(
-          state.citationsByMessage[messageId],
+          getOwnCitation(state.citationsByMessage, messageId),
           nextCitationData
         )
       ) {

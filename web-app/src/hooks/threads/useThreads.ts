@@ -16,6 +16,15 @@ const buildSearchIndex = (threads: Record<string, Thread>): Fuse<Thread> => {
   })
 }
 
+const getOwnThread = (
+  threads: Record<string, Thread>,
+  threadId: string
+): Thread | undefined => {
+  return Object.prototype.hasOwnProperty.call(threads, threadId)
+    ? threads[threadId]
+    : undefined
+}
+
 const reportPersistenceError = (operation: string) => (error: unknown) => {
   console.error(`[threads] ${operation} persistence failed:`, error)
   toast.error(`Failed to save: ${operation}`, {
@@ -83,15 +92,11 @@ function deleteThreadsFromState(
 
   threadsToDeleteIds.forEach(cleanupThreadResources)
 
-  const remainingThreads = Object.keys(state.threads)
-    .filter((threadId) => !threadsToDelete.has(threadId))
-    .reduce(
-      (acc, threadId) => {
-        acc[threadId] = state.threads[threadId]
-        return acc
-      },
-      {} as Record<string, Thread>
+  const remainingThreads = Object.fromEntries(
+    Object.entries(state.threads).filter(
+      ([threadId]) => !threadsToDelete.has(threadId)
     )
+  ) as Record<string, Thread>
 
   return {
     threads: remainingThreads,
@@ -107,9 +112,10 @@ export const useThreads = create<ThreadState>()((set, get) => ({
   threads: {},
   searchIndex: null,
   setThreads: (threads) => {
-    const normalizedThreads = threads.reduce(
-      (acc: Record<string, Thread>, thread) => {
-        acc[thread.id] = {
+    const normalizedThreads = Object.fromEntries(
+      threads.map((thread) => [
+        thread.id,
+        {
           ...thread,
           model: thread.model
             ? {
@@ -117,11 +123,9 @@ export const useThreads = create<ThreadState>()((set, get) => ({
                 id: thread.model?.id,
               }
             : undefined,
-        }
-        return acc
-      },
-      {} as Record<string, Thread>
-    )
+        },
+      ])
+    ) as Record<string, Thread>
 
     set((state) => {
       const mergedThreads = {
@@ -167,20 +171,21 @@ export const useThreads = create<ThreadState>()((set, get) => ({
   },
   toggleFavorite: (threadId) => {
     set((state) => {
-      if (!state.threads[threadId]) return state
+      const thread = getOwnThread(state.threads, threadId)
+      if (!thread) return state
       getServiceHub()
         .threads()
         .updateThread({
-          ...state.threads[threadId],
-          isFavorite: !state.threads[threadId].isFavorite,
+          ...thread,
+          isFavorite: !thread.isFavorite,
         })
         .catch(reportPersistenceError('toggle favorite'))
       return {
         threads: {
           ...state.threads,
           [threadId]: {
-            ...state.threads[threadId],
-            isFavorite: !state.threads[threadId].isFavorite,
+            ...thread,
+            isFavorite: !thread.isFavorite,
             updated: Math.floor(Date.now() / 1000),
           },
         },
@@ -226,16 +231,15 @@ export const useThreads = create<ThreadState>()((set, get) => ({
   },
   unstarAllThreads: () => {
     set((state) => {
-      const updatedThreads = Object.keys(state.threads).reduce(
-        (acc, threadId) => {
-          acc[threadId] = {
-            ...state.threads[threadId],
+      const updatedThreads = Object.fromEntries(
+        Object.entries(state.threads).map(([threadId, thread]) => [
+          threadId,
+          {
+            ...thread,
             isFavorite: false,
-          }
-          return acc
-        },
-        {} as Record<string, Thread>
-      )
+          },
+        ])
+      ) as Record<string, Thread>
       Object.values(updatedThreads).forEach((thread) => {
         getServiceHub()
           .threads()
@@ -249,7 +253,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
     return Object.values(get().threads).filter((thread) => thread.isFavorite)
   },
   getThreadById: (threadId: string) => {
-    return get().threads[threadId]
+    return getOwnThread(get().threads, threadId)
   },
   setCurrentThreadId: (threadId) => {
     if (threadId !== get().currentThreadId) set({ currentThreadId: threadId })
@@ -314,18 +318,17 @@ export const useThreads = create<ThreadState>()((set, get) => ({
           const existingThreads = Object.values(state.threads)
           const reorderedThreads = [createdThread, ...existingThreads]
 
-          const threadMap = reorderedThreads.reduce(
-            (acc: Record<string, Thread>, thread) => {
-              acc[thread.id] = {
+          const threadMap = Object.fromEntries(
+            reorderedThreads.map((thread) => [
+              thread.id,
+              {
                 ...thread,
                 model: thread.model
                   ? { provider: thread.model?.provider, id: thread.model?.id }
                   : undefined,
-              }
-              return acc
-            },
-            {} as Record<string, Thread>
-          )
+              },
+            ])
+          ) as Record<string, Thread>
 
           return {
             threads: threadMap,
@@ -348,21 +351,23 @@ export const useThreads = create<ThreadState>()((set, get) => ({
   },
   updateCurrentThreadAssistant: (assistant) => {
     set((state) => {
-      if (!state.currentThreadId) return { ...state }
+      if (!state.currentThreadId) return state
       const currentThread = state.getCurrentThread()
-      if (currentThread)
-        getServiceHub()
-          .threads()
-          .updateThread({
-            ...currentThread,
-            assistants: assistant ? [{ ...assistant, model: currentThread.model }] : [],
-          })
-          .catch(reportPersistenceError('update thread assistant'))
+      if (!currentThread) return state
+      getServiceHub()
+        .threads()
+        .updateThread({
+          ...currentThread,
+          assistants: assistant
+            ? [{ ...assistant, model: currentThread.model }]
+            : [],
+        })
+        .catch(reportPersistenceError('update thread assistant'))
       return {
         threads: {
           ...state.threads,
           [state.currentThreadId as string]: {
-            ...state.threads[state.currentThreadId as string],
+            ...currentThread,
             assistants: assistant ? [assistant] : [],
             updated: Math.floor(Date.now() / 1000),
           },
@@ -372,18 +377,18 @@ export const useThreads = create<ThreadState>()((set, get) => ({
   },
   updateCurrentThreadModel: (model) => {
     set((state) => {
-      if (!state.currentThreadId) return { ...state }
+      if (!state.currentThreadId) return state
       const currentThread = state.getCurrentThread()
-      if (currentThread)
-        getServiceHub()
-          .threads()
-          .updateThread({ ...currentThread, model })
-          .catch(reportPersistenceError('update thread model'))
+      if (!currentThread) return state
+      getServiceHub()
+        .threads()
+        .updateThread({ ...currentThread, model })
+        .catch(reportPersistenceError('update thread model'))
       return {
         threads: {
           ...state.threads,
           [state.currentThreadId as string]: {
-            ...state.threads[state.currentThreadId as string],
+            ...currentThread,
             model,
           },
         },
@@ -392,7 +397,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
   },
   renameThread: (threadId, newTitle) => {
     set((state) => {
-      const thread = state.threads[threadId]
+      const thread = getOwnThread(state.threads, threadId)
       if (!thread) return state
       const updatedThread = {
         ...thread,
@@ -412,11 +417,13 @@ export const useThreads = create<ThreadState>()((set, get) => ({
   },
   getCurrentThread: () => {
     const { currentThreadId, threads } = get()
-    return currentThreadId ? threads[currentThreadId] : undefined
+    return currentThreadId
+      ? getOwnThread(threads, currentThreadId)
+      : undefined
   },
   updateThreadTimestamp: (threadId) => {
     set((state) => {
-      const thread = state.threads[threadId]
+      const thread = getOwnThread(state.threads, threadId)
       if (!thread) return state
 
       // Update the thread with new timestamp and set it to order 1 (top)
@@ -449,7 +456,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
   },
   updateThread: (threadId, updates) => {
     set((state) => {
-      const thread = state.threads[threadId]
+      const thread = getOwnThread(state.threads, threadId)
       if (!thread) return state
 
       const updatedThread = {

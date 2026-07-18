@@ -128,6 +128,18 @@ describe('DropdownToolsAvailable', () => {
     expect(screen.getByText('tool-c')).toBeInTheDocument()
   })
 
+  it('groups tools whose server name matches an inherited property', () => {
+    currentTools = [
+      { name: 'special-tool', server: '__proto__', description: '' },
+    ]
+
+    expect(() =>
+      render(<DropdownToolsAvailable>{renderTrigger}</DropdownToolsAvailable>)
+    ).not.toThrow()
+    expect(screen.getByText('__proto__')).toBeInTheDocument()
+    expect(screen.getByText('special-tool')).toBeInTheDocument()
+  })
+
   it('renders "Available Tools" label', () => {
     render(<DropdownToolsAvailable>{renderTrigger}</DropdownToolsAvailable>)
 

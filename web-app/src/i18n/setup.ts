@@ -160,7 +160,7 @@ const translate = (key: string, options: TranslationOptions = {}): string => {
       return current &&
         typeof current === 'object' &&
         current !== null &&
-        key in current
+        Object.prototype.hasOwnProperty.call(current, key)
         ? (current as Record<string, unknown>)[key]
         : undefined
     }, obj as unknown) as string | undefined

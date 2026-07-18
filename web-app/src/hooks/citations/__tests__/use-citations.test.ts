@@ -29,6 +29,22 @@ describe('useCitations', () => {
     )
   })
 
+  it('treats prototype-named message ids as ordinary own entries', () => {
+    expect(useCitations.getState().getCitations('__proto__')).toBeUndefined()
+
+    useCitations.getState().setCitations('__proto__', citationData)
+
+    expect(useCitations.getState().getCitations('__proto__')).toEqual(
+      citationData
+    )
+    expect(
+      Object.prototype.hasOwnProperty.call(
+        useCitations.getState().citationsByMessage,
+        '__proto__'
+      )
+    ).toBe(true)
+  })
+
   it('hydrates citation metadata idempotently', () => {
     useCitations.getState().hydrate('message-1', { citationData })
     const hydratedCitationData =

@@ -53,4 +53,18 @@ describe('toolchain version pins', () => {
       expect(match[1], `${relativePath} rust-version`).toBe('1.85.0')
     }
   })
+
+  it('forces Rollup plugin builds to exit on the Node 24 baseline', () => {
+    const pluginPackages = [
+      'src-tauri/plugins/tauri-plugin-hardware/package.json',
+      'src-tauri/plugins/tauri-plugin-llamacpp/package.json',
+    ]
+
+    for (const relativePath of pluginPackages) {
+      const pkg = JSON.parse(read(relativePath))
+      expect(pkg.scripts?.build, `${relativePath} build script`).toContain(
+        '--forceExit'
+      )
+    }
+  })
 })

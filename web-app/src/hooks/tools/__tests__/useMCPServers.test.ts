@@ -92,6 +92,24 @@ describe('useMCPServers', () => {
       const config = result.current.getServerConfig('nonexistent-server')
       expect(config).toBeUndefined()
     })
+
+    it('does not confuse object prototype properties with configured servers', () => {
+      const { result } = renderHook(() => useMCPServers())
+      const serverConfig: MCPServerConfig = {
+        command: 'node',
+        args: ['server.js'],
+        env: {},
+      }
+
+      expect(result.current.getServerConfig('__proto__')).toBeUndefined()
+
+      act(() => {
+        result.current.addServer('__proto__', serverConfig)
+      })
+
+      expect(result.current.getServerConfig('__proto__')).toEqual(serverConfig)
+      expect(Object.keys(result.current.mcpServers)).toContain('__proto__')
+    })
   })
 
   describe('addServer', () => {

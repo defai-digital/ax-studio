@@ -165,4 +165,12 @@ describe('getStoredLanguage', () => {
 
     expect(i18n.language).toBe('en')
   })
+
+  it('falls back for inherited translation keys', async () => {
+    mockLocalStorage.getItem.mockReturnValue(null)
+    const i18n = await loadI18n()
+
+    expect(i18n.t('__proto__')).toBe('__proto__')
+    expect(i18n.t('common:constructor')).toBe('common:constructor')
+  })
 })

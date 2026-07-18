@@ -101,4 +101,22 @@ describe('useModelSupportStatus', () => {
 
     expect(result.current.modelSupportStatus['model-a']).toBe('YELLOW')
   })
+
+  it('checks prototype-named model ids instead of treating them as cached', async () => {
+    mocks.isModelSupported.mockResolvedValue('GREEN')
+    const { result } = renderHook(() => useModelSupportStatus())
+
+    await act(async () => {
+      await result.current.checkModelSupport({
+        model_id: '__proto__',
+        path: '/models/special.gguf',
+      })
+    })
+
+    expect(mocks.isModelSupported).toHaveBeenCalledWith(
+      '/models/special.gguf',
+      8192
+    )
+    expect(result.current.modelSupportStatus['__proto__']).toBe('GREEN')
+  })
 })

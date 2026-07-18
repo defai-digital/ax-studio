@@ -6,6 +6,18 @@ export const NEW_THREAD_ATTACHMENT_KEY = '__new-thread__'
 
 const EMPTY_ATTACHMENTS: Attachment[] = []
 
+const getOwnAttachments = (
+  attachmentsByThread: Record<string, Attachment[]>,
+  threadId: string
+): Attachment[] | undefined => {
+  if (!Object.prototype.hasOwnProperty.call(attachmentsByThread, threadId)) {
+    return undefined
+  }
+
+  const attachments = attachmentsByThread[threadId]
+  return Array.isArray(attachments) ? attachments : undefined
+}
+
 type AttachmentStore = {
   attachmentsByThread: Record<string, Attachment[]>
   getAttachments: (threadId?: string) => Attachment[]
@@ -20,11 +32,15 @@ type AttachmentStore = {
 export const useChatAttachments = create<AttachmentStore>()((set, get) => ({
   attachmentsByThread: {},
   getAttachments: (threadId = NEW_THREAD_ATTACHMENT_KEY) => {
-    return get().attachmentsByThread[threadId] ?? EMPTY_ATTACHMENTS
+    return (
+      getOwnAttachments(get().attachmentsByThread, threadId) ??
+      EMPTY_ATTACHMENTS
+    )
   },
   setAttachments: (threadId, updater) => {
     set((state) => {
-      const current = state.attachmentsByThread[threadId] ?? []
+      const current =
+        getOwnAttachments(state.attachmentsByThread, threadId) ?? []
       const next = typeof updater === 'function' ? updater(current) : updater
       return {
         attachmentsByThread: {
@@ -42,10 +58,14 @@ export const useChatAttachments = create<AttachmentStore>()((set, get) => ({
   },
   transferAttachments: (fromKey, toKey) => {
     set((state) => {
-      const fromAttachments = state.attachmentsByThread[fromKey]
+      const fromAttachments = getOwnAttachments(
+        state.attachmentsByThread,
+        fromKey
+      )
       if (!fromAttachments?.length) return state
 
-      const existingDestination = state.attachmentsByThread[toKey] ?? []
+      const existingDestination =
+        getOwnAttachments(state.attachmentsByThread, toKey) ?? []
       const attachmentsByThread = { ...state.attachmentsByThread }
       delete attachmentsByThread[fromKey]
 

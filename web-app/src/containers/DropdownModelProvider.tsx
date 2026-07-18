@@ -658,7 +658,7 @@ export const DropdownModelProvider = memo(function DropdownModelProvider({
 
   // Group filtered items by provider, excluding favorites when not searching
   const groupedItems = useMemo(() => {
-    const groups: Record<string, SearchableModel[]> = {}
+    const groups = Object.create(null) as Record<string, SearchableModel[]>
 
     if (!searchValue) {
       // When not searching, show all active providers (even without models)

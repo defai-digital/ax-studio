@@ -71,6 +71,24 @@ describe('useRouterSettings', () => {
     )
   })
 
+  it('does not treat object prototype properties as thread overrides', () => {
+    useRouterSettings.setState({
+      enabled: true,
+      routerModelId: 'router-model',
+      routerProviderId: 'router-provider',
+      threadOverrides: {},
+    })
+
+    expect(useRouterSettings.getState().isAutoRouteEnabled('__proto__')).toBe(
+      true
+    )
+
+    useRouterSettings.getState().setThreadOverride('__proto__', false)
+    expect(useRouterSettings.getState().isAutoRouteEnabled('__proto__')).toBe(
+      false
+    )
+  })
+
   describe('isAutoRouteEnabled', () => {
     it('returns false when globally disabled', () => {
       expect(useRouterSettings.getState().isAutoRouteEnabled('thread-1')).toBe(

@@ -327,10 +327,12 @@ function MCPServersDesktop() {
       }
 
       // Capture original active states before clearing
-      const originalActiveStates: Record<string, boolean> = {}
-      Object.entries(mcpServers).forEach(([key, config]) => {
-        originalActiveStates[key] = config.active ?? false
-      })
+      const originalActiveStates = Object.fromEntries(
+        Object.entries(mcpServers).map(([key, config]) => [
+          key,
+          config.active ?? false,
+        ])
+      )
 
       // Clear existing servers first
       Object.keys(mcpServers).forEach((serverKey) => {
@@ -341,7 +343,12 @@ function MCPServersDesktop() {
       // Add all servers from the JSON, preserving original active state
       // unless the user explicitly changed it in the JSON editor
       Object.entries(nextServers).forEach(([key, config]) => {
-        const wasActive = originalActiveStates[key] ?? false
+        const wasActive = Object.prototype.hasOwnProperty.call(
+          originalActiveStates,
+          key
+        )
+          ? originalActiveStates[key]
+          : false
         const userSetActive = config.active ?? wasActive
         addServer(key, { ...config, active: userSetActive })
         toggleServer(key, userSetActive)

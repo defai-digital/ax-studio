@@ -588,7 +588,7 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
 
   // Group commands by category for display
   const groupedCommands = useMemo(() => {
-    const groups: Record<string, CommandItem[]> = {}
+    const groups = Object.create(null) as Record<string, CommandItem[]>
     const cmds = searchQuery ? filteredCommands : commands
     cmds.forEach((cmd) => {
       if (!groups[cmd.category]) groups[cmd.category] = []

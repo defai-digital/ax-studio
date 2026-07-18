@@ -810,18 +810,9 @@ mod tests {
 
     #[test]
     fn test_extract_bearer_token_is_case_insensitive() {
-        assert_eq!(
-            extract_bearer_token("Bearer my-secret"),
-            Some("my-secret")
-        );
-        assert_eq!(
-            extract_bearer_token("bearer my-secret"),
-            Some("my-secret")
-        );
-        assert_eq!(
-            extract_bearer_token("BEARER my-secret"),
-            Some("my-secret")
-        );
+        assert_eq!(extract_bearer_token("Bearer my-secret"), Some("my-secret"));
+        assert_eq!(extract_bearer_token("bearer my-secret"), Some("my-secret"));
+        assert_eq!(extract_bearer_token("BEARER my-secret"), Some("my-secret"));
         assert_eq!(
             extract_bearer_token("  BeArEr   my-secret  "),
             Some("my-secret")

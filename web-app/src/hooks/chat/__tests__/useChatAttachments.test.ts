@@ -49,6 +49,24 @@ describe('useChatAttachments', () => {
       const b = getState().getAttachments('y')
       expect(a).toBe(b)
     })
+
+    it('treats prototype-named threads as ordinary own entries', () => {
+      expect(getState().getAttachments('__proto__')).toEqual([])
+
+      act(() => {
+        getState().setAttachments('__proto__', [makeAttachment('special.txt')])
+      })
+
+      expect(getState().getAttachments('__proto__')).toEqual([
+        makeAttachment('special.txt'),
+      ])
+      expect(
+        Object.prototype.hasOwnProperty.call(
+          getState().attachmentsByThread,
+          '__proto__'
+        )
+      ).toBe(true)
+    })
   })
 
   describe('setAttachments', () => {

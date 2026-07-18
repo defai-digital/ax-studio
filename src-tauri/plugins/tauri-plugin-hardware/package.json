@@ -26,7 +26,7 @@
     "NOTICE"
   ],
   "scripts": {
-    "build": "rollup -c",
+    "build": "rollup -c --forceExit",
     "prepublishOnly": "yarn build",
     "pretest": "yarn build"
   },
