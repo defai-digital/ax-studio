@@ -83,7 +83,7 @@ function isLocalRouterCandidate(model: AvailableModelForRouter): boolean {
   return (
     LOCAL_PROVIDER_IDS.has(provider) ||
     provider === 'local' ||
-    /\b(local|llama\.?cpp|ollama|mlx|lmstudio)\b/i.test(
+    /\b(local|llama\.?cpp|ollama|mlx|ax-engine|lmstudio)\b/i.test(
       `${model.id} ${model.displayName}`
     )
   )

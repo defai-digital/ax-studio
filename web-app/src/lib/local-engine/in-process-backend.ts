@@ -11,7 +11,7 @@ import type { LocalEngineBackend, LocalEngineLifecycle } from './types'
 export class InProcessLocalEngineBackend implements LocalEngineBackend {
   readonly info = {
     kind: 'in_process' as const,
-    providerId: 'mlx',
+    providerId: 'ax-engine',
     label: 'AX Engine (in-process MLX)',
   }
 

@@ -125,11 +125,26 @@ function nonStreamResponse(result: MlxChatCompletion): Response {
 function streamingResponse(
   modelId: string,
   messages: OpenAIChatMessage[],
-  params: MlxGenerateParams
+  params: MlxGenerateParams,
+  signal?: AbortSignal
 ): Response {
   const encoder = new TextEncoder()
   const created = Math.floor(Date.now() / 1000)
   const id = `mlx-${created}-${Math.random().toString(36).slice(2, 10)}`
+  let nativeStreamStarted = false
+  let nativeStreamFinished = false
+  let cancellationRequested = false
+
+  const cancelNativeStream = async () => {
+    cancellationRequested = true
+    if (!nativeStreamStarted || nativeStreamFinished) return
+
+    try {
+      await invoke<boolean>('mlx_cancel_stream', { requestId: id })
+    } catch (error) {
+      console.warn('[mlx-ipc-fetch] failed to cancel native stream:', error)
+    }
+  }
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -160,6 +175,25 @@ function streamingResponse(
           /* already closed */
         }
       }
+      const safeError = (error: unknown) => {
+        if (streamClosed) return
+        streamClosed = true
+        try {
+          controller.error(error)
+        } catch {
+          /* already closed */
+        }
+      }
+      const handleAbort = () => {
+        safeError(new DOMException('The operation was aborted.', 'AbortError'))
+        void cancelNativeStream()
+      }
+
+      if (signal?.aborted) {
+        handleAbort()
+        return
+      }
+      signal?.addEventListener('abort', handleAbort, { once: true })
 
       const enqueueChunk = (
         delta: { role?: string; content?: string },
@@ -190,6 +224,7 @@ function streamingResponse(
               enqueueChunk({ content: evt.text }, null)
             }
           } else if (evt.type === 'done') {
+            nativeStreamFinished = true
             if (!firstDeltaSent) {
               enqueueChunk({ role: 'assistant' }, null)
               firstDeltaSent = true
@@ -231,17 +266,31 @@ function streamingResponse(
       try {
         // Idempotent — Rust resolves the HF cache snapshot from modelId.
         await invoke('mlx_load_model', { modelId })
-        await invoke('mlx_chat_stream', {
+        if (cancellationRequested || signal?.aborted) return
+
+        nativeStreamStarted = true
+        const nativeStream = invoke('mlx_chat_stream', {
+          requestId: id,
           modelId,
           messages,
           params,
           onEvent: channel,
         })
+        if (cancellationRequested || signal?.aborted) {
+          void cancelNativeStream()
+        }
+        await nativeStream
+        nativeStreamFinished = true
       } catch (e) {
         if (lastErr == null)
           lastErr = e instanceof Error ? e.message : String(e)
-        controller.error(new Error(`[mlx-ipc-fetch] ${lastErr}`))
+        safeError(new Error(`[mlx-ipc-fetch] ${lastErr}`))
+      } finally {
+        signal?.removeEventListener('abort', handleAbort)
       }
+    },
+    async cancel() {
+      await cancelNativeStream()
     },
   })
 
@@ -298,9 +347,14 @@ export function createMlxIpcFetch(): typeof fetch {
     const modelId = parsed.model
     const messages = parsed.messages ?? []
     const params = toMlxParams(parsed)
+    const signal = init?.signal ?? request?.signal
+
+    if (signal?.aborted) {
+      throw new DOMException('The operation was aborted.', 'AbortError')
+    }
 
     if (parsed.stream) {
-      return streamingResponse(modelId, messages, params)
+      return streamingResponse(modelId, messages, params, signal)
     }
 
     try {

@@ -186,7 +186,7 @@ describe('useThreadConfig', () => {
       const { result } = renderHook(() =>
         useThreadConfig({
           thread: makeThread({
-            model: { id: 'mlx-community/gemma-4-12B-it-4bit', provider: 'mlx' },
+            model: { id: 'mlx-community/gemma-4-12B-it-4bit', provider: 'ax-engine' },
           }),
           selectedModel: makeModel({ id: 'mlx-community/Qwen3.6-27B-4bit' }),
           globalDefaultPrompt: 'prompt',

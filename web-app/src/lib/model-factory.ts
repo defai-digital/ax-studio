@@ -33,6 +33,7 @@ export interface ModelParameters {
 
 import { type LanguageModel } from 'ai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
+import { isAxEngineProvider } from '@/constants/providers'
 import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 import { createMlxIpcFetch } from './mlx-ipc-fetch'
 
@@ -531,14 +532,14 @@ export class ModelFactory {
     const openAIParams = toOpenAIParams(parameters)
     const providerName = provider.provider.toLowerCase()
 
-    // MLX runs in-process via ax-engine-sdk. Do not route it through the local
-    // proxy/ax-serving, because the installed ax-serving worker only preloads
-    // GGUF models in this build.
-    const isMlxProvider = provider.provider === 'mlx'
+    // AX Engine runs in-process via ax-engine-sdk. Do not route it through the
+    // local proxy/ax-serving, because the installed ax-serving worker only
+    // preloads GGUF models in this build.
+    const isAxEngine = isAxEngineProvider(provider.provider)
 
     // Normalize non-standard streaming SSE responses from various providers.
     // Applied to proxy providers since the proxy passes streaming bytes through unchanged.
-    const baseFetch = isMlxProvider
+    const baseFetch = isAxEngine
       ? createMlxIpcFetch()
       : createStreamingPatchFetch(httpFetch)
     const fetchFn = createCustomFetch(baseFetch, openAIParams)

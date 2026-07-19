@@ -32,11 +32,12 @@ import {
   getHuggingFaceModelUrl,
 } from '@/lib/huggingface'
 import { invoke } from '@tauri-apps/api/core'
+import { isAxEngineProvider } from '@/constants/providers'
 
 // Default provider for local inference
 const defaultProvider = 'llamacpp'
 const storageEngineProviderFor = (provider?: string): string | undefined =>
-  provider === 'mlx' ? 'llamacpp' : provider
+  isAxEngineProvider(provider) ? 'llamacpp' : provider
 
 export class DefaultModelsService implements ModelsService {
   private parseHuggingFaceModelPath(
@@ -381,12 +382,10 @@ export class DefaultModelsService implements ModelsService {
 
   async abortDownload(id: string): Promise<void> {
     const llamacppEngine = this.getEngine('llamacpp')
-    const mlxEngine = this.getEngine('mlx')
     try {
-      await Promise.allSettled([
-        llamacppEngine?.abortImport(id),
-        mlxEngine?.abortImport(id),
-      ].filter(Boolean))
+      await Promise.allSettled(
+        [llamacppEngine?.abortImport(id)].filter(Boolean)
+      )
     } finally {
       events.emit(DownloadEvent.onFileDownloadStopped, {
         modelId: id,
@@ -407,7 +406,7 @@ export class DefaultModelsService implements ModelsService {
   }
 
   async getActiveModels(provider?: string): Promise<string[]> {
-    if (provider === 'mlx') {
+    if (isAxEngineProvider(provider)) {
       return invoke<string[]>('mlx_list_loaded')
     }
 
@@ -420,7 +419,7 @@ export class DefaultModelsService implements ModelsService {
     model: string,
     provider?: string
   ): Promise<UnloadResult | undefined> {
-    if (provider === 'mlx') {
+    if (isAxEngineProvider(provider)) {
       try {
         await invoke('mlx_unload_model', { modelId: model })
         return { success: true }
@@ -438,18 +437,18 @@ export class DefaultModelsService implements ModelsService {
   async stopAllModels(): Promise<void> {
     // Fetch active model lists from both engines in parallel, then stop
     // every model with `allSettled` so a single failing unload doesn't
-    // skip the rest. Previously, if one llamacpp unload failed, the
-    // subsequent `await Promise.all(...)` rejected and the mlx loop below
-    // never ran — leaving mlx models loaded on logout / factory reset.
-    const [llamaCppModels, mlxModels] = await Promise.all([
+    // skip the rest.
+    const [llamaCppModels, axEngineModels] = await Promise.all([
       this.getActiveModels('llamacpp').catch(() => [] as string[]),
-      this.getActiveModels('mlx').catch(() => [] as string[]),
+      this.getActiveModels('ax-engine').catch(() => [] as string[]),
     ])
     const results = await Promise.allSettled([
       ...(llamaCppModels ?? []).map((model) =>
         this.stopModel(model, 'llamacpp')
       ),
-      ...(mlxModels ?? []).map((model) => this.stopModel(model, 'mlx')),
+      ...(axEngineModels ?? []).map((model) =>
+        this.stopModel(model, 'ax-engine')
+      ),
     ])
     for (const result of results) {
       if (result.status === 'rejected') {
@@ -466,7 +465,7 @@ export class DefaultModelsService implements ModelsService {
     model: string,
     bypassAutoUnload: boolean = false
   ): Promise<SessionInfo | undefined> {
-    if (provider.provider === 'mlx') {
+    if (isAxEngineProvider(provider.provider)) {
       await invoke('mlx_load_model', { modelId: model })
       return {
         pid: 0,

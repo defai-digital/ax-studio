@@ -1,7 +1,26 @@
-import { describe, expect, it, vi } from 'vitest'
-import { connectAxBiMcpServer, listAxBiDatasets } from '../datasets'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  connectAxBiMcpServer,
+  hasConfiguredAxBiMcpToken,
+  listAxBiDatasets,
+} from '../datasets'
+
+const tokenStorageMocks = vi.hoisted(() => ({
+  read: vi.fn(),
+  store: vi.fn(),
+}))
+
+vi.mock('../token-storage', () => ({
+  readStoredAxBiMcpToken: tokenStorageMocks.read,
+  storeAxBiMcpToken: tokenStorageMocks.store,
+}))
 
 describe('ax-bi datasets', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    tokenStorageMocks.read.mockReturnValue('stored-ax-bi-token')
+  })
+
   function makeDatasetServiceHub(result: unknown) {
     const callTool = vi.fn().mockResolvedValue(result)
     const serviceHub = {
@@ -156,8 +175,82 @@ describe('ax-bi datasets', () => {
         type: 'http',
         url: 'http://localhost:31421/mcp',
         active: true,
+        headers: { Authorization: 'Bearer stored-ax-bi-token' },
       })
     )
+  })
+
+  it('stores a supplied token encrypted and keeps it out of MCP config', async () => {
+    const updateMCPConfig = vi.fn().mockResolvedValue(undefined)
+    const activateMCPServer = vi.fn().mockResolvedValue(undefined)
+    const serviceHub = {
+      mcp: () => ({
+        getMCPConfig: vi.fn().mockResolvedValue({}),
+        updateMCPConfig,
+        activateMCPServer,
+      }),
+    }
+
+    await connectAxBiMcpServer({
+      serviceHub: serviceHub as never,
+      url: 'http://127.0.0.1:31421/mcp',
+      token: '  sst_full-secret-token  ',
+    })
+
+    expect(tokenStorageMocks.store).toHaveBeenCalledWith(
+      'sst_full-secret-token'
+    )
+    const persistedConfig = updateMCPConfig.mock.calls[0][0]
+    expect(persistedConfig).not.toContain('sst_full-secret-token')
+    expect(JSON.parse(persistedConfig).mcpServers['ax-bi']).not.toHaveProperty(
+      'headers.Authorization'
+    )
+    expect(activateMCPServer.mock.calls[0][1]).toMatchObject({
+      headers: { Authorization: 'Bearer sst_full-secret-token' },
+    })
+  })
+
+  it('rejects unsafe token header material', async () => {
+    const serviceHub = {
+      mcp: () => ({
+        getMCPConfig: vi.fn().mockResolvedValue({}),
+        updateMCPConfig: vi.fn(),
+        activateMCPServer: vi.fn(),
+      }),
+    }
+
+    await expect(
+      connectAxBiMcpServer({
+        serviceHub: serviceHub as never,
+        url: 'http://127.0.0.1:31421/mcp',
+        token: 'bad\ntoken',
+      })
+    ).rejects.toThrow('contains invalid characters')
+    expect(tokenStorageMocks.store).not.toHaveBeenCalled()
+  })
+
+  it('requires a token when none is stored locally', async () => {
+    tokenStorageMocks.read.mockReturnValue(null)
+    const serviceHub = {
+      mcp: () => ({
+        getMCPConfig: vi.fn().mockResolvedValue({}),
+        updateMCPConfig: vi.fn(),
+        activateMCPServer: vi.fn(),
+      }),
+    }
+
+    await expect(
+      connectAxBiMcpServer({
+        serviceHub: serviceHub as never,
+        url: 'http://127.0.0.1:31421/mcp',
+      })
+    ).rejects.toThrow('AX BI API key or JWT is required')
+  })
+
+  it('reports whether an encrypted AX BI token is stored locally', async () => {
+    await expect(hasConfiguredAxBiMcpToken()).resolves.toBe(true)
+    tokenStorageMocks.read.mockReturnValue(null)
+    await expect(hasConfiguredAxBiMcpToken()).resolves.toBe(false)
   })
 
   it('preserves already normalized AX BI MCP URLs when connecting', async () => {
@@ -179,7 +272,7 @@ describe('ax-bi datasets', () => {
     ).resolves.toBe('http://localhost:31421/mcp')
   })
 
-  it('preserves existing AX BI authentication and timeout settings', async () => {
+  it('replaces plaintext AX BI authentication while preserving other settings', async () => {
     const updateMCPConfig = vi.fn().mockResolvedValue(undefined)
     const activateMCPServer = vi.fn().mockResolvedValue(undefined)
     const serviceHub = {
@@ -189,7 +282,10 @@ describe('ax-bi datasets', () => {
             'ax-bi': {
               type: 'http',
               url: 'https://old.example.com/mcp',
-              headers: { Authorization: 'Bearer configured-token' },
+              headers: {
+                Authorization: 'Bearer configured-token',
+                'X-Tenant': 'north',
+              },
               timeout: 45,
               managed: true,
             },
@@ -208,7 +304,7 @@ describe('ax-bi datasets', () => {
     const saved = JSON.parse(updateMCPConfig.mock.calls[0][0])
     expect(saved.mcpServers['ax-bi']).toMatchObject({
       url: 'https://bi.example.com/mcp',
-      headers: { Authorization: 'Bearer configured-token' },
+      headers: { 'X-Tenant': 'north' },
       timeout: 45,
       managed: true,
       active: true,
@@ -216,7 +312,10 @@ describe('ax-bi datasets', () => {
     expect(activateMCPServer).toHaveBeenCalledWith(
       'ax-bi',
       expect.objectContaining({
-        headers: { Authorization: 'Bearer configured-token' },
+        headers: {
+          'X-Tenant': 'north',
+          Authorization: 'Bearer stored-ax-bi-token',
+        },
         timeout: 45,
       })
     )

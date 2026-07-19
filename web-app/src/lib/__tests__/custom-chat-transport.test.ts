@@ -38,7 +38,7 @@ const mocks = vi.hoisted(() => {
       settings: [],
     },
     {
-      provider: 'mlx',
+      provider: 'ax-engine',
       models: [{ id: 'mlx-community/Qwen3.6-27B-4bit', capabilities: [] }],
       settings: [],
     },
@@ -173,7 +173,7 @@ vi.mock('@/lib/transport/single-agent-transport', () => ({
 vi.mock('@/lib/chat/model-session', () => ({
   prepareProviderForChat: vi.fn(() => Promise.resolve()),
   isLocalProvider: vi.fn((provider: ProviderObject) =>
-    ['llamacpp', 'mlx', 'ollama'].includes(provider.provider)
+    ['llamacpp', 'ax-engine', 'ollama'].includes(provider.provider)
   ),
 }))
 
@@ -586,7 +586,7 @@ describe('CustomChatTransport — LLM Router integration', () => {
     mocks.routerProviderId = 'test-provider'
     ;(routeMessage as ReturnType<typeof vi.fn>).mockResolvedValue({
       modelId: 'mlx-community/Qwen3.6-27B-4bit',
-      providerId: 'mlx',
+      providerId: 'ax-engine',
       reason: 'local mlx model is best',
       routed: true,
       latencyMs: 10,
@@ -611,7 +611,7 @@ describe('CustomChatTransport — LLM Router integration', () => {
     expect(prepareProviderForChat).not.toHaveBeenCalled()
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
       'mlx-community/Qwen3.6-27B-4bit',
-      expect.objectContaining({ provider: 'mlx' }),
+      expect.objectContaining({ provider: 'ax-engine' }),
       expect.objectContaining({ max_output_tokens: 4096 }),
       { requestRole: 'final' }
     )
@@ -730,7 +730,7 @@ describe('CustomChatTransport — LLM Router integration', () => {
       id: 'mlx-community/Qwen3.6-27B-4bit',
       capabilities: [],
     }
-    mocks.selectedProvider = 'mlx'
+    mocks.selectedProvider = 'ax-engine'
 
     const transport = makeTransport({ threadId: 'thread-1' })
     await transport.sendMessages({
@@ -751,7 +751,7 @@ describe('CustomChatTransport — LLM Router integration', () => {
     expect(prepareProviderForChat).not.toHaveBeenCalled()
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
       'mlx-community/Qwen3.6-27B-4bit',
-      expect.objectContaining({ provider: 'mlx' }),
+      expect.objectContaining({ provider: 'ax-engine' }),
       expect.objectContaining({ max_output_tokens: 4096 }),
       { requestRole: 'final' }
     )

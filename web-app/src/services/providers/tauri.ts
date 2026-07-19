@@ -3,7 +3,14 @@
  */
 
 import { models as providerModels } from 'token.js'
-import { predefinedProviders } from '@/constants/providers'
+import {
+  AX_ENGINE_PROVIDER_ID,
+  isAxEngineProvider,
+  LEGACY_MLX_BASE_URLS,
+  MLX_IN_PROCESS_BASE_URL,
+  normalizeProviderId,
+  predefinedProviders,
+} from '@/constants/providers'
 import { EngineManager } from '@ax-studio/core'
 import { ModelCapabilities } from '@/types/models'
 import { modelSettings } from '@/lib/predefined'
@@ -38,6 +45,96 @@ function runtimeBaseUrl(value: unknown): string {
   return ''
 }
 
+function normalizeBaseUrl(url: string | undefined): string {
+  return (url ?? '').trim().replace(/\/+$/, '')
+}
+
+function isInProcessMlxProvider(provider: ModelProvider): boolean {
+  if (isAxEngineProvider(provider.provider)) return true
+  const url = normalizeBaseUrl(provider.base_url)
+  return (
+    LEGACY_MLX_BASE_URLS.has(url) ||
+    url === normalizeBaseUrl(MLX_IN_PROCESS_BASE_URL)
+  )
+}
+
+/**
+ * Probe the in-process MLX runtime and return installed model ids.
+ * Used by Settings → Test Connection (must not HTTP-fetch base_url).
+ */
+async function fetchInProcessMlxModels(): Promise<string[]> {
+  try {
+    const { invoke } = await import('@tauri-apps/api/core')
+    const probe = (await invoke('mlx_runtime_probe')) as {
+      host?: { supported_mlx_runtime?: boolean; detection_error?: string | null }
+      metal?: { fully_available?: boolean }
+    }
+
+    if (!probe?.host?.supported_mlx_runtime) {
+      const detail = probe?.host?.detection_error
+        ? `: ${probe.host.detection_error}`
+        : ''
+      throw new Error(
+        `MLX runtime is not supported on this host (Apple Silicon + Metal required)${detail}`
+      )
+    }
+    if (!probe?.metal?.fully_available) {
+      throw new Error(
+        'Metal toolchain is not fully available for MLX. Install Xcode command-line tools and try again.'
+      )
+    }
+
+    const modelIds = new Set<string>()
+
+    // Models already registered with the local engine extension (incl. HF cache).
+    for (const engine of EngineManager.instance().engines.values()) {
+      try {
+        const listed = (await engine.list()) as Array<{
+          id?: string
+          providerId?: string
+        }>
+        for (const model of listed ?? []) {
+          if (!model?.id) continue
+          if (isAxEngineProvider(model.providerId)) {
+            modelIds.add(model.id)
+          }
+        }
+      } catch (error) {
+        console.debug('[providers] engine.list failed during MLX probe:', error)
+      }
+    }
+
+    // Direct HF hub cache scan (models with AX manifests).
+    try {
+      const cached = (await invoke('mlx_list_hf_cache_models')) as Array<{
+        model_id?: string
+        has_manifest?: boolean
+      }>
+      for (const entry of cached ?? []) {
+        if (entry?.has_manifest && entry.model_id) {
+          modelIds.add(entry.model_id)
+        }
+      }
+    } catch (error) {
+      console.debug('[providers] mlx_list_hf_cache_models unavailable:', error)
+    }
+
+    return Array.from(modelIds).sort((a, b) => a.localeCompare(b))
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.message.startsWith('MLX runtime') ||
+        error.message.startsWith('Metal toolchain'))
+    ) {
+      throw error
+    }
+    const message = extractErrorMessage(error)
+    throw new Error(
+      `Unexpected error while probing in-process MLX runtime: ${message}`
+    )
+  }
+}
+
 function combineProviderLists(
   runtimeProviders: ModelProvider[],
   builtinProviders: ModelProvider[]
@@ -49,7 +146,9 @@ function combineProviderLists(
 
   for (const builtinProvider of builtinProviders) {
     const existing = providers.find(
-      (provider) => provider.provider === builtinProvider.provider
+      (provider) =>
+        normalizeProviderId(provider.provider) ===
+        normalizeProviderId(builtinProvider.provider)
     )
     if (!existing) {
       providers.push(builtinProvider)
@@ -69,9 +168,55 @@ function combineProviderLists(
     existing.api_key = existing.api_key || builtinProvider.api_key
     existing.explore_models_url =
       existing.explore_models_url || builtinProvider.explore_models_url
+
+    // Rename legacy product id `mlx` → `ax-engine` and drop dead :19997 URLs.
+    if (isAxEngineProvider(existing.provider)) {
+      existing.provider = AX_ENGINE_PROVIDER_ID
+      if (LEGACY_MLX_BASE_URLS.has(normalizeBaseUrl(existing.base_url))) {
+        existing.base_url = builtinProvider.base_url
+        existing.settings = (existing.settings ?? []).map((setting) => {
+          if (setting.key !== 'base-url') return setting
+          const controllerProps = {
+            ...(setting.controller_props ?? {}),
+            value: builtinProvider.base_url,
+            placeholder:
+              (setting.controller_props as { placeholder?: string } | undefined)
+                ?.placeholder &&
+              LEGACY_MLX_BASE_URLS.has(
+                normalizeBaseUrl(
+                  (setting.controller_props as { placeholder?: string })
+                    .placeholder
+                )
+              )
+                ? builtinProvider.base_url
+                : (
+                    setting.controller_props as
+                      | { placeholder?: string }
+                      | undefined
+                  )?.placeholder,
+          }
+          return { ...setting, controller_props: controllerProps }
+        })
+      }
+    }
   }
 
-  return providers
+  // Collapse any remaining duplicate legacy `mlx` + `ax-engine` rows.
+  const byId = new Map<string, ModelProvider>()
+  for (const provider of providers) {
+    const id = normalizeProviderId(provider.provider)
+    const existing = byId.get(id)
+    if (!existing) {
+      byId.set(id, { ...provider, provider: id })
+      continue
+    }
+    const modelIds = new Set((existing.models ?? []).map((m) => m.id))
+    existing.models = [
+      ...(existing.models ?? []),
+      ...(provider.models ?? []).filter((m) => !modelIds.has(m.id)),
+    ]
+  }
+  return Array.from(byId.values())
 }
 
 async function withProviderTimeout<T>(
@@ -279,7 +424,9 @@ export class TauriProvidersService implements ProvidersService {
 
       const modelEntries = await Promise.allSettled(
         models.map(async (model) => {
-          const runtimeProviderName = model.providerId || providerName
+          const runtimeProviderName = normalizeProviderId(
+            model.providerId || providerName
+          )
           let capabilities: string[] = []
           if ('capabilities' in model && Array.isArray(model.capabilities)) {
             capabilities = [...(model.capabilities as string[])]
@@ -369,6 +516,12 @@ export class TauriProvidersService implements ProvidersService {
   }
 
   async fetchModelsFromProvider(provider: ModelProvider): Promise<string[]> {
+    // MLX is in-process (ax-engine-sdk via Tauri IPC). Never hit a local HTTP
+    // engine URL (including the legacy :19997 default).
+    if (isInProcessMlxProvider(provider)) {
+      return fetchInProcessMlxModels()
+    }
+
     const baseUrl = provider.base_url?.trim().replace(/\/+$/, '')
     if (!baseUrl) {
       throw new Error('Provider must have base_url configured')

@@ -11,7 +11,11 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    mpsc::{Receiver, Sender},
+    Arc, Mutex,
+};
 use std::thread::{self, JoinHandle};
 
 use ax_engine_sdk::{
@@ -108,12 +112,59 @@ pub enum MlxCommand {
     /// arrive. The `reply` channel resolves with the terminal status once
     /// the worker has emitted the `Done` (or `Error`) event.
     GenerateStream {
+        request_id: String,
         model_id: String,
         messages: Vec<ChatMessage>,
         params: GenerateParams,
+        cancellation: Arc<AtomicBool>,
         on_event: Box<dyn Fn(StreamEvent) + Send>,
         reply: oneshot::Sender<Result<(), String>>,
     },
+}
+
+#[derive(Clone, Default)]
+struct StreamCancellationRegistry {
+    flags: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
+}
+
+impl StreamCancellationRegistry {
+    fn register(&self, request_id: &str) -> Result<Arc<AtomicBool>, String> {
+        let mut flags = self
+            .flags
+            .lock()
+            .map_err(|_| "MLX stream cancellation registry is unavailable".to_string())?;
+        if flags.contains_key(request_id) {
+            return Err(format!("MLX stream request already exists: {request_id}"));
+        }
+        let cancellation = Arc::new(AtomicBool::new(false));
+        flags.insert(request_id.to_string(), Arc::clone(&cancellation));
+        Ok(cancellation)
+    }
+
+    fn cancel(&self, request_id: &str) -> Result<bool, String> {
+        let flags = self
+            .flags
+            .lock()
+            .map_err(|_| "MLX stream cancellation registry is unavailable".to_string())?;
+        let Some(cancellation) = flags.get(request_id) else {
+            return Ok(false);
+        };
+        cancellation.store(true, Ordering::Release);
+        Ok(true)
+    }
+
+    fn unregister(&self, request_id: &str, cancellation: &Arc<AtomicBool>) {
+        let Ok(mut flags) = self.flags.lock() else {
+            log::warn!("MLX stream cancellation registry is unavailable during cleanup");
+            return;
+        };
+        if flags
+            .get(request_id)
+            .is_some_and(|current| Arc::ptr_eq(current, cancellation))
+        {
+            flags.remove(request_id);
+        }
+    }
 }
 
 /// Handle to the MLX worker thread. Clonable via the inner sender — multiple
@@ -121,6 +172,7 @@ pub enum MlxCommand {
 #[derive(Clone)]
 pub struct MlxWorker {
     cmd_tx: Sender<MlxCommand>,
+    stream_cancellations: StreamCancellationRegistry,
 }
 
 impl MlxWorker {
@@ -130,7 +182,13 @@ impl MlxWorker {
             .name("ax-mlx-worker".to_string())
             .spawn(move || run_worker(cmd_rx))
             .expect("failed to spawn mlx worker thread");
-        (Self { cmd_tx }, join)
+        (
+            Self {
+                cmd_tx,
+                stream_cancellations: StreamCancellationRegistry::default(),
+            },
+            join,
+        )
     }
 
     fn dispatch(&self, cmd: MlxCommand) -> Result<(), String> {
@@ -183,6 +241,7 @@ impl MlxWorker {
 
     pub async fn generate_stream<F>(
         &self,
+        request_id: String,
         model_id: String,
         messages: Vec<ChatMessage>,
         params: GenerateParams,
@@ -192,15 +251,31 @@ impl MlxWorker {
         F: Fn(StreamEvent) + Send + 'static,
     {
         let (reply, rx) = oneshot::channel();
-        self.dispatch(MlxCommand::GenerateStream {
+        let cancellation = self.stream_cancellations.register(&request_id)?;
+        if let Err(error) = self.dispatch(MlxCommand::GenerateStream {
+            request_id: request_id.clone(),
             model_id,
             messages,
             params,
+            cancellation: Arc::clone(&cancellation),
             on_event: Box::new(on_event),
             reply,
-        })?;
-        rx.await
-            .map_err(|_| "mlx worker dropped GenerateStream reply".to_string())?
+        }) {
+            self.stream_cancellations
+                .unregister(&request_id, &cancellation);
+            return Err(error);
+        }
+        let result = match rx.await {
+            Ok(result) => result,
+            Err(_) => Err("mlx worker dropped GenerateStream reply".to_string()),
+        };
+        self.stream_cancellations
+            .unregister(&request_id, &cancellation);
+        result
+    }
+
+    pub fn cancel_stream(&self, request_id: &str) -> Result<bool, String> {
+        self.stream_cancellations.cancel(request_id)
     }
 }
 
@@ -369,14 +444,23 @@ fn run_worker(rx: Receiver<MlxCommand>) {
                 let _ = reply.send(result);
             }
             MlxCommand::GenerateStream {
+                request_id,
                 model_id,
                 messages,
                 params,
+                cancellation,
                 on_event,
                 reply,
             } => {
-                let result =
-                    handle_generate_stream(&mut models, &model_id, messages, params, &on_event);
+                let result = handle_generate_stream(
+                    &mut models,
+                    &request_id,
+                    &model_id,
+                    messages,
+                    params,
+                    &cancellation,
+                    &on_event,
+                );
                 if let Err(ref e) = result {
                     on_event(StreamEvent::Error { message: e.clone() });
                 }
@@ -548,9 +632,11 @@ fn handle_generate(
 
 fn handle_generate_stream(
     models: &mut HashMap<String, LoadedModel>,
+    request_id: &str,
     model_id: &str,
     messages: Vec<ChatMessage>,
     params: GenerateParams,
+    cancellation: &AtomicBool,
     on_event: &(dyn Fn(StreamEvent) + Send),
 ) -> Result<(), String> {
     let entry = models
@@ -608,19 +694,34 @@ fn handle_generate_stream(
         }
     };
     let mut saw_start = false;
+    let mut engine_request_id = None;
     let mut prompt_token_count = prompt_token_count;
     let mut output_token_count = 0_u32;
     let mut finish_reason = "stop".to_string();
     let mut accumulated_output_tokens = Vec::new();
     let mut emitted_text = String::new();
     let mut strip_gemma4_thought_prefix = is_gemma4_family(model_id);
+    let mut cancelled = false;
 
-    for event_result in stream.by_ref() {
+    loop {
+        if cancellation.load(Ordering::Acquire) {
+            cancelled = true;
+            break;
+        }
+        let Some(event_result) = stream.next() else {
+            break;
+        };
         let event = event_result
             .map_err(|e| format!("session.next_stream_event failed for {model_id}: {e:?}"))?;
 
+        if cancellation.load(Ordering::Acquire) {
+            cancelled = true;
+            break;
+        }
+
         match event {
             SdkGenerateStreamEvent::Request(request_event) => {
+                engine_request_id = Some(request_event.request.request_id);
                 prompt_token_count = request_event
                     .request
                     .prompt_len
@@ -632,6 +733,7 @@ fn handle_generate_stream(
                 saw_start = true;
             }
             SdkGenerateStreamEvent::Step(step_event) => {
+                engine_request_id = Some(step_event.request.request_id);
                 if !saw_start {
                     on_event(StreamEvent::Start {
                         model_id: model_id.to_string(),
@@ -699,6 +801,12 @@ fn handle_generate_stream(
         }
     }
 
+    if cancelled {
+        output_token_count = accumulated_output_tokens.len() as u32;
+        finish_reason = "cancelled".to_string();
+        log::info!("[mlx-worker] cancelled stream {request_id} for {model_id}");
+    }
+
     let elapsed_ms = started.elapsed().as_millis() as u64;
     log::info!(
         "[mlx-worker] stream done: {output_token_count} tokens in {elapsed_ms}ms = {:.1} t/s",
@@ -717,6 +825,15 @@ fn handle_generate_stream(
     });
 
     drop(stream);
+    if cancelled {
+        if let Some(engine_request_id) = engine_request_id {
+            if let Err(error) = session.cancel_request(engine_request_id) {
+                log::debug!(
+                    "[mlx-worker] native cancellation cleanup failed for {request_id}: {error}"
+                );
+            }
+        }
+    }
     drop(session);
     prepare_next_session(entry, model_id);
 
@@ -1345,5 +1462,18 @@ mod tests {
         assert!(!decoded_text_has_incomplete_trailing_codepoint(
             "literal � inside text."
         ));
+    }
+
+    #[test]
+    fn stream_cancellation_registry_signals_and_cleans_up_requests() {
+        let registry = StreamCancellationRegistry::default();
+        let cancellation = registry.register("stream-1").unwrap();
+
+        assert!(!cancellation.load(Ordering::Acquire));
+        assert_eq!(registry.cancel("stream-1"), Ok(true));
+        assert!(cancellation.load(Ordering::Acquire));
+
+        registry.unregister("stream-1", &cancellation);
+        assert_eq!(registry.cancel("stream-1"), Ok(false));
     }
 }

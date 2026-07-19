@@ -255,9 +255,9 @@ describe('ModelFactory', () => {
 
     it('routes mlx through the in-process AX Engine IPC fetch shim', async () => {
       const provider: ProviderObject = {
-        provider: 'mlx',
+        provider: 'ax-engine',
         api_key: '',
-        base_url: 'http://127.0.0.1:19997/v1',
+        base_url: 'http://127.0.0.1:0/v1',
         models: [],
         settings: [],
         active: true,
@@ -268,10 +268,10 @@ describe('ModelFactory', () => {
       expect(createMlxIpcFetch).toHaveBeenCalledTimes(1)
       expect(createOpenAICompatible).toHaveBeenCalledWith(
         expect.objectContaining({
-          name: 'mlx',
+          name: 'ax-engine',
           baseURL: expect.stringMatching(/^http:\/\/127\.0\.0\.1:/),
           headers: expect.objectContaining({
-            'X-Ax-Provider': 'mlx',
+            'X-Ax-Provider': 'ax-engine',
           }),
         })
       )

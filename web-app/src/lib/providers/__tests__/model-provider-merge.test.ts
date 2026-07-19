@@ -44,6 +44,45 @@ describe('mergeProviders', () => {
     expect(result[0].base_url).toBe('https://api.openai.com')
   })
 
+  it('rewrites legacy MLX HTTP engine base_url to the in-process placeholder', () => {
+    const existing = [
+      makeProvider('ax-engine', [], {
+        base_url: 'http://127.0.0.1:19997/v1',
+        settings: [
+          {
+            key: 'base-url',
+            controller_props: {
+              value: 'http://127.0.0.1:19997/v1',
+              placeholder: 'http://127.0.0.1:19997/v1',
+            },
+          },
+        ],
+      } as Partial<ModelProvider>),
+    ]
+    const incoming = [
+      makeProvider('ax-engine', [], {
+        base_url: 'http://127.0.0.1:0/v1',
+        settings: [
+          {
+            key: 'base-url',
+            controller_props: {
+              value: 'http://127.0.0.1:0/v1',
+              placeholder: 'http://127.0.0.1:0/v1',
+            },
+          },
+        ],
+      } as Partial<ModelProvider>),
+    ]
+    const result = mergeProviders(incoming, existing, [], '/')
+    expect(result[0].base_url).toBe('http://127.0.0.1:0/v1')
+    expect(result[0].settings?.[0]?.controller_props).toEqual(
+      expect.objectContaining({
+        value: 'http://127.0.0.1:0/v1',
+        placeholder: 'http://127.0.0.1:0/v1',
+      })
+    )
+  })
+
   it('excludes models in deletedModels from merged list', () => {
     const existing = [makeProvider('openai', [{ id: 'gpt-3' }])]
     const incoming = [
@@ -166,12 +205,12 @@ describe('mergeProviders', () => {
 
   it('removes legacy bundled MLX models from cached provider state', () => {
     const existing = [
-      makeProvider('mlx', [
+      makeProvider('ax-engine', [
         { id: 'mlx-community/Qwen3.6-27B-4bit' },
         { id: 'user/imported-mlx-model' },
       ]),
     ]
-    const incoming = [makeProvider('mlx', [])]
+    const incoming = [makeProvider('ax-engine', [])]
     const result = mergeProviders(incoming, existing, [], '/')
     const modelIds = result[0].models.map((model) => model.id)
 

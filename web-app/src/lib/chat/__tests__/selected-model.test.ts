@@ -30,13 +30,13 @@ describe('resolveEffectiveSelectedModel', () => {
     const fallbackModel: Model = { id: 'global-qwen', capabilities: ['tools'] }
 
     const selectedModel = resolveEffectiveSelectedModel({
-      model: { id: 'thread-gemma', provider: 'mlx' },
-      providers: [createProvider('mlx', [])],
-      selectedProvider: 'mlx',
+      model: { id: 'thread-gemma', provider: 'ax-engine' },
+      providers: [createProvider('ax-engine', [])],
+      selectedProvider: 'ax-engine',
       selectedModelFromStore: fallbackModel,
     })
 
-    expect(selectedModel).toEqual({ id: 'thread-gemma', provider: 'mlx' })
+    expect(selectedModel).toEqual({ id: 'thread-gemma', provider: 'ax-engine' })
   })
 
   it('prefers active provider metadata over stale selected model metadata', () => {

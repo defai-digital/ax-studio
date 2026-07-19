@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   BarChart3,
   Database,
+  Eye,
+  EyeOff,
   FileSpreadsheet,
   LineChart,
   Plus,
@@ -18,6 +20,7 @@ import {
   DEFAULT_AX_BI_MCP_URL,
   connectAxBiMcpServer,
   getConfiguredAxBiMcpUrl,
+  hasConfiguredAxBiMcpToken,
   listAxBiDatasets,
   type AxBiDataset,
 } from '@/lib/ax-bi/datasets'
@@ -36,6 +39,11 @@ function formatTime(value: string): string {
 export function AxBiWorkspace() {
   const serviceHub = useServiceHub()
   const [mcpUrl, setMcpUrl] = useState(DEFAULT_AX_BI_MCP_URL)
+  const [mcpToken, setMcpToken] = useState('')
+  const [showMcpToken, setShowMcpToken] = useState(false)
+  const [mcpTokenStatus, setMcpTokenStatus] = useState<
+    'loading' | 'missing' | 'stored'
+  >('loading')
   const [connectionStatus, setConnectionStatus] = useState<
     'idle' | 'connecting' | 'connected' | 'error'
   >('idle')
@@ -85,6 +93,19 @@ export function AxBiWorkspace() {
       })
       .catch(() => undefined)
 
+    hasConfiguredAxBiMcpToken()
+      .then((configured) => {
+        if (mounted) setMcpTokenStatus(configured ? 'stored' : 'missing')
+      })
+      .catch((error) => {
+        if (!mounted) return
+        setMcpTokenStatus('missing')
+        setConnectionStatus('error')
+        setConnectionMessage(
+          error instanceof Error ? error.message : String(error)
+        )
+      })
+
     return () => {
       mounted = false
     }
@@ -126,8 +147,11 @@ export function AxBiWorkspace() {
       const normalizedUrl = await connectAxBiMcpServer({
         serviceHub,
         url: mcpUrl,
+        token: mcpToken.trim() || undefined,
       })
       setMcpUrl(normalizedUrl)
+      setMcpToken('')
+      setMcpTokenStatus('stored')
       setConnectionStatus('connected')
       await refreshDatasets(datasetSearch)
     } catch (error) {
@@ -273,12 +297,57 @@ export function AxBiWorkspace() {
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={connectionStatus === 'connecting'}
+                  disabled={
+                    connectionStatus === 'connecting' ||
+                    mcpTokenStatus === 'loading' ||
+                    (mcpTokenStatus === 'missing' && !mcpToken.trim())
+                  }
                   onClick={handleConnectAxBi}
                 >
                   {connectionStatus === 'connecting' ? 'Connecting' : 'Connect'}
                 </Button>
               </div>
+              <label
+                htmlFor="ax-bi-mcp-token"
+                className="block pt-1 text-xs font-medium uppercase text-muted-foreground"
+              >
+                API key or JWT
+              </label>
+              <div className="relative">
+                <Input
+                  id="ax-bi-mcp-token"
+                  aria-label="AX BI API key or JWT"
+                  type={showMcpToken ? 'text' : 'password'}
+                  autoComplete="off"
+                  value={mcpToken}
+                  placeholder={
+                    mcpTokenStatus === 'stored'
+                      ? 'Token encrypted locally — leave blank to reuse'
+                      : 'Paste the full sst_… key or JWT'
+                  }
+                  className="pr-10"
+                  onChange={(event) => setMcpToken(event.target.value)}
+                />
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={showMcpToken ? 'Hide AX BI token' : 'Show AX BI token'}
+                  className="absolute right-0.5 top-1/2 -translate-y-1/2"
+                  onClick={() => setShowMcpToken((visible) => !visible)}
+                >
+                  {showMcpToken ? (
+                    <EyeOff className="size-4" />
+                  ) : (
+                    <Eye className="size-4" />
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Copy the full AX BI MCP key from AX BI. Studio encrypts it in
+                local storage and sends the decrypted value only as a Bearer
+                authorization header.
+              </p>
               {connectionMessage ? (
                 <div
                   className={cn(

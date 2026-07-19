@@ -45,6 +45,15 @@ pub struct MetalInfo {
     pub metal_ar: bool,
 }
 
+/// A model discovered under the local Hugging Face hub cache.
+#[derive(Debug, Serialize)]
+pub struct HfCachedModelInfo {
+    pub model_id: String,
+    pub model_dir: String,
+    pub has_manifest: bool,
+    pub size_bytes: u64,
+}
+
 #[tauri::command]
 pub fn mlx_runtime_probe() -> Result<MlxRuntimeProbe, String> {
     let host = current_host_report();
@@ -166,6 +175,25 @@ pub fn mlx_has_model_manifest(model_dir: String) -> Result<bool, String> {
     Ok(is_ax_native_model_dir(&path))
 }
 
+/// List MLX-capable models already present in the local Hugging Face hub cache.
+///
+/// Studio's model registry only tracks `model.yml` under app-data. This command
+/// discovers hub snapshots (including models downloaded outside Studio) so the
+/// extension can surface and auto-register them.
+#[tauri::command]
+pub fn mlx_list_hf_cache_models() -> Result<Vec<HfCachedModelInfo>, String> {
+    let models = hf_cache::list_cached_models()
+        .into_iter()
+        .map(|entry| HfCachedModelInfo {
+            model_id: entry.model_id,
+            model_dir: entry.model_dir.to_string_lossy().to_string(),
+            has_manifest: entry.has_manifest,
+            size_bytes: entry.size_bytes,
+        })
+        .collect();
+    Ok(models)
+}
+
 /// Generate or validate AX Engine's native manifest for a downloaded MLX
 /// Hugging Face snapshot.
 #[tauri::command]
@@ -202,34 +230,27 @@ pub async fn mlx_generate_model_manifest(model_dir: String) -> Result<(), String
 }
 
 /// Look up `~/.cache/huggingface/hub/models--<author>--<name>/snapshots/<commit>/`
-/// from a model id like `mlx-community/Qwen3.5-9B-MLX-4bit`. Returns the most
-/// recent snapshot if multiple exist. Returns None if the cache layout doesn't
-/// match (e.g. model not downloaded yet).
+/// (or a nested AX-ready subdir) for a model id like
+/// `mlx-community/Qwen3.5-9B-MLX-4bit`. Prefers a snapshot that already has
+/// `model-manifest.json`; falls back to the newest safetensors snapshot.
 pub(crate) fn resolve_hf_cache_dir(model_id: &str) -> Option<PathBuf> {
-    let repo_dir = hf_cache::repo_cache_dir(model_id).ok()?;
-    let snapshots = repo_dir.join("snapshots");
-    let entries = std::fs::read_dir(&snapshots).ok()?;
-    let mut best: Option<(std::time::SystemTime, PathBuf)> = None;
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if !path.is_dir() {
-            continue;
-        }
-        let mtime = entry.metadata().ok().and_then(|m| m.modified().ok())?;
-        if best.as_ref().map(|(t, _)| mtime > *t).unwrap_or(true) {
-            best = Some((mtime, path));
-        }
-    }
-    best.map(|(_, p)| p)
+    hf_cache::resolve_best_model_dir(model_id)
 }
 
 fn resolve_downloaded_or_cached_model_dir<R: Runtime>(
     app_handle: &AppHandle<R>,
     model_id: &str,
 ) -> Option<PathBuf> {
-    resolve_hf_cache_dir(model_id)
-        .filter(|path| is_ax_native_model_dir(path))
-        .or_else(|| resolve_app_data_model_dir(app_handle, model_id))
+    // Prefer an AX-native HF snapshot (has model-manifest.json).
+    if let Some(path) = resolve_hf_cache_dir(model_id).filter(|path| is_ax_native_model_dir(path)) {
+        return Some(path);
+    }
+    // App-data import path next.
+    if let Some(path) = resolve_app_data_model_dir(app_handle, model_id) {
+        return Some(path);
+    }
+    // Last resort: HF snapshot with weights only (caller may generate manifest).
+    resolve_hf_cache_dir(model_id).filter(|path| dir_contains_safetensors(path))
 }
 
 fn resolve_app_data_model_dir<R: Runtime>(
@@ -328,6 +349,7 @@ pub struct ChatCompletionUsage {
 #[tauri::command]
 pub async fn mlx_chat_stream(
     state: State<'_, MlxState>,
+    request_id: String,
     model_id: String,
     messages: Vec<ChatMessage>,
     params: Option<GenerateParams>,
@@ -337,7 +359,7 @@ pub async fn mlx_chat_stream(
     let sink = on_event.clone();
     state
         .worker
-        .generate_stream(model_id, messages, params, move |evt| {
+        .generate_stream(request_id, model_id, messages, params, move |evt| {
             // Best-effort emit; if the frontend dropped the channel, log and
             // keep going so the worker can still drain its terminal event and
             // unblock its reply.
@@ -346,6 +368,14 @@ pub async fn mlx_chat_stream(
             }
         })
         .await
+}
+
+/// Cancel an in-flight in-process MLX stream. The worker checks the shared
+/// cancellation flag between native decode steps, then drops the active AX
+/// Engine stream and session.
+#[tauri::command]
+pub fn mlx_cancel_stream(state: State<'_, MlxState>, request_id: String) -> Result<bool, String> {
+    state.worker.cancel_stream(&request_id)
 }
 
 /// In-process chat completion against a previously-loaded MLX model.

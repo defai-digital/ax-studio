@@ -4,9 +4,54 @@ const ANTHROPIC_BROWSER_ACCESS_HEADER =
   'anthropic-dangerous-direct-browser-access'
 const ANTHROPIC_BROWSER_ACCESS_VALUE = 'true'
 
-// `mlx` is local too: model loading and chat route through the in-process
-// ax-engine-sdk/MLX Tauri commands under the visible `mlx` provider id.
-export const LOCAL_PROVIDER_IDS = new Set(['llamacpp', 'ollama', 'mlx'])
+/**
+ * Product provider id for in-process AX Engine (Apple MLX via ax-engine-sdk).
+ * Formerly named `mlx` in settings/store — migrate with `normalizeProviderId`.
+ */
+export const AX_ENGINE_PROVIDER_ID = 'ax-engine'
+/** Pre-rename product id still present in persisted stores / old builds. */
+export const LEGACY_MLX_PROVIDER_ID = 'mlx'
+
+export const LOCAL_PROVIDER_IDS = new Set([
+  'llamacpp',
+  'ollama',
+  AX_ENGINE_PROVIDER_ID,
+  // Keep legacy id so in-flight/persisted values still count as local.
+  LEGACY_MLX_PROVIDER_ID,
+])
+
+/** True for the in-process AX Engine provider (including legacy `mlx` id). */
+export function isAxEngineProvider(providerId: string | undefined | null): boolean {
+  return (
+    providerId === AX_ENGINE_PROVIDER_ID || providerId === LEGACY_MLX_PROVIDER_ID
+  )
+}
+
+/** Map legacy `mlx` product id → `ax-engine`. Leave other ids unchanged. */
+export function normalizeProviderId(providerId: string): string {
+  return providerId === LEGACY_MLX_PROVIDER_ID
+    ? AX_ENGINE_PROVIDER_ID
+    : providerId
+}
+
+/**
+ * In-process AX Engine no longer uses a local HTTP engine (old :19997 port).
+ * Chat goes through Tauri IPC (`mlx_chat_*`); this placeholder only satisfies
+ * provider schema / OpenAI-compatible settings fields.
+ *
+ * Port `0` marks "no listening server". Do not point this at a real port.
+ */
+export const MLX_IN_PROCESS_BASE_URL = 'http://127.0.0.1:0/v1'
+/** @deprecated Use MLX_IN_PROCESS_BASE_URL — same placeholder for AX Engine. */
+export const AX_ENGINE_IN_PROCESS_BASE_URL = MLX_IN_PROCESS_BASE_URL
+
+/** Pre-in-process defaults that must be rewritten on load. */
+export const LEGACY_MLX_BASE_URLS = new Set([
+  'http://127.0.0.1:19997/v1',
+  'http://127.0.0.1:19997',
+  'http://localhost:19997/v1',
+  'http://localhost:19997',
+])
 
 export const LEGACY_BUNDLED_MLX_MODEL_IDS = new Set([
   'mlx-community/Qwen3-4B-4bit',
@@ -305,40 +350,41 @@ export const predefinedProviders = [
     ],
     models: [],
   },
-  // MLX (AX Studio -> Tauri IPC -> ax-engine-sdk native runner -> Apple MLX)
+  // AX Engine (AX Studio -> Tauri IPC -> ax-engine-sdk native runner -> Apple MLX)
   //
-  // Default Local Engine backend is **in_process** (ADR-009). Sidecar HTTP
-  // (`ax-engine serve`) is optional/future — see web-app/src/lib/local-engine/.
-  // Models are discovered from app-managed local downloads/imports. Do not add
+  // Default Local Engine backend is **in_process** (ADR-009). There is no
+  // HTTP MLX server. Sidecar `ax-engine serve` is optional/future —
+  // see web-app/src/lib/local-engine/.
+  // Models are discovered from HF cache / app-managed imports. Do not add
   // catalog models here, otherwise the Hub will mark them as downloaded before
   // they exist on disk.
   {
     active: true,
-    api_key: 'sk-local-mlx',
-    base_url: 'http://127.0.0.1:19997/v1',
+    api_key: 'sk-local-ax-engine',
+    base_url: MLX_IN_PROCESS_BASE_URL,
     explore_models_url: 'https://huggingface.co/mlx-community',
-    provider: 'mlx',
+    provider: AX_ENGINE_PROVIDER_ID,
     settings: [
       {
         key: 'base-url',
         title: 'Base URL',
         description:
-          'Local MLX runner. Chat uses the in-process ax-engine-sdk through Tauri IPC; this URL is kept only for compatibility.',
+          'Not used for chat. AX Engine runs in-process via ax-engine-sdk (Tauri IPC). Port 0 means no local HTTP engine is listening.',
         controller_type: 'input',
         controller_props: {
-          placeholder: 'http://127.0.0.1:19997/v1',
-          value: 'http://127.0.0.1:19997/v1',
+          placeholder: MLX_IN_PROCESS_BASE_URL,
+          value: MLX_IN_PROCESS_BASE_URL,
         },
       },
       {
         key: 'api-key',
         title: 'API Key',
         description:
-          'Local server; any non-empty value works. Stored only on this machine.',
+          'Local in-process runner; any non-empty value works. Stored only on this machine.',
         controller_type: 'input',
         controller_props: {
-          placeholder: 'sk-local-mlx',
-          value: 'sk-local-mlx',
+          placeholder: 'sk-local-ax-engine',
+          value: 'sk-local-ax-engine',
           type: 'password',
           input_actions: ['unobscure', 'copy'],
         },

@@ -24,7 +24,7 @@ vi.mock('@/hooks/models/useFavoriteModel', () => ({
 
 // Mock predefinedProviders
 vi.mock('@/constants/providers', () => ({
-  LOCAL_PROVIDER_IDS: new Set(['llamacpp', 'mlx', 'ollama']),
+  LOCAL_PROVIDER_IDS: new Set(['llamacpp', 'ax-engine', 'ollama']),
   predefinedProviders: [
     { provider: 'anthropic' },
     { provider: 'openai' },
@@ -290,11 +290,11 @@ describe('routeMessage', () => {
     const result = await routeMessage(
       [userMessage('what is agi ?')],
       'mlx-community/Qwen3.5-9B-MLX-4bit',
-      'mlx',
+      'ax-engine',
       [
         {
           id: 'qwen3-coder-next-4b',
-          provider: 'mlx',
+          provider: 'ax-engine',
           displayName: 'Qwen3 Coder Next 4B',
         },
         {
@@ -304,7 +304,7 @@ describe('routeMessage', () => {
         },
       ],
       'qwen3-coder-next-4b',
-      'mlx',
+      'ax-engine',
       15000
     )
 
@@ -323,23 +323,23 @@ describe('routeMessage', () => {
     const result = await routeMessage(
       [userMessage('what is agi ?')],
       'mlx-community/Qwen3.5-9B-MLX-4bit',
-      'mlx',
+      'ax-engine',
       [
         {
           id: 'qwen3-coder-next-4b',
-          provider: 'mlx',
+          provider: 'ax-engine',
           displayName: 'Qwen3 Coder Next 4B',
         },
       ],
       'qwen3-coder-next-4b',
-      'mlx',
+      'ax-engine',
       15000
     )
 
     expect(result).toEqual(
       expect.objectContaining({
         modelId: 'qwen3-coder-next-4b',
-        providerId: 'mlx',
+        providerId: 'ax-engine',
         reason: 'quick factual question',
         routed: true,
       })
@@ -476,7 +476,7 @@ describe('getAvailableModelsForRouter', () => {
       },
       {
         active: true,
-        provider: 'mlx',
+        provider: 'ax-engine',
         models: [
           {
             id: 'qwen2.5-coder-7b-mlx',
@@ -497,7 +497,7 @@ describe('getAvailableModelsForRouter', () => {
       },
       {
         id: 'qwen2.5-coder-7b-mlx',
-        provider: 'mlx',
+        provider: 'ax-engine',
         displayName: 'Qwen Coder MLX',
       },
     ])
@@ -603,7 +603,7 @@ describe('buildRouterPrompt', () => {
       buildRouterPrompt('What is AGI?', [
         {
           id: 'qwen3-coder-next-4b',
-          provider: 'mlx',
+          provider: 'ax-engine',
           displayName: 'Qwen3 Coder Next 4B',
         },
       ]).user

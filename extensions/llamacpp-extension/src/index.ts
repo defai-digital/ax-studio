@@ -1089,7 +1089,9 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   }
 
   private async _providerIdForModelPath(modelPath: string): Promise<string> {
-    return (await this._hasAxModelManifestAtPath(modelPath)) ? 'mlx' : this.providerId
+    return (await this._hasAxModelManifestAtPath(modelPath))
+      ? 'ax-engine'
+      : this.providerId
   }
 
   private _isAxServingArtifactError(error: unknown): boolean {
@@ -1320,6 +1322,22 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     return modelPath
   }
 
+  private async _ensureAxModelManifest(modelDir: string): Promise<boolean> {
+    if (await this._hasAxModelManifestAtPath(modelDir)) {
+      return true
+    }
+    try {
+      await invoke('mlx_generate_model_manifest', { modelDir })
+      return await this._hasAxModelManifestAtPath(modelDir)
+    } catch (error) {
+      console.debug(
+        `[llamacpp] Failed to generate AX manifest for ${modelDir}:`,
+        error
+      )
+      return false
+    }
+  }
+
   private async _resolveHfCachedAxModel(
     modelId: string
   ): Promise<ResolvedLoadTarget | null> {
@@ -1327,6 +1345,13 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
     try {
       const modelPath = await invoke<string>('mlx_resolve_model_dir', { modelId })
+      const hasAxManifest = await this._ensureAxModelManifest(modelPath)
+      if (!hasAxManifest) {
+        console.debug(
+          `[llamacpp] HF cache model ${modelId} has no AX manifest at ${modelPath}`
+        )
+        return null
+      }
       return {
         cfg: {
           model_path: modelPath,
@@ -1344,6 +1369,62 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     }
   }
 
+  private async _mergeHfCacheModels(results: modelInfo[]): Promise<modelInfo[]> {
+    try {
+      const cached = await invoke<
+        Array<{
+          model_id: string
+          model_dir: string
+          has_manifest: boolean
+          size_bytes: number
+        }>
+      >('mlx_list_hf_cache_models')
+      if (!Array.isArray(cached) || cached.length === 0) {
+        return results
+      }
+
+      const seen = new Set(results.map((model) => model.id))
+      const engineName = ENGINE
+
+      for (const entry of cached) {
+        const modelId = entry.model_id?.trim()
+        if (!modelId || seen.has(modelId)) continue
+        // Prefer AX-ready snapshots; weights-only dirs can still load after
+        // manifest generation, but only register ready ones for the picker.
+        if (!entry.has_manifest) continue
+
+        try {
+          await this._writeModelConfig(modelId, {
+            model_path: entry.model_dir,
+            name: modelId,
+            size_bytes: Math.max(0, Number(entry.size_bytes) || 0),
+            embedding: false,
+          })
+        } catch (error) {
+          console.debug(
+            `[llamacpp] Failed to auto-register HF cache model ${modelId}:`,
+            error
+          )
+        }
+
+        results.push({
+          id: modelId,
+          name: modelId,
+          providerId: 'ax-engine',
+          port: 0,
+          sizeBytes: Math.max(0, Number(entry.size_bytes) || 0),
+          embedding: false,
+          path: entry.model_dir,
+          engine: engineName,
+        })
+        seen.add(modelId)
+      }
+    } catch (error) {
+      console.debug('[llamacpp] HF cache scan unavailable:', error)
+    }
+    return results
+  }
+
   private async _resolveLoadTarget(
     modelId: string
   ): Promise<ResolvedLoadTarget | null> {
@@ -1353,7 +1434,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         this._isAbsolutePath(cfg.model_path) &&
         !cfg.model_path.toLowerCase().endsWith('.gguf')
       ) {
-        const hasAxManifest = await this._hasAxModelManifestAtPath(cfg.model_path)
+        const hasAxManifest = await this._ensureAxModelManifest(cfg.model_path)
         return {
           cfg,
           modelPath: cfg.model_path,
@@ -1503,80 +1584,84 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     try {
       const engineName = ENGINE
       const modelsDir = await this._modelsDir()
-      if (!(await fs.existsSync(modelsDir))) return []
-
       const results: modelInfo[] = []
 
-      // Ensure modelsDir ends with separator for reliable prefix stripping
-      const sep = modelsDir.includes('\\') ? '\\' : '/'
-      const modelsDirPrefix = modelsDir.endsWith(sep)
-        ? modelsDir
-        : modelsDir + sep
+      if (await fs.existsSync(modelsDir)) {
+        // Ensure modelsDir ends with separator for reliable prefix stripping
+        const sep = modelsDir.includes('\\') ? '\\' : '/'
+        const modelsDirPrefix = modelsDir.endsWith(sep)
+          ? modelsDir
+          : modelsDir + sep
 
-      // DFS to discover model directories (handles nested IDs like "author/model")
-      const topEntries: string[] = (await fs.readdirSync(modelsDir)) ?? []
-      const toAbsoluteEntry = async (baseDir: string, entry: string) => {
-        const normalized = entry.replace(/\\/g, '/')
-        const normalizedBase = modelsDir.replace(/\\/g, '/')
-        if (
-          normalized === normalizedBase ||
-          normalized.startsWith(normalizedBase + '/')
-        ) {
-          return entry
+        // DFS to discover model directories (handles nested IDs like "author/model")
+        const topEntries: string[] = (await fs.readdirSync(modelsDir)) ?? []
+        const toAbsoluteEntry = async (baseDir: string, entry: string) => {
+          const normalized = entry.replace(/\\/g, '/')
+          const normalizedBase = modelsDir.replace(/\\/g, '/')
+          if (
+            normalized === normalizedBase ||
+            normalized.startsWith(normalizedBase + '/')
+          ) {
+            return entry
+          }
+          return joinPath([baseDir, entry])
         }
-        return joinPath([baseDir, entry])
-      }
-      const stack: string[] = await Promise.all(
-        topEntries.map((entry) => toAbsoluteEntry(modelsDir, entry))
-      )
+        const stack: string[] = await Promise.all(
+          topEntries.map((entry) => toAbsoluteEntry(modelsDir, entry))
+        )
 
-      while (stack.length > 0) {
-        const entryPath = stack.pop()!
+        while (stack.length > 0) {
+          const entryPath = stack.pop()!
 
-        // Check if this directory contains model.yml
-        const ymlPath = await joinPath([entryPath, 'model.yml'])
-        const hasModelYml = await fs.existsSync(ymlPath)
+          // Check if this directory contains model.yml
+          const ymlPath = await joinPath([entryPath, 'model.yml'])
+          const hasModelYml = await fs.existsSync(ymlPath)
 
-        if (hasModelYml) {
-          // Extract relative model ID by stripping the modelsDir prefix
-          let modelId = entryPath
-          if (entryPath.startsWith(modelsDirPrefix)) {
-            modelId = entryPath.substring(modelsDirPrefix.length)
-          }
-          // Normalize separators to forward slashes for consistent IDs
-          modelId = modelId.replace(/\\/g, '/')
-
-          const cfg = await this._readModelConfig(modelId)
-          if (cfg) {
-            const manifestProbePath = this._isAbsolutePath(cfg.model_path)
-              ? cfg.model_path
-              : entryPath
-            const providerId = await this._providerIdForModelPath(manifestProbePath)
-            results.push({
-              id: modelId,
-              name: cfg.name || modelId,
-              providerId,
-              port: 0,
-              sizeBytes: cfg.size_bytes ?? 0,
-              embedding: Boolean(cfg.embedding),
-              path: cfg.model_path,
-              engine: engineName,
-            })
-          }
-        } else {
-          // No model.yml — might be a parent directory (e.g., "mlx-community/").
-          // Prefer probing children directly so nested Hugging Face IDs are
-          // discovered even if a filesystem bridge omits directory metadata.
-          try {
-            const subEntries: string[] = (await fs.readdirSync(entryPath)) ?? []
-            for (const subEntry of subEntries) {
-              stack.push(await toAbsoluteEntry(entryPath, subEntry))
+          if (hasModelYml) {
+            // Extract relative model ID by stripping the modelsDir prefix
+            let modelId = entryPath
+            if (entryPath.startsWith(modelsDirPrefix)) {
+              modelId = entryPath.substring(modelsDirPrefix.length)
             }
-          } catch (error) {
-            console.debug(`[llamacpp] Skipping unreadable model entry ${entryPath}:`, error)
+            // Normalize separators to forward slashes for consistent IDs
+            modelId = modelId.replace(/\\/g, '/')
+
+            const cfg = await this._readModelConfig(modelId)
+            if (cfg) {
+              const manifestProbePath = this._isAbsolutePath(cfg.model_path)
+                ? cfg.model_path
+                : entryPath
+              const providerId = await this._providerIdForModelPath(manifestProbePath)
+              results.push({
+                id: modelId,
+                name: cfg.name || modelId,
+                providerId,
+                port: 0,
+                sizeBytes: cfg.size_bytes ?? 0,
+                embedding: Boolean(cfg.embedding),
+                path: cfg.model_path,
+                engine: engineName,
+              })
+            }
+          } else {
+            // No model.yml — might be a parent directory (e.g., "mlx-community/").
+            // Prefer probing children directly so nested Hugging Face IDs are
+            // discovered even if a filesystem bridge omits directory metadata.
+            try {
+              const subEntries: string[] = (await fs.readdirSync(entryPath)) ?? []
+              for (const subEntry of subEntries) {
+                stack.push(await toAbsoluteEntry(entryPath, subEntry))
+              }
+            } catch (error) {
+              console.debug(`[llamacpp] Skipping unreadable model entry ${entryPath}:`, error)
+            }
           }
         }
       }
+
+      // Also surface models already present in the Hugging Face hub cache
+      // (downloaded outside Studio or without a local model.yml registry entry).
+      await this._mergeHfCacheModels(results)
 
       return results
     } catch (e) {
@@ -1821,7 +1906,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     try {
       await invoke('register_provider_config', {
         request: {
-          provider: 'mlx',
+          provider: 'ax-engine',
           base_url: `http://127.0.0.1:${preferred.port}/v1`,
           api_key: '',
           custom_headers: [],
@@ -1829,7 +1914,10 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         },
       })
     } catch (regErr) {
-      console.warn('[llamacpp] Failed to register mlx provider with proxy:', regErr)
+      console.warn(
+        '[llamacpp] Failed to register ax-engine provider with proxy:',
+        regErr
+      )
     }
   }
 

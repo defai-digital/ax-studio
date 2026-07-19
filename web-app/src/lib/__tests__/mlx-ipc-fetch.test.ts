@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -24,6 +24,10 @@ function deferred<T>() {
 }
 
 describe('createMlxIpcFetch', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('does not expose parse exception details in the response body', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const fetchFn = createMlxIpcFetch()
@@ -63,6 +67,7 @@ describe('createMlxIpcFetch', () => {
         })
         return undefined
       }
+      if (command === 'mlx_cancel_stream') return true
       throw new Error(`unexpected command ${command}`)
     })
 
@@ -211,6 +216,53 @@ describe('createMlxIpcFetch', () => {
       modelId: 'test-model',
       messages: [{ role: 'user', content: 'hi' }],
       params: {},
+    })
+  })
+
+  it('forwards an aborted stream to the native AX Engine worker', async () => {
+    const streamStarted = deferred<void>()
+    const nativeStreamDone = deferred<void>()
+    let nativeRequestId = ''
+
+    mocks.invoke.mockImplementation(async (command: string, args: any) => {
+      if (command === 'mlx_load_model') return undefined
+      if (command === 'mlx_chat_stream') {
+        nativeRequestId = args.requestId
+        streamStarted.resolve()
+        await nativeStreamDone.promise
+        return undefined
+      }
+      if (command === 'mlx_cancel_stream') {
+        expect(args).toEqual({ requestId: nativeRequestId })
+        nativeStreamDone.resolve()
+        return true
+      }
+      throw new Error(`unexpected command ${command}`)
+    })
+
+    const abortController = new AbortController()
+    const fetchFn = createMlxIpcFetch()
+    const response = await fetchFn('http://localhost/v1/chat/completions', {
+      method: 'POST',
+      signal: abortController.signal,
+      body: JSON.stringify({
+        model: 'test-model',
+        stream: true,
+        messages: [{ role: 'user', content: 'hi' }],
+      }),
+    })
+
+    await streamStarted.promise
+    expect(nativeRequestId).toMatch(/^mlx-/)
+
+    const read = response.body!.getReader().read()
+    abortController.abort()
+
+    await expect(read).rejects.toMatchObject({ name: 'AbortError' })
+    await vi.waitFor(() => {
+      expect(mocks.invoke).toHaveBeenCalledWith('mlx_cancel_stream', {
+        requestId: nativeRequestId,
+      })
     })
   })
 })

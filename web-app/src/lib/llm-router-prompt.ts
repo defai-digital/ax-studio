@@ -38,7 +38,7 @@ If you are unsure or the task doesn't clearly favor any model, respond with:
 const LOCAL_PROVIDER_IDS = new Set([
   'llamacpp',
   'ollama',
-  'mlx',
+  'ax-engine',
   'lmstudio',
   'local',
 ])
@@ -50,7 +50,9 @@ function inferModelTraits(model: AvailableModelForRouter): string[] {
 
   const isLocal =
     LOCAL_PROVIDER_IDS.has(model.provider.toLowerCase()) ||
-    /(^|[-_\s])(local|llama\.?cpp|ollama|mlx|lmstudio)([-_\s]|$)/.test(haystack)
+    /(^|[-_\s])(local|llama\.?cpp|ollama|mlx|ax-engine|lmstudio)([-_\s]|$)/.test(
+      haystack
+    )
 
   traits.push(isLocal ? 'local/free' : 'remote')
 

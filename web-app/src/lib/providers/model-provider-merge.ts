@@ -9,9 +9,32 @@
  *   always uses `/` (HF-style), not the OS filesystem separator.
  */
 import {
+  isAxEngineProvider,
   LEGACY_BUNDLED_MLX_MODEL_IDS,
+  LEGACY_MLX_BASE_URLS,
   LOCAL_PROVIDER_IDS,
+  MLX_IN_PROCESS_BASE_URL,
+  normalizeProviderId,
 } from '@/constants/providers'
+
+function normalizeBaseUrl(url: string | undefined): string {
+  return (url ?? '').trim().replace(/\/+$/, '')
+}
+
+function resolveAxEngineBaseUrl(
+  providerName: string,
+  existingUrl: string | undefined,
+  incomingUrl: string | undefined
+): string | undefined {
+  const preferred = existingUrl || incomingUrl
+  if (
+    isAxEngineProvider(providerName) &&
+    LEGACY_MLX_BASE_URLS.has(normalizeBaseUrl(preferred))
+  ) {
+    return MLX_IN_PROCESS_BASE_URL
+  }
+  return preferred
+}
 
 export function mergeProviders(
   incomingProviders: ModelProvider[],
@@ -27,11 +50,12 @@ export function mergeProviders(
   }))
 
   const updatedProviders = incomingProviders.map((provider) => {
+    const providerId = normalizeProviderId(provider.provider)
     const existingProvider = validExistingProviders.find(
-      (x) => x.provider === provider.provider
+      (x) => normalizeProviderId(x.provider) === providerId
     )
     const existingModels = filterLegacyBundledMlxModels(
-      provider.provider,
+      providerId,
       filterValidModels(existingProvider?.models ?? [])
     )
 
@@ -40,7 +64,7 @@ export function mergeProviders(
         (e) =>
           isValidModel(e) &&
           !existingModels.some((m) => m.id === e.id) &&
-          (LOCAL_PROVIDER_IDS.has(provider.provider) ||
+          (LOCAL_PROVIDER_IDS.has(providerId) ||
             !safeDeletedModels.includes(e.id))
       ),
       ...existingModels,
@@ -71,32 +95,61 @@ export function mergeProviders(
       }
     })
 
+    const baseUrl = resolveAxEngineBaseUrl(
+      providerId,
+      existingProvider?.base_url,
+      provider.base_url
+    )
+
     return {
       ...provider,
+      provider: providerId,
       models: provider.persist ? updatedModels : mergedModels,
       settings: provider.settings.map((setting) => {
         const existingSetting = provider.persist
           ? undefined
           : existingProvider?.settings?.find((x) => x.key === setting.key)
+        const controllerProps = {
+          ...setting.controller_props,
+          ...(existingSetting?.controller_props ?? {}),
+        } as Record<string, unknown>
+        if (
+          isAxEngineProvider(providerId) &&
+          setting.key === 'base-url' &&
+          LEGACY_MLX_BASE_URLS.has(
+            normalizeBaseUrl(String(controllerProps.value ?? ''))
+          )
+        ) {
+          controllerProps.value = MLX_IN_PROCESS_BASE_URL
+          if (
+            LEGACY_MLX_BASE_URLS.has(
+              normalizeBaseUrl(String(controllerProps.placeholder ?? ''))
+            )
+          ) {
+            controllerProps.placeholder = MLX_IN_PROCESS_BASE_URL
+          }
+        }
         return {
           ...setting,
-          controller_props: {
-            ...setting.controller_props,
-            ...(existingSetting?.controller_props ?? {}),
-          },
+          controller_props: controllerProps,
         }
       }),
       api_key: existingProvider?.api_key || provider.api_key,
-      base_url: existingProvider?.base_url || provider.base_url,
+      base_url: baseUrl,
       active: existingProvider ? existingProvider.active : true,
     }
   })
 
   return [
     ...updatedProviders,
-    ...validExistingProviders.filter(
-      (e) => !updatedProviders.some((p) => p.provider === e.provider)
-    ),
+    ...validExistingProviders
+      .filter(
+        (e) =>
+          !updatedProviders.some(
+            (p) => normalizeProviderId(p.provider) === normalizeProviderId(e.provider)
+          )
+      )
+      .map((e) => ({ ...e, provider: normalizeProviderId(e.provider) })),
   ]
 }
 
@@ -113,7 +166,7 @@ function filterValidModels<T extends { id?: string; model?: string }>(
 function filterLegacyBundledMlxModels<
   T extends { id?: string; model?: string },
 >(provider: string, models: T[]): T[] {
-  if (provider !== 'mlx') return models
+  if (!isAxEngineProvider(provider)) return models
 
   return models.filter(
     (model) => !LEGACY_BUNDLED_MLX_MODEL_IDS.has(model.id ?? model.model ?? '')

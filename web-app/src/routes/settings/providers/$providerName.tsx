@@ -236,7 +236,14 @@ function ProviderDetail() {
   }
 
   const handleTestConnection = async () => {
-    if (!provider || !provider.base_url) {
+    if (!provider) {
+      setConnectionStatus('error')
+      setConnectionMessage('Provider is not available.')
+      return
+    }
+    // AX Engine is in-process (Tauri IPC) — no HTTP base URL is required.
+    // Remote/OpenAI-compatible providers still need a base URL.
+    if (provider.provider !== 'ax-engine' && provider.provider !== 'mlx' && !provider.base_url) {
       setConnectionStatus('error')
       setConnectionMessage('Base URL is required to test connection.')
       return

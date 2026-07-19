@@ -79,7 +79,7 @@ describe('InProcessLocalEngineBackend', () => {
     const backend = createDefaultLocalEngineBackend()
     expect(backend).toBeInstanceOf(InProcessLocalEngineBackend)
     expect(backend.info.kind).toBe('in_process')
-    expect(backend.info.providerId).toBe('mlx')
+    expect(backend.info.providerId).toBe('ax-engine')
   })
 
   it('reports missing_dependency outside Tauri', async () => {

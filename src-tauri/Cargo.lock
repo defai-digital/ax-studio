@@ -342,8 +342,8 @@ dependencies = [
 
 [[package]]
 name = "ax-engine-core"
-version = "6.5.2"
-source = "git+https://github.com/defai-digital/ax-engine?rev=a55ac03df228d4b0343d4dfbf6f1ccef4fba419b#a55ac03df228d4b0343d4dfbf6f1ccef4fba419b"
+version = "6.8.1"
+source = "git+https://github.com/defai-digital/ax-engine?rev=6ff19f66fa3f7fa26f89efab38ec0527a244b5b1#6ff19f66fa3f7fa26f89efab38ec0527a244b5b1"
 dependencies = [
  "metal",
  "objc",
@@ -356,12 +356,13 @@ dependencies = [
 
 [[package]]
 name = "ax-engine-mlx"
-version = "6.5.2"
-source = "git+https://github.com/defai-digital/ax-engine?rev=a55ac03df228d4b0343d4dfbf6f1ccef4fba419b#a55ac03df228d4b0343d4dfbf6f1ccef4fba419b"
+version = "6.8.1"
+source = "git+https://github.com/defai-digital/ax-engine?rev=6ff19f66fa3f7fa26f89efab38ec0527a244b5b1#6ff19f66fa3f7fa26f89efab38ec0527a244b5b1"
 dependencies = [
  "ax-engine-core",
  "fs2",
  "mlx-sys",
+ "parking_lot",
  "serde_json",
  "sha2",
  "thiserror 2.0.18",
@@ -370,8 +371,8 @@ dependencies = [
 
 [[package]]
 name = "ax-engine-sdk"
-version = "6.5.2"
-source = "git+https://github.com/defai-digital/ax-engine?rev=a55ac03df228d4b0343d4dfbf6f1ccef4fba419b#a55ac03df228d4b0343d4dfbf6f1ccef4fba419b"
+version = "6.8.1"
+source = "git+https://github.com/defai-digital/ax-engine?rev=6ff19f66fa3f7fa26f89efab38ec0527a244b5b1#6ff19f66fa3f7fa26f89efab38ec0527a244b5b1"
 dependencies = [
  "ax-engine-core",
  "ax-engine-mlx",
@@ -1483,7 +1484,7 @@ version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab8ecd87370524b461f8557c119c405552c396ed91fc0a8eec68679eab26f94a"
 dependencies = [
- "libloading 0.8.9",
+ "libloading 0.7.4",
 ]
 
 [[package]]
@@ -3388,14 +3389,13 @@ dependencies = [
 
 [[package]]
 name = "mlx-sys"
-version = "6.5.2"
-source = "git+https://github.com/defai-digital/ax-engine?rev=a55ac03df228d4b0343d4dfbf6f1ccef4fba419b#a55ac03df228d4b0343d4dfbf6f1ccef4fba419b"
+version = "6.8.1"
+source = "git+https://github.com/defai-digital/ax-engine?rev=6ff19f66fa3f7fa26f89efab38ec0527a244b5b1#6ff19f66fa3f7fa26f89efab38ec0527a244b5b1"
 dependencies = [
  "bindgen",
  "cc",
  "libc",
  "memmap2",
- "regex",
  "serde_json",
 ]
 

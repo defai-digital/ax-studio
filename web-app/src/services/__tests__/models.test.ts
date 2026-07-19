@@ -146,7 +146,7 @@ describe('DefaultModelsService', () => {
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       mockInvoke.mockResolvedValue([])
 
-      const result = await modelsService.getActiveModels('mlx')
+      const result = await modelsService.getActiveModels('ax-engine')
 
       expect(result).toEqual([])
       expect(mockInvoke).toHaveBeenCalledWith('mlx_list_loaded')
@@ -330,29 +330,21 @@ describe('DefaultModelsService', () => {
       )
     })
 
-    it('should emit stopped event even when one provider abort fails', async () => {
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    it('should emit stopped event even when abort fails', async () => {
       const llamaEngine = {
         ...mockEngine,
         abortImport: vi.fn().mockRejectedValue(new Error('llama abort failed')),
       }
-      const mlxEngine = {
-        ...mockEngine,
-        abortImport: vi.fn().mockResolvedValue(undefined),
-      }
-      mockEngineManager.get.mockImplementation((provider: string) =>
-        provider === 'mlx' ? mlxEngine : llamaEngine
-      )
+      mockEngineManager.get.mockImplementation(() => llamaEngine)
 
       await modelsService.abortDownload('model1')
 
       expect(llamaEngine.abortImport).toHaveBeenCalledWith('model1')
-      expect(mlxEngine.abortImport).toHaveBeenCalledWith('model1')
+      // Stopped event is always emitted (finally), even if abort rejects.
       expect(events.emit).toHaveBeenCalledWith(
         DownloadEvent.onFileDownloadStopped,
         { modelId: 'model1', downloadType: 'Model' }
       )
-      consoleSpy.mockRestore()
     })
   })
 
@@ -369,7 +361,7 @@ describe('DefaultModelsService', () => {
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       mockEngineManager.get.mockReturnValue(undefined)
 
-      await expect(modelsService.deleteModel('model1', 'mlx')).rejects.toThrow(
+      await expect(modelsService.deleteModel('model1', 'ax-engine')).rejects.toThrow(
         '[ModelsService] Cannot delete model: engine "llamacpp" is not available.'
       )
 
@@ -402,7 +394,7 @@ describe('DefaultModelsService', () => {
 	    it('should stop mlx models through the MLX SDK command', async () => {
 	      mockInvoke.mockResolvedValue(undefined)
 
-	      await expect(modelsService.stopModel('model1', 'mlx')).resolves.toEqual({
+	      await expect(modelsService.stopModel('model1', 'ax-engine')).resolves.toEqual({
 	        success: true,
 	      })
 
@@ -573,7 +565,7 @@ describe('DefaultModelsService', () => {
 
     it('should load mlx models through the MLX SDK command', async () => {
       const provider = {
-        provider: 'mlx',
+        provider: 'ax-engine',
         models: [{ id: 'model1', settings: {} }],
       } as any
       mockInvoke.mockResolvedValue(undefined)
@@ -1159,7 +1151,7 @@ describe('DefaultModelsService', () => {
         modelId: 'mlx-community/gemma-4-12B-it-4bit',
         author: 'mlx-community',
         tags: ['mlx'],
-        library_name: 'mlx',
+        library_name: 'ax-engine',
         siblings: [
           {
             rfilename: 'model-manifest.json',
@@ -1210,7 +1202,7 @@ describe('DefaultModelsService', () => {
         modelId: 'mlx-community/Qwen3.5-9B-MLX-4bit',
         author: 'mlx-community',
         tags: ['mlx'],
-        library_name: 'mlx',
+        library_name: 'ax-engine',
         siblings: [
           {
             rfilename: 'model-00001-of-00002.safetensors',

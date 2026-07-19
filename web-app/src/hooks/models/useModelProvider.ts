@@ -1,7 +1,14 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
-import { ANTHROPIC_DEFAULT_HEADERS } from '@/constants/providers'
+import {
+  ANTHROPIC_DEFAULT_HEADERS,
+  AX_ENGINE_PROVIDER_ID,
+  isAxEngineProvider,
+  LEGACY_MLX_BASE_URLS,
+  MLX_IN_PROCESS_BASE_URL,
+  normalizeProviderId,
+} from '@/constants/providers'
 import { mergeProviders } from '@/lib/providers/model-provider-merge'
 import { createSafeJSONStorage } from '@/lib/storage/storage'
 
@@ -281,8 +288,10 @@ const normalizeProviderHeaders = (
 const normalizeProvider = (value: unknown): ModelProvider | null => {
   if (!isPlainRecord(value)) return null
 
-  const providerName = normalizeNonEmptyString(value.provider)
-  if (!providerName) return null
+  const rawProviderName = normalizeNonEmptyString(value.provider)
+  if (!rawProviderName) return null
+  // Persist migration: product id `mlx` → `ax-engine`.
+  const providerName = normalizeProviderId(rawProviderName)
 
   const provider: ModelProvider = {
     provider: providerName,
@@ -304,6 +313,33 @@ const normalizeProvider = (value: unknown): ModelProvider | null => {
 
   const customHeader = normalizeProviderHeaders(value.custom_header)
   if (customHeader !== undefined) provider.custom_header = customHeader
+
+  // Persist migration: in-process AX Engine; drop the dead :19997 HTTP default.
+  if (
+    isAxEngineProvider(provider.provider) &&
+    LEGACY_MLX_BASE_URLS.has((provider.base_url ?? '').trim().replace(/\/+$/, ''))
+  ) {
+    provider.provider = AX_ENGINE_PROVIDER_ID
+    provider.base_url = MLX_IN_PROCESS_BASE_URL
+    provider.settings = provider.settings.map((setting) => {
+      if (setting.key !== 'base-url') return setting
+      const props = { ...(setting.controller_props ?? {}) }
+      const valueStr =
+        typeof props.value === 'string'
+          ? props.value.trim().replace(/\/+$/, '')
+          : ''
+      if (LEGACY_MLX_BASE_URLS.has(valueStr) || !props.value) {
+        props.value = MLX_IN_PROCESS_BASE_URL
+      }
+      if (
+        typeof props.placeholder === 'string' &&
+        LEGACY_MLX_BASE_URLS.has(props.placeholder.trim().replace(/\/+$/, ''))
+      ) {
+        props.placeholder = MLX_IN_PROCESS_BASE_URL
+      }
+      return { ...setting, controller_props: props }
+    })
+  }
 
   return provider
 }

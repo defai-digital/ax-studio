@@ -27,7 +27,10 @@ import type { ServiceHub } from '@/services'
 import { isLocalProvider, prepareProviderForChat } from './chat/model-session'
 import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 import { syncRemoteProviders } from './providers/provider-sync'
-import { LOCAL_PROVIDER_IDS } from '@/constants/providers'
+import {
+  isAxEngineProvider,
+  LOCAL_PROVIDER_IDS,
+} from '@/constants/providers'
 import { extractErrorMessage } from '@/lib/utils/error'
 import { normalizeMcpResultForToolOutput } from './ax-bi/mcp-result'
 
@@ -96,11 +99,11 @@ function shouldAwaitLocalStartup(
   provider: ProviderObject,
   modelId: string
 ): boolean {
-  return provider.provider === 'mlx' || modelId.startsWith('mlx-community/')
+  return isAxEngineProvider(provider.provider) || modelId.startsWith('mlx-community/')
 }
 
 function usesMlxIpc(providerId: string): boolean {
-  return providerId === 'mlx'
+  return isAxEngineProvider(providerId)
 }
 
 function createFallbackLocalProvider(

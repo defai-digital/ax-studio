@@ -60,6 +60,25 @@ const PROVIDER_METADATA: Record<
     description: 'Custom model provider',
     title: 'Cohere',
   },
+  'ax-engine': {
+    logo: '/images/model-provider/mlx.png',
+    color: '#0ea5e9',
+    description: 'Local AX Engine (Apple MLX)',
+    title: 'AX Engine',
+  },
+  // Legacy product id (migrated to ax-engine)
+  mlx: {
+    logo: '/images/model-provider/mlx.png',
+    color: '#0ea5e9',
+    description: 'Local AX Engine (Apple MLX)',
+    title: 'AX Engine',
+  },
+  llamacpp: {
+    logo: '/images/model-provider/llamacpp.svg',
+    color: '#22c55e',
+    description: 'Local llama.cpp (GGUF)',
+    title: 'llama.cpp',
+  },
 }
 
 export function getProviderLogo(provider: string): string | undefined {

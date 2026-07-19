@@ -120,6 +120,8 @@ macro_rules! desktop_handlers {
             #[cfg(target_os = "macos")]
             crate::core::mlx::commands::mlx_has_model_manifest,
             #[cfg(target_os = "macos")]
+            crate::core::mlx::commands::mlx_list_hf_cache_models,
+            #[cfg(target_os = "macos")]
             crate::core::mlx::commands::mlx_generate_model_manifest,
             #[cfg(target_os = "macos")]
             crate::core::mlx::commands::mlx_load_model,
@@ -131,6 +133,8 @@ macro_rules! desktop_handlers {
             crate::core::mlx::commands::mlx_chat_completion,
             #[cfg(target_os = "macos")]
             crate::core::mlx::commands::mlx_chat_stream,
+            #[cfg(target_os = "macos")]
+            crate::core::mlx::commands::mlx_cancel_stream,
         ]
     };
 }

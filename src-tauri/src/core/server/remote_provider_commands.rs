@@ -211,11 +211,12 @@ fn provider_ip_is_forbidden(ip: std::net::IpAddr, allow_internal: bool) -> bool 
 }
 
 async fn validate_provider_url(provider: &str, url: &str) -> Result<(), String> {
-    // Providers that legitimately point to a loopback/internal URL. `mlx` lands
-    // here because the in-app provider talks to a local ax-engine-server (which
-    // itself delegates to mlx_lm.server) at http://127.0.0.1:<port>/v1. Without
-    // this entry, registration is silently rejected and chat fails with
-    // "No remote provider configured for model_id ...".
+    // Providers that legitimately point to a loopback/internal URL.
+    // `mlx` is in-process via ax-engine-sdk (no HTTP server required); it is
+    // still allow-listed so a placeholder loopback base_url (e.g. :0/v1) can
+    // be registered without being rejected as an internal SSRF target.
+    // `llamacpp` / `ollama` / `lmstudio` / optional `ax-engine` sidecar still
+    // use real local HTTP endpoints.
     let allow_internal = matches!(
         provider,
         "llamacpp" | "ollama" | "lmstudio" | "mlx" | "ax-engine"

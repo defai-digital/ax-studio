@@ -8,6 +8,7 @@ export const localStorageKey = {
   settingInterface: 'setting-appearance',
   settingGeneral: 'setting-general',
   axBiSessions: 'ax-bi-sessions',
+  axBiMcpToken: 'ax-bi-mcp-token',
 
   settingCodeBlock: 'setting-code-block',
   settingLocalApiServer: 'setting-local-api-server',

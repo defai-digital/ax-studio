@@ -6,10 +6,15 @@ import { TauriProvidersService } from '../providers/tauri'
 const mocks = vi.hoisted(() => ({
   fetchNative: vi.fn(),
   fetchTauri: vi.fn(),
+  invoke: vi.fn(),
 }))
 
 vi.mock('@tauri-apps/plugin-http', () => ({
   fetch: mocks.fetchTauri,
+}))
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: mocks.invoke,
 }))
 
 function provider(overrides: Partial<ModelProvider> = {}): ModelProvider {
@@ -55,6 +60,73 @@ describe('TauriProvidersService', () => {
     await expect(
       service.fetchModelsFromProvider(provider({ base_url: '' }))
     ).rejects.toThrow('Provider must have base_url configured')
+  })
+
+  it('tests MLX via in-process runtime probe instead of HTTP base_url', async () => {
+    mocks.invoke.mockImplementation(async (command: string) => {
+      if (command === 'mlx_runtime_probe') {
+        return {
+          host: { supported_mlx_runtime: true },
+          metal: { fully_available: true },
+        }
+      }
+      if (command === 'mlx_list_hf_cache_models') {
+        return [
+          {
+            model_id: 'mlx-community/Qwen3.5-9B-MLX-4bit',
+            has_manifest: true,
+          },
+          {
+            model_id: 'mlx-community/weights-only',
+            has_manifest: false,
+          },
+        ]
+      }
+      return undefined
+    })
+
+    EngineManager.instance().engines.set('llamacpp', {
+      list: vi.fn().mockResolvedValue([
+        {
+          id: 'mlx-community/gemma-4-e2b-it-4bit',
+          providerId: 'ax-engine',
+        },
+        {
+          id: 'local.gguf',
+          providerId: 'llamacpp',
+        },
+      ]),
+    } as never)
+
+    const result = await service.fetchModelsFromProvider(
+      provider({
+        provider: 'ax-engine',
+        // Stale persisted URL — must not be fetched over HTTP.
+        base_url: 'http://127.0.0.1:19997/v1',
+      })
+    )
+
+    expect(result).toEqual([
+      'mlx-community/gemma-4-e2b-it-4bit',
+      'mlx-community/Qwen3.5-9B-MLX-4bit',
+    ])
+    expect(mocks.fetchNative).not.toHaveBeenCalled()
+    expect(mocks.fetchTauri).not.toHaveBeenCalled()
+    expect(mocks.invoke).toHaveBeenCalledWith('mlx_runtime_probe')
+  })
+
+  it('fails MLX connection test when Metal is unavailable', async () => {
+    mocks.invoke.mockResolvedValue({
+      host: { supported_mlx_runtime: true },
+      metal: { fully_available: false },
+    })
+
+    await expect(
+      service.fetchModelsFromProvider(
+        provider({ provider: 'ax-engine', base_url: 'http://127.0.0.1:0/v1' })
+      )
+    ).rejects.toThrow('Metal toolchain is not fully available for MLX')
+    expect(mocks.fetchTauri).not.toHaveBeenCalled()
   })
 
   it('fetches OpenAI-style model responses with safe headers', async () => {
@@ -438,7 +510,7 @@ describe('TauriProvidersService', () => {
         {
           id: 'mlx-community/Qwen3.5-4B-4bit',
           name: 'mlx-community/Qwen3.5-4B-4bit',
-          providerId: 'mlx',
+          providerId: 'ax-engine',
           capabilities: [],
         },
       ]),
@@ -449,9 +521,9 @@ describe('TauriProvidersService', () => {
 
     const result = await service.getProviders()
     const llamaProvider = result.find((p) => p.provider === 'llamacpp')
-    const mlxProvider = result.find((p) => p.provider === 'mlx')
+    const mlxProvider = result.find((p) => p.provider === 'ax-engine')
 
-    expect(result.filter((p) => p.provider === 'mlx')).toHaveLength(1)
+    expect(result.filter((p) => p.provider === 'ax-engine')).toHaveLength(1)
     expect(llamaProvider).toEqual(expect.objectContaining({ provider: 'llamacpp' }))
     expect(llamaProvider?.models).toEqual([
       expect.objectContaining({ id: 'local.gguf', runtimeProviderName: 'llamacpp' }),
@@ -460,11 +532,11 @@ describe('TauriProvidersService', () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: 'mlx-community/Qwen3.5-4B-4bit',
-          runtimeProviderName: 'mlx',
+          runtimeProviderName: 'ax-engine',
         }),
       ])
     )
-    expect(mlxProvider?.base_url).toBe('http://127.0.0.1:19997/v1')
+    expect(mlxProvider?.base_url).toBe('http://127.0.0.1:0/v1')
   })
 
   it('skips a failing runtime engine without hiding built-in providers', async () => {

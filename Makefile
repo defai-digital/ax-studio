@@ -61,7 +61,8 @@ endif
 
 dev: ensure-dev-port-free ensure-dev-setup
 	$(NODE) scripts/copy-assets-tauri.mjs
-	$(TAURI_CLI) dev
+	# desktop enables hardware + llamacpp plugins (required for capability ACL).
+	$(TAURI_CLI) dev --features desktop
 
 dev-stop:
 ifeq ($(OS),Windows_NT)

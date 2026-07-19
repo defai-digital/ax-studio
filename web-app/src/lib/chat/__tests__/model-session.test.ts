@@ -19,7 +19,7 @@ function makeProvider(
 describe('model-session', () => {
   it('identifies local providers', () => {
     expect(isLocalProvider(makeProvider('llamacpp'))).toBe(true)
-    expect(isLocalProvider(makeProvider('mlx'))).toBe(true)
+    expect(isLocalProvider(makeProvider('ax-engine'))).toBe(true)
     expect(isLocalProvider(makeProvider('openai'))).toBe(false)
   })
 
@@ -43,7 +43,7 @@ describe('model-session', () => {
       prepareProviderForChat(serviceHub, makeProvider('llamacpp'), 'model-a')
     ).resolves.toBeUndefined()
     await expect(
-      prepareProviderForChat(serviceHub, makeProvider('mlx'), 'model-b')
+      prepareProviderForChat(serviceHub, makeProvider('ax-engine'), 'model-b')
     ).resolves.toBeUndefined()
   })
 

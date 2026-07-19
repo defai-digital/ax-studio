@@ -223,6 +223,9 @@ describe('AxStudioLlamacppExtension', () => {
         const modelDir = (args as { modelDir?: string } | undefined)?.modelDir
         return Boolean(modelDir && mocks.fsState.has(`${modelDir}/model-manifest.json`))
       }
+      if (command === 'mlx_list_hf_cache_models') {
+        return []
+      }
       if (command === 'mlx_cleanup_import_artifacts') {
         const paths = (args as { paths?: string[] } | undefined)?.paths ?? []
         for (const path of paths) {
@@ -502,8 +505,14 @@ describe('AxStudioLlamacppExtension', () => {
       '/home/devop/.cache/huggingface/hub/models--mlx-community--Qwen3.6-27B-4bit'
     const snapshotsDir = `${repoDir}/snapshots`
     const snapshotDir = `${snapshotsDir}/abc123`
+    mocks.fsState.set(`${snapshotDir}/model-manifest.json`, '{}')
     vi.mocked(invoke).mockImplementation(async (command: string, args?: unknown) => {
       if (command === 'mlx_resolve_model_dir') return snapshotDir
+      if (command === 'mlx_has_model_manifest') {
+        const modelDir = (args as { modelDir?: string } | undefined)?.modelDir
+        return Boolean(modelDir && mocks.fsState.has(`${modelDir}/model-manifest.json`))
+      }
+      if (command === 'mlx_list_hf_cache_models') return []
       const path = (args as { path?: string } | undefined)?.path
       return path ?? ''
     })
@@ -1294,11 +1303,54 @@ describe('AxStudioLlamacppExtension', () => {
         expect.objectContaining({
 	          id: 'mlx-community/Qwen3.5-4B-4bit',
 	          name: 'mlx-community/Qwen3.5-4B-4bit',
-	          providerId: 'mlx',
+	          providerId: 'ax-engine',
 	          path: 'llamacpp/models/mlx-community/Qwen3.5-4B-4bit',
 	        }),
       ])
     )
+  })
+
+  it('lists models discovered in the Hugging Face hub cache without model.yml', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+    const snapshotDir =
+      '/hf-cache/models--mlx-community--Qwen3.5-9B-MLX-4bit/snapshots/abc123'
+    vi.mocked(invoke).mockImplementation(async (command: string) => {
+      if (command === 'mlx_list_hf_cache_models') {
+        return [
+          {
+            model_id: 'mlx-community/Qwen3.5-9B-MLX-4bit',
+            model_dir: snapshotDir,
+            has_manifest: true,
+            size_bytes: 4_200_000_000,
+          },
+          {
+            model_id: 'mlx-community/weights-only',
+            model_dir: '/hf-cache/weights-only',
+            has_manifest: false,
+            size_bytes: 100,
+          },
+        ]
+      }
+      return undefined
+    })
+
+    const listed = await extension.list()
+    expect(listed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'mlx-community/Qwen3.5-9B-MLX-4bit',
+          providerId: 'ax-engine',
+          path: snapshotDir,
+          sizeBytes: 4_200_000_000,
+        }),
+      ])
+    )
+    expect(listed.find((m) => m.id === 'mlx-community/weights-only')).toBeUndefined()
+    expect(
+      mocks.fsState.get(
+        '/app-data/llamacpp/models/mlx-community/Qwen3.5-9B-MLX-4bit/model.yml'
+      )
+    ).toContain(snapshotDir)
   })
 
   it('lists AX manifest models under mlx and plain models under llamacpp', async () => {
@@ -1347,7 +1399,7 @@ describe('AxStudioLlamacppExtension', () => {
 	        expect.objectContaining({
 	          id: 'Qwen3.5-35B-A3B-4bit',
 	          name: 'Qwen3.5-35B-A3B-4bit',
-	          providerId: 'mlx',
+	          providerId: 'ax-engine',
 	        }),
       ])
     )
@@ -1357,7 +1409,7 @@ describe('AxStudioLlamacppExtension', () => {
 	    })
 	    await expect(extension.get('Qwen3.5-35B-A3B-4bit')).resolves.toMatchObject({
 	      id: 'Qwen3.5-35B-A3B-4bit',
-	      providerId: 'mlx',
+	      providerId: 'ax-engine',
 	    })
 	  })
 
