@@ -790,20 +790,18 @@ mod tests {
     }
 
     #[test]
-    fn cli_allowlist_accepts_unix_absolute_path() {
-        // Absolute paths bypass the allowlist by design — the assumption is
-        // that whoever can write an absolute path into the MCP config already
-        // has filesystem access ≈ code execution. We just verify the bypass
-        // works so future code changes don't accidentally break power users
-        // who legitimately want to point at e.g. /opt/homebrew/bin/python.
-        assert!(validate_mcp_cli_command("/usr/bin/python3").is_ok());
-        assert!(validate_mcp_cli_command("/opt/homebrew/bin/node").is_ok());
+    fn cli_allowlist_rejects_unix_absolute_path() {
+        // Absolute paths are rejected so a tampered MCP config cannot spawn
+        // arbitrary binaries (e.g. /bin/sh). Callers must use bare allowlisted
+        // interpreter names instead.
+        assert!(validate_mcp_cli_command("/usr/bin/python3").is_err());
+        assert!(validate_mcp_cli_command("/opt/homebrew/bin/node").is_err());
     }
 
     #[test]
-    fn cli_allowlist_accepts_windows_path() {
-        // Same bypass via backslash for Windows.
-        assert!(validate_mcp_cli_command("C:\\Program Files\\nodejs\\node.exe").is_ok());
+    fn cli_allowlist_rejects_windows_path() {
+        // Same path rejection for Windows-style paths.
+        assert!(validate_mcp_cli_command("C:\\Program Files\\nodejs\\node.exe").is_err());
     }
 
     // ── path helpers ──────────────────────────────────────────────────────

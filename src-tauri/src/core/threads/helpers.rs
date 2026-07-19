@@ -144,7 +144,13 @@ pub fn update_thread_metadata(path: &Path, thread: &ThreadRecord) -> Result<(), 
     fs::write(&tmp_path, &data).map_err(|e| e.to_string())?;
     // fsync to ensure data is on disk before rename. A sync failure must fail
     // the update; reporting success here would violate the durability contract.
-    File::open(&tmp_path)
+    //
+    // Open with write access: on Windows, FlushFileBuffers (sync_all) requires
+    // GENERIC_WRITE, and File::open is read-only → ERROR_ACCESS_DENIED.
+    File::options()
+        .read(true)
+        .write(true)
+        .open(&tmp_path)
         .and_then(|file| file.sync_all())
         .map_err(|error| error.to_string())?;
     if let Err(error) = fs::rename(&tmp_path, path) {

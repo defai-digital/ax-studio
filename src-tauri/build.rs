@@ -74,6 +74,51 @@ fn build_mlx_runtime_shim() {
         .compile("ax_studio_mlx_runtime");
 }
 
+/// Embed an absolute LC_RPATH for libmlx so cargo-test / debug binaries can
+/// load the same dylib mlx-sys linked against. mlx-sys's own
+/// `rustc-link-arg=-rpath` does not propagate to downstream executables.
+fn embed_mlx_rpath_for_test_and_dev_binaries() {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
+        return;
+    }
+
+    println!("cargo:rerun-if-env-changed=DEP_MLX_LIB_DIR");
+    println!("cargo:rerun-if-env-changed=MLX_LIB_DIR");
+    println!("cargo:rerun-if-env-changed=VIRTUAL_ENV");
+
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Ok(dir) = std::env::var("DEP_MLX_LIB_DIR") {
+        candidates.push(PathBuf::from(dir));
+    }
+    if let Ok(dir) = std::env::var("MLX_LIB_DIR") {
+        candidates.push(PathBuf::from(dir));
+    }
+    if let Ok(venv) = std::env::var("VIRTUAL_ENV") {
+        // prepare-mlx / CI venv: site-packages/mlx/lib
+        let site = PathBuf::from(&venv).join("lib");
+        if let Ok(entries) = fs::read_dir(&site) {
+            for entry in entries.flatten() {
+                let mlx_lib = entry.path().join("site-packages/mlx/lib");
+                if mlx_lib.join("libmlx.dylib").is_file() {
+                    candidates.push(mlx_lib);
+                }
+            }
+        }
+    }
+    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+        candidates.push(PathBuf::from(manifest_dir).join("resources/lib"));
+    }
+
+    for dir in candidates {
+        let lib = dir.join("libmlx.dylib");
+        if lib.is_file() {
+            println!("cargo:rerun-if-changed={}", lib.display());
+            println!("cargo:rustc-link-arg=-Wl,-rpath,{}", dir.display());
+            return;
+        }
+    }
+}
+
 fn main() {
     // When createUpdaterArtifacts is enabled in tauri.conf.json, a signing public key is required
     // so the app can verify update bundle signatures. The CI only enables this when the key is
@@ -98,5 +143,6 @@ fn main() {
 
     generate_extension_hashes();
     build_mlx_runtime_shim();
+    embed_mlx_rpath_for_test_and_dev_binaries();
     tauri_build::build()
 }

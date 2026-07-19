@@ -107,6 +107,18 @@ endif
 	$(YARN) test
 	$(YARN) copy:assets:tauri
 	$(YARN) prepare:mlx
+	# Stage MLX dylibs where dyld/@rpath resolves them for cargo-test binaries
+	# (target/debug/Frameworks and siblings), in addition to resources/lib used
+	# by the packaged app. Harmless no-op on non-Darwin or when prepare:mlx skipped.
+	@if [ "$$(uname -s)" = "Darwin" ] && [ -f src-tauri/resources/lib/libmlx.dylib ]; then \
+		mkdir -p src-tauri/target/debug/Frameworks src-tauri/target/Frameworks src-tauri/target/debug/deps; \
+		for f in libmlx.dylib libjaccl.dylib; do \
+			cp -f "src-tauri/resources/lib/$$f" src-tauri/target/debug/Frameworks/; \
+			cp -f "src-tauri/resources/lib/$$f" src-tauri/target/Frameworks/; \
+			cp -f "src-tauri/resources/lib/$$f" src-tauri/target/debug/; \
+			cp -f "src-tauri/resources/lib/$$f" src-tauri/target/debug/deps/; \
+		done; \
+	fi
 	$(YARN) build:icon
 	cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
 	cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --no-default-features --features test-tauri -- -D warnings

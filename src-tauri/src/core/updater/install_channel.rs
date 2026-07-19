@@ -6,7 +6,9 @@
 //! When detection is uncertain, return `standalone` so the in-app updater
 //! remains available (fail open for manual/DMG installs).
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(any(test, target_os = "macos"))]
+use std::path::PathBuf;
 
 /// Install channel reported to the frontend.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
