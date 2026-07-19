@@ -143,9 +143,9 @@ describe('ax-bi datasets', () => {
     await expect(
       connectAxBiMcpServer({
         serviceHub: serviceHub as never,
-        url: 'localhost:8088',
+        url: 'localhost:31423',
       })
-    ).resolves.toBe('http://localhost:5008/mcp')
+    ).resolves.toBe('http://localhost:31421/mcp')
 
     expect(updateMCPConfig).toHaveBeenCalledWith(
       expect.stringContaining('"ax-bi"')
@@ -154,7 +154,7 @@ describe('ax-bi datasets', () => {
       'ax-bi',
       expect.objectContaining({
         type: 'http',
-        url: 'http://localhost:5008/mcp',
+        url: 'http://localhost:31421/mcp',
         active: true,
       })
     )
@@ -174,9 +174,9 @@ describe('ax-bi datasets', () => {
     await expect(
       connectAxBiMcpServer({
         serviceHub: serviceHub as never,
-        url: 'http://localhost:5008/mcp/',
+        url: 'http://localhost:31421/mcp/',
       })
-    ).resolves.toBe('http://localhost:5008/mcp')
+    ).resolves.toBe('http://localhost:31421/mcp')
   })
 
   it('preserves existing AX BI authentication and timeout settings', async () => {

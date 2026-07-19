@@ -11,7 +11,7 @@ const generateDefaultApiKey = (): string => {
 }
 
 const DEFAULT_SERVER_HOST = '127.0.0.1'
-const DEFAULT_SERVER_PORT = 1337
+const DEFAULT_SERVER_PORT = 31419
 const DEFAULT_API_PREFIX = '/v1'
 const DEFAULT_PROXY_TIMEOUT = 600
 const MAX_TRUSTED_HOSTS = 200
@@ -23,7 +23,7 @@ type LocalApiServerState = {
   // Server host option (127.0.0.1 or 0.0.0.0)
   serverHost: '127.0.0.1' | '0.0.0.0'
   setServerHost: (value: '127.0.0.1' | '0.0.0.0') => void
-  // Server port (default 1337)
+  // Server port (default 31419)
   serverPort: number
   setServerPort: (value: number) => void
   // API prefix (default /v1)
@@ -208,7 +208,7 @@ export const useLocalApiServer = create<LocalApiServerState>()(
         if (typeof value !== 'string') return
         set({ apiPrefix: value })
       },
-      // Default to true — the frontend webview (http://localhost:1420 in dev)
+      // Default to true — the frontend webview (http://localhost:31420 in dev)
       // uses native fetch to hit the local proxy, which triggers CORS preflight.
       // Without this the browser rejects the request with "Load failed" before
       // any bytes hit the network.

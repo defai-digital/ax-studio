@@ -804,11 +804,11 @@ mod tests {
     fn test_extract_command_args_sse_without_command() {
         let config = serde_json::json!({
             "type": "sse",
-            "url": "http://127.0.0.1:5008/mcp"
+            "url": "http://127.0.0.1:31421/mcp"
         });
         let result = extract_command_args(&config).unwrap();
         assert_eq!(result.transport_type.as_deref(), Some("sse"));
-        assert_eq!(result.url.as_deref(), Some("http://127.0.0.1:5008/mcp"));
+        assert_eq!(result.url.as_deref(), Some("http://127.0.0.1:31421/mcp"));
         assert!(result.command.is_empty());
     }
 
@@ -911,7 +911,7 @@ mod tests {
     fn test_restart_sse_server_config_is_valid() {
         let sse_config = serde_json::json!({
             "type": "sse",
-            "url": "http://127.0.0.1:5008/mcp"
+            "url": "http://127.0.0.1:31421/mcp"
         });
         let args = extract_command_args(&sse_config);
         assert!(

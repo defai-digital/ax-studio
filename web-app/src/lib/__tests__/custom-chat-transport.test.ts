@@ -136,7 +136,7 @@ vi.mock('@/hooks/settings/useLocalApiServer', () => ({
   useLocalApiServer: {
     getState: () => ({
       serverHost: '127.0.0.1',
-      serverPort: 1337,
+      serverPort: 31419,
       apiPrefix: '/v1',
       apiKey: '',
     }),
@@ -708,7 +708,7 @@ describe('CustomChatTransport — LLM Router integration', () => {
     vi.useRealTimers()
 
     expect(mocks.fetch).toHaveBeenCalledWith(
-      'http://127.0.0.1:1337/v1/models',
+      'http://127.0.0.1:31419/v1/models',
       expect.objectContaining({
         method: 'GET',
         headers: expect.objectContaining({

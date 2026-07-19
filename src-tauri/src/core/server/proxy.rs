@@ -142,7 +142,7 @@ fn handle_cors_preflight(req: &Request<Body>, config: &ProxyConfig) -> Option<Re
     // preflight requests.  The Tauri webview uses globalThis.fetch (not the
     // Tauri HTTP plugin) for streaming SSE because the plugin's ReadableStream
     // doesn't support pipeThrough().  Native fetch triggers CORS preflight
-    // for the tauri:// origin → localhost:1337 cross-origin request.
+    // for the tauri:// origin → localhost:31419 cross-origin request.
     // Blocking it would break chat streaming entirely.
     let is_loopback = matches!(config.host.as_str(), "127.0.0.1" | "localhost" | "::1");
     if !config.cors_enabled && !is_loopback {
@@ -538,7 +538,7 @@ mod tests {
         ProxyConfig {
             prefix: "/v1".to_string(),
             proxy_api_key: api_key.to_string(),
-            trusted_hosts: vec![vec!["localhost".to_string(), "1337".to_string()]],
+            trusted_hosts: vec![vec!["localhost".to_string(), "31419".to_string()]],
             cors_enabled,
             verbose_logs: false,
             host: "localhost".to_string(),
@@ -575,7 +575,7 @@ mod tests {
         let req = Request::builder()
             .method(hyper::Method::OPTIONS)
             .uri("/")
-            .header(hyper::header::HOST, "localhost:1337")
+            .header(hyper::header::HOST, "localhost:31419")
             .body(Body::empty())
             .unwrap();
         let config = test_config(true, "");
@@ -601,7 +601,7 @@ mod tests {
         let req = Request::builder()
             .method(hyper::Method::OPTIONS)
             .uri("/")
-            .header(hyper::header::HOST, "localhost:1337")
+            .header(hyper::header::HOST, "localhost:31419")
             .header("Access-Control-Request-Method", "CONNECT")
             .body(Body::empty())
             .unwrap();
@@ -615,7 +615,7 @@ mod tests {
         let req = Request::builder()
             .method(hyper::Method::OPTIONS)
             .uri("/")
-            .header(hyper::header::HOST, "localhost:1337")
+            .header(hyper::header::HOST, "localhost:31419")
             .header("Access-Control-Request-Headers", "x-evil-header")
             .body(Body::empty())
             .unwrap();
@@ -629,7 +629,7 @@ mod tests {
         let req = Request::builder()
             .method(hyper::Method::OPTIONS)
             .uri("/")
-            .header(hyper::header::HOST, "localhost:1337")
+            .header(hyper::header::HOST, "localhost:31419")
             .header(
                 "Access-Control-Request-Headers",
                 "content-type, authorization, x-ax-request-role",
@@ -646,7 +646,7 @@ mod tests {
         let req = Request::builder()
             .method(hyper::Method::OPTIONS)
             .uri("/")
-            .header(hyper::header::HOST, "localhost:1337")
+            .header(hyper::header::HOST, "localhost:31419")
             .header(hyper::header::ORIGIN, "http://localhost:3000")
             .body(Body::empty())
             .unwrap();
@@ -676,7 +676,7 @@ mod tests {
         let req = Request::builder()
             .method(hyper::Method::OPTIONS)
             .uri("/")
-            .header(hyper::header::HOST, "localhost:1337")
+            .header(hyper::header::HOST, "localhost:31419")
             .header(hyper::header::ORIGIN, "https://evil.example")
             .body(Body::empty())
             .unwrap();
@@ -691,7 +691,7 @@ mod tests {
         let req = Request::builder()
             .method(hyper::Method::OPTIONS)
             .uri("/")
-            .header(hyper::header::HOST, "localhost:1337")
+            .header(hyper::header::HOST, "localhost:31419")
             .body(Body::empty())
             .unwrap();
         let config = test_config(true, "");
@@ -747,14 +747,14 @@ mod tests {
     fn test_validate_request_configs_path_returns_404() {
         let config = test_config(false, "my-secret");
         let mut headers = hyper::HeaderMap::new();
-        headers.insert(hyper::header::HOST, "localhost:1337".parse().unwrap());
+        headers.insert(hyper::header::HOST, "localhost:31419".parse().unwrap());
         headers.insert(
             hyper::header::AUTHORIZATION,
             "Bearer my-secret".parse().unwrap(),
         );
         let result = validate_request(
             "/configs",
-            "localhost:1337",
+            "localhost:31419",
             "",
             &headers,
             &config,
@@ -774,10 +774,10 @@ mod tests {
             hyper::header::AUTHORIZATION,
             "Bearer my-secret".parse().unwrap(),
         );
-        headers.insert(hyper::header::HOST, "localhost:1337".parse().unwrap());
+        headers.insert(hyper::header::HOST, "localhost:31419".parse().unwrap());
         let result = validate_request(
             "/configs/something",
-            "localhost:1337",
+            "localhost:31419",
             "",
             &headers,
             &config,
@@ -799,7 +799,7 @@ mod tests {
         );
         let result = validate_request(
             "/chat/completions",
-            "localhost:1337",
+            "localhost:31419",
             "",
             &headers,
             &config,
@@ -832,7 +832,7 @@ mod tests {
         );
         let result = validate_request(
             "/chat/completions",
-            "localhost:1337",
+            "localhost:31419",
             "",
             &headers,
             &config,
@@ -851,7 +851,7 @@ mod tests {
         headers.insert("X-Api-Key", "my-secret".parse().unwrap());
         let result = validate_request(
             "/chat/completions",
-            "localhost:1337",
+            "localhost:31419",
             "",
             &headers,
             &config,
@@ -870,7 +870,7 @@ mod tests {
         );
         let result = validate_request(
             "/chat/completions",
-            "localhost:1337",
+            "localhost:31419",
             "",
             &headers,
             &config,
@@ -893,7 +893,7 @@ mod tests {
         let headers = hyper::HeaderMap::new();
         let result = validate_request(
             "/chat/completions",
-            "localhost:1337",
+            "localhost:31419",
             "",
             &headers,
             &config,
@@ -918,7 +918,7 @@ mod tests {
         );
         let result = validate_request(
             "/chat/completions",
-            "localhost:1337",
+            "localhost:31419",
             "",
             &headers,
             &config,

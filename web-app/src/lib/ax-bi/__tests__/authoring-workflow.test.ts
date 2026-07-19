@@ -93,7 +93,7 @@ describe('runAxBiAuthoringWorkflow', () => {
       chart_type_selected: 'echarts_timeseries_line',
       explanation: 'A time series shows the trend.',
       confidence: 0.91,
-      preview_url: 'http://127.0.0.1:8088/superset/explore/?slice_id=7',
+      preview_url: 'http://127.0.0.1:31423/superset/explore/?slice_id=7',
     })
 
     const result = await runAxBiAuthoringWorkflow({
@@ -113,7 +113,7 @@ describe('runAxBiAuthoringWorkflow', () => {
       delegated: true,
       artifactType: 'chart',
       status: 'completed',
-      artifactUrl: 'http://127.0.0.1:8088/explore/?slice_id=7',
+      artifactUrl: 'http://127.0.0.1:31423/explore/?slice_id=7',
     })
   })
 
@@ -146,7 +146,7 @@ describe('runAxBiAuthoringWorkflow', () => {
     client.ai.promptToDashboard.mockResolvedValue({
       status: 'completed',
       plan,
-      dashboard_url: 'http://127.0.0.1:8088/superset/dashboard/12/',
+      dashboard_url: 'http://127.0.0.1:31423/superset/dashboard/12/',
       charts_succeeded: 3,
       charts_failed: 0,
     })
@@ -167,7 +167,7 @@ describe('runAxBiAuthoringWorkflow', () => {
       delegated: true,
       artifactType: 'dashboard',
       status: 'completed',
-      artifactUrl: 'http://127.0.0.1:8088/ax-bi/dashboard/12/',
+      artifactUrl: 'http://127.0.0.1:31423/ax-bi/dashboard/12/',
     })
   })
 

@@ -61,16 +61,22 @@ export default defineConfig(() => {
     //
     // 1. prevent vite from obscuring rust errors
     clearScreen: false,
-    // 2. tauri expects a fixed port, fail if that port is not available
+    // 2. tauri expects a fixed port, fail if that port is not available.
+    // Port 31420 avoids clashing with common local AI stacks (and the old
+    // Tauri template default 1420). Keep in sync with:
+    // - src-tauri/tauri.conf.json build.devUrl
+    // - Makefile DEV_PORT
+    // When HMR uses an explicit host, use 31430 for the WebSocket port.
+    // AX BI local stack owns 31421–31429 (MCP, node, web, services, WS, nginx).
     server: {
-      port: 1420,
+      port: 31420,
       strictPort: true,
       host: host || false,
       hmr: host
         ? {
             protocol: 'ws',
             host,
-            port: 1421,
+            port: 31430,
           }
         : undefined,
       watch: {

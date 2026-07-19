@@ -36,6 +36,28 @@ From the repository root:
 make dev-web-app
 ```
 
+The Vite dev server is fixed on **http://localhost:31420** (see `vite.config.ts`
+`server.port` and the root `Makefile` `DEV_PORT`). Tauri loads the same URL via
+`src-tauri/tauri.conf.json` `build.devUrl`. Remote-host HMR uses port **31430**.
+
+The local OpenAI-compatible inference API defaults to
+**http://127.0.0.1:31419/v1** (`DEFAULT_SERVER_PORT` in
+`src/hooks/settings/useLocalApiServer.ts`).
+
+Local AX BI defaults (see `src/lib/ax-bi/endpoints.ts`):
+
+| Variable | Port | Service |
+| --- | ---: | --- |
+| `MCP_PORT` | 31421 | MCP |
+| `NODE_PORT` | 31422 | Frontend dev |
+| `AXBI_PORT` | 31423 | Web app |
+| `AX_SERVICES_PORT` | 31424 | AX Services |
+| `WEBSOCKET_PORT` | 31425 | Async WS |
+| `WEBSOCKET_HTTP_PORT` | 31426 | WS HTTP |
+| `NGINX_PORT` | 31429 | Nginx |
+| `DATABASE_PORT` | 5432 | Postgres |
+| `REDIS_PORT` | 6379 | Redis |
+
 Direct workspace commands:
 
 ```bash
@@ -56,5 +78,6 @@ make dev
 - Browser mode is useful for fast UI iteration, but it does not replace testing in the Tauri shell
 - Prefer routing, state, and service patterns that already exist in `src/`
 - All user-facing strings should remain localizable
+- Do not change the dev port in only one place — keep Vite, Tauri `devUrl`, and `DEV_PORT` aligned
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for contributor guidance.

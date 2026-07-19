@@ -177,7 +177,7 @@ mod tests {
         let builder = hyper::http::Response::builder();
         let result = add_cors_headers_with_host_and_origin(
             builder,
-            "127.0.0.1:1337",
+            "127.0.0.1:31419",
             "http://tauri.localhost",
             &[],
             false, // CORS disabled (default desktop case)
@@ -197,7 +197,7 @@ mod tests {
         let builder = hyper::http::Response::builder();
         let result = add_cors_headers_with_host_and_origin(
             builder,
-            "localhost:1337",
+            "localhost:31419",
             "tauri://localhost",
             &[],
             false,

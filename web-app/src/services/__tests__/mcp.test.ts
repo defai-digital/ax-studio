@@ -196,7 +196,7 @@ describe('TauriMCPService', () => {
           mcpServers: {
             good: {
               type: 'http',
-              url: 'http://127.0.0.1:5008/mcp',
+              url: 'http://127.0.0.1:31421/mcp',
               command: '',
               args: [],
               env: {},
@@ -219,7 +219,7 @@ describe('TauriMCPService', () => {
       expect(result.mcpServers).toEqual({
         good: expect.objectContaining({
           type: 'http',
-          url: 'http://127.0.0.1:5008/mcp',
+          url: 'http://127.0.0.1:31421/mcp',
           active: true,
         }),
       })

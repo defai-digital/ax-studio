@@ -99,7 +99,7 @@ describe('mcp-catalog.schema', () => {
     expect(
       mcpCatalogEntrySchema.safeParse({
         ...validHttpEntry,
-        url: 'http://127.0.0.1:5008/mcp',
+        url: 'http://127.0.0.1:31421/mcp',
       }).success
     ).toBe(true)
     expect(

@@ -388,7 +388,7 @@ users can decide when work stays local and when it routes to a hosted model.
 AX Studio starts a local OpenAI-compatible API server on:
 
 ```text
-http://127.0.0.1:1337
+http://127.0.0.1:31419
 ```
 
 Common endpoints:
@@ -518,12 +518,41 @@ Yarn 1.x.
 extensions, downloads required binaries, copies Tauri assets, and launches the
 desktop app with hot reload.
 
+### Local ports (dev)
+
+**AX Studio**
+
+| Port | Use |
+| --- | --- |
+| **31419** | Local OpenAI-compatible inference API (`/v1`, default) |
+| **31420** | Vite / Tauri frontend (`devUrl`) |
+| **31430** | Vite HMR WebSocket (when an explicit host is set) |
+
+**AX BI stack** (defaults; see `web-app/src/lib/ax-bi/endpoints.ts`)
+
+| Variable | Port | Service |
+| --- | ---: | --- |
+| `MCP_PORT` | **31421** | MCP (`http://127.0.0.1:31421/mcp`) |
+| `NODE_PORT` / `WEBPACK_DEVSERVER_PORT` | **31422** | Frontend dev |
+| `AXBI_PORT` | **31423** | Web app |
+| `AX_SERVICES_PORT` | **31424** | AX Services |
+| `WEBSOCKET_PORT` | **31425** | Async WS |
+| `WEBSOCKET_HTTP_PORT` | **31426** | WS HTTP |
+| `NGINX_PORT` | **31429** | Nginx host port |
+| `DATABASE_PORT` | **5432** | Postgres |
+| `REDIS_PORT` | **6379** | Redis |
+
+Studio frontend ports are fixed in `web-app/vite.config.ts`,
+`src-tauri/tauri.conf.json` (`build.devUrl`), and `Makefile` `DEV_PORT`.
+AX BI MCP/web defaults also appear in `src-tauri/src/core/mcp/constants.rs`.
+Production desktop builds do not open the Vite ports.
+
 ### Common Commands
 
 | Command | Purpose |
 | --- | --- |
 | `make dev` | Full Tauri desktop dev app |
-| `make dev-web-app` | Frontend-only Vite app on port 1420 |
+| `make dev-web-app` | Frontend-only Vite app on port 31420 |
 | `make build` | Production build for the current platform |
 | `make test` | Lint, TypeScript tests, and Rust tests |
 | `yarn test` | Run Vitest suites |

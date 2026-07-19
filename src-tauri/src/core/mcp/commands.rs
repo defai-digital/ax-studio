@@ -581,9 +581,15 @@ fn migrate_legacy_ax_bi_mcp_url(mcp_servers: &mut Map<String, Value>) -> bool {
         return false;
     };
 
+    // Rewrite legacy local endpoints (former web 8088 and MCP 5008 defaults)
+    // to the current local MCP port 31421.
     let replacement = match url.as_str() {
-        Some("http://127.0.0.1:8088/mcp") => Some("http://127.0.0.1:5008/mcp"),
-        Some("http://localhost:8088/mcp") => Some("http://localhost:5008/mcp"),
+        Some("http://127.0.0.1:8088/mcp") | Some("http://127.0.0.1:5008/mcp") => {
+            Some("http://127.0.0.1:31421/mcp")
+        }
+        Some("http://localhost:8088/mcp") | Some("http://localhost:5008/mcp") => {
+            Some("http://localhost:31421/mcp")
+        }
         _ => None,
     };
     let Some(replacement) = replacement else {
@@ -776,7 +782,21 @@ mod ax_bi_migration_tests {
         let servers = config.as_object_mut().unwrap();
 
         assert!(migrate_legacy_ax_bi_mcp_url(servers));
-        assert_eq!(servers["ax-bi"]["url"], "http://127.0.0.1:5008/mcp");
+        assert_eq!(servers["ax-bi"]["url"], "http://127.0.0.1:31421/mcp");
+    }
+
+    #[test]
+    fn migrates_the_former_default_mcp_port_5008() {
+        let mut config = json!({
+            "ax-bi": {
+                "type": "http",
+                "url": "http://localhost:5008/mcp"
+            }
+        });
+        let servers = config.as_object_mut().unwrap();
+
+        assert!(migrate_legacy_ax_bi_mcp_url(servers));
+        assert_eq!(servers["ax-bi"]["url"], "http://localhost:31421/mcp");
     }
 
     #[test]

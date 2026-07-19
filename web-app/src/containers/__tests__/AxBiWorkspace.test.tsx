@@ -16,9 +16,9 @@ vi.mock('@/hooks/useServiceHub', () => ({
 }))
 
 vi.mock('@/lib/ax-bi/datasets', () => ({
-  DEFAULT_AX_BI_MCP_URL: 'http://127.0.0.1:5008/mcp',
+  DEFAULT_AX_BI_MCP_URL: 'http://127.0.0.1:31421/mcp',
   connectAxBiMcpServer: vi.fn(),
-  getConfiguredAxBiMcpUrl: vi.fn().mockResolvedValue('http://127.0.0.1:5008/mcp'),
+  getConfiguredAxBiMcpUrl: vi.fn().mockResolvedValue('http://127.0.0.1:31421/mcp'),
   listAxBiDatasets: vi.fn().mockResolvedValue([]),
 }))
 
@@ -38,8 +38,8 @@ describe('AxBiWorkspace Open result', () => {
       status: 'ready',
       prompt: 'Create a saved donut chart',
       message:
-        'Created saved AX BI chart "Smoke - Sex Split".\n\nChart URL: http://localhost:8088/explore/?slice_id=1',
-      url: 'http://localhost:8088/explore/?slice_id=1',
+        'Created saved AX BI chart "Smoke - Sex Split".\n\nChart URL: http://localhost:31423/explore/?slice_id=1',
+      url: 'http://localhost:31423/explore/?slice_id=1',
     })
   })
 
@@ -47,13 +47,13 @@ describe('AxBiWorkspace Open result', () => {
     render(<AxBiWorkspace />)
 
     const link = screen.getByRole('link', { name: 'Open result' })
-    expect(link).toHaveAttribute('href', 'http://localhost:8088/explore/?slice_id=1')
+    expect(link).toHaveAttribute('href', 'http://localhost:31423/explore/?slice_id=1')
 
     fireEvent.click(link)
 
     expect(openUrl).toHaveBeenCalledTimes(1)
     expect(openUrl).toHaveBeenCalledWith(
-      'http://localhost:8088/explore/?slice_id=1'
+      'http://localhost:31423/explore/?slice_id=1'
     )
   })
 })

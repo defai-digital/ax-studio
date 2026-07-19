@@ -34,7 +34,7 @@ describe('useLocalApiServer', () => {
     const store = useLocalApiServer.getState()
     store.setEnableOnStartup(true)
     store.setServerHost('127.0.0.1')
-    store.setServerPort(1337)
+    store.setServerPort(31419)
     store.setApiPrefix('/v1')
     store.setCorsEnabled(true)
     store.setVerboseLogs(true)
@@ -48,7 +48,7 @@ describe('useLocalApiServer', () => {
 
     expect(result.current.enableOnStartup).toBe(true)
     expect(result.current.serverHost).toBe('127.0.0.1')
-    expect(result.current.serverPort).toBe(1337)
+    expect(result.current.serverPort).toBe(31419)
     expect(result.current.apiPrefix).toBe('/v1')
     expect(result.current.corsEnabled).toBe(true)
     expect(result.current.verboseLogs).toBe(true)
@@ -148,11 +148,11 @@ describe('useLocalApiServer', () => {
       act(() => {
         result.current.setServerPort(0)
         result.current.setServerPort(65536)
-        result.current.setServerPort(1337.5)
-        result.current.setServerPort('1337' as never)
+        result.current.setServerPort(31419.5)
+        result.current.setServerPort('31419' as never)
       })
 
-      expect(result.current.serverPort).toBe(1337)
+      expect(result.current.serverPort).toBe(31419)
     })
   })
 
@@ -515,7 +515,7 @@ describe('useLocalApiServer', () => {
         {
           enableOnStartup: 'false',
           serverHost: 'localhost',
-          serverPort: '1337',
+          serverPort: '31419',
           apiPrefix: null,
           corsEnabled: 'true',
           verboseLogs: false,
@@ -536,7 +536,7 @@ describe('useLocalApiServer', () => {
         expect.objectContaining({
           enableOnStartup: true,
           serverHost: '127.0.0.1',
-          serverPort: 1337,
+          serverPort: 31419,
           apiPrefix: '/v1',
           corsEnabled: true,
           verboseLogs: false,
@@ -601,7 +601,7 @@ describe('useLocalApiServer', () => {
       expect(partialize?.(state as never)).toEqual({
         enableOnStartup: true,
         serverHost: '127.0.0.1',
-        serverPort: 1337,
+        serverPort: 31419,
         apiPrefix: '/v1',
         corsEnabled: true,
         verboseLogs: true,

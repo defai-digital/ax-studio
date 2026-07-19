@@ -60,7 +60,7 @@ const mocks = vi.hoisted(() => {
     }),
     serverHost: '127.0.0.1',
     setServerHost: vi.fn(),
-    serverPort: 1337,
+    serverPort: 31419,
     setServerPort,
     apiPrefix: '/v1',
     setApiPrefix: vi.fn(),
@@ -355,7 +355,7 @@ describe('Local API Server settings route', () => {
       verboseLogs: true,
       enableOnStartup: true,
       serverHost: '127.0.0.1',
-      serverPort: 1337,
+      serverPort: 31419,
       apiPrefix: '/v1',
       apiKey: 'ax-test-key',
       trustedHosts: ['localhost'],
@@ -436,7 +436,7 @@ describe('Local API Server settings route', () => {
     await waitFor(() => {
       expect(mocks.startServer).toHaveBeenCalledWith({
         host: '127.0.0.1',
-        port: 1337,
+        port: 31419,
         prefix: '/v1',
         apiKey: 'ax-test-key',
         trustedHosts: ['localhost'],
@@ -477,38 +477,38 @@ describe('Local API Server settings route', () => {
     })
     expect(mocks.setServerPort).not.toHaveBeenCalled()
     expect(mocks.toast.success).toHaveBeenCalledWith('Server started', {
-      description: 'Local API server running on port 1337',
+      description: 'Local API server running on port 31419',
     })
   })
 
   it('rejects fractional server port input instead of truncating it', () => {
     renderLocalApiServerRoute()
 
-    const portInput = screen.getByDisplayValue('1337')
+    const portInput = screen.getByDisplayValue('31419')
 
-    fireEvent.change(portInput, { target: { value: '1337.5' } })
+    fireEvent.change(portInput, { target: { value: '31419.5' } })
     fireEvent.blur(portInput)
 
     expect(mocks.setServerPort).not.toHaveBeenCalled()
-    expect(portInput).toHaveValue(1337)
+    expect(portInput).toHaveValue(31419)
   })
 
   it('rejects non-decimal server port input instead of coercing it', () => {
     renderLocalApiServerRoute()
 
-    const portInput = screen.getByDisplayValue('1337')
+    const portInput = screen.getByDisplayValue('31419')
 
     fireEvent.change(portInput, { target: { value: '1e3' } })
     fireEvent.blur(portInput)
 
     expect(mocks.setServerPort).not.toHaveBeenCalled()
-    expect(portInput).toHaveValue(1337)
+    expect(portInput).toHaveValue(31419)
 
     fireEvent.change(portInput, { target: { value: '0x539' } })
     fireEvent.blur(portInput)
 
     expect(mocks.setServerPort).not.toHaveBeenCalled()
-    expect(portInput).toHaveValue(1337)
+    expect(portInput).toHaveValue(31419)
   })
 
   it('rejects fractional proxy timeout input instead of truncating it', () => {

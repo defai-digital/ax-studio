@@ -52,6 +52,13 @@ describe('web-app vite config defines', () => {
     expect(config.define?.AUTO_UPDATER_DISABLED).toBe('false')
   })
 
+  it('uses the fixed AX Studio Vite dev port (kept in sync with tauri.conf)', async () => {
+    const config = await resolveConfig()
+
+    expect(config.server?.port).toBe(31420)
+    expect(config.server?.strictPort).toBe(true)
+  })
+
   it('falls back to the default update check interval for invalid values', async () => {
     process.env.UPDATE_CHECK_INTERVAL_MS = '-1'
 

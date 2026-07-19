@@ -59,6 +59,24 @@ make dev
 
 `make dev` installs dependencies, builds the shared packages and extensions, downloads required binaries, and launches the Tauri app in development mode.
 
+Local development ports:
+
+| Port | Use |
+| --- | --- |
+| **31419** | AX Studio local inference API (`/v1`) |
+| **31420** | AX Studio Vite / Tauri frontend |
+| **31421** | AX BI MCP (`MCP_PORT`, `…/mcp`) |
+| **31422** | AX BI frontend dev (`NODE_PORT`) |
+| **31423** | AX BI web app (`AXBI_PORT`) |
+| **31424**–**31426**, **31429** | AX BI services / WS / nginx |
+| **31430** | AX Studio Vite HMR (explicit host only) |
+| **5432** / **6379** | Postgres / Redis (AX BI) |
+
+Keep the Studio frontend triple in sync if you change it:
+`web-app/vite.config.ts` (`server.port`), `src-tauri/tauri.conf.json`
+(`build.devUrl`), and `Makefile` `DEV_PORT`. AX BI port constants:
+`web-app/src/lib/ax-bi/endpoints.ts` and `src-tauri/src/core/mcp/constants.rs`.
+
 Useful alternatives:
 
 ```bash

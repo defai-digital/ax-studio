@@ -6,7 +6,7 @@
  * ---------------
  * The chat transport pipeline (Vercel AI SDK + `createOpenAICompatible`) drives
  * an HTTP `fetch` per chat request. For every provider we point that fetch at
- * the local Rust proxy on `http://127.0.0.1:1337`, which then forwards to the
+ * the local Rust proxy on `http://127.0.0.1:31419`, which then forwards to the
  * upstream model server.
  *
  * For the `mlx` provider, the "upstream" lives inside this very process —

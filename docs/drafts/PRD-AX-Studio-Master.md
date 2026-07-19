@@ -182,7 +182,7 @@ The product should feel useful to non-technical knowledge workers while remainin
 
 ### 7.11 Local API Server
 
-- The app must expose a local OpenAI-compatible API on `localhost:1337` where enabled.
+- The app must expose a local OpenAI-compatible API on `localhost:31419` where enabled.
 - Users must be able to view/control local API server status.
 - API behavior must be documented for external tools and scripts.
 - Authentication, CORS, and data-boundary behavior must be defined before external-facing release.

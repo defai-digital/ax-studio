@@ -1,4 +1,8 @@
-import { normalizeAxBiMcpUrl } from './endpoints'
+import {
+  DEFAULT_AX_BI_MCP_PORT,
+  DEFAULT_AX_BI_WEB_PORT,
+  normalizeAxBiMcpUrl,
+} from './endpoints'
 
 type JsonRpcId = string | number
 
@@ -459,15 +463,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /**
  * Derive an MCP endpoint from the AX BI web base URL.
- * Local web (8088 / default port) maps to MCP on 5008; remote hosts keep their
- * port and rely on reverse-proxy `/mcp` routing (normalized next).
+ * Local web (AXBI_PORT 31423, legacy 8088, or empty default) maps to MCP on
+ * DEFAULT_AX_BI_MCP_PORT; remote hosts keep their port and rely on
+ * reverse-proxy `/mcp` routing (normalized next).
  */
 function deriveMcpUrl(baseUrl: string): string {
   const url = new URL(baseUrl)
   const isLocal =
     url.hostname === '127.0.0.1' || url.hostname === 'localhost'
-  if (isLocal && (url.port === '8088' || url.port === '')) {
-    url.port = '5008'
+  if (
+    isLocal &&
+    (url.port === String(DEFAULT_AX_BI_WEB_PORT) ||
+      url.port === '8088' ||
+      url.port === '')
+  ) {
+    url.port = String(DEFAULT_AX_BI_MCP_PORT)
   }
   return url.toString()
 }

@@ -59,7 +59,7 @@ describe('legacy API bridge', () => {
     mocks.isTauri = true
     const args = {
       host: '127.0.0.1',
-      port: 1337,
+      port: 31419,
       prefix: '/v1',
       apiKey: 'secret',
       trustedHosts: ['localhost'],
@@ -73,7 +73,7 @@ describe('legacy API bridge', () => {
     expect(mocks.invoke).toHaveBeenCalledWith('start_server', {
       config: {
         host: '127.0.0.1',
-        port: 1337,
+        port: 31419,
         prefix: '/v1',
         api_key: 'secret',
         trusted_hosts: ['localhost'],

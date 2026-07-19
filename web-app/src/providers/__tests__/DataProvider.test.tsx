@@ -26,7 +26,7 @@ const {
   mockLocalApiServerState: {
     enableOnStartup: true,
     serverHost: '127.0.0.1' as const,
-    serverPort: 1337,
+    serverPort: 31419,
     apiPrefix: '/v1',
     apiKey: 'ax-test',
     trustedHosts: ['localhost'],
@@ -131,7 +131,7 @@ describe('DataProvider', () => {
     Object.assign(mockLocalApiServerState, {
       enableOnStartup: true,
       serverHost: '127.0.0.1',
-      serverPort: 1337,
+      serverPort: 31419,
       apiPrefix: '/v1',
       apiKey: 'ax-test',
       trustedHosts: ['localhost'],
@@ -170,7 +170,7 @@ describe('DataProvider', () => {
         enabled: true,
         config: expect.objectContaining({
           host: '127.0.0.1',
-          port: 1337,
+          port: 31419,
           prefix: '/v1',
           apiKey: 'ax-test',
           trustedHosts: ['localhost'],
@@ -193,7 +193,7 @@ describe('DataProvider', () => {
     rerender(<DataProvider />)
 
     expect(mockBootstrapLocalApi).toHaveBeenCalledTimes(1)
-    expect(mockBootstrapLocalApi.mock.calls[0][0].config.port).toBe(1337)
+    expect(mockBootstrapLocalApi.mock.calls[0][0].config.port).toBe(31419)
     expect(mockBootstrapLocalApi.mock.calls[0][0].config.apiKey).toBe('ax-test')
   })
 })

@@ -12,7 +12,7 @@ describe('AX BI tool navigation helpers', () => {
         {
           text: JSON.stringify({
             success: true,
-            explore_url: 'http://127.0.0.1:8088/explore/p/abc/',
+            explore_url: 'http://127.0.0.1:31423/explore/p/abc/',
           }),
         },
       ],
@@ -20,10 +20,10 @@ describe('AX BI tool navigation helpers', () => {
 
     expect(parsed).toEqual({
       success: true,
-      explore_url: 'http://127.0.0.1:8088/explore/p/abc/',
+      explore_url: 'http://127.0.0.1:31423/explore/p/abc/',
     })
     expect(getAxBiResultUrl('generate_chart', parsed!)).toBe(
-      'http://127.0.0.1:8088/explore/p/abc/'
+      'http://127.0.0.1:31423/explore/p/abc/'
     )
   })
 
@@ -31,7 +31,7 @@ describe('AX BI tool navigation helpers', () => {
     expect(
       getAxBiResultUrl('get_dataset_info', {
         success: true,
-        url: 'http://127.0.0.1:8088/explore/?datasource_type=table&datasource_id=20',
+        url: 'http://127.0.0.1:31423/explore/?datasource_type=table&datasource_id=20',
       })
     ).toBeUndefined()
   })
@@ -39,43 +39,43 @@ describe('AX BI tool navigation helpers', () => {
   it('opens prompt-to-dashboard results', () => {
     expect(
       getAxBiResultUrl('prompt_to_dashboard', {
-        dashboard_url: 'http://127.0.0.1:8088/ax-bi/dashboard/12/',
+        dashboard_url: 'http://127.0.0.1:31423/ax-bi/dashboard/12/',
       })
-    ).toBe('http://127.0.0.1:8088/ax-bi/dashboard/12/')
+    ).toBe('http://127.0.0.1:31423/ax-bi/dashboard/12/')
   })
 
   it('rewrites retired Superset dashboard routes to AX BI routes', () => {
     expect(
       normalizeAxBiResultUrl(
-        'http://127.0.0.1:8088/superset/dashboard/8/?native_filters_key=abc#top'
+        'http://127.0.0.1:31423/superset/dashboard/8/?native_filters_key=abc#top'
       )
     ).toBe(
-      'http://127.0.0.1:8088/ax-bi/dashboard/8/?native_filters_key=abc#top'
+      'http://127.0.0.1:31423/ax-bi/dashboard/8/?native_filters_key=abc#top'
     )
     expect(normalizeAxBiResultUrl('/dashboard/12/')).toBe(
-      'http://127.0.0.1:8088/ax-bi/dashboard/12/'
+      'http://127.0.0.1:31423/ax-bi/dashboard/12/'
     )
   })
 
   it('keeps current explore routes and upgrades retired Superset explore routes', () => {
     expect(normalizeAxBiResultUrl('/explore/?slice_id=12')).toBe(
-      'http://127.0.0.1:8088/explore/?slice_id=12'
+      'http://127.0.0.1:31423/explore/?slice_id=12'
     )
     expect(normalizeAxBiResultUrl('/superset/explore/?slice_id=12')).toBe(
-      'http://127.0.0.1:8088/explore/?slice_id=12'
+      'http://127.0.0.1:31423/explore/?slice_id=12'
     )
   })
 
   it('preserves localhost hosts so AX BI session cookies stay valid', () => {
     expect(
-      normalizeAxBiResultUrl('http://localhost:8088/explore/?slice_id=1')
-    ).toBe('http://localhost:8088/explore/?slice_id=1')
+      normalizeAxBiResultUrl('http://localhost:31423/explore/?slice_id=1')
+    ).toBe('http://localhost:31423/explore/?slice_id=1')
   })
 
   it('trusts IPv6 loopback the same as 127.0.0.1', () => {
     expect(
-      normalizeAxBiResultUrl('http://[::1]:8088/explore/?slice_id=1')
-    ).toBe('http://[::1]:8088/explore/?slice_id=1')
+      normalizeAxBiResultUrl('http://[::1]:31423/explore/?slice_id=1')
+    ).toBe('http://[::1]:31423/explore/?slice_id=1')
   })
 
   it('rejects non-HTTP result URLs', () => {

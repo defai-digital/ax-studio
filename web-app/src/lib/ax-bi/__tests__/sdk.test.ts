@@ -32,26 +32,26 @@ describe('AX BI SDK shim', () => {
           content: [{ type: 'text', text: 'Dashboard created' }],
           structuredContent: {
             status: 'completed',
-            dashboard_url: 'http://127.0.0.1:8088/ax-bi/dashboard/8/',
+            dashboard_url: 'http://127.0.0.1:31423/ax-bi/dashboard/8/',
           },
         })
       )
     vi.stubGlobal('fetch', fetchMock)
 
     const client = new AxBI({
-      baseUrl: 'http://127.0.0.1:8088',
+      baseUrl: 'http://127.0.0.1:31423',
       auth: { type: 'token', accessToken: '' },
     })
     await expect(
       client.ai.promptToDashboard({ prompt: 'Build a sales dashboard' })
     ).resolves.toEqual({
       status: 'completed',
-      dashboard_url: 'http://127.0.0.1:8088/ax-bi/dashboard/8/',
+      dashboard_url: 'http://127.0.0.1:31423/ax-bi/dashboard/8/',
     })
 
     expect(fetchMock).toHaveBeenCalledTimes(3)
     for (const [url] of fetchMock.mock.calls) {
-      expect(url).toBe('http://127.0.0.1:5008/mcp')
+      expect(url).toBe('http://127.0.0.1:31421/mcp')
     }
     // Streamable HTTP requires Accept on every POST, including notifications.
     for (const call of fetchMock.mock.calls) {
@@ -113,8 +113,8 @@ describe('AX BI SDK shim', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const client = new AxBI({
-      baseUrl: 'http://127.0.0.1:8088',
-      mcpUrl: 'http://127.0.0.1:5008/mcp',
+      baseUrl: 'http://127.0.0.1:31423',
+      mcpUrl: 'http://127.0.0.1:31421/mcp',
     })
 
     await client.ai.createChartFromIntent({
@@ -190,8 +190,8 @@ describe('AX BI SDK shim', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const client = new AxBI({
-      baseUrl: 'http://127.0.0.1:8088',
-      mcpUrl: 'http://127.0.0.1:5008/mcp',
+      baseUrl: 'http://127.0.0.1:31423',
+      mcpUrl: 'http://127.0.0.1:31421/mcp',
     })
 
     await expect(client.ai.getAuthoringCapabilities()).resolves.toEqual(
@@ -227,8 +227,8 @@ describe('AX BI SDK shim', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const client = new AxBI({
-      baseUrl: 'http://127.0.0.1:8088',
-      mcpUrl: 'http://127.0.0.1:5008/mcp/',
+      baseUrl: 'http://127.0.0.1:31423',
+      mcpUrl: 'http://127.0.0.1:31421/mcp/',
     })
 
     await expect(client.ai.planDashboard({ prompt: 'Plan it' })).resolves.toEqual(
@@ -267,8 +267,8 @@ describe('AX BI SDK shim', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const client = new AxBI({
-      baseUrl: 'http://127.0.0.1:8088',
-      mcpUrl: 'http://127.0.0.1:5008/mcp',
+      baseUrl: 'http://127.0.0.1:31423',
+      mcpUrl: 'http://127.0.0.1:31421/mcp',
     })
 
     await expect(client.ai.planDashboard({ prompt: 'Plan' })).resolves.toEqual({
@@ -277,7 +277,7 @@ describe('AX BI SDK shim', () => {
     })
   })
 
-  it('does not force MCP port 5008 on remote web bases', async () => {
+  it('does not force MCP port 31421 on remote web bases', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonRpcResponse('1', {}))
@@ -316,8 +316,8 @@ describe('AX BI SDK shim', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const client = new AxBI({
-      baseUrl: 'http://127.0.0.1:8088',
-      mcpUrl: 'http://127.0.0.1:5008/mcp',
+      baseUrl: 'http://127.0.0.1:31423',
+      mcpUrl: 'http://127.0.0.1:31421/mcp',
     })
 
     await expect(

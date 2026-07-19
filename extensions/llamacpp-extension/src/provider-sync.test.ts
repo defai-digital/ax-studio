@@ -36,11 +36,11 @@ describe('decideLocalProviderSync', () => {
         loadedModels: ['model-a', 'model-b'],
         llamacppModels: ['model-a'],
         axServingModels: ['model-b'],
-        axServingPort: 1337,
+        axServingPort: 31419,
       })
     ).toEqual({
       action: 'register',
-      port: 1337,
+      port: 31419,
       apiKey: '',
       models: ['model-b'],
     })
@@ -93,7 +93,7 @@ describe('decideLocalProviderSync', () => {
         loadedModels: ['llama-model', 'ax-model'],
         llamacppModels: ['llama-model'],
         axServingModels: ['ax-model'],
-        axServingPort: 1337,
+        axServingPort: 31419,
         preferred: { port: 8080, apiKey: 'secret', models: ['llama-model'] },
       })
     ).toEqual({

@@ -74,16 +74,16 @@ mod tests {
     #[test]
     fn test_localhost_is_valid() {
         assert!(is_valid_host("localhost", &[]));
-        assert!(is_valid_host("localhost:1337", &[]));
+        assert!(is_valid_host("localhost:31419", &[]));
         assert!(is_valid_host("127.0.0.1", &[]));
-        assert!(is_valid_host("127.0.0.1:1337", &[]));
+        assert!(is_valid_host("127.0.0.1:31419", &[]));
     }
 
     #[test]
     fn test_ipv6_loopback_is_valid() {
         // Host headers for IPv6 loopback arrive bracketed, often with a port.
         assert!(is_valid_host("[::1]", &[]));
-        assert!(is_valid_host("[::1]:1337", &[]));
+        assert!(is_valid_host("[::1]:31419", &[]));
         assert!(is_valid_host("::1", &[]));
     }
 
@@ -91,7 +91,7 @@ mod tests {
     fn test_tauri_localhost_is_valid() {
         // Critical for Windows where Tauri webview uses http://tauri.localhost
         assert!(is_valid_host("tauri.localhost", &[]));
-        assert!(is_valid_host("tauri.localhost:1337", &[]));
+        assert!(is_valid_host("tauri.localhost:31419", &[]));
     }
 
     #[test]
