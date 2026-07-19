@@ -342,8 +342,8 @@ dependencies = [
 
 [[package]]
 name = "ax-engine-core"
-version = "6.8.1"
-source = "git+https://github.com/defai-digital/ax-engine?rev=6ff19f66fa3f7fa26f89efab38ec0527a244b5b1#6ff19f66fa3f7fa26f89efab38ec0527a244b5b1"
+version = "6.9.0"
+source = "git+https://github.com/defai-digital/ax-engine?rev=aa42a7d1481cb235cb6d4da553a50e7440c949c1#aa42a7d1481cb235cb6d4da553a50e7440c949c1"
 dependencies = [
  "metal",
  "objc",
@@ -356,13 +356,14 @@ dependencies = [
 
 [[package]]
 name = "ax-engine-mlx"
-version = "6.8.1"
-source = "git+https://github.com/defai-digital/ax-engine?rev=6ff19f66fa3f7fa26f89efab38ec0527a244b5b1#6ff19f66fa3f7fa26f89efab38ec0527a244b5b1"
+version = "6.9.0"
+source = "git+https://github.com/defai-digital/ax-engine?rev=aa42a7d1481cb235cb6d4da553a50e7440c949c1#aa42a7d1481cb235cb6d4da553a50e7440c949c1"
 dependencies = [
  "ax-engine-core",
  "fs2",
  "mlx-sys",
  "parking_lot",
+ "serde",
  "serde_json",
  "sha2",
  "thiserror 2.0.18",
@@ -371,11 +372,12 @@ dependencies = [
 
 [[package]]
 name = "ax-engine-sdk"
-version = "6.8.1"
-source = "git+https://github.com/defai-digital/ax-engine?rev=6ff19f66fa3f7fa26f89efab38ec0527a244b5b1#6ff19f66fa3f7fa26f89efab38ec0527a244b5b1"
+version = "6.9.0"
+source = "git+https://github.com/defai-digital/ax-engine?rev=aa42a7d1481cb235cb6d4da553a50e7440c949c1#aa42a7d1481cb235cb6d4da553a50e7440c949c1"
 dependencies = [
  "ax-engine-core",
  "ax-engine-mlx",
+ "mlx-sys",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -3389,8 +3391,8 @@ dependencies = [
 
 [[package]]
 name = "mlx-sys"
-version = "6.8.1"
-source = "git+https://github.com/defai-digital/ax-engine?rev=6ff19f66fa3f7fa26f89efab38ec0527a244b5b1#6ff19f66fa3f7fa26f89efab38ec0527a244b5b1"
+version = "6.9.0"
+source = "git+https://github.com/defai-digital/ax-engine?rev=aa42a7d1481cb235cb6d4da553a50e7440c949c1#aa42a7d1481cb235cb6d4da553a50e7440c949c1"
 dependencies = [
  "bindgen",
  "cc",

@@ -130,8 +130,13 @@ describe('Voice Settings Route', () => {
     return render(<Component />)
   }
 
-  it('renders the voice settings page with the on-device note', () => {
+  it('renders the voice settings page with the on-device note', async () => {
     renderPage()
+
+    await waitFor(() => {
+      expect(mocks.voice.getStatus).toHaveBeenCalledWith('base.en')
+      expect(mocks.voice.getStatus).toHaveBeenCalledWith('small.en')
+    })
 
     expect(screen.getByTestId('header-page')).toBeInTheDocument()
     expect(screen.getByTestId('settings-menu')).toBeInTheDocument()
@@ -144,8 +149,12 @@ describe('Voice Settings Route', () => {
     ).toHaveTextContent('settings:voice.onDeviceNote')
   })
 
-  it('toggles the voice input setting', () => {
+  it('toggles the voice input setting', async () => {
     renderPage()
+
+    await waitFor(() => {
+      expect(mocks.voice.getStatus).toHaveBeenCalledTimes(2)
+    })
 
     const toggle = screen.getByTestId('voice-enable-switch')
     fireEvent.click(toggle)
@@ -153,8 +162,12 @@ describe('Voice Settings Route', () => {
     expect(useVoiceSettings.getState().voiceInputEnabled).toBe(true)
   })
 
-  it('changes the selected speech model', () => {
+  it('changes the selected speech model', async () => {
     renderPage()
+
+    await waitFor(() => {
+      expect(mocks.voice.getStatus).toHaveBeenCalledTimes(2)
+    })
 
     const select = screen.getByTestId('voice-model-select')
     fireEvent.change(select, { target: { value: 'small.en' } })

@@ -154,10 +154,10 @@ keyring = { version = "3.6.3", default-features = false, features = ["windows-na
 # do NOT use `branch = "main"`, which would silently auto-pull every new
 # commit and could break our integration without notice.
 #
-# Pinned to ax-engine v6.8.1 (peeled commit for refs/tags/v6.8.1).
+# Pinned to ax-engine v6.9.0 (peeled commit for refs/tags/v6.9.0).
 [target.'cfg(target_os = "macos")'.dependencies]
-ax-engine-core = { git = "https://github.com/defai-digital/ax-engine", rev = "6ff19f66fa3f7fa26f89efab38ec0527a244b5b1" }
-ax-engine-sdk = { git = "https://github.com/defai-digital/ax-engine", rev = "6ff19f66fa3f7fa26f89efab38ec0527a244b5b1", features = ["mlx-native", "tokenizer"] }
+ax-engine-core = { git = "https://github.com/defai-digital/ax-engine", rev = "aa42a7d1481cb235cb6d4da553a50e7440c949c1" }
+ax-engine-sdk = { git = "https://github.com/defai-digital/ax-engine", rev = "aa42a7d1481cb235cb6d4da553a50e7440c949c1", features = ["mlx-native", "tokenizer"] }
 keyring = { version = "3.6.3", default-features = false, features = ["apple-native"] }
 objc2-app-kit = { version = "0.3.2", features = ["NSWindow"] }
 # Direct `tokenizers` dep so we can decode generated token ids back to text —

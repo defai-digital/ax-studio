@@ -50,13 +50,14 @@ const optionalAssets = [
   `AX.Studio_${version}_x64-portable.exe`,
   `AX.Studio_${version}_arm64-portable.exe`,
 ]
+const requiredMetadataAssets = ['ax-minisign.pub']
 
 function fail(message) {
   console.error(`release asset error: ${message}`)
   process.exitCode = 1
 }
 
-for (const asset of requiredAssets) {
+for (const asset of [...requiredAssets, ...requiredMetadataAssets]) {
   if (!assets.includes(asset)) {
     fail(`missing asset: ${asset}`)
   }

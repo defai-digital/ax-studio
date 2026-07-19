@@ -35,7 +35,10 @@ import { type LanguageModel } from 'ai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { isAxEngineProvider } from '@/constants/providers'
 import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
-import { createMlxIpcFetch } from './mlx-ipc-fetch'
+import {
+  createAxEngineMetadataExtractor,
+  createMlxIpcFetch,
+} from './mlx-ipc-fetch'
 
 // Use the webview's native fetch for AI requests to the local proxy.
 // Tauri's HTTP plugin (tauriFetch) bypasses CORS but its Response.body
@@ -573,6 +576,9 @@ export class ModelFactory {
       headers: proxyHeaders,
       includeUsage: true,
       fetch: fetchFn,
+      metadataExtractor: isAxEngine
+        ? createAxEngineMetadataExtractor()
+        : undefined,
     })
 
     return proxyModel.languageModel(modelId)

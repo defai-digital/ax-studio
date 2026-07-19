@@ -9,6 +9,8 @@ DEV_PORT ?= 31420
 NODE ?= node
 YARN ?= npx -y @yarnpkg/cli-dist@4.5.3
 TAURI_CLI ?= $(NODE) node_modules/@tauri-apps/cli/tauri.js
+AX_MINISIGN_SECRET_KEY ?= $(HOME)/signkey/ax.minisign.key
+AX_MINISIGN_PUBLIC_KEY ?= $(HOME)/signkey/ax.pub
 
 .PHONY: all install-and-build install-rust-targets dev-setup ensure-dev-setup ensure-dev-port-free dev dev-stop install-web-app dev-web-app build-web-app serve-web-app build-serve-web-app lint test test-quality test-quality-blocking build clean
 
@@ -119,7 +121,10 @@ test-quality-blocking:
 
 # Build
 build: install-and-build install-rust-targets
-	TAURI_SIGNING_PUBLIC_KEY="$${TAURI_SIGNING_PUBLIC_KEY:-$$(cat ~/.tauri/ax-studio.key.pub 2>/dev/null)}" $(YARN) build
+	TAURI_SIGNING_PRIVATE_KEY="$${TAURI_SIGNING_PRIVATE_KEY:-$(AX_MINISIGN_SECRET_KEY)}" \
+	TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-$${MINISIGN_PASSWORD:-}}" \
+	TAURI_SIGNING_PUBLIC_KEY="$${TAURI_SIGNING_PUBLIC_KEY:-$$(cat "$(AX_MINISIGN_PUBLIC_KEY)" 2>/dev/null)}" \
+	$(YARN) build
 
 clean:
 ifeq ($(OS),Windows_NT)

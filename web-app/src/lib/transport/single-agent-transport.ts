@@ -11,6 +11,7 @@ import type { UIMessageChunk } from 'ai'
 
 import { useAppState } from '@/hooks/settings/useAppState'
 import { extractErrorMessage } from '@/lib/utils/error'
+import { isDiffusionGemmaModelId } from '@/lib/mlx-ipc-fetch'
 
 import type { TokenUsageCallback } from './transport-types'
 import { stripUnavailableToolParts } from './transport-types'
@@ -127,6 +128,10 @@ export async function executeSingleAgentStream(
     ? `${systemMessage ?? ''}${MCP_TOOL_USE_INSTRUCTION}`
     : systemMessage
 
+  const requestStartTime = Date.now()
+  const isBlockDiffusion = isDiffusionGemmaModelId(
+    typeof model === 'string' ? model : model.modelId
+  )
   let streamStartTime: number | undefined
 
   const result = streamText({
@@ -140,6 +145,9 @@ export async function executeSingleAgentStream(
   })
 
   let tokensPerSecond = 0
+  let nativeElapsedMs = 0
+  let nativeOutputTokens = 0
+  let hasNativeBlockMetrics = false
   let totalChars = 0
   let lastSpeedUpdate = 0
 
@@ -160,11 +168,12 @@ export async function executeSingleAgentStream(
     messageMetadata: ({ part }) => {
       if (part.type === 'text-delta') {
         // AI SDK v5 fullStream text-delta parts use `text` (not `textDelta`).
-        // Start timing from the FIRST token so TTFT (prefill/queue time) is
-        // excluded — this gives pure generation speed, not end-to-end latency.
+        // Autoregressive models are timed from the first token to exclude TTFT.
+        // A diffusion model does all denoise work before its first visible
+        // block, so timing only the block drain would report hundreds of t/s.
         const text = (part as { type: 'text-delta'; text: string }).text ?? ''
         if (!streamStartTime && text.length > 0) {
-          streamStartTime = Date.now()
+          streamStartTime = isBlockDiffusion ? requestStartTime : Date.now()
         }
         totalChars += text.length
         const now = Date.now()
@@ -175,9 +184,50 @@ export async function executeSingleAgentStream(
       }
 
       if (part.type === 'finish-step') {
-        tokensPerSecond =
-          (part.providerMetadata?.providerMetadata
-            ?.tokensPerSecond as number) || 0
+        const providerMetadata = part.providerMetadata as
+          | Record<string, unknown>
+          | undefined
+        const axEngineMetrics = providerMetadata?.axEngine as
+          | Record<string, unknown>
+          | undefined
+        const legacyMetrics = providerMetadata?.providerMetadata as
+          | Record<string, unknown>
+          | undefined
+        const hasBlockDiffusionMetrics =
+          axEngineMetrics?.generationKind === 'block_diffusion'
+        // Native elapsed time includes the denoise phase and is therefore the
+        // authoritative rate for block diffusion. Keep the existing
+        // first-token timing for autoregressive models, whose native elapsed
+        // time also includes prefill and would change the displayed metric.
+        if (hasBlockDiffusionMetrics) {
+          const reportedElapsedMs = axEngineMetrics?.elapsedMs
+          const reportedOutputTokens = axEngineMetrics?.outputTokenCount
+          if (
+            typeof reportedElapsedMs === 'number' &&
+            Number.isFinite(reportedElapsedMs) &&
+            reportedElapsedMs >= 0 &&
+            typeof reportedOutputTokens === 'number' &&
+            Number.isFinite(reportedOutputTokens) &&
+            reportedOutputTokens >= 0
+          ) {
+            // A tool round-trip creates another model step. Accumulate each
+            // native request instead of pairing total usage with only the last
+            // step's elapsed time and rate.
+            hasNativeBlockMetrics = true
+            nativeElapsedMs += reportedElapsedMs
+            nativeOutputTokens += reportedOutputTokens
+            tokensPerSecond =
+              nativeElapsedMs > 0
+                ? (nativeOutputTokens * 1000) / nativeElapsedMs
+                : 0
+          }
+        } else {
+          const reportedSpeed = legacyMetrics?.tokensPerSecond
+          tokensPerSecond =
+            typeof reportedSpeed === 'number' && Number.isFinite(reportedSpeed)
+              ? reportedSpeed
+              : 0
+        }
       }
 
       if (part.type === 'finish') {
@@ -187,7 +237,12 @@ export async function executeSingleAgentStream(
           finishReason: string
         }
         const usage = finishPart.totalUsage
-        const durationMs = streamStartTime ? Date.now() - streamStartTime : 0
+        const durationMs =
+          hasNativeBlockMetrics && nativeElapsedMs > 0
+            ? nativeElapsedMs
+            : streamStartTime
+              ? Date.now() - streamStartTime
+              : 0
         const durationSec = durationMs / 1000
         const outputTokens = usage?.outputTokens ?? 0
         const inputTokens = usage?.inputTokens

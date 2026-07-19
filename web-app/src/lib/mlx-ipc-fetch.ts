@@ -28,6 +28,7 @@
  */
 
 import { Channel, invoke } from '@tauri-apps/api/core'
+import type { MetadataExtractor } from '@ai-sdk/openai-compatible'
 
 interface OpenAIChatMessage {
   role: string
@@ -93,6 +94,86 @@ type StreamEvent =
 
 const SSE_HEADERS = { 'Content-Type': 'text/event-stream; charset=utf-8' }
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
+
+interface AxEngineWireMetrics {
+  elapsed_ms: number
+  output_token_count: number
+  generation_kind: 'autoregressive' | 'block_diffusion'
+}
+
+function readAxEngineWireMetrics(value: unknown): AxEngineWireMetrics | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const metrics = (value as Record<string, unknown>).ax_engine_metrics
+  if (!metrics || typeof metrics !== 'object' || Array.isArray(metrics)) {
+    return undefined
+  }
+
+  const record = metrics as Record<string, unknown>
+  const elapsedMs = record.elapsed_ms
+  const outputTokenCount = record.output_token_count
+  const generationKind = record.generation_kind
+  if (
+    typeof elapsedMs !== 'number' ||
+    !Number.isFinite(elapsedMs) ||
+    elapsedMs < 0 ||
+    typeof outputTokenCount !== 'number' ||
+    !Number.isFinite(outputTokenCount) ||
+    outputTokenCount < 0 ||
+    (generationKind !== 'autoregressive' &&
+      generationKind !== 'block_diffusion')
+  ) {
+    return undefined
+  }
+
+  return {
+    elapsed_ms: elapsedMs,
+    output_token_count: outputTokenCount,
+    generation_kind: generationKind,
+  }
+}
+
+function providerMetadataForMetrics(metrics: AxEngineWireMetrics) {
+  return {
+    axEngine: {
+      elapsedMs: metrics.elapsed_ms,
+      outputTokenCount: metrics.output_token_count,
+      tokensPerSecond:
+        metrics.elapsed_ms > 0
+          ? (metrics.output_token_count * 1000) / metrics.elapsed_ms
+          : 0,
+      generationKind: metrics.generation_kind,
+    },
+  }
+}
+
+export function isDiffusionGemmaModelId(modelId: string | undefined): boolean {
+  return /diffusion[-_]?gemma/i.test(modelId ?? '')
+}
+
+/**
+ * Preserve native AX Engine timing through the OpenAI-compatible SDK layer.
+ * Without this extractor the SDK intentionally drops non-standard SSE fields,
+ * leaving the UI to time only the near-instant drain of a diffusion block.
+ */
+export function createAxEngineMetadataExtractor(): MetadataExtractor {
+  return {
+    extractMetadata: async ({ parsedBody }) => {
+      const metrics = readAxEngineWireMetrics(parsedBody)
+      return metrics ? providerMetadataForMetrics(metrics) : undefined
+    },
+    createStreamExtractor: () => {
+      let metrics: AxEngineWireMetrics | undefined
+      return {
+        processChunk(parsedChunk) {
+          metrics = readAxEngineWireMetrics(parsedChunk) ?? metrics
+        },
+        buildMetadata() {
+          return metrics ? providerMetadataForMetrics(metrics) : undefined
+        },
+      }
+    },
+  }
+}
 
 function toMlxParams(req: OpenAIChatRequest): MlxGenerateParams {
   const stop = typeof req.stop === 'string' ? [req.stop] : req.stop
@@ -242,6 +323,13 @@ function streamingResponse(
                 prompt_tokens: evt.prompt_token_count,
                 completion_tokens: evt.output_token_count,
                 total_tokens: evt.prompt_token_count + evt.output_token_count,
+              },
+              ax_engine_metrics: {
+                elapsed_ms: evt.elapsed_ms,
+                output_token_count: evt.output_token_count,
+                generation_kind: isDiffusionGemmaModelId(modelId)
+                  ? 'block_diffusion'
+                  : 'autoregressive',
               },
             }
 

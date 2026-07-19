@@ -12,7 +12,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     mpsc::{Receiver, Sender},
     Arc, Mutex,
 };
@@ -27,9 +27,9 @@ use tokenizers::Tokenizer;
 use tokio::sync::oneshot;
 
 const DEFAULT_MLX_MAX_OUTPUT_TOKENS: u32 = 2048;
-const DIFFUSION_GEMMA_CHAT_MAX_OUTPUT_TOKENS: u32 = 64;
 const GEMMA4_CHANNEL_OPEN: &str = "<|channel>";
 const GEMMA4_CHANNEL_CLOSE: &str = "<channel|>";
+static NEXT_DIFFUSION_REQUEST_SEED: AtomicU64 = AtomicU64::new(1);
 
 /// OpenAI-style chat message.
 #[derive(Clone, Debug, Deserialize)]
@@ -562,7 +562,7 @@ fn handle_generate(
 
     let stop_sequences = effective_stop_sequences(model_id, params.stop);
 
-    let max_output_tokens = effective_max_output_tokens(model_id, params.max_output_tokens);
+    let max_output_tokens = effective_max_output_tokens(params.max_output_tokens);
 
     let request = GenerateRequest {
         model_id: model_id.to_string(),
@@ -654,7 +654,7 @@ fn handle_generate_stream(
     let _ = prompt;
 
     let sampling = effective_sampling(model_id, &params);
-    let max_output_tokens = effective_max_output_tokens(model_id, params.max_output_tokens);
+    let max_output_tokens = effective_max_output_tokens(params.max_output_tokens);
     let stop_sequences = effective_stop_sequences(model_id, params.stop);
 
     let request = GenerateRequest {
@@ -670,7 +670,8 @@ fn handle_generate_stream(
 
     log::info!(
         "[mlx-worker] stream {model_id}: {prompt_token_count} prompt tokens, \
-         max_out={max_output_tokens}"
+         max_out={max_output_tokens}, seed={}",
+        request.sampling.seed
     );
 
     let mut session = take_warm_session(entry, model_id)?;
@@ -809,7 +810,8 @@ fn handle_generate_stream(
 
     let elapsed_ms = started.elapsed().as_millis() as u64;
     log::info!(
-        "[mlx-worker] stream done: {output_token_count} tokens in {elapsed_ms}ms = {:.1} t/s",
+        "[mlx-worker] stream done: {output_token_count} tokens in {elapsed_ms}ms = {:.1} t/s, \
+         finish_reason={finish_reason}",
         if elapsed_ms == 0 {
             0.0
         } else {
@@ -873,12 +875,13 @@ fn effective_stop_sequences(model_id: &str, requested: Option<Vec<String>>) -> V
     stops
 }
 
-fn effective_max_output_tokens(model_id: &str, requested: Option<u32>) -> u32 {
-    let max_output_tokens = requested.unwrap_or(DEFAULT_MLX_MAX_OUTPUT_TOKENS).max(1);
-    if is_diffusion_gemma_family(model_id) {
-        return max_output_tokens.min(DIFFUSION_GEMMA_CHAT_MAX_OUTPUT_TOKENS);
-    }
-    max_output_tokens
+fn effective_max_output_tokens(requested: Option<u32>) -> u32 {
+    // AX Engine owns model-family-specific scheduling. In particular,
+    // DiffusionGemma's canvas size is an internal block size, not a response
+    // limit: the engine drains a completed block and generates another while
+    // request budget remains. Preserve the caller's budget so long-form and
+    // multi-block responses can complete normally.
+    requested.unwrap_or(DEFAULT_MLX_MAX_OUTPUT_TOKENS).max(1)
 }
 
 fn effective_sampling(model_id: &str, params: &GenerateParams) -> GenerateSampling {
@@ -890,7 +893,14 @@ fn effective_sampling(model_id: &str, params: &GenerateParams) -> GenerateSampli
             min_p: None,
             repetition_penalty: 1.1,
             repetition_context_size: None,
-            seed: 0,
+            // Diffusion generation starts from a random token canvas. Reusing
+            // seed 0 for every chat request makes a failed/early-EOS block
+            // recur almost verbatim when the user retries or says "continue".
+            // Keep explicit seeds reproducible, but give ordinary chat turns
+            // a fresh canvas.
+            seed: params
+                .seed
+                .unwrap_or_else(|| NEXT_DIFFUSION_REQUEST_SEED.fetch_add(1, Ordering::Relaxed)),
             deterministic: None,
             ignore_eos: false,
         };
@@ -1311,7 +1321,7 @@ mod tests {
     }
 
     #[test]
-    fn diffusiongemma_uses_gemma4_template_and_block_budget() {
+    fn diffusiongemma_uses_gemma4_template_and_preserves_request_budget() {
         let prompt = format_prompt(
             &[user_msg("Hello")],
             "mlx-community/diffusiongemma-26B-A4B-it-4bit",
@@ -1331,14 +1341,16 @@ mod tests {
         assert!(!stops.contains(&"<|channel>".to_string()));
         assert!(!stops.contains(&"<channel|>".to_string()));
 
+        let requested_budget = 4096;
         assert_eq!(
-            effective_max_output_tokens("mlx-community/diffusiongemma-26B-A4B-it-4bit", Some(4096)),
-            DIFFUSION_GEMMA_CHAT_MAX_OUTPUT_TOKENS
+            effective_max_output_tokens(Some(requested_budget)),
+            requested_budget
         );
         assert_eq!(
-            effective_max_output_tokens("mlx-community/diffusiongemma-26B-A4B-it-4bit", Some(64)),
-            64
+            effective_max_output_tokens(None),
+            DEFAULT_MLX_MAX_OUTPUT_TOKENS
         );
+        assert_eq!(effective_max_output_tokens(Some(0)), 1);
 
         let sampling = effective_sampling(
             "mlx-community/diffusiongemma-26B-A4B-it-4bit",
@@ -1356,7 +1368,20 @@ mod tests {
         assert_eq!(sampling.top_p, 1.0);
         assert_eq!(sampling.top_k, 0);
         assert_eq!(sampling.repetition_penalty, 1.1);
-        assert_eq!(sampling.seed, 0);
+        assert_eq!(sampling.seed, 42);
+
+        let default_params = GenerateParams::default();
+        let first_seed = effective_sampling(
+            "mlx-community/diffusiongemma-26B-A4B-it-4bit",
+            &default_params,
+        )
+        .seed;
+        let second_seed = effective_sampling(
+            "mlx-community/diffusiongemma-26B-A4B-it-4bit",
+            &default_params,
+        )
+        .seed;
+        assert_ne!(first_seed, second_seed);
     }
 
     #[test]

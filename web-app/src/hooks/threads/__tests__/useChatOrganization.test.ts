@@ -45,6 +45,17 @@ vi.mock('@/hooks/threads/useThreads', () => ({
 
 import { useChatOrganization, useChatOrganizationStore } from '../useChatOrganization'
 
+async function renderHydratedOrganizationHook() {
+  const hook = renderHook(() => useChatOrganization())
+  // Flush the mount-time organization request before a synchronous store
+  // action ends the test. Otherwise its resolved state update can escape the
+  // test's act() boundary and make assertions race with hydration.
+  await act(async () => {
+    await Promise.resolve()
+  })
+  return hook
+}
+
 describe('useChatOrganization', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -218,7 +229,7 @@ describe('useChatOrganization', () => {
     expect(result.current.activeTagId).toBeNull()
   })
 
-  it('assignFolder writes thread.metadata.folderId through updateThread', () => {
+  it('assignFolder writes thread.metadata.folderId through updateThread', async () => {
     mockThreads = {
       'thread-1': {
         id: 'thread-1',
@@ -227,7 +238,7 @@ describe('useChatOrganization', () => {
         metadata: { other: 'keep' },
       } as Thread,
     }
-    const { result } = renderHook(() => useChatOrganization())
+    const { result } = await renderHydratedOrganizationHook()
 
     act(() => {
       result.current.assignFolder('thread-1', 'folder-1')
@@ -238,7 +249,7 @@ describe('useChatOrganization', () => {
     })
   })
 
-  it('assignFolder with null clears the folder', () => {
+  it('assignFolder with null clears the folder', async () => {
     mockThreads = {
       'thread-1': {
         id: 'thread-1',
@@ -247,7 +258,7 @@ describe('useChatOrganization', () => {
         metadata: { folderId: 'folder-1' },
       } as Thread,
     }
-    const { result } = renderHook(() => useChatOrganization())
+    const { result } = await renderHydratedOrganizationHook()
 
     act(() => {
       result.current.assignFolder('thread-1', null)
@@ -258,8 +269,8 @@ describe('useChatOrganization', () => {
     })
   })
 
-  it('assignFolder ignores unknown threads', () => {
-    const { result } = renderHook(() => useChatOrganization())
+  it('assignFolder ignores unknown threads', async () => {
+    const { result } = await renderHydratedOrganizationHook()
 
     act(() => {
       result.current.assignFolder('missing', 'folder-1')
@@ -268,7 +279,7 @@ describe('useChatOrganization', () => {
     expect(mockUpdateThread).not.toHaveBeenCalled()
   })
 
-  it('setThreadTags writes thread.metadata.tagIds and clears on empty', () => {
+  it('setThreadTags writes thread.metadata.tagIds and clears on empty', async () => {
     mockThreads = {
       'thread-1': {
         id: 'thread-1',
@@ -277,7 +288,7 @@ describe('useChatOrganization', () => {
         metadata: {},
       } as Thread,
     }
-    const { result } = renderHook(() => useChatOrganization())
+    const { result } = await renderHydratedOrganizationHook()
 
     act(() => {
       result.current.setThreadTags('thread-1', ['tag-1', 'tag-2'])
@@ -294,8 +305,8 @@ describe('useChatOrganization', () => {
     })
   })
 
-  it('toggleFolderCollapsed toggles ids in the collapsed list', () => {
-    const { result } = renderHook(() => useChatOrganization())
+  it('toggleFolderCollapsed toggles ids in the collapsed list', async () => {
+    const { result } = await renderHydratedOrganizationHook()
 
     act(() => {
       result.current.toggleFolderCollapsed('folder-1')
@@ -308,8 +319,8 @@ describe('useChatOrganization', () => {
     expect(result.current.collapsedFolderIds).toEqual([])
   })
 
-  it('setActiveTagId sets and clears the single-select filter', () => {
-    const { result } = renderHook(() => useChatOrganization())
+  it('setActiveTagId sets and clears the single-select filter', async () => {
+    const { result } = await renderHydratedOrganizationHook()
 
     act(() => {
       result.current.setActiveTagId('tag-1')

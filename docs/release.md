@@ -68,6 +68,25 @@ minisign -Vm AX.Studio_2.0.0_aarch64.dmg \
   -x AX.Studio_2.0.0_aarch64.dmg.minisig
 ```
 
+For local release signing, the repository defaults to these Minisign files:
+
+```text
+~/signkey/ax.minisign.key -> ax.sec
+~/signkey/ax.pub
+```
+
+Keep `ax.sec` private with mode `0600`. Set `MINISIGN_PASSWORD` in the release
+environment for unattended signing. When it is absent on macOS, the signer
+looks up service `ax-minisign`, account `ax-release`, then falls back to
+Minisign's terminal prompt. Store the password with:
+
+```bash
+security add-generic-password -U -s ax-minisign -a ax-release -w
+```
+
+The local Tauri build uses the same private/public key pair for updater
+artifacts when updater signing is enabled.
+
 ## Release Download Policy
 
 Use `gh release download` for release assets inside GitHub Actions. It handles

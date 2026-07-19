@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ModelFactory } from '../model-factory'
 import type { ProviderObject } from '@ax-studio/core'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import { createMlxIpcFetch } from '../mlx-ipc-fetch'
+import {
+  createAxEngineMetadataExtractor,
+  createMlxIpcFetch,
+} from '../mlx-ipc-fetch'
 
 // Mock the Tauri invoke function
 vi.mock('@tauri-apps/api/core', () => ({
@@ -18,6 +21,10 @@ vi.mock('@ai-sdk/openai-compatible', () => ({
 
 vi.mock('../mlx-ipc-fetch', () => ({
   createMlxIpcFetch: vi.fn(() => vi.fn()),
+  createAxEngineMetadataExtractor: vi.fn(() => ({
+    extractMetadata: vi.fn(),
+    createStreamExtractor: vi.fn(),
+  })),
 }))
 
 vi.mock('@ai-sdk/anthropic', () => ({
@@ -266,6 +273,7 @@ describe('ModelFactory', () => {
       await ModelFactory.createModel('mlx-community/Qwen3.6-27B-4bit', provider)
 
       expect(createMlxIpcFetch).toHaveBeenCalledTimes(1)
+      expect(createAxEngineMetadataExtractor).toHaveBeenCalledTimes(1)
       expect(createOpenAICompatible).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'ax-engine',
@@ -273,6 +281,7 @@ describe('ModelFactory', () => {
           headers: expect.objectContaining({
             'X-Ax-Provider': 'ax-engine',
           }),
+          metadataExtractor: expect.any(Object),
         })
       )
       const openAICompatible = vi.mocked(createOpenAICompatible).mock.results[0]

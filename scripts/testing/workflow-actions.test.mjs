@@ -98,6 +98,27 @@ describe('GitHub Actions dependency boundaries', () => {
     expect(releaseWorkflow).toContain('FC40F1109912C025E751E804AA9BD1538A2D12EF')
     expect(releaseWorkflow).toContain('--verify-only')
     expect(releaseWorkflow).toContain('docs/ax-studio.minisign.pub')
+    expect(releaseWorkflow).toContain('artifacts/ax-minisign.pub')
+    expect(releaseWorkflow).toContain('cmp docs/ax-studio.minisign.pub artifacts/ax-minisign.pub')
+    expect(releaseWorkflow).toContain('signkey/ax.minisign.key')
+    expect(releaseWorkflow).toContain('signkey/ax.pub')
+    expect(releaseWorkflow).not.toContain('signkey/ax-studio.minisign.key')
+    expect(releaseWorkflow).not.toContain('signkey/ax-studio.minisign.pub')
+  })
+
+  it('refuses to mutate a published release', () => {
+    const releaseWorkflow = fs.readFileSync(
+      path.join(workflowsDirectory, 'ax-studio-tauri-build.yaml'),
+      'utf8',
+    )
+
+    expect(releaseWorkflow).toContain(
+      'Release $TAG is already published; refusing to replace verified assets.',
+    )
+    expect(releaseWorkflow).toContain(
+      'Release $TAG is no longer a draft; refusing to publish or mutate it.',
+    )
+    expect(releaseWorkflow).not.toContain('continuing to replace assets in place')
   })
 
   it('requires and verifies the Homebrew stable release path', () => {
@@ -115,6 +136,8 @@ describe('GitHub Actions dependency boundaries', () => {
     expect(releaseWorkflow).toContain('brew audit --cask --strict')
     expect(releaseWorkflow).toContain('brew install --cask defai-digital/ax-studio/ax-studio')
     expect(releaseWorkflow).toContain('spctl --assess --type execute')
+    expect(releaseWorkflow).toContain('release.dmg.minisig')
+    expect(releaseWorkflow).toContain('minisign -V -p docs/ax-studio.minisign.pub')
     expect(caskWriter).not.toContain('xattr')
   })
 

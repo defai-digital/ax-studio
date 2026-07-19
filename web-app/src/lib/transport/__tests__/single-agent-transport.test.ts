@@ -196,6 +196,144 @@ describe('executeSingleAgentStream', () => {
     })
   })
 
+  it('uses native AX Engine elapsed time instead of diffusion block-drain time', async () => {
+    await executeSingleAgentStream(
+      makeConfig({
+        model: {
+          modelId: 'mlx-community/diffusiongemma-26B-A4B-it-4bit',
+        } as unknown as LanguageModel,
+      })
+    )
+    const opts = mockStreamText.getCapturedOptions() as Record<string, unknown>
+    const messageMetadata = opts.messageMetadata as (p: {
+      part: unknown
+    }) => unknown
+
+    messageMetadata({
+      part: {
+        type: 'text-delta',
+        text: '這段文字',
+      },
+    })
+    messageMetadata({
+      part: {
+        type: 'finish-step',
+        providerMetadata: {
+          axEngine: {
+            elapsedMs: 8218,
+            outputTokenCount: 27,
+            tokensPerSecond: 27 / 8.218,
+            generationKind: 'block_diffusion',
+          },
+        },
+      },
+    })
+    const result = messageMetadata({
+      part: {
+        type: 'finish',
+        totalUsage: { inputTokens: 5482, outputTokens: 27, totalTokens: 5509 },
+        finishReason: 'stop',
+      },
+    })
+
+    expect(result).toMatchObject({
+      tokenSpeed: {
+        tokenSpeed: 3.3,
+        tokenCount: 27,
+        durationMs: 8218,
+      },
+    })
+  })
+
+  it('accumulates native diffusion metrics across tool-call steps', async () => {
+    await executeSingleAgentStream(
+      makeConfig({
+        model: {
+          modelId: 'mlx-community/diffusiongemma-26B-A4B-it-4bit',
+        } as unknown as LanguageModel,
+      })
+    )
+    const opts = mockStreamText.getCapturedOptions() as Record<string, unknown>
+    const messageMetadata = opts.messageMetadata as (p: {
+      part: unknown
+    }) => unknown
+
+    for (const metrics of [
+      { elapsedMs: 8000, outputTokenCount: 20, tokensPerSecond: 2.5 },
+      { elapsedMs: 2000, outputTokenCount: 10, tokensPerSecond: 5 },
+    ]) {
+      messageMetadata({
+        part: {
+          type: 'finish-step',
+          providerMetadata: {
+            axEngine: {
+              ...metrics,
+              generationKind: 'block_diffusion',
+            },
+          },
+        },
+      })
+    }
+
+    const result = messageMetadata({
+      part: {
+        type: 'finish',
+        totalUsage: { inputTokens: 100, outputTokens: 30, totalTokens: 130 },
+        finishReason: 'stop',
+      },
+    })
+
+    expect(result).toMatchObject({
+      tokenSpeed: {
+        tokenSpeed: 3,
+        tokenCount: 30,
+        durationMs: 10000,
+      },
+    })
+  })
+
+  it('does not apply native total elapsed time to autoregressive models', async () => {
+    await executeSingleAgentStream(
+      makeConfig({
+        model: {
+          modelId: 'ax-local/Qwen3.6-27B-MTP',
+        } as unknown as LanguageModel,
+      })
+    )
+    const opts = mockStreamText.getCapturedOptions() as Record<string, unknown>
+    const messageMetadata = opts.messageMetadata as (p: {
+      part: unknown
+    }) => unknown
+
+    messageMetadata({
+      part: {
+        type: 'finish-step',
+        providerMetadata: {
+          axEngine: {
+            elapsedMs: 9000,
+            tokensPerSecond: 1,
+            generationKind: 'autoregressive',
+          },
+        },
+      },
+    })
+    const result = messageMetadata({
+      part: {
+        type: 'finish',
+        totalUsage: { inputTokens: 10, outputTokens: 9, totalTokens: 19 },
+        finishReason: 'stop',
+      },
+    })
+
+    expect(result).toMatchObject({
+      tokenSpeed: {
+        tokenSpeed: 0,
+        tokenCount: 9,
+        durationMs: 0,
+      },
+    })
+  })
+
   it('onError callback returns error message string', async () => {
     const consoleErrorSpy = vi
       .spyOn(console, 'error')

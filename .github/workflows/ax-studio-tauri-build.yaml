@@ -104,10 +104,8 @@ jobs:
             if [ "$is_draft" = "true" ]; then
               gh release edit "$TAG" --draft=true --prerelease=false --repo "$GITHUB_REPOSITORY"
             else
-              # Keep the published release online while rebuilding assets for
-              # the same tag. Later upload steps use --clobber, and the final
-              # Homebrew step updates the tap to the new DMG checksum.
-              echo "::notice::Release $TAG is already published; continuing to replace assets in place."
+              echo "::error::Release $TAG is already published; refusing to replace verified assets."
+              exit 1
             fi
           else
             gh release create "$TAG" --title "$VERSION" --draft --generate-notes --repo "$GITHUB_REPOSITORY"
@@ -365,8 +363,18 @@ jobs:
           AX_STUDIO_MINISIGN_SECRET_KEY_B64: ${{ secrets.AX_STUDIO_MINISIGN_SECRET_KEY_B64 }}
           AX_STUDIO_MINISIGN_PUBLIC_KEY: ${{ secrets.AX_STUDIO_MINISIGN_PUBLIC_KEY }}
         run: |
-          printf '%s' "$AX_STUDIO_MINISIGN_SECRET_KEY_B64" | base64 --decode > signkey/ax-studio.minisign.key
-          printf '%s\n' "$AX_STUDIO_MINISIGN_PUBLIC_KEY" > signkey/ax-studio.minisign.pub
+          set -euo pipefail
+          printf '%s' "$AX_STUDIO_MINISIGN_SECRET_KEY_B64" | base64 --decode > signkey/ax.minisign.key
+          chmod 700 signkey
+          chmod 600 signkey/ax.minisign.key
+          if [[ "$AX_STUDIO_MINISIGN_PUBLIC_KEY" == untrusted* ]]; then
+            printf '%s\n' "$AX_STUDIO_MINISIGN_PUBLIC_KEY" > signkey/ax.pub
+          else
+            {
+              echo "untrusted comment: AX shared minisign public key"
+              echo "$AX_STUDIO_MINISIGN_PUBLIC_KEY"
+            } > signkey/ax.pub
+          fi
           # Sign whatever the download step actually fetched: optional assets
           # (e.g. AX Studio.app.tar.gz without an updater key) may be absent,
           # and a hard-coded list would fail the whole release on them.
@@ -378,13 +386,18 @@ jobs:
             esac
           done
           node scripts/release/minisign-artifacts.mjs --key-dir signkey "${files[@]}"
+          cp docs/ax-studio.minisign.pub artifacts/ax-minisign.pub
 
       - name: Upload minisign signatures
         if: ${{ env.HAS_MINISIGN_KEY == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "v${{ needs.get-update-version.outputs.new_version }}" artifacts/*.minisig --clobber --repo "$GITHUB_REPOSITORY"
+          gh release upload "v${{ needs.get-update-version.outputs.new_version }}" \
+            artifacts/*.minisig \
+            artifacts/ax-minisign.pub \
+            --clobber \
+            --repo "$GITHUB_REPOSITORY"
 
   verify-release-assets:
     needs: [get-update-version, sign-release-assets]
@@ -426,6 +439,7 @@ jobs:
           rm -rf artifacts
           mkdir artifacts
           gh release download "$TAG" --dir artifacts --repo "$GITHUB_REPOSITORY"
+          cmp docs/ax-studio.minisign.pub artifacts/ax-minisign.pub
           files=()
           for signature in artifacts/*.minisig; do
             artifact="${signature%.minisig}"
@@ -449,7 +463,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: v${{ needs.get-update-version.outputs.new_version }}
-        run: gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY"
+        run: |
+          set -euo pipefail
+          is_draft=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
+          if [ "$is_draft" != "true" ]; then
+            echo "::error::Release $TAG is no longer a draft; refusing to publish or mutate it."
+            exit 1
+          fi
+          gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY"
 
   update-homebrew-tap:
     needs: [get-update-version, publish-release]
@@ -475,6 +496,9 @@ jobs:
         env:
           VERSION: ${{ needs.get-update-version.outputs.new_version }}
         run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y minisign
           # Assets can take a moment to propagate right after publish; retry
           # instead of stranding Homebrew users on the previous version.
           curl --fail --location --no-progress-meter \
@@ -483,6 +507,13 @@ jobs:
             --proto '=https' --proto-redir '=https' \
             --output release.dmg \
             "https://github.com/defai-digital/ax-studio/releases/download/v${VERSION}/AX.Studio_${VERSION}_aarch64.dmg"
+          curl --fail --location --no-progress-meter \
+            --retry 6 --retry-all-errors --retry-delay 10 \
+            --connect-timeout 15 --max-time 600 --remove-on-error \
+            --proto '=https' --proto-redir '=https' \
+            --output release.dmg.minisig \
+            "https://github.com/defai-digital/ax-studio/releases/download/v${VERSION}/AX.Studio_${VERSION}_aarch64.dmg.minisig"
+          minisign -V -p docs/ax-studio.minisign.pub -m release.dmg -x release.dmg.minisig
           echo "DMG_SHA256=$(sha256sum release.dmg | awk '{print $1}')" >> "$GITHUB_ENV"
 
       - name: Push updated cask to homebrew tap

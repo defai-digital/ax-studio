@@ -11,7 +11,11 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: mocks.invoke,
 }))
 
-import { createMlxIpcFetch } from '../mlx-ipc-fetch'
+import {
+  createAxEngineMetadataExtractor,
+  createMlxIpcFetch,
+  isDiffusionGemmaModelId,
+} from '../mlx-ipc-fetch'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -95,6 +99,74 @@ describe('createMlxIpcFetch', () => {
 
     done.resolve()
     await reader.cancel()
+  })
+
+  it('preserves native AX Engine elapsed time for diffusion speed metadata', async () => {
+    mocks.invoke.mockImplementation(async (command: string, args: any) => {
+      if (command === 'mlx_load_model') return undefined
+      if (command === 'mlx_chat_stream') {
+        args.onEvent.onmessage({
+          type: 'start',
+          model_id: 'mlx-community/diffusiongemma-26B-A4B-it-4bit',
+          prompt_token_count: 5482,
+        })
+        args.onEvent.onmessage({ type: 'delta', text: '短答' })
+        args.onEvent.onmessage({
+          type: 'done',
+          prompt_token_count: 5482,
+          output_token_count: 27,
+          finish_reason: 'stop',
+          elapsed_ms: 8218,
+        })
+        return undefined
+      }
+      throw new Error(`unexpected command ${command}`)
+    })
+
+    const fetchFn = createMlxIpcFetch()
+    const response = await fetchFn('http://localhost/v1/chat/completions', {
+      method: 'POST',
+      body: JSON.stringify({
+        model: 'mlx-community/diffusiongemma-26B-A4B-it-4bit',
+        stream: true,
+        messages: [{ role: 'user', content: 'translate' }],
+      }),
+    })
+    const sse = await response.text()
+    const chunks = sse
+      .split('\n')
+      .filter((line) => line.startsWith('data: {'))
+      .map((line) => JSON.parse(line.slice('data: '.length)))
+    const finalChunk = chunks.find(
+      (chunk) => chunk.ax_engine_metrics != null
+    )
+
+    expect(finalChunk).toMatchObject({
+      ax_engine_metrics: {
+        elapsed_ms: 8218,
+        output_token_count: 27,
+        generation_kind: 'block_diffusion',
+      },
+    })
+
+    const streamExtractor =
+      createAxEngineMetadataExtractor().createStreamExtractor()
+    for (const chunk of chunks) streamExtractor.processChunk(chunk)
+    expect(streamExtractor.buildMetadata()).toMatchObject({
+      axEngine: {
+        elapsedMs: 8218,
+        outputTokenCount: 27,
+        tokensPerSecond: 27 / 8.218,
+        generationKind: 'block_diffusion',
+      },
+    })
+  })
+
+  it('recognizes all supported DiffusionGemma model-id separators', () => {
+    expect(isDiffusionGemmaModelId('org/diffusiongemma-model')).toBe(true)
+    expect(isDiffusionGemmaModelId('org/diffusion-gemma-model')).toBe(true)
+    expect(isDiffusionGemmaModelId('org/diffusion_gemma-model')).toBe(true)
+    expect(isDiffusionGemmaModelId('org/gemma-4-model')).toBe(false)
   })
 
   it('maps OpenAI chat params onto mlx_chat_completion IPC args', async () => {
