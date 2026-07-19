@@ -7,8 +7,6 @@
 //! remains available (fail open for manual/DMG installs).
 
 use std::path::Path;
-#[cfg(any(test, target_os = "macos"))]
-use std::path::PathBuf;
 
 /// Install channel reported to the frontend.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,7 +59,7 @@ fn detect_macos_channel(exe: &Path) -> InstallChannel {
 
 /// Collect the original path, canonical path, and parent chain for matching.
 #[cfg(target_os = "macos")]
-fn path_candidates(exe: &Path) -> Vec<PathBuf> {
+fn path_candidates(exe: &Path) -> Vec<std::path::PathBuf> {
     let mut out = Vec::new();
     out.push(exe.to_path_buf());
     if let Ok(canonical) = exe.canonicalize() {
