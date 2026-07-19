@@ -8,7 +8,7 @@ const repoRoot = path.resolve(import.meta.dirname, '..', '..')
 const signer = path.join(repoRoot, 'scripts', 'release', 'minisign-artifacts.mjs')
 const temporaryDirectories = []
 const sharedPublicKey = readFileSync(
-  path.join(repoRoot, 'docs', 'release', 'ax-studio.minisign.pub'),
+  path.join(repoRoot, 'docs', 'release', 'ax.minisign.pub'),
   'utf8',
 )
 const realMinisignAvailable = spawnSync('minisign', ['-v'], {

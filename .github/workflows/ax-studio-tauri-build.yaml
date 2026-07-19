@@ -408,7 +408,7 @@ jobs:
             esac
           done
           node scripts/release/minisign-artifacts.mjs --key-dir signkey "${files[@]}"
-          cp docs/release/ax-studio.minisign.pub artifacts/ax-minisign.pub
+          cp docs/release/ax.minisign.pub artifacts/ax-minisign.pub
 
       - name: Upload minisign signatures
         if: ${{ env.HAS_MINISIGN_KEY == 'true' }}
@@ -461,7 +461,7 @@ jobs:
           rm -rf artifacts
           mkdir artifacts
           gh release download "$TAG" --dir artifacts --repo "$GITHUB_REPOSITORY"
-          cmp docs/release/ax-studio.minisign.pub artifacts/ax-minisign.pub
+          cmp docs/release/ax.minisign.pub artifacts/ax-minisign.pub
           files=()
           for signature in artifacts/*.minisig; do
             artifact="${signature%.minisig}"
@@ -471,7 +471,7 @@ jobs:
           test "${#files[@]}" -gt 0
           node scripts/release/minisign-artifacts.mjs \
             --verify-only \
-            --public-key docs/release/ax-studio.minisign.pub \
+            --public-key docs/release/ax.minisign.pub \
             "${files[@]}"
 
   publish-release:
@@ -535,7 +535,7 @@ jobs:
             --proto '=https' --proto-redir '=https' \
             --output release.dmg.minisig \
             "https://github.com/defai-digital/ax-studio/releases/download/v${VERSION}/AX.Studio_${VERSION}_aarch64.dmg.minisig"
-          minisign -V -p docs/release/ax-studio.minisign.pub -m release.dmg -x release.dmg.minisig
+          minisign -V -p docs/release/ax.minisign.pub -m release.dmg -x release.dmg.minisig
           echo "DMG_SHA256=$(sha256sum release.dmg | awk '{print $1}')" >> "$GITHUB_ENV"
 
       - name: Push updated cask to homebrew tap

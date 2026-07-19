@@ -72,7 +72,7 @@ const pinnedPublicKey = path.resolve(
   repoRoot,
   expandHome(
     args.get('pinned-public-key')
-      ?? fileURLToPath(new URL('../../docs/release/ax-studio.minisign.pub', import.meta.url)),
+      ?? fileURLToPath(new URL('../../docs/release/ax.minisign.pub', import.meta.url)),
   ),
 )
 const keychainService = args.get('password-keychain-service') ?? 'ax-minisign'
