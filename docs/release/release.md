@@ -34,7 +34,10 @@ Windows x64 and ARM64 artifacts are part of the supported desktop release.
 Authenticode signing is fail-closed: all Azure signing secrets are required,
 and missing credentials, signing failures, certificate mismatches, or invalid
 Authenticode signatures must fail the release. The release workflow must never
-publish unsigned Windows artifacts:
+publish unsigned Windows artifacts. Full Windows practice (Key Vault vs local
+PFX, verify script, cert renewal, winget/Store ladder) is in
+[`windows-signing.md`](windows-signing.md). Public cert pin metadata is
+[`windows-cert.json`](windows-cert.json).
 
 | Secret | Purpose |
 | --- | --- |
@@ -45,9 +48,11 @@ publish unsigned Windows artifacts:
 | `AZURE_CERT_NAME` | Azure Key Vault certificate name. |
 
 The Azure service principal must be scoped to the signing vault and have
-certificate `Get`, secret `Get`, and key `Sign` permissions. Public Windows
-artifacts must be independently verified after upload and show
-`DEFAI Private Limited` as the valid Authenticode signer.
+certificate `Get`, secret `Get`, and key `Sign` permissions. Prefer
+non-exportable keys and avoid routine PFX download. Public Windows artifacts
+must be independently verified after upload with
+`scripts/release/verify-windows-authenticode.ps1` (DEFAI subject, pinned
+thumbprint from `windows-cert.json`, trusted timestamp).
 
 Stable releases require detached Minisign signatures. Configure all three
 secrets before publishing:
@@ -57,6 +62,15 @@ secrets before publishing:
 | `AX_STUDIO_MINISIGN_SECRET_KEY_B64` | Base64-encoded minisign secret key. |
 | `AX_STUDIO_MINISIGN_PUBLIC_KEY` | Minisign public key for verification. |
 | `AX_STUDIO_MINISIGN_PASSWORD` | Password for the encrypted Minisign secret key. |
+
+Optional winget community submission (does not block the release when unset):
+
+| Secret | Purpose |
+| --- | --- |
+| `WINGET_PKGS_TOKEN` | Token that can push to your `winget-pkgs` fork and open PRs on `microsoft/winget-pkgs`. |
+| `WINGET_PKGS_FORK` | Fork slug, for example `defai-digital/winget-pkgs`. |
+
+See [`../../packaging/winget/README.md`](../../packaging/winget/README.md).
 
 The matching public verification key is committed at
 [`docs/release/ax-minisign.pub`](ax-minisign.pub). Verify a downloaded
@@ -170,13 +184,32 @@ builds macOS Apple Silicon, Windows x64, and Windows ARM64 in parallel. It then:
 1. Downloads the draft DMG and verifies the stapled notarization ticket,
    Developer ID signer, team ID, and Gatekeeper assessment.
 2. Downloads every Windows executable and verifies its Authenticode status,
-   DEFAI certificate thumbprint, subject, and trusted timestamp.
-3. Writes and validates `latest.json` for Tauri updater delivery.
-4. Signs every release asset with Minisign, downloads the signatures again,
-   and verifies them with `docs/release/ax-minisign.pub`.
-5. Publishes the GitHub release only after all artifact checks pass.
-6. Updates `defai-digital/homebrew-ax-studio`, installs the new cask on a clean
+   DEFAI certificate thumbprint, subject, and trusted timestamp via
+   `scripts/release/verify-windows-authenticode.ps1`.
+3. Prepares `SHA256SUMS-windows.txt` for the setup installers, uploads it to the
+   draft release, and stores winget manifests as a workflow artifact.
+4. Writes and validates `latest.json` for Tauri updater delivery.
+5. Signs every release asset with Minisign (including `SHA256SUMS-windows.txt`),
+   downloads the signatures again, and verifies them with
+   `docs/release/ax-minisign.pub`.
+6. Publishes the GitHub release only after all artifact checks pass.
+7. Updates `defai-digital/homebrew-ax-studio`, installs the new cask on a clean
    macOS runner, and verifies the installed application with Gatekeeper.
+8. Optionally opens a `microsoft/winget-pkgs` PR when `WINGET_PKGS_TOKEN` and
+   `WINGET_PKGS_FORK` are configured (installer URLs must already be public).
+
+### macOS dual update channels
+
+Stable macOS ships one signed aarch64 app through two channels:
+
+| Channel | Artifact | End-user update |
+| --- | --- | --- |
+| Homebrew cask | Notarized DMG + SHA256 | `brew upgrade --cask ax-studio` |
+| In-app Tauri updater | Signed `.app.tar.gz` via `latest.json` | Settings / update dialog |
+
+Homebrew-managed installs are detected at runtime; the app **does not** perform
+in-app binary replace for those installs (prefer brew upgrade). Manual/DMG
+installs keep the full in-app updater.
 
 Do not manually publish the draft when any required job fails. Fix the cause and
 rerun the tagged release workflow so that the complete chain remains auditable.

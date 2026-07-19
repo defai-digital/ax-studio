@@ -23,6 +23,10 @@ pre-install
 !docs/legal/**
 !docs/release/**
 !docs/architecture/**
+!packaging/winget/README.md
+
+# Generated winget manifests (regenerate with prepare-windows-distribution)
+packaging/winget/manifests/
 src-tauri/resources/lib
 src-tauri/icons
 !src-tauri/icons/icon.png

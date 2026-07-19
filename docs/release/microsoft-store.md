@@ -5,6 +5,10 @@ the current release to MSIX without separately validating local model
 sidecars, MCP child processes, extensions, file access, the local API server,
 and updater behavior.
 
+Authenticode policy, Key Vault signing, and certificate pins are documented in
+[`windows-signing.md`](windows-signing.md) and
+[`windows-cert.json`](windows-cert.json).
+
 ## Partner Center prerequisites
 
 - Use a verified Company account for **DEFAI Private Limited**.

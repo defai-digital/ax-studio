@@ -3,7 +3,7 @@ param(
   [ValidateScript({ Test-Path $_ -PathType Leaf })]
   [string]$InstallerPath,
 
-  [string]$ExpectedPublisher = 'CN=DEFAI Private Limited',
+  [string]$ExpectedPublisher = '',
 
   [int]$LaunchSeconds = 8
 )
@@ -14,11 +14,31 @@ $uninstallEntry = $null
 $installDirectory = $null
 $launchedProcess = $null
 
+function Get-WindowsCertMetadata {
+  $candidates = @(
+    (Join-Path $PSScriptRoot '..\..\docs\release\windows-cert.json'),
+    (Join-Path (Get-Location) 'docs\release\windows-cert.json')
+  )
+  foreach ($candidate in $candidates) {
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+      return Get-Content -LiteralPath $candidate -Raw -Encoding UTF8 | ConvertFrom-Json
+    }
+  }
+  throw 'windows-cert.json not found (expected docs/release/windows-cert.json).'
+}
+
+$certMetadata = Get-WindowsCertMetadata
+if ([string]::IsNullOrWhiteSpace($ExpectedPublisher)) {
+  $ExpectedPublisher = [string]$certMetadata.subjectPattern
+}
+$expectedThumbprint = ([string]$certMetadata.thumbprintSha1).Replace(' ', '').Replace(':', '').ToUpperInvariant()
+
 function Assert-AuthenticodeSignature {
   param(
     [Parameter(Mandatory = $true)][string]$Path,
     [string]$PublisherPattern = '',
-    [switch]$RequireTimestamp
+    [switch]$RequireTimestamp,
+    [switch]$RequirePinnedThumbprint
   )
 
   $signature = Get-AuthenticodeSignature -FilePath $Path
@@ -27,6 +47,12 @@ function Assert-AuthenticodeSignature {
   }
   if ($PublisherPattern -and $signature.SignerCertificate.Subject -notmatch [regex]::Escape($PublisherPattern)) {
     throw "Unexpected signer for ${Path}: $($signature.SignerCertificate.Subject)"
+  }
+  if ($RequirePinnedThumbprint) {
+    $actual = $signature.SignerCertificate.Thumbprint.Replace(' ', '').Replace(':', '').ToUpperInvariant()
+    if ($actual -ne $expectedThumbprint) {
+      throw "Unexpected signer certificate for ${Path}. Expected $expectedThumbprint, got $actual"
+    }
   }
   if ($RequireTimestamp -and $null -eq $signature.TimeStamperCertificate) {
     throw "Missing trusted timestamp for ${Path}."
@@ -100,7 +126,7 @@ function Invoke-AxStudioUninstall {
   }
 }
 
-Assert-AuthenticodeSignature -Path $installer -PublisherPattern $ExpectedPublisher -RequireTimestamp
+Assert-AuthenticodeSignature -Path $installer -PublisherPattern $ExpectedPublisher -RequireTimestamp -RequirePinnedThumbprint
 
 try {
   $install = Start-Process -FilePath $installer -ArgumentList '/S' -Wait -PassThru
@@ -144,7 +170,7 @@ try {
   if ($null -eq $mainExecutable) {
     throw "AX Studio executable was not found in $installDirectory."
   }
-  Assert-AuthenticodeSignature -Path $mainExecutable.FullName -PublisherPattern $ExpectedPublisher -RequireTimestamp
+  Assert-AuthenticodeSignature -Path $mainExecutable.FullName -PublisherPattern $ExpectedPublisher -RequireTimestamp -RequirePinnedThumbprint
 
   $launchedProcess = Start-Process -FilePath $mainExecutable.FullName -PassThru
   Start-Sleep -Seconds $LaunchSeconds

@@ -75,18 +75,26 @@ describe('GitHub Actions dependency boundaries', () => {
 
   it('keeps Windows signing fail-closed and verifies the expected certificate', () => {
     const signScript = fs.readFileSync(path.join(repoRoot, 'src-tauri', 'sign.ps1'), 'utf8')
+    const certMetadata = JSON.parse(
+      fs.readFileSync(path.join(repoRoot, 'docs', 'release', 'windows-cert.json'), 'utf8'),
+    )
 
     expect(signScript).not.toContain('Skipping Windows code signing')
     expect(signScript).toContain('-fd sha256')
     expect(signScript).toContain('-td sha256')
     expect(signScript).toContain('Get-AuthenticodeSignature')
-    expect(signScript).toContain('FC40F1109912C025E751E804AA9BD1538A2D12EF')
+    expect(signScript).toContain('windows-cert.json')
     expect(signScript).toContain('$LASTEXITCODE')
+    expect(certMetadata.thumbprintSha1).toMatch(/^[0-9A-Fa-f]{40}$/)
   })
 
   it('independently verifies uploaded Apple, Authenticode, and Minisign signatures', () => {
     const releaseWorkflow = fs.readFileSync(
       path.join(workflowsDirectory, 'ax-studio-tauri-build.yaml'),
+      'utf8',
+    )
+    const verifyScript = fs.readFileSync(
+      path.join(repoRoot, 'scripts', 'release', 'verify-windows-authenticode.ps1'),
       'utf8',
     )
 
@@ -103,8 +111,14 @@ describe('GitHub Actions dependency boundaries', () => {
     expect(releaseWorkflow).toContain('vtool -show-build "$MLX_LIBRARY"')
     expect(releaseWorkflow).toContain("grep -E '^Timestamp='")
     expect(releaseWorkflow).toContain('verify-windows-authenticode:')
-    expect(releaseWorkflow).toContain('Get-AuthenticodeSignature')
-    expect(releaseWorkflow).toContain('FC40F1109912C025E751E804AA9BD1538A2D12EF')
+    expect(releaseWorkflow).toContain('verify-windows-authenticode.ps1')
+    expect(releaseWorkflow).toContain('-RequireVersion')
+    expect(releaseWorkflow).toContain('prepare-windows-distribution:')
+    expect(releaseWorkflow).toContain('prepare-windows-distribution.mjs')
+    expect(releaseWorkflow).toContain('SHA256SUMS-windows.txt')
+    expect(releaseWorkflow).toContain('ax-studio-winget-manifests-')
+    expect(verifyScript).toContain('Get-AuthenticodeSignature')
+    expect(verifyScript).toContain('windows-cert.json')
     expect(releaseWorkflow).toContain('--verify-only')
     expect(releaseWorkflow).toContain('docs/release/ax-minisign.pub')
     expect(releaseWorkflow).toContain('artifacts/ax-minisign.pub')
@@ -178,6 +192,28 @@ describe('GitHub Actions dependency boundaries', () => {
     expect(releaseWorkflow).toContain('minisign -V -p docs/release/ax-minisign.pub')
     expect(caskWriter).not.toContain('xattr')
     expect(caskWriter).not.toContain('brew install mlx')
+    expect(caskWriter).toContain('auto_updates false')
+    expect(caskWriter).toContain('brew upgrade --cask ax-studio')
+  })
+
+  it('optionally submits winget manifests after publish', () => {
+    const releaseWorkflow = fs.readFileSync(
+      path.join(workflowsDirectory, 'ax-studio-tauri-build.yaml'),
+      'utf8',
+    )
+    expect(releaseWorkflow).toContain('submit-winget-manifest:')
+    expect(releaseWorkflow).toContain('submit-winget-pr.mjs')
+    expect(releaseWorkflow).toContain('WINGET_PKGS_TOKEN')
+    expect(releaseWorkflow).toContain('publish-release')
+  })
+
+  it('runs a scheduled Windows cert expiry workflow', () => {
+    const expiryWorkflow = fs.readFileSync(
+      path.join(workflowsDirectory, 'windows-cert-expiry.yml'),
+      'utf8',
+    )
+    expect(expiryWorkflow).toContain('validate-release-config.mjs')
+    expect(expiryWorkflow).toContain('schedule:')
   })
 
   it('keeps release downloads authenticated, observable, and retryable', () => {

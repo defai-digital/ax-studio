@@ -3,6 +3,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { WINDOWS_SIGN_COMMAND } from './set-version.mjs'
+import {
+  CERT_EXPIRY_TIERS,
+  applyWindowsCertExpiryPolicy,
+} from './windows-cert-expiry.mjs'
 
 const repoRoot = path.resolve(import.meta.dirname, '..', '..')
 const stablePlatforms = ['darwin-aarch64', 'windows-x86_64', 'windows-aarch64']
@@ -39,6 +43,7 @@ function assertArrayEqual(name, actual, expected) {
 
 const tauriConfig = readJson('src-tauri/tauri.conf.json')
 const macosConfig = readJson('src-tauri/tauri.macos.conf.json')
+const windowsConfig = readJson('src-tauri/tauri.windows.conf.json')
 const latestTemplate = readJson('src-tauri/latest.json.template')
 const mlxVersion = fs.readFileSync(path.join(repoRoot, 'mlx.version'), 'utf8').trim()
 
@@ -68,6 +73,20 @@ if (!/^\d+\.\d+\.\d+$/.test(mlxVersion)) {
 
 if (macosConfig.bundle?.macOS?.minimumSystemVersion !== '15.0') {
   fail('src-tauri/tauri.macos.conf.json must target macOS 15.0 to match the Homebrew cask')
+}
+
+assertArrayEqual(
+  'src-tauri/tauri.windows.conf.json bundle.targets',
+  windowsConfig.bundle?.targets ?? [],
+  ['nsis'],
+)
+if (windowsConfig.bundle?.windows?.nsis?.installMode !== 'perMachine') {
+  fail(
+    'src-tauri/tauri.windows.conf.json must set bundle.windows.nsis.installMode to perMachine (matches winget Scope: machine)',
+  )
+}
+if (windowsConfig.bundle?.windows?.nsis?.oneClick !== false) {
+  fail('src-tauri/tauri.windows.conf.json must set bundle.windows.nsis.oneClick to false')
 }
 
 assertArrayEqual(
@@ -167,6 +186,99 @@ if (WINDOWS_SIGN_COMMAND !== expectedWindowsSignCommand) {
   fail(
     `scripts/release/set-version.mjs Windows sign command must be ${expectedWindowsSignCommand}, got ${WINDOWS_SIGN_COMMAND}`,
   )
+}
+
+const windowsCertPath = 'docs/release/windows-cert.json'
+if (!fs.existsSync(path.join(repoRoot, windowsCertPath))) {
+  fail(`${windowsCertPath} is required for Windows Authenticode pin metadata`)
+} else {
+  const windowsCert = readJson(windowsCertPath)
+  const requiredCertFields = [
+    'publisher',
+    'subjectPattern',
+    'thumbprintSha1',
+    'notAfter',
+    'timestampUrl',
+    'productUrl',
+    'description',
+    'packageIdentifier',
+  ]
+  for (const field of requiredCertFields) {
+    if (typeof windowsCert[field] !== 'string' || !windowsCert[field].trim()) {
+      fail(`${windowsCertPath} must define non-empty string field ${field}`)
+    }
+  }
+  if (!/^[0-9A-Fa-f]{40}$/.test(windowsCert.thumbprintSha1)) {
+    fail(`${windowsCertPath} thumbprintSha1 must be a 40-character hex SHA-1`)
+  }
+  if (windowsCert.publisher !== tauriConfig.bundle?.publisher) {
+    fail(
+      `${windowsCertPath} publisher must match tauri.conf.json bundle.publisher (${tauriConfig.bundle?.publisher})`,
+    )
+  }
+  if (!windowsCert.subjectPattern.includes(windowsCert.publisher)) {
+    fail(`${windowsCertPath} subjectPattern must include publisher`)
+  }
+
+  const expiry = applyWindowsCertExpiryPolicy(windowsCert.notAfter)
+  if (
+    expiry.tier === CERT_EXPIRY_TIERS.EXPIRED
+    || expiry.tier === CERT_EXPIRY_TIERS.FAIL_SOON
+  ) {
+    fail(`${windowsCertPath}: ${expiry.message}`)
+  }
+
+  const signScript = fs.readFileSync(path.join(repoRoot, 'src-tauri/sign.ps1'), 'utf8')
+  if (!signScript.includes('windows-cert.json')) {
+    fail('src-tauri/sign.ps1 must load docs/release/windows-cert.json')
+  }
+  if (!signScript.includes('Get-AuthenticodeSignature')) {
+    fail('src-tauri/sign.ps1 must verify Authenticode after signing')
+  }
+
+  const verifyScriptPath = 'scripts/release/verify-windows-authenticode.ps1'
+  if (!fs.existsSync(path.join(repoRoot, verifyScriptPath))) {
+    fail(`${verifyScriptPath} is required for release Authenticode gates`)
+  } else {
+    const verifyScript = fs.readFileSync(path.join(repoRoot, verifyScriptPath), 'utf8')
+    if (!verifyScript.includes('windows-cert.json')) {
+      fail(`${verifyScriptPath} must load docs/release/windows-cert.json`)
+    }
+    if (!verifyScript.includes('RequireVersion')) {
+      fail(`${verifyScriptPath} must support RequireVersion for release CI`)
+    }
+  }
+
+  const releaseWorkflow = fs.readFileSync(
+    path.join(repoRoot, '.github/workflows/ax-studio-tauri-build.yaml'),
+    'utf8',
+  )
+  if (!releaseWorkflow.includes('verify-windows-authenticode.ps1')) {
+    fail('release workflow must call scripts/release/verify-windows-authenticode.ps1')
+  }
+  if (!releaseWorkflow.includes('prepare-windows-distribution.mjs')) {
+    fail('release workflow must prepare Windows SHA256SUMS and winget manifests')
+  }
+  if (!releaseWorkflow.includes('SHA256SUMS-windows.txt')) {
+    fail('release workflow must publish SHA256SUMS-windows.txt')
+  }
+
+  const storeWorkflow = fs.readFileSync(
+    path.join(repoRoot, '.github/workflows/ax-studio-microsoft-store-build.yml'),
+    'utf8',
+  )
+  if (!storeWorkflow.includes('verify-windows-authenticode.ps1')) {
+    fail('Microsoft Store workflow must call scripts/release/verify-windows-authenticode.ps1')
+  }
+
+  for (const scriptPath of [
+    'scripts/release/write-winget-manifest.mjs',
+    'scripts/release/prepare-windows-distribution.mjs',
+  ]) {
+    if (!fs.existsSync(path.join(repoRoot, scriptPath))) {
+      fail(`${scriptPath} is required for Windows distribution packaging`)
+    }
+  }
 }
 
 if (process.exitCode) {

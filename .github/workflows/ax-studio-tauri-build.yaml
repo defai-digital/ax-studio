@@ -223,6 +223,11 @@ jobs:
       # Draft release assets require write access to be downloaded.
       contents: write
     steps:
+      - name: Getting the repo
+        uses: actions/checkout@v7
+        with:
+          ref: refs/tags/v${{ needs.get-update-version.outputs.new_version }}
+
       - name: Download Windows release executables
         shell: pwsh
         env:
@@ -240,42 +245,73 @@ jobs:
         env:
           VERSION: ${{ needs.get-update-version.outputs.new_version }}
         run: |
-          $expectedThumbprint = 'FC40F1109912C025E751E804AA9BD1538A2D12EF'
-          $requiredInstallers = @(
-            "AX.Studio_$env:VERSION`_x64-setup.exe",
-            "AX.Studio_$env:VERSION`_arm64-setup.exe"
-          )
+          ./scripts/release/verify-windows-authenticode.ps1 `
+            -Path artifacts `
+            -RequireVersion $env:VERSION
 
-          foreach ($installer in $requiredInstallers) {
-            if (-not (Test-Path (Join-Path artifacts $installer))) {
-              throw "Required signed Windows installer is missing: $installer"
-            }
-          }
+  prepare-windows-distribution:
+    needs: [get-update-version, verify-windows-authenticode]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      # Draft release assets require write access to download and upload.
+      contents: write
+    steps:
+      - name: Getting the repo
+        uses: actions/checkout@v7
+        with:
+          ref: refs/tags/v${{ needs.get-update-version.outputs.new_version }}
 
-          $executables = @(Get-ChildItem artifacts -Filter '*.exe' -File)
-          if ($executables.Count -lt 2) {
-            throw 'Expected at least the x64 and ARM64 Windows installers.'
-          }
+      - name: Installing node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
 
-          foreach ($executable in $executables) {
-            $signature = Get-AuthenticodeSignature -FilePath $executable.FullName
-            if ($signature.Status -ne 'Valid') {
-              throw "Invalid Authenticode signature for $($executable.Name): $($signature.StatusMessage)"
-            }
-            if ($signature.SignerCertificate.Thumbprint -ne $expectedThumbprint) {
-              throw "Unexpected signer certificate for $($executable.Name): $($signature.SignerCertificate.Thumbprint)"
-            }
-            if ($signature.SignerCertificate.Subject -notmatch 'CN=DEFAI Private Limited') {
-              throw "Unexpected signer subject for $($executable.Name): $($signature.SignerCertificate.Subject)"
-            }
-            if ($null -eq $signature.TimeStamperCertificate) {
-              throw "Missing trusted timestamp for $($executable.Name)"
-            }
-            Write-Host "Verified $($executable.Name): $($signature.SignerCertificate.Subject)"
-          }
+      - name: Download Windows setup installers
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          gh release download "v${VERSION}" \
+            --dir artifacts \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "AX.Studio_${VERSION}_x64-setup.exe" \
+            --pattern "AX.Studio_${VERSION}_arm64-setup.exe"
+
+      - name: Prepare SHA256SUMS and winget manifests
+        env:
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+        run: |
+          set -euo pipefail
+          node scripts/release/prepare-windows-distribution.mjs \
+            --version "$VERSION" \
+            --artifacts-dir artifacts \
+            --out-dir windows-distribution \
+            --release-date "$(date -u +%F)"
+
+      - name: Upload Windows distribution package to draft release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+        run: |
+          set -euo pipefail
+          gh release upload "v${VERSION}" \
+            windows-distribution/SHA256SUMS-windows.txt \
+            --clobber \
+            --repo "$GITHUB_REPOSITORY"
+
+      - name: Upload winget manifest artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ax-studio-winget-manifests-${{ needs.get-update-version.outputs.new_version }}
+          retention-days: 90
+          if-no-files-found: error
+          path: windows-distribution/**
 
   sync-temp-to-latest:
-    needs: [create-draft-release, get-update-version, build-macos, build-windows, build-windows-arm64, verify-macos-release-signature, verify-windows-authenticode]
+    needs: [create-draft-release, get-update-version, build-macos, build-windows, build-windows-arm64, verify-macos-release-signature, verify-windows-authenticode, prepare-windows-distribution]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -376,6 +412,7 @@ jobs:
             --pattern "AX.Studio_${{ needs.get-update-version.outputs.new_version }}_x64-portable.exe" \
             --pattern "AX.Studio_${{ needs.get-update-version.outputs.new_version }}_arm64-setup.exe" \
             --pattern "AX.Studio_${{ needs.get-update-version.outputs.new_version }}_arm64-portable.exe" \
+            --pattern "SHA256SUMS-windows.txt" \
             --pattern "latest.json"
 
       - name: Sign release assets with minisign
@@ -493,6 +530,73 @@ jobs:
             exit 1
           fi
           gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY"
+
+  # Optional: open/update a PR on microsoft/winget-pkgs after the release is
+  # public (installer URLs must resolve). Requires WINGET_PKGS_TOKEN + fork.
+  # Does not fail the stable release when the token is unset.
+  submit-winget-manifest:
+    needs: [get-update-version, publish-release, verify-release-assets]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      HAS_WINGET_TOKEN: ${{ secrets.WINGET_PKGS_TOKEN != '' }}
+    steps:
+      - name: Skip when WINGET_PKGS_TOKEN is unset
+        if: ${{ env.HAS_WINGET_TOKEN != 'true' }}
+        run: |
+          echo "::notice::WINGET_PKGS_TOKEN not configured; skipping winget-pkgs PR."
+          echo "Generate manifests remain available as the ax-studio-winget-manifests-* artifact."
+
+      - name: Getting the repo
+        if: ${{ env.HAS_WINGET_TOKEN == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          ref: refs/tags/v${{ needs.get-update-version.outputs.new_version }}
+
+      - name: Installing node
+        if: ${{ env.HAS_WINGET_TOKEN == 'true' }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Download public setup installers and prepare manifests
+        if: ${{ env.HAS_WINGET_TOKEN == 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          gh release download "v${VERSION}" \
+            --dir artifacts \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "AX.Studio_${VERSION}_x64-setup.exe" \
+            --pattern "AX.Studio_${VERSION}_arm64-setup.exe"
+          node scripts/release/prepare-windows-distribution.mjs \
+            --version "$VERSION" \
+            --artifacts-dir artifacts \
+            --out-dir windows-distribution \
+            --release-date "$(date -u +%F)"
+
+      - name: Submit winget-pkgs PR
+        if: ${{ env.HAS_WINGET_TOKEN == 'true' }}
+        env:
+          WINGET_PKGS_TOKEN: ${{ secrets.WINGET_PKGS_TOKEN }}
+          WINGET_PKGS_FORK: ${{ secrets.WINGET_PKGS_FORK }}
+          VERSION: ${{ needs.get-update-version.outputs.new_version }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WINGET_PKGS_FORK:-}" ]; then
+            echo "::error::WINGET_PKGS_FORK secret (owner/winget-pkgs) is required when WINGET_PKGS_TOKEN is set."
+            exit 1
+          fi
+          node scripts/release/submit-winget-pr.mjs \
+            --version "$VERSION" \
+            --manifests-dir windows-distribution/winget \
+            --fork "$WINGET_PKGS_FORK" \
+            --repo "$GITHUB_REPOSITORY"
 
   update-homebrew-tap:
     needs: [get-update-version, publish-release]

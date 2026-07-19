@@ -45,9 +45,17 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 | Platform | Status | Install path |
 | --- | --- | --- |
 | macOS Apple Silicon | Active support | Homebrew cask or GitHub release assets |
-| Windows x64 | Active support | GitHub release installer |
-| Windows ARM64 | API/URL client | GitHub release installer |
+| Windows x64 | Active support | Signed GitHub NSIS installer (winget planned) |
+| Windows ARM64 | API/URL client | Signed GitHub NSIS installer (winget planned) |
 | Linux desktop | Not active support | Source builds only, without release/SLA expectations |
+
+### System requirements
+
+| Platform | Requirements |
+| --- | --- |
+| macOS | **15.0 (Sequoia) or later**, **Apple Silicon** only |
+| Windows x64 | Windows 10/11; WebView2 (bootstrapper included in setup) |
+| Windows ARM64 | Windows 11 ARM; WebView2; local inference is API/URL-first |
 
 Linux users should use AX Serving, OpenAI-compatible endpoints, or source builds
 when they need AX workflows outside the supported desktop release targets.
@@ -101,8 +109,14 @@ page:
 
 - Windows on Intel or AMD: use `AX.Studio_*_x64-setup.exe`.
 - Windows on ARM: use `AX.Studio_*_arm64-setup.exe`.
-- The setup installer is recommended for normal use. Portable builds are for
-  users who specifically need a no-install package.
+- The **NSIS setup installer** is the only supported public install path
+  (per-machine). Portable builds are optional for users who need a no-install
+  package. MSI is not built or published.
+- Silent / IT install (elevated): run the setup with `/S`. Example:
+
+```powershell
+.\AX.Studio_2.2.0_x64-setup.exe /S
+```
 
 Windows executables are Authenticode-signed by **DEFAI Private Limited** and
 timestamped by DigiCert. Before installing, open
@@ -114,12 +128,28 @@ from an unofficial source.
 To verify a download with PowerShell:
 
 ```powershell
-Get-AuthenticodeSignature ".\AX.Studio_*_x64-setup.exe" |
-  Format-List Status, StatusMessage, SignerCertificate
+$sig = Get-AuthenticodeSignature ".\AX.Studio_*_x64-setup.exe"
+$sig | Format-List Status, StatusMessage, SignerCertificate
+if ($sig.Status -ne "Valid" -or $sig.SignerCertificate.Subject -notmatch "DEFAI Private Limited") {
+  throw "Refusing to install: invalid Authenticode signature"
+}
 ```
 
 The expected status is `Valid`, and the certificate subject must identify
-`DEFAI Private Limited`.
+`DEFAI Private Limited`. Operators who have the repository can run the shared
+gate used by release CI:
+
+```powershell
+.\scripts\release\verify-windows-authenticode.ps1 -Path .\AX.Studio_*_x64-setup.exe
+```
+
+Windows signing policy, certificate pins, and cert renewal are documented in
+[`docs/release/windows-signing.md`](docs/release/windows-signing.md).
+
+**winget:** a package id of `DEFAI.AXStudio` is reserved in-repo for future
+publication to the winget community repository. Do not run `winget install`
+for AX Studio until that package is published and linked here. See
+[`packaging/winget/README.md`](packaging/winget/README.md).
 
 #### Manual download
 
@@ -246,18 +276,33 @@ useful, and relevant logs.
 
 ### Update
 
-**macOS Homebrew**
+Pick **one** update channel based on how you installed. Mixing Homebrew and the
+in-app updater can leave the install out of sync with the package manager.
+
+**macOS Homebrew** (if you installed with `brew install --cask`)
 
 ```bash
 brew upgrade --cask ax-studio
 ```
 
+**macOS manual / DMG**
+
+Use **Settings → Check for updates** (in-app updater) or download the latest
+signed DMG from
+[GitHub Releases](https://github.com/defai-digital/ax-studio/releases/latest).
+
 **Windows**
 
-Download and run the latest x64 or ARM64 installer from
+Prefer **Settings → Check for updates** when available, or download and run the
+latest x64 or ARM64 NSIS installer from
 [GitHub Releases](https://github.com/defai-digital/ax-studio/releases/latest).
 Confirm that its Authenticode signature is valid and identifies
-`DEFAI Private Limited` before installing the update.
+`DEFAI Private Limited` before installing the update. When present, compare the
+file hash to `SHA256SUMS-windows.txt` on the same release. IT silent upgrade:
+
+```powershell
+.\AX.Studio_*_x64-setup.exe /S
+```
 
 ### Uninstall
 

@@ -3,6 +3,8 @@
  * Types for application update operations
  */
 
+export type InstallChannel = 'homebrew' | 'standalone' | 'unknown'
+
 export interface UpdateInfo {
   version: string
   date?: string
@@ -20,6 +22,7 @@ export interface UpdateProgressEvent {
 
 export interface UpdaterService {
   check(): Promise<UpdateInfo | null>
+  getInstallChannel(): Promise<InstallChannel>
   downloadAndInstallWithProgress(
     progressCallback: (event: UpdateProgressEvent) => void
   ): Promise<void>

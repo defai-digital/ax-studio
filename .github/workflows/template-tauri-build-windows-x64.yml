@@ -65,8 +65,6 @@ on:
         value: ${{ jobs.build-windows-x64.outputs.WIN_SIG }}
       FILE_NAME:
         value: ${{ jobs.build-windows-x64.outputs.FILE_NAME }}
-      MSI_FILE_NAME:
-        value: ${{ jobs.build-windows-x64.outputs.MSI_FILE_NAME }}
       PORTABLE_FILE_NAME:
         value: ${{ jobs.build-windows-x64.outputs.PORTABLE_FILE_NAME }}
 
@@ -80,7 +78,6 @@ jobs:
     outputs:
       WIN_SIG: ${{ steps.metadata.outputs.WIN_SIG }}
       FILE_NAME: ${{ steps.metadata.outputs.FILE_NAME }}
-      MSI_FILE_NAME: ${{ steps.metadata.outputs.MSI_FILE_NAME }}
       PORTABLE_FILE_NAME: ${{ steps.metadata.outputs.PORTABLE_FILE_NAME }}
     permissions:
       contents: write
@@ -193,14 +190,6 @@ jobs:
           if-no-files-found: error
           path: |
             ./src-tauri/target/release/bundle/nsis/*.exe
-      - name: Upload MSI Installer Artifact
-        if: ${{ !inputs.microsoft_store }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: ax-studio-windows-msi-${{ inputs.new_version }}
-          retention-days: 14
-          path: |
-            ./src-tauri/target/release/bundle/msi/*.msi
 
       - name: Upload Portable Artifact
         if: ${{ !inputs.microsoft_store }}
@@ -224,12 +213,10 @@ jobs:
           if [ "${{ inputs.channel }}" != "stable" ]; then
             RAW_FILE_NAME="AX Studio-${{ inputs.channel }}_${VERSION}_x64-setup.exe"
             FILE_NAME="AX.Studio-${{ inputs.channel }}_${VERSION}_x64-setup.exe"
-            MSI_FILE="AX Studio-${{ inputs.channel }}_${VERSION}_x64_en-US.msi"
             PORTABLE_FILE_NAME="AX.Studio-${{ inputs.channel }}_${VERSION}_x64-portable.exe"
           else
             RAW_FILE_NAME="AX Studio_${VERSION}_x64-setup.exe"
             FILE_NAME="AX.Studio_${VERSION}_x64-setup.exe"
-            MSI_FILE="AX Studio_${VERSION}_x64_en-US.msi"
             PORTABLE_FILE_NAME="AX.Studio_${VERSION}_x64-portable.exe"
           fi
 
@@ -257,7 +244,6 @@ jobs:
           {
             echo "WIN_SIG=${WIN_SIG}"
             echo "FILE_NAME=${FILE_NAME}"
-            echo "MSI_FILE_NAME=${MSI_FILE}"
             echo "PORTABLE_FILE_NAME=${PORTABLE_FILE_NAME}"
           } >> "$GITHUB_OUTPUT"
         id: metadata

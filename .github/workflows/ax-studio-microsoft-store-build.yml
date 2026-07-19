@@ -113,19 +113,7 @@ jobs:
       - name: Verify installer signatures
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          foreach ($installer in Get-ChildItem store-artifacts -Filter '*.exe' -File) {
-            $signature = Get-AuthenticodeSignature $installer.FullName
-            if ($signature.Status -ne 'Valid') {
-              throw "Invalid Authenticode signature for $($installer.Name): $($signature.StatusMessage)"
-            }
-            if ($signature.SignerCertificate.Subject -notmatch 'CN=DEFAI Private Limited') {
-              throw "Unexpected signer for $($installer.Name): $($signature.SignerCertificate.Subject)"
-            }
-            if ($null -eq $signature.TimeStamperCertificate) {
-              throw "Missing trusted timestamp for $($installer.Name)."
-            }
-          }
+          ./scripts/release/verify-windows-authenticode.ps1 -Path store-artifacts
 
       - name: Smoke-test silent x64 install, launch, PE signatures, and uninstall
         shell: pwsh

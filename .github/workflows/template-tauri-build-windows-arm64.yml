@@ -232,6 +232,16 @@ jobs:
             echo "PORTABLE_FILE_NAME=${PORTABLE_FILE_NAME}"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Upload NSIS Installer Artifact
+        if: ${{ !inputs.microsoft_store }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ax-studio-windows-arm64-exe-${{ inputs.new_version }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            ./src-tauri/target/aarch64-pc-windows-msvc/release/bundle/nsis/*.exe
+
       - name: Upload Microsoft Store NSIS artifact
         if: inputs.microsoft_store
         uses: actions/upload-artifact@v7

@@ -6,7 +6,33 @@ param (
 )
 
 $ErrorActionPreference = "Stop"
-$expectedThumbprint = "FC40F1109912C025E751E804AA9BD1538A2D12EF"
+
+function Get-WindowsCertMetadata {
+  $metadataPath = Join-Path $PSScriptRoot "..\docs\release\windows-cert.json"
+  if (-not (Test-Path -LiteralPath $metadataPath -PathType Leaf)) {
+    throw "Windows certificate metadata file is missing: $metadataPath"
+  }
+
+  $metadata = Get-Content -LiteralPath $metadataPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  foreach ($field in @("thumbprintSha1", "timestampUrl", "description", "productUrl")) {
+    if ([string]::IsNullOrWhiteSpace([string]$metadata.$field)) {
+      throw "windows-cert.json is missing required field: $field"
+    }
+  }
+
+  return $metadata
+}
+
+function Normalize-Thumbprint {
+  param([string]$Value)
+  return ($Value -replace "[\s:]", "").ToUpperInvariant()
+}
+
+$certMetadata = Get-WindowsCertMetadata
+$expectedThumbprint = Normalize-Thumbprint $certMetadata.thumbprintSha1
+$timestampUrl = [string]$certMetadata.timestampUrl
+$description = [string]$certMetadata.description
+$productUrl = [string]$certMetadata.productUrl
 
 $requiredEnv = @(
   "AZURE_KEY_VAULT_URI",
@@ -37,15 +63,15 @@ if (-not $azureSignTool) {
 
 & $azureSignTool.Source sign `
   -fd sha256 `
-  -tr http://timestamp.digicert.com `
+  -tr $timestampUrl `
   -td sha256 `
   -kvu $env:AZURE_KEY_VAULT_URI `
   -kvi $env:AZURE_CLIENT_ID `
   -kvt $env:AZURE_TENANT_ID `
   -kvs $env:AZURE_CLIENT_SECRET `
   -kvc $env:AZURE_CERT_NAME `
-  -d "AX Studio" `
-  -du "https://axstudio.ai" `
+  -d $description `
+  -du $productUrl `
   -v $Target
 
 if ($LASTEXITCODE -ne 0) {
@@ -57,7 +83,7 @@ if ($signature.Status -ne "Valid") {
   throw "Authenticode verification failed for $Target with status $($signature.Status)."
 }
 
-$actualThumbprint = $signature.SignerCertificate.Thumbprint.Replace(" ", "").ToUpperInvariant()
+$actualThumbprint = Normalize-Thumbprint $signature.SignerCertificate.Thumbprint
 if ($actualThumbprint -ne $expectedThumbprint) {
   throw "Unexpected Windows signing certificate for $Target. Expected $expectedThumbprint, got $actualThumbprint."
 }

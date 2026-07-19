@@ -93,7 +93,11 @@ vi.mock('../opener/tauri', () => ({
 
 vi.mock('../updater/tauri', () => ({
   TauriUpdaterService: vi.fn().mockImplementation(function () {
-    return {}
+    return {
+      check: async () => null,
+      getInstallChannel: async () => 'standalone' as const,
+      downloadAndInstallWithProgress: async () => {},
+    }
   }),
 }))
 

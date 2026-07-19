@@ -44,6 +44,7 @@ const requiredAssets = [
   `AX.Studio_${version}_x64-setup.exe`,
   `AX.Studio_${version}_arm64-setup.exe`,
   'latest.json',
+  'SHA256SUMS-windows.txt',
 ]
 const optionalAssets = [
   'AX.Studio.app.tar.gz',

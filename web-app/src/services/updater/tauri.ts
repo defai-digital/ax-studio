@@ -12,7 +12,12 @@
 import { check, Update } from '@tauri-apps/plugin-updater'
 import { invoke } from '@tauri-apps/api/core'
 import { load } from '@tauri-apps/plugin-store'
-import type { UpdateInfo, UpdateProgressEvent, UpdaterService } from './types'
+import type {
+  InstallChannel,
+  UpdateInfo,
+  UpdateProgressEvent,
+  UpdaterService,
+} from './types'
 
 const STORE_NAME = 'updater.json'
 const NONCE_SEED_KEY = 'nonce_seed'
@@ -58,6 +63,44 @@ async function getNonceSeed(): Promise<string> {
 export class TauriUpdaterService implements UpdaterService {
   private cachedInstallableUpdate: Update | null = null
   private installableCheckPromise: Promise<Update | null> | null = null
+  private cachedInstallChannel: InstallChannel | null = null
+  private installChannelPromise: Promise<InstallChannel> | null = null
+
+  /**
+   * Detect Homebrew vs standalone install. Defaults to standalone when unsure
+   * so manual/DMG installs keep the full in-app updater.
+   */
+  async getInstallChannel(): Promise<InstallChannel> {
+    if (this.cachedInstallChannel) return this.cachedInstallChannel
+    if (this.installChannelPromise) return this.installChannelPromise
+
+    this.installChannelPromise = (async () => {
+      try {
+        const channel = await invoke<string>('get_install_channel')
+        if (
+          channel === 'homebrew' ||
+          channel === 'standalone' ||
+          channel === 'unknown'
+        ) {
+          this.cachedInstallChannel = channel
+          return channel
+        }
+        this.cachedInstallChannel = 'standalone'
+        return 'standalone'
+      } catch (error) {
+        console.warn(
+          'Failed to resolve install channel; assuming standalone:',
+          error
+        )
+        this.cachedInstallChannel = 'standalone'
+        return 'standalone'
+      } finally {
+        this.installChannelPromise = null
+      }
+    })()
+
+    return this.installChannelPromise
+  }
 
   /**
    * Lazily fetch an installable Update via the Tauri plugin. Deduplicated so

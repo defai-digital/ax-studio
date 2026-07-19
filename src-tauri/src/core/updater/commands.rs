@@ -5,7 +5,17 @@
  * custom HMAC signing is applied only by the updater client when needed.
  */
 use super::custom_updater::{CustomUpdater, UpdateInfo};
+use super::install_channel::detect_install_channel;
 use tauri::{command, AppHandle};
+
+/// Return how this desktop build was installed (`homebrew` | `standalone` | `unknown`).
+///
+/// Used by the frontend to soft-gate in-app binary updates for Homebrew cask
+/// installs (prefer `brew upgrade --cask ax-studio`).
+#[command]
+pub fn get_install_channel() -> String {
+    detect_install_channel().as_str().to_string()
+}
 
 /// Check for updates using endpoints from tauri.conf.json.
 #[command]

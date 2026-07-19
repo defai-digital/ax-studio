@@ -110,6 +110,7 @@ macro_rules! desktop_handlers {
             crate::core::research::commands::scrape_url,
             // Custom updater commands (desktop only)
             crate::core::updater::commands::check_for_app_updates,
+            crate::core::updater::commands::get_install_channel,
             // In-process MLX (ax-engine-sdk) — macOS only
             #[cfg(target_os = "macos")]
             crate::core::mlx::commands::mlx_runtime_probe,

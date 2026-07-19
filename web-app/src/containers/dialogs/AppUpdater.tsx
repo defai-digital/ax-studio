@@ -15,8 +15,10 @@ export function DialogAppUpdater() {
   const { updateState, downloadAndInstallUpdate, setRemindMeLater } =
     useAppUpdater()
   const [showReleaseNotes, setShowReleaseNotes] = useState(false)
+  const isHomebrewInstall = updateState.installChannel === 'homebrew'
 
   const handleUpdate = () => {
+    if (isHomebrewInstall) return
     downloadAndInstallUpdate()
   }
 
@@ -71,8 +73,15 @@ export function DialogAppUpdater() {
                     })}
                   </div>
                   <div className="mt-1 text-muted-foreground font-normal mb-2">
-                    {t('updater:updateAvailable')}
+                    {isHomebrewInstall
+                      ? t('updater:homebrewUpdateAvailable')
+                      : t('updater:updateAvailable')}
                   </div>
+                  {isHomebrewInstall && (
+                    <code className="mt-1 mb-2 block rounded bg-muted px-2 py-1 text-xs font-mono">
+                      {t('updater:homebrewUpgradeCommand')}
+                    </code>
+                  )}
                 </div>
               </div>
             </div>
@@ -120,17 +129,21 @@ export function DialogAppUpdater() {
                     size="sm"
                     onClick={() => setRemindMeLater(true)}
                   >
-                    {t('updater:remindMeLater')}
+                    {isHomebrewInstall
+                      ? t('updater:homebrewDismiss')
+                      : t('updater:remindMeLater')}
                   </Button>
-                  <Button
-                    onClick={handleUpdate}
-                    disabled={updateState.isDownloading}
-                    size="sm"
-                  >
-                    {updateState.isDownloading
-                      ? t('updater:downloading')
-                      : t('updater:updateNow')}
-                  </Button>
+                  {!isHomebrewInstall && (
+                    <Button
+                      onClick={handleUpdate}
+                      disabled={updateState.isDownloading}
+                      size="sm"
+                    >
+                      {updateState.isDownloading
+                        ? t('updater:downloading')
+                        : t('updater:updateNow')}
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>

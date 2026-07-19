@@ -50,6 +50,25 @@ describe('TauriUpdaterService', () => {
     consoleInfoSpy.mockRestore()
   })
 
+  describe('getInstallChannel()', () => {
+    it('returns homebrew when the backend reports a cask install', async () => {
+      const service = await createService()
+      mocks.invoke.mockResolvedValue('homebrew')
+
+      await expect(service.getInstallChannel()).resolves.toBe('homebrew')
+      expect(mocks.invoke).toHaveBeenCalledWith('get_install_channel')
+    })
+
+    it('defaults to standalone when the backend fails', async () => {
+      const service = await createService()
+      mocks.invoke.mockRejectedValue(new Error('unavailable'))
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      await expect(service.getInstallChannel()).resolves.toBe('standalone')
+      warn.mockRestore()
+    })
+  })
+
   describe('check()', () => {
     it('returns null when the custom backend reports no update', async () => {
       const service = await createService()

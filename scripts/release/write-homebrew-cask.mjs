@@ -49,6 +49,9 @@ const cask = `cask "ax-studio" do
   depends_on arch: :arm64
   depends_on macos: :sequoia
 
+  # In-app updater is for manual/DMG installs only. Homebrew owns upgrades.
+  auto_updates false
+
   preflight do
     # Clears any pre-existing bundle (current or pre-rename "Ax-Studio.app" name) so
     # upgrades from untracked installs don't hit Homebrew's "already an App" guard.
@@ -69,6 +72,15 @@ const cask = `cask "ax-studio" do
     "~/Library/Preferences/ai.axstudio.app.plist",
     "~/Library/Saved Application State/ai.axstudio.app.savedState",
   ]
+
+  caveats <<~EOS
+    AX Studio also ships an in-app updater for manual DMG installs.
+    If you installed with Homebrew, prefer:
+
+      brew upgrade --cask ax-studio
+
+    Using the in-app "Update Now" action can desync the Homebrew cask.
+  EOS
 end
 `
 

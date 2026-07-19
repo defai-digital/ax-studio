@@ -1,7 +1,7 @@
 import { isDev } from '@/lib/utils'
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { events, AppEvent } from '@ax-studio/core'
-import type { UpdateInfo } from '@/services/updater/types'
+import type { InstallChannel, UpdateInfo } from '@/services/updater/types'
 import { SystemEvent } from '@/types/events'
 import { useServiceHub } from '@/hooks/useServiceHub'
 
@@ -13,6 +13,8 @@ export interface UpdateState {
   downloadedBytes: number
   totalBytes: number
   remindMeLater: boolean
+  /** Homebrew cask installs should not use in-app binary replace. */
+  installChannel: InstallChannel
 }
 
 export const useAppUpdater = () => {
@@ -26,6 +28,7 @@ export const useAppUpdater = () => {
     downloadedBytes: 0,
     totalBytes: 0,
     remindMeLater: false,
+    installChannel: 'standalone',
   })
 
   // Listen for app update state sync events
@@ -73,6 +76,17 @@ export const useAppUpdater = () => {
         if (!isDev()) {
           if (AUTO_UPDATER_DISABLED) {
             return null
+          }
+
+          try {
+            const channel = await serviceHub.updater().getInstallChannel()
+            if (!controller.signal.aborted) {
+              const channelState = { installChannel: channel }
+              setUpdateState((prev) => ({ ...prev, ...channelState }))
+              syncStateToOtherInstances(channelState)
+            }
+          } catch (channelError) {
+            console.warn('Failed to resolve install channel:', channelError)
           }
 
           const update = await serviceHub.updater().check()
@@ -159,6 +173,21 @@ export const useAppUpdater = () => {
     }
 
     if (!updateState.updateInfo) return
+
+    // Homebrew-managed installs must use `brew upgrade --cask ax-studio`.
+    // Replacing the app in place desyncs the cask from Caskroom.
+    let channel = updateState.installChannel
+    try {
+      channel = await serviceHub.updater().getInstallChannel()
+    } catch {
+      // keep state value
+    }
+    if (channel === 'homebrew') {
+      console.info(
+        'Skipping in-app install: Homebrew cask install detected. Use brew upgrade --cask ax-studio.'
+      )
+      return
+    }
 
     abortRef.current?.abort()
     const controller = new AbortController()
@@ -247,7 +276,7 @@ export const useAppUpdater = () => {
         message: error instanceof Error ? error.message : 'Unknown error',
       })
     }
-  }, [serviceHub, updateState.updateInfo])
+  }, [serviceHub, updateState.updateInfo, updateState.installChannel])
 
   return {
     updateState,

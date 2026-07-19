@@ -37,6 +37,8 @@ describe('Microsoft Store release boundary', () => {
     const smokeTest = read('scripts/release/test-microsoft-store-installer.ps1')
 
     expect(smokeTest).toContain('Get-AuthenticodeSignature')
+    expect(smokeTest).toContain('windows-cert.json')
+    expect(smokeTest).toContain('RequirePinnedThumbprint')
     expect(smokeTest).toContain("-ArgumentList '/S'")
     expect(smokeTest).toContain('Get-AxStudioUninstallEntry')
     expect(smokeTest).toContain('Invoke-AxStudioUninstall -Entry')
@@ -48,5 +50,11 @@ describe('Microsoft Store release boundary', () => {
     expect(workflow).not.toContain('--clobber')
     expect(workflow).toContain('AX.Studio_${VERSION}_x64-store-setup.exe')
     expect(workflow).toContain('AX.Studio_${VERSION}_arm64-store-setup.exe')
+  })
+
+  it('reuses the shared Authenticode verifier for Store installers', () => {
+    const workflow = read('.github/workflows/ax-studio-microsoft-store-build.yml')
+    expect(workflow).toContain('verify-windows-authenticode.ps1')
+    expect(workflow).toContain('-Path store-artifacts')
   })
 })

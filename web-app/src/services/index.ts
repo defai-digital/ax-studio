@@ -254,6 +254,7 @@ class PlatformServiceHub implements ServiceHub {
 
     this.updaterService = {
       check: async () => null,
+      getInstallChannel: async () => 'standalone' as const,
       downloadAndInstallWithProgress: async () => {},
     }
 

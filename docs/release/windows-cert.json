@@ -1,0 +1,14 @@
+{
+  "publisher": "DEFAI Private Limited",
+  "subjectPattern": "CN=DEFAI Private Limited",
+  "thumbprintSha1": "FC40F1109912C025E751E804AA9BD1538A2D12EF",
+  "notBefore": "2026-07-13T00:00:00Z",
+  "notAfter": "2027-07-12T23:59:59Z",
+  "issuerContains": "DigiCert Trusted G4 Code Signing",
+  "azureKeyVaultName": "keyvault-defai",
+  "azureCertificateName": "cert-defai",
+  "timestampUrl": "http://timestamp.digicert.com",
+  "productUrl": "https://axstudio.ai",
+  "description": "AX Studio",
+  "packageIdentifier": "DEFAI.AXStudio"
+}
