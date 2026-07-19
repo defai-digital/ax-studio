@@ -13,11 +13,22 @@ interface TokenSpeed {
   tokenSpeed: number
   tokenCount?: number
   durationMs?: number
+  generationTokenCount?: number
+  totalDurationMs?: number
+  timeToFirstTokenMs?: number
+  accelerationMode?: 'mtp' | 'mtp_fallback' | 'direct'
+  mtpAcceptanceRate?: number
 }
 
 interface TokenSpeedIndicatorProps {
   metadata?: Record<string, unknown>
   streaming?: boolean
+}
+
+function formatLatency(durationMs: number): string {
+  return durationMs < 1000
+    ? `${Math.round(durationMs)}ms`
+    : `${(durationMs / 1000).toFixed(1)}s`
 }
 
 export const TokenSpeedIndicator = memo(
@@ -31,10 +42,9 @@ export const TokenSpeedIndicator = memo(
     )
 
     // Fallback to persisted metadata when not streaming
-    const persistedTokenSpeed =
-      (metadata?.tokenSpeed as TokenSpeed)?.tokenSpeed || 0
-    const persistedTokenCount =
-      (metadata?.tokenSpeed as TokenSpeed)?.tokenCount || 0
+    const persistedMetrics = metadata?.tokenSpeed as TokenSpeed | undefined
+    const persistedTokenSpeed = persistedMetrics?.tokenSpeed || 0
+    const persistedTokenCount = persistedMetrics?.tokenCount || 0
     const usage = metadata?.usage as TokenUsage | undefined
 
     const nonStreamingAssistantParam =
@@ -64,12 +74,35 @@ export const TokenSpeedIndicator = memo(
 
     if (!shouldShow) return
 
+    const accelerationLabel = !streaming
+      ? persistedMetrics?.accelerationMode === 'mtp'
+        ? Number.isFinite(persistedMetrics.mtpAcceptanceRate)
+          ? `MTP ${Math.round((persistedMetrics.mtpAcceptanceRate ?? 0) * 100)}%`
+          : 'MTP'
+        : persistedMetrics?.accelerationMode === 'mtp_fallback'
+          ? 'MTP fallback'
+          : persistedMetrics?.accelerationMode === 'direct'
+            ? 'Direct'
+            : undefined
+      : undefined
+    const timeToFirstTokenLabel =
+      !streaming &&
+      persistedMetrics?.timeToFirstTokenMs != null &&
+      Number.isFinite(persistedMetrics.timeToFirstTokenMs) &&
+      persistedMetrics.timeToFirstTokenMs >= 0
+        ? `TTFT ${formatLatency(persistedMetrics.timeToFirstTokenMs)}`
+        : undefined
+
     return (
       <div className="flex items-center gap-1 text-[11px] text-muted-foreground/40">
         <Gauge size={12} />
         <span>{displaySpeed} t/s</span>
         {displayTokenCount > 0 && (
           <span>&middot; {displayTokenCount} tokens</span>
+        )}
+        {accelerationLabel && <span>&middot; {accelerationLabel}</span>}
+        {timeToFirstTokenLabel && (
+          <span>&middot; {timeToFirstTokenLabel}</span>
         )}
       </div>
     )

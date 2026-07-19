@@ -3,9 +3,12 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+const here = dirname(fileURLToPath(import.meta.url))
+const repoRoot = resolve(here, '..')
 const args = ['tauri', 'build', '--features', 'desktop']
 const explicitTarget = process.env.TAURI_BUILD_TARGET?.trim()
 const explicitConfig = process.env.TAURI_BUILD_CONFIG?.trim()
+let buildEnvironment = process.env
 
 if (explicitConfig) {
   args.push('--config', explicitConfig)
@@ -27,7 +30,55 @@ if (explicitTarget) {
 
 args.push(...process.argv.slice(2))
 
+if (process.platform === 'darwin') {
+  const macosConfig = JSON.parse(
+    readFileSync(join(repoRoot, 'src-tauri', 'tauri.macos.conf.json'), 'utf8'),
+  )
+  const minimumSystemVersion = macosConfig.bundle?.macOS?.minimumSystemVersion
+  if (typeof minimumSystemVersion !== 'string' || minimumSystemVersion.length === 0) {
+    console.error('[tauri-build] macOS minimumSystemVersion is not configured')
+    process.exit(1)
+  }
+  for (const variable of [
+    'MACOSX_DEPLOYMENT_TARGET',
+    'CMAKE_OSX_DEPLOYMENT_TARGET',
+  ]) {
+    const requestedDeploymentTarget = process.env[variable]?.trim()
+    if (
+      requestedDeploymentTarget
+      && requestedDeploymentTarget !== minimumSystemVersion
+    ) {
+      console.error(
+        `[tauri-build] ${variable} ${requestedDeploymentTarget} does not match configured ${minimumSystemVersion}`,
+      )
+      process.exit(1)
+    }
+  }
+  buildEnvironment = {
+    ...process.env,
+    CMAKE_OSX_DEPLOYMENT_TARGET: minimumSystemVersion,
+    MACOSX_DEPLOYMENT_TARGET: minimumSystemVersion,
+  }
+  console.log(
+    `[tauri-build] targeting macOS ${minimumSystemVersion} for native dependencies`,
+  )
+
+  const prepareMlx = spawnSync(
+    process.execPath,
+    [join(repoRoot, 'scripts', 'prepare-mlx-runtime.mjs')],
+    { stdio: 'inherit' },
+  )
+  if (prepareMlx.error) {
+    console.error(prepareMlx.error)
+    process.exit(1)
+  }
+  if ((prepareMlx.status ?? 1) !== 0) {
+    process.exit(prepareMlx.status ?? 1)
+  }
+}
+
 const result = spawnSync('yarn', args, {
+  env: buildEnvironment,
   stdio: 'inherit',
   shell: process.platform === 'win32',
 })
@@ -47,8 +98,6 @@ if ((result.status ?? 1) !== 0) {
 // tauri.conf.json. macOS 26's TCC silently denies events to the WKWebView
 // when these disagree, so the app appears to launch but ignores input.
 if (process.platform === 'darwin') {
-  const here = dirname(fileURLToPath(import.meta.url))
-  const repoRoot = resolve(here, '..')
   const tauriDir = join(repoRoot, 'src-tauri')
   const appleSigningIdentity =
     process.env.AX_STUDIO_APPLE_CODESIGN_IDENTITY?.trim() ||

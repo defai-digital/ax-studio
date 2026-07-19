@@ -61,6 +61,19 @@ fn generate_extension_hashes() {
     fs::write(&out_file, code).expect("Failed to write extension_hashes.rs");
 }
 
+fn build_mlx_runtime_shim() {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
+        return;
+    }
+
+    println!("cargo:rerun-if-changed=native/mlx_runtime.cpp");
+    cc::Build::new()
+        .cpp(true)
+        .file("native/mlx_runtime.cpp")
+        .flag_if_supported("-std=c++17")
+        .compile("ax_studio_mlx_runtime");
+}
+
 fn main() {
     // When createUpdaterArtifacts is enabled in tauri.conf.json, a signing public key is required
     // so the app can verify update bundle signatures. The CI only enables this when the key is
@@ -84,5 +97,6 @@ fn main() {
     }
 
     generate_extension_hashes();
+    build_mlx_runtime_shim();
     tauri_build::build()
 }

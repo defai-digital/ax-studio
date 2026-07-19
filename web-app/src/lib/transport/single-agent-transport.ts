@@ -145,9 +145,15 @@ export async function executeSingleAgentStream(
   })
 
   let tokensPerSecond = 0
-  let nativeElapsedMs = 0
-  let nativeOutputTokens = 0
-  let hasNativeBlockMetrics = false
+  let nativeGenerationDurationMs = 0
+  let nativeGenerationTokens = 0
+  let nativeTotalDurationMs = 0
+  let nativeTimeToFirstTokenMs: number | undefined
+  let nativeAccelerationMode: 'mtp' | 'mtp_fallback' | 'direct' | undefined
+  let nativeMtpDraftTokens = 0
+  let nativeMtpAcceptedTokens = 0
+  let nativeMtpDirectFallbackSteps = 0
+  let hasNativeGenerationMetrics = false
   let totalChars = 0
   let lastSpeedUpdate = 0
 
@@ -195,11 +201,95 @@ export async function executeSingleAgentStream(
           | undefined
         const hasBlockDiffusionMetrics =
           axEngineMetrics?.generationKind === 'block_diffusion'
-        // Native elapsed time includes the denoise phase and is therefore the
-        // authoritative rate for block diffusion. Keep the existing
-        // first-token timing for autoregressive models, whose native elapsed
-        // time also includes prefill and would change the displayed metric.
-        if (hasBlockDiffusionMetrics) {
+        const reportedGenerationDurationMs =
+          axEngineMetrics?.generationDurationMs
+        const reportedGenerationTokens =
+          axEngineMetrics?.generationTokenCount
+        const hasVersionedGenerationMetrics =
+          typeof reportedGenerationDurationMs === 'number' &&
+          Number.isFinite(reportedGenerationDurationMs) &&
+          reportedGenerationDurationMs >= 0 &&
+          typeof reportedGenerationTokens === 'number' &&
+          Number.isFinite(reportedGenerationTokens) &&
+          reportedGenerationTokens >= 0
+
+        // AX Engine measures the generation phase with a monotonic clock at
+        // the native stream boundary. Use that report for both autoregressive
+        // and block-diffusion models so Studio, Ollama-style eval metrics, and
+        // LM Studio-style generation speed share the same denominator.
+        if (hasVersionedGenerationMetrics) {
+          hasNativeGenerationMetrics = true
+          nativeGenerationDurationMs += reportedGenerationDurationMs
+          nativeGenerationTokens += reportedGenerationTokens
+
+          const reportedTotalDurationMs = axEngineMetrics?.totalDurationMs
+          nativeTotalDurationMs +=
+            typeof reportedTotalDurationMs === 'number' &&
+            Number.isFinite(reportedTotalDurationMs) &&
+            reportedTotalDurationMs >= 0
+              ? reportedTotalDurationMs
+              : reportedGenerationDurationMs
+
+          const reportedTimeToFirstTokenMs =
+            axEngineMetrics?.timeToFirstTokenMs
+          if (
+            nativeTimeToFirstTokenMs == null &&
+            typeof reportedTimeToFirstTokenMs === 'number' &&
+            Number.isFinite(reportedTimeToFirstTokenMs) &&
+            reportedTimeToFirstTokenMs >= 0
+          ) {
+            nativeTimeToFirstTokenMs = reportedTimeToFirstTokenMs
+          }
+
+          const reportedAccelerationMode = axEngineMetrics?.accelerationMode
+          if (reportedAccelerationMode === 'mtp') {
+            nativeAccelerationMode = 'mtp'
+          } else if (
+            reportedAccelerationMode === 'mtp_fallback' &&
+            nativeAccelerationMode !== 'mtp'
+          ) {
+            nativeAccelerationMode = 'mtp_fallback'
+          } else if (
+            reportedAccelerationMode === 'direct' &&
+            nativeAccelerationMode == null
+          ) {
+            nativeAccelerationMode = 'direct'
+          }
+
+          const reportedMtpDraftTokens = axEngineMetrics?.mtpDraftTokens
+          const reportedMtpAcceptedTokens = axEngineMetrics?.mtpAcceptedTokens
+          const reportedMtpDirectFallbackSteps =
+            axEngineMetrics?.mtpDirectFallbackSteps
+          if (
+            typeof reportedMtpDraftTokens === 'number' &&
+            Number.isFinite(reportedMtpDraftTokens) &&
+            reportedMtpDraftTokens >= 0
+          ) {
+            nativeMtpDraftTokens += reportedMtpDraftTokens
+          }
+          if (
+            typeof reportedMtpAcceptedTokens === 'number' &&
+            Number.isFinite(reportedMtpAcceptedTokens) &&
+            reportedMtpAcceptedTokens >= 0
+          ) {
+            nativeMtpAcceptedTokens += reportedMtpAcceptedTokens
+          }
+          if (
+            typeof reportedMtpDirectFallbackSteps === 'number' &&
+            Number.isFinite(reportedMtpDirectFallbackSteps) &&
+            reportedMtpDirectFallbackSteps >= 0
+          ) {
+            nativeMtpDirectFallbackSteps += reportedMtpDirectFallbackSteps
+          }
+
+          tokensPerSecond =
+            nativeGenerationDurationMs > 0
+              ? (nativeGenerationTokens * 1000) / nativeGenerationDurationMs
+              : 0
+        } else if (hasBlockDiffusionMetrics) {
+          // Compatibility with AX Studio builds that predate the versioned
+          // performance report. Their total elapsed time is still the correct
+          // denominator for block diffusion.
           const reportedElapsedMs = axEngineMetrics?.elapsedMs
           const reportedOutputTokens = axEngineMetrics?.outputTokenCount
           if (
@@ -213,12 +303,14 @@ export async function executeSingleAgentStream(
             // A tool round-trip creates another model step. Accumulate each
             // native request instead of pairing total usage with only the last
             // step's elapsed time and rate.
-            hasNativeBlockMetrics = true
-            nativeElapsedMs += reportedElapsedMs
-            nativeOutputTokens += reportedOutputTokens
+            hasNativeGenerationMetrics = true
+            nativeGenerationDurationMs += reportedElapsedMs
+            nativeTotalDurationMs += reportedElapsedMs
+            nativeGenerationTokens += reportedOutputTokens
             tokensPerSecond =
-              nativeElapsedMs > 0
-                ? (nativeOutputTokens * 1000) / nativeElapsedMs
+              nativeGenerationDurationMs > 0
+                ? (nativeGenerationTokens * 1000) /
+                  nativeGenerationDurationMs
                 : 0
           }
         } else {
@@ -238,8 +330,8 @@ export async function executeSingleAgentStream(
         }
         const usage = finishPart.totalUsage
         const durationMs =
-          hasNativeBlockMetrics && nativeElapsedMs > 0
-            ? nativeElapsedMs
+          hasNativeGenerationMetrics
+            ? nativeGenerationDurationMs
             : streamStartTime
               ? Date.now() - streamStartTime
               : 0
@@ -260,6 +352,16 @@ export async function executeSingleAgentStream(
         } else {
           tokenSpeed = 0
         }
+        const totalDurationMs = hasNativeGenerationMetrics
+          ? nativeTotalDurationMs
+          : Date.now() - requestStartTime
+        const timeToFirstTokenMs =
+          nativeTimeToFirstTokenMs ??
+          (streamStartTime ? streamStartTime - requestStartTime : undefined)
+        const mtpAcceptanceRate =
+          nativeMtpDraftTokens > 0
+            ? nativeMtpAcceptedTokens / nativeMtpDraftTokens
+            : undefined
         useAppState
           .getState()
           .setTokenSpeed(
@@ -278,6 +380,17 @@ export async function executeSingleAgentStream(
             tokenSpeed: Math.round(tokenSpeed * 10) / 10,
             tokenCount,
             durationMs,
+            generationTokenCount: hasNativeGenerationMetrics
+              ? nativeGenerationTokens
+              : tokenCount,
+            totalDurationMs,
+            timeToFirstTokenMs,
+            accelerationMode: nativeAccelerationMode,
+            mtpAcceptanceRate,
+            mtpDraftTokens: nativeMtpDraftTokens || undefined,
+            mtpAcceptedTokens: nativeMtpAcceptedTokens || undefined,
+            mtpDirectFallbackSteps:
+              nativeMtpDirectFallbackSteps || undefined,
           },
         }
       }

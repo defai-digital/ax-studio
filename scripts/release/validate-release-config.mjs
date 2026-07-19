@@ -38,7 +38,9 @@ function assertArrayEqual(name, actual, expected) {
 }
 
 const tauriConfig = readJson('src-tauri/tauri.conf.json')
+const macosConfig = readJson('src-tauri/tauri.macos.conf.json')
 const latestTemplate = readJson('src-tauri/latest.json.template')
+const mlxVersion = fs.readFileSync(path.join(repoRoot, 'mlx.version'), 'utf8').trim()
 
 if (tauriConfig.productName !== 'AX Studio') {
   fail(`src-tauri/tauri.conf.json productName must be AX Studio, got ${tauriConfig.productName}`)
@@ -58,6 +60,29 @@ if (tauriConfig.bundle?.publisher !== 'DEFAI Private Limited') {
 
 if (tauriConfig.bundle?.createUpdaterArtifacts !== false) {
   fail('src-tauri/tauri.conf.json should keep bundle.createUpdaterArtifacts false in source; release CI enables it')
+}
+
+if (!/^\d+\.\d+\.\d+$/.test(mlxVersion)) {
+  fail(`mlx.version must contain a semantic version, got: ${mlxVersion}`)
+}
+
+if (macosConfig.bundle?.macOS?.minimumSystemVersion !== '15.0') {
+  fail('src-tauri/tauri.macos.conf.json must target macOS 15.0 to match the Homebrew cask')
+}
+
+assertArrayEqual(
+  'src-tauri/tauri.macos.conf.json bundled MLX libraries',
+  macosConfig.bundle?.macOS?.frameworks ?? [],
+  [
+    'resources/lib/libmlx.dylib',
+    'resources/lib/libjaccl.dylib',
+  ],
+)
+if (
+  macosConfig.bundle?.macOS?.files?.['Resources/mlx.metallib']
+  !== 'resources/lib/mlx.metallib'
+) {
+  fail('src-tauri/tauri.macos.conf.json must bundle mlx.metallib as a signed app resource')
 }
 
 const endpoints = tauriConfig.plugins?.updater?.endpoints

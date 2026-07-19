@@ -105,21 +105,24 @@ mod tests {
 
     #[test]
     fn paths_from_opened_urls_keeps_only_local_files() {
+        let local_path = std::env::temp_dir().join("AX Studio").join("report.pdf");
         let urls = vec![
-            url::Url::parse("file:///Users/alice/Documents/report.pdf").unwrap(),
+            url::Url::from_file_path(&local_path).unwrap(),
             url::Url::parse("https://example.com/not-a-file.pdf").unwrap(),
             url::Url::parse("ax-studio://deeplink").unwrap(),
         ];
         let paths = paths_from_opened_urls(urls);
-        assert_eq!(paths, vec!["/Users/alice/Documents/report.pdf"]);
+        assert_eq!(paths, vec![local_path.to_string_lossy().into_owned()]);
     }
 
     #[test]
     fn paths_from_opened_urls_handles_spaces_and_unicode() {
-        let urls =
-            vec![url::Url::parse("file:///Users/alice/My%20Documents/n%C3%A9%20file.txt").unwrap()];
+        let local_path = std::env::temp_dir()
+            .join("My Documents")
+            .join("né file.txt");
+        let urls = vec![url::Url::from_file_path(&local_path).unwrap()];
         let paths = paths_from_opened_urls(urls);
-        assert_eq!(paths, vec!["/Users/alice/My Documents/né file.txt"]);
+        assert_eq!(paths, vec![local_path.to_string_lossy().into_owned()]);
     }
 
     #[test]

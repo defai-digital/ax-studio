@@ -117,10 +117,16 @@ jobs:
         with:
           xcode-version: '26.2'
 
-      - name: Install MLX native dependencies
+      - name: Install pinned MLX build dependency
         run: |
-          brew list mlx >/dev/null 2>&1 || brew install mlx
-          brew list mlx-c >/dev/null 2>&1 || brew install mlx-c
+          set -euo pipefail
+          MLX_VERSION="$(tr -d '[:space:]' < mlx.version)"
+          MLX_VENV="$RUNNER_TEMP/ax-studio-mlx-venv"
+          python3 -m venv "$MLX_VENV"
+          "$MLX_VENV/bin/python" -m pip install --disable-pip-version-check "mlx==${MLX_VERSION}"
+          echo "VIRTUAL_ENV=$MLX_VENV" >> "$GITHUB_ENV"
+          echo "$MLX_VENV/bin" >> "$GITHUB_PATH"
+          "$MLX_VENV/bin/python" -c 'import importlib.metadata; print("MLX", importlib.metadata.version("mlx"))'
 
       - name: Validate stable signing secrets
         if: inputs.channel == 'stable' && inputs.public_provider == 'github'

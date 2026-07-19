@@ -9,6 +9,12 @@ use tokio::sync::Mutex;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "macos")]
+    if let Err(error) = core::mlx::runtime::configure_bundled_metallib() {
+        eprintln!("Failed to configure bundled MLX runtime: {error}");
+        return;
+    }
+
     let builder = tauri::Builder::default();
 
     #[cfg(desktop)]

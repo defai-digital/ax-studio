@@ -35,7 +35,15 @@
     "resources": ["resources/pre-install/**/*", "resources/LICENSE"],
     "externalBin": ["resources/bin/bun", "resources/bin/uv"],
     "macOS": {
-      "entitlements": "./Entitlements.plist"
+      "entitlements": "./Entitlements.plist",
+      "minimumSystemVersion": "15.0",
+      "frameworks": [
+        "resources/lib/libmlx.dylib",
+        "resources/lib/libjaccl.dylib"
+      ],
+      "files": {
+        "Resources/mlx.metallib": "resources/lib/mlx.metallib"
+      }
     }
   }
 }

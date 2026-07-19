@@ -188,10 +188,16 @@ jobs:
         with:
           xcode-version: '26.2'
 
-      - name: Install MLX native dependencies
+      - name: Install pinned MLX build dependency
         run: |
-          brew list mlx >/dev/null 2>&1 || brew install mlx
-          brew list mlx-c >/dev/null 2>&1 || brew install mlx-c
+          set -euo pipefail
+          MLX_VERSION="$(tr -d '[:space:]' < mlx.version)"
+          MLX_VENV="$RUNNER_TEMP/ax-studio-mlx-venv"
+          python3 -m venv "$MLX_VENV"
+          "$MLX_VENV/bin/python" -m pip install --disable-pip-version-check "mlx==${MLX_VERSION}"
+          echo "VIRTUAL_ENV=$MLX_VENV" >> "$GITHUB_ENV"
+          echo "$MLX_VENV/bin" >> "$GITHUB_PATH"
+          "$MLX_VENV/bin/python" -c 'import importlib.metadata; print("MLX", importlib.metadata.version("mlx"))'
 
       - name: Linter and test
         run: |
@@ -355,7 +361,7 @@ jobs:
       - name: Install Tauri dependencies
         run: |
           sudo apt update
-          sudo apt install -y libglib2.0-dev libatk1.0-dev libpango1.0-dev libgtk-3-dev libsoup-3.0-dev libwebkit2gtk-4.1-dev librsvg2-dev libfuse2 libdbus-1-dev webkit2gtk-driver
+          sudo apt install -y libglib2.0-dev libatk1.0-dev libpango1.0-dev libgtk-3-dev libsoup-3.0-dev libwebkit2gtk-4.1-dev librsvg2-dev libfuse2 libdbus-1-dev libasound2-dev webkit2gtk-driver
 
       - name: 'Cleanup cache'
         continue-on-error: true

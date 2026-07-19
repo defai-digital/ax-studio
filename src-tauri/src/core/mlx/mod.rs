@@ -15,6 +15,9 @@
 pub mod commands;
 
 #[cfg(target_os = "macos")]
+pub mod runtime;
+
+#[cfg(target_os = "macos")]
 pub mod state;
 
 #[cfg(target_os = "macos")]

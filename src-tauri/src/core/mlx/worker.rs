@@ -20,13 +20,17 @@ use std::thread::{self, JoinHandle};
 
 use ax_engine_sdk::{
     current_host_report, EngineSession, EngineSessionConfig, GenerateRequest, GenerateSampling,
-    GenerateStreamEvent as SdkGenerateStreamEvent, NativeModelArtifactsSource,
+    GenerateStreamEvent as SdkGenerateStreamEvent, MlxMtpPolicy, NativeModelArtifactsSource,
 };
 use serde::{Deserialize, Serialize};
 use tokenizers::Tokenizer;
 use tokio::sync::oneshot;
 
 const DEFAULT_MLX_MAX_OUTPUT_TOKENS: u32 = 2048;
+// A bounded target filter keeps temperature-sampled requests eligible for AX
+// Engine's exact MTP rejection-sampling route. Zero plus top_p < 1 would force
+// every otherwise valid MTP package to direct fallback.
+const DEFAULT_MLX_TOP_K: u32 = 20;
 const GEMMA4_CHANNEL_OPEN: &str = "<|channel>";
 const GEMMA4_CHANNEL_CLOSE: &str = "<channel|>";
 static NEXT_DIFFUSION_REQUEST_SEED: AtomicU64 = AtomicU64::new(1);
@@ -60,6 +64,78 @@ pub struct ChatCompletionResult {
     pub finish_reason: String,
 }
 
+/// Versioned native timing and route telemetry forwarded unchanged to the
+/// frontend. Durations use a monotonic engine clock and microseconds so the UI
+/// can apply the same generation-only throughput denominator as other local
+/// runtimes without timing IPC delivery.
+#[derive(Clone, Debug, Serialize)]
+pub struct StreamPerformanceMetrics {
+    pub metrics_version: u32,
+    pub total_time_us: u64,
+    pub time_to_first_token_us: Option<u64>,
+    pub generation_time_us: Option<u64>,
+    pub generation_token_count: u32,
+    pub generation_kind: String,
+    pub mtp: StreamMtpMetrics,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct StreamMtpMetrics {
+    pub available: bool,
+    pub requested: bool,
+    pub active: bool,
+    pub direct_fallback_steps: u32,
+    pub draft_tokens: u32,
+    pub accepted_tokens: u32,
+    pub decode_steps: u32,
+}
+
+impl StreamPerformanceMetrics {
+    fn from_response(response: &ax_engine_sdk::GenerateResponse) -> Self {
+        let performance = &response.performance;
+        let mtp = &performance.mtp;
+        Self {
+            metrics_version: performance.metrics_version,
+            total_time_us: performance.total_time_us,
+            time_to_first_token_us: performance.time_to_first_token_us,
+            generation_time_us: performance.generation_time_us,
+            generation_token_count: performance.generation_token_count,
+            generation_kind: if response.route.decision("ax_mlx_generation_kind") == Some(1) {
+                "block_diffusion"
+            } else {
+                "autoregressive"
+            }
+            .to_string(),
+            mtp: StreamMtpMetrics {
+                available: mtp.available,
+                requested: mtp.requested,
+                active: mtp.active,
+                direct_fallback_steps: mtp.direct_fallback_steps,
+                draft_tokens: mtp.draft_tokens,
+                accepted_tokens: mtp.accepted_tokens,
+                decode_steps: mtp.decode_steps,
+            },
+        }
+    }
+
+    fn tokens_per_second(&self) -> Option<f64> {
+        let generation_time_us = self.generation_time_us?;
+        (generation_time_us > 0 && self.generation_token_count > 0).then(|| {
+            f64::from(self.generation_token_count) * 1_000_000.0 / generation_time_us as f64
+        })
+    }
+
+    fn acceleration_mode(&self) -> &'static str {
+        if self.mtp.active {
+            "mtp"
+        } else if self.mtp.available && self.mtp.requested && self.mtp.direct_fallback_steps > 0 {
+            "mtp_fallback"
+        } else {
+            "direct"
+        }
+    }
+}
+
 /// Streaming events emitted while a chat completion is in flight.
 /// Mirrors the SSE event shapes that the chat transport already handles for
 /// HTTP backends, so the frontend can treat both paths uniformly.
@@ -73,14 +149,15 @@ pub enum StreamEvent {
     },
     /// One or more decoded output tokens since the previous Delta.
     Delta { text: String },
-    /// Final event with usage stats and stop reason. `elapsed_ms` is the
-    /// wall-clock time spent inside native streaming, useful for diagnostics
-    /// and speed display fallbacks.
+    /// Final event with usage stats, stop reason, and native performance data.
+    /// `elapsed_ms` remains for backward compatibility and cancellation, while
+    /// completed requests use `performance` for comparable speed reporting.
     Done {
         prompt_token_count: u32,
         output_token_count: u32,
         finish_reason: String,
         elapsed_ms: u64,
+        performance: Option<StreamPerformanceMetrics>,
     },
     /// Terminal error event. The Tauri command's Result also surfaces the
     /// error, but emitting it on the channel keeps the chat UI's incremental
@@ -313,33 +390,39 @@ impl LoadedModel {
 /// most one unused session warm per loaded model and consumes it for the next
 /// generate / generate_stream request.
 ///
-/// **n-gram acceleration: OFF by default.** ax-engine's library default is
-/// ON, but the n-gram code path triggers the mlx-c 0.6.0 4-bit slice abort
-/// on every 4-bit model on disk — confirmed against `Qwen3-4B-4bit` and
-/// `Qwen3.5-9B-MLX-4bit`. We default to the direct (no-speculation) path so
-/// `make dev` just works.
+/// **Packaged MTP: AUTO; standalone n-gram: OFF by default.** AX Engine only
+/// admits MTP when the loaded package contains a validated Qwen MTP sidecar or
+/// Gemma assistant. Ordinary models safely remain direct. The separate n-gram
+/// path stays off because it triggers the mlx-c 0.6.0 4-bit slice abort on
+/// affected packages.
 ///
 /// To deliberately enable n-gram for A/B testing (e.g. to demonstrate the
 /// crash, or once upstream fixes it), set env var `AX_MLX_NGRAM=1` when
-/// launching the app.
+/// launching the app. `AX_MLX_MTP_POLICY=disabled|required|auto` is available
+/// for direct baselines and package validation; normal users should keep Auto.
 fn build_session(model_dir: &Path) -> Result<EngineSession, String> {
     let enable_ngram = std::env::var("AX_MLX_NGRAM")
         .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "True"))
         .unwrap_or(false);
     let disable_ngram = !enable_ngram;
+    let mtp_policy = mtp_policy_from_env();
     let config = EngineSessionConfig {
         mlx_model_artifacts_dir: Some(model_dir.to_path_buf()),
         mlx_model_artifacts_source: Some(NativeModelArtifactsSource::ExplicitConfig),
+        mlx_mtp_policy: mtp_policy,
         mlx_disable_ngram_acceleration: disable_ngram,
+        // Keep the unstable n-gram draft source out of the otherwise validated
+        // model-based MTP verification loop.
+        mlx_mtp_disable_ngram_stacking: true,
         ..Default::default()
     };
     log::info!(
-        "[mlx-worker] build_session model_dir={} ngram={}",
+        "[mlx-worker] build_session model_dir={} mtp={mtp_policy:?} ngram={}",
         model_dir.display(),
         if enable_ngram {
             "ON (set via AX_MLX_NGRAM=1 — expect crash on 4-bit)"
         } else {
-            "OFF (default; direct path)"
+            "OFF (default; independent from packaged MTP)"
         },
     );
     // Wrap in catch_unwind: the MLX FFI layer may panic on unsupported
@@ -358,6 +441,23 @@ fn build_session(model_dir: &Path) -> Result<EngineSession, String> {
             format!("MLX engine panicked during model initialization: {detail}")
         })?
         .map_err(|e| format!("EngineSession::new failed: {e:?}"))
+}
+
+fn mtp_policy_from_env() -> MlxMtpPolicy {
+    let value = std::env::var("AX_MLX_MTP_POLICY").ok();
+    match value.as_deref().map(str::trim) {
+        None | Some("") | Some("auto") | Some("AUTO") | Some("Auto") | Some("1") | Some("true")
+        | Some("TRUE") | Some("on") | Some("ON") => MlxMtpPolicy::Auto,
+        Some("disabled") | Some("DISABLED") | Some("Disabled") | Some("disable") | Some("off")
+        | Some("OFF") | Some("0") | Some("false") | Some("FALSE") => MlxMtpPolicy::Disabled,
+        Some("required") | Some("REQUIRED") | Some("Required") | Some("require") => {
+            MlxMtpPolicy::Required
+        }
+        Some(other) => {
+            log::warn!("[mlx-worker] ignoring invalid AX_MLX_MTP_POLICY={other:?}; using Auto");
+            MlxMtpPolicy::Auto
+        }
+    }
 }
 
 fn take_warm_session(entry: &mut LoadedModel, model_id: &str) -> Result<EngineSession, String> {
@@ -670,7 +770,12 @@ fn handle_generate_stream(
 
     log::info!(
         "[mlx-worker] stream {model_id}: {prompt_token_count} prompt tokens, \
-         max_out={max_output_tokens}, seed={}",
+         max_out={max_output_tokens}, temperature={}, top_p={}, top_k={}, \
+         repetition_penalty={}, seed={}",
+        request.sampling.temperature,
+        request.sampling.top_p,
+        request.sampling.top_k,
+        request.sampling.repetition_penalty,
         request.sampling.seed
     );
 
@@ -703,6 +808,7 @@ fn handle_generate_stream(
     let mut emitted_text = String::new();
     let mut strip_gemma4_thought_prefix = is_gemma4_family(model_id);
     let mut cancelled = false;
+    let mut performance = None;
 
     loop {
         if cancellation.load(Ordering::Acquire) {
@@ -797,6 +903,7 @@ fn handle_generate_stream(
                 output_token_count = response
                     .output_token_count
                     .unwrap_or(response.output_tokens.len() as u32);
+                performance = Some(StreamPerformanceMetrics::from_response(&response));
                 finish_reason = response_finish_reason(&response);
             }
         }
@@ -809,21 +916,41 @@ fn handle_generate_stream(
     }
 
     let elapsed_ms = started.elapsed().as_millis() as u64;
-    log::info!(
-        "[mlx-worker] stream done: {output_token_count} tokens in {elapsed_ms}ms = {:.1} t/s, \
-         finish_reason={finish_reason}",
-        if elapsed_ms == 0 {
-            0.0
+    if let Some(metrics) = &performance {
+        let mtp_acceptance_percent = if metrics.mtp.draft_tokens > 0 {
+            f64::from(metrics.mtp.accepted_tokens) * 100.0 / f64::from(metrics.mtp.draft_tokens)
         } else {
-            output_token_count as f64 * 1000.0 / elapsed_ms as f64
-        },
-    );
+            0.0
+        };
+        log::info!(
+            "[mlx-worker] stream done: {} measured tokens in {:?}us = {:.1} t/s, \
+             total={}us, ttft={:?}us, route={}, mtp={}/{} ({:.1}%), \
+             mtp_steps={}, direct_fallback_steps={}, finish_reason={finish_reason}",
+            metrics.generation_token_count,
+            metrics.generation_time_us,
+            metrics.tokens_per_second().unwrap_or_default(),
+            metrics.total_time_us,
+            metrics.time_to_first_token_us,
+            metrics.acceleration_mode(),
+            metrics.mtp.accepted_tokens,
+            metrics.mtp.draft_tokens,
+            mtp_acceptance_percent,
+            metrics.mtp.decode_steps,
+            metrics.mtp.direct_fallback_steps,
+        );
+    } else {
+        log::info!(
+            "[mlx-worker] stream done without native performance report: \
+             {output_token_count} tokens in {elapsed_ms}ms, finish_reason={finish_reason}"
+        );
+    }
 
     on_event(StreamEvent::Done {
         prompt_token_count,
         output_token_count,
         finish_reason,
         elapsed_ms,
+        performance,
     });
 
     drop(stream);
@@ -909,7 +1036,7 @@ fn effective_sampling(model_id: &str, params: &GenerateParams) -> GenerateSampli
     GenerateSampling {
         temperature: params.temperature.unwrap_or(0.7),
         top_p: params.top_p.unwrap_or(0.95),
-        top_k: params.top_k.unwrap_or(0),
+        top_k: params.top_k.unwrap_or(DEFAULT_MLX_TOP_K),
         min_p: None,
         repetition_penalty: params.repetition_penalty.unwrap_or(1.0),
         repetition_context_size: None,
@@ -1382,6 +1509,19 @@ mod tests {
         )
         .seed;
         assert_ne!(first_seed, second_seed);
+    }
+
+    #[test]
+    fn autoregressive_defaults_keep_exact_sampled_mtp_eligible() {
+        let sampling = effective_sampling(
+            "mlx-community/Qwen3.6-35B-A3B-6bit-MTP",
+            &GenerateParams::default(),
+        );
+
+        assert_eq!(sampling.temperature, 0.7);
+        assert_eq!(sampling.top_p, 0.95);
+        assert_eq!(sampling.top_k, DEFAULT_MLX_TOP_K);
+        assert_eq!(sampling.repetition_penalty, 1.0);
     }
 
     #[test]

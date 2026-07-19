@@ -532,13 +532,21 @@ export class ModelFactory {
     options: { requestRole?: 'router' | 'final' } = {}
   ): Promise<LanguageModel> {
     const proxyUrl = getProxyBaseUrl()
-    const openAIParams = toOpenAIParams(parameters)
     const providerName = provider.provider.toLowerCase()
 
     // AX Engine runs in-process via ax-engine-sdk. Do not route it through the
     // local proxy/ax-serving, because the installed ax-serving worker only
     // preloads GGUF models in this build.
     const isAxEngine = isAxEngineProvider(provider.provider)
+    const openAIParams = toOpenAIParams(parameters)
+    if (isAxEngine) {
+      // top_k is not part of OpenAI's public schema, but the in-process fetch
+      // shim accepts it. Preserve AX Studio's default (20): exact sampled MTP
+      // requires a bounded target filter, and silently dropping this field
+      // forced every temperature-sampled MTP request onto direct fallback.
+      const topK = parameters.top_k
+      if (topK != null) openAIParams.top_k = topK
+    }
 
     // Normalize non-standard streaming SSE responses from various providers.
     // Applied to proxy providers since the proxy passes streaming bytes through unchanged.

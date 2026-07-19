@@ -93,6 +93,14 @@ describe('GitHub Actions dependency boundaries', () => {
     expect(releaseWorkflow).toContain('verify-macos-release-signature:')
     expect(releaseWorkflow).toContain('xcrun stapler validate')
     expect(releaseWorkflow).toContain('Authority=Developer ID Application: DEFAI PRIVATE LIMITED')
+    expect(releaseWorkflow).toContain('Contents/Frameworks/libmlx.dylib')
+    expect(releaseWorkflow).toContain('Contents/Frameworks/libjaccl.dylib')
+    expect(releaseWorkflow).toContain('Contents/Resources/mlx.metallib')
+    expect(releaseWorkflow).toContain('Contents/MacOS/ax-studio')
+    expect(releaseWorkflow).not.toContain('Contents/MacOS/AX Studio')
+    expect(releaseWorkflow).toContain('@executable_path/../Frameworks')
+    expect(releaseWorkflow).toContain('LSMinimumSystemVersion')
+    expect(releaseWorkflow).toContain("grep -E '^Timestamp='")
     expect(releaseWorkflow).toContain('verify-windows-authenticode:')
     expect(releaseWorkflow).toContain('Get-AuthenticodeSignature')
     expect(releaseWorkflow).toContain('FC40F1109912C025E751E804AA9BD1538A2D12EF')
@@ -104,6 +112,35 @@ describe('GitHub Actions dependency boundaries', () => {
     expect(releaseWorkflow).toContain('signkey/ax.pub')
     expect(releaseWorkflow).not.toContain('signkey/ax-studio.minisign.key')
     expect(releaseWorkflow).not.toContain('signkey/ax-studio.minisign.pub')
+  })
+
+  it('builds macOS against the pinned, bundled MLX wheel', () => {
+    const macBuildWorkflow = fs.readFileSync(
+      path.join(workflowsDirectory, 'template-tauri-build-macos.yml'),
+      'utf8',
+    )
+    const testWorkflow = fs.readFileSync(
+      path.join(workflowsDirectory, 'ax-studio-linter-and-test.yml'),
+      'utf8',
+    )
+    const macConfig = JSON.parse(
+      fs.readFileSync(path.join(repoRoot, 'src-tauri', 'tauri.macos.conf.json'), 'utf8'),
+    )
+
+    for (const workflow of [macBuildWorkflow, testWorkflow]) {
+      expect(workflow).toContain('MLX_VERSION="$(tr -d')
+      expect(workflow).toContain('"mlx==${MLX_VERSION}"')
+      expect(workflow).toContain('VIRTUAL_ENV=$MLX_VENV')
+      expect(workflow).not.toContain('brew install mlx')
+    }
+    expect(macConfig.bundle.macOS.frameworks).toEqual([
+      'resources/lib/libmlx.dylib',
+      'resources/lib/libjaccl.dylib',
+    ])
+    expect(macConfig.bundle.macOS.minimumSystemVersion).toBe('15.0')
+    expect(macConfig.bundle.macOS.files).toEqual({
+      'Resources/mlx.metallib': 'resources/lib/mlx.metallib',
+    })
   })
 
   it('refuses to mutate a published release', () => {
@@ -139,6 +176,7 @@ describe('GitHub Actions dependency boundaries', () => {
     expect(releaseWorkflow).toContain('release.dmg.minisig')
     expect(releaseWorkflow).toContain('minisign -V -p docs/ax-studio.minisign.pub')
     expect(caskWriter).not.toContain('xattr')
+    expect(caskWriter).not.toContain('brew install mlx')
   })
 
   it('keeps release downloads authenticated, observable, and retryable', () => {

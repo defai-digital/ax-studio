@@ -49,13 +49,6 @@ const cask = `cask "ax-studio" do
   depends_on arch: :arm64
   depends_on macos: :sequoia
 
-  caveats do
-    <<~EOS
-      MLX and MLX-C are optional prerequisites for local inference.
-      Install them manually with: brew install mlx mlx-c
-    EOS
-  end
-
   preflight do
     # Clears any pre-existing bundle (current or pre-rename "Ax-Studio.app" name) so
     # upgrades from untracked installs don't hit Homebrew's "already an App" guard.

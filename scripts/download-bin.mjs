@@ -4,6 +4,7 @@ import fs, { copyFileSync, mkdirSync } from 'fs'
 import https from 'https'
 import os from 'os'
 import path from 'path'
+import { fileURLToPath } from 'url'
 import unzipper from 'unzipper'
 import { x as tarExtract } from 'tar'
 
@@ -225,7 +226,11 @@ async function prepareUv(uvPlatform, platform, targetTriple, tempBinDir, binDir)
   })
 
   const executableName = platform === 'win32' ? 'uv.exe' : 'uv'
-  const source = path.join(extractDir, `uv-${uvPlatform}`, executableName)
+  const source = resolveUvExecutableSource(
+    extractDir,
+    uvPlatform,
+    platform,
+  )
   const destination = path.join(binDir, executableName)
   assertFile(source)
   copyFileSync(source, destination)
@@ -241,6 +246,18 @@ async function prepareUv(uvPlatform, platform, targetTriple, tempBinDir, binDir)
   }
 
   return { source, destination, targetDestination }
+}
+
+/**
+ * uv's Windows ZIPs place uv.exe at the archive root, while Unix tarballs
+ * contain a uv-<target>/ directory. Keep the upstream layouts explicit so a
+ * Windows release cannot silently depend on the Unix archive shape.
+ */
+export function resolveUvExecutableSource(extractDir, uvPlatform, platform) {
+  const executableName = platform === 'win32' ? 'uv.exe' : 'uv'
+  return platform === 'win32'
+    ? path.join(extractDir, executableName)
+    : path.join(extractDir, `uv-${uvPlatform}`, executableName)
 }
 
 async function prepareMacUniversalBinary({ name, version, platforms, hashes, tempBinDir, binDir }) {
@@ -317,7 +334,12 @@ async function main() {
   console.log('Verified binary downloads completed.')
 }
 
-main().catch((error) => {
-  console.error('Error:', error)
-  process.exitCode = 1
-})
+const isMainModule = process.argv[1]
+  && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+
+if (isMainModule) {
+  main().catch((error) => {
+    console.error('Error:', error)
+    process.exitCode = 1
+  })
+}

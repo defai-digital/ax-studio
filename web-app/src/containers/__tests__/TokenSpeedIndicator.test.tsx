@@ -46,6 +46,36 @@ describe('TokenSpeedIndicator', () => {
     expect(screen.getByText(/100 tokens/)).toBeInTheDocument()
   })
 
+  it('shows the native MTP route, acceptance rate, and TTFT', () => {
+    const metadata = {
+      tokenSpeed: {
+        tokenSpeed: 20,
+        tokenCount: 82,
+        durationMs: 4000,
+        timeToFirstTokenMs: 1250,
+        accelerationMode: 'mtp',
+        mtpAcceptanceRate: 0.75,
+      },
+      usage: { outputTokens: 82 },
+    }
+    render(<TokenSpeedIndicator metadata={metadata} />)
+    expect(screen.getByText(/MTP 75%/)).toBeInTheDocument()
+    expect(screen.getByText(/TTFT 1.3s/)).toBeInTheDocument()
+  })
+
+  it('shows when an MTP-capable request fell back to direct decode', () => {
+    const metadata = {
+      tokenSpeed: {
+        tokenSpeed: 12,
+        tokenCount: 24,
+        accelerationMode: 'mtp_fallback',
+      },
+      usage: { outputTokens: 24 },
+    }
+    render(<TokenSpeedIndicator metadata={metadata} />)
+    expect(screen.getByText(/MTP fallback/)).toBeInTheDocument()
+  })
+
   it('renders streaming token speed when streaming is true', () => {
     mockStreamingTokenSpeed = 55
     mockStreamingTokenCount = 200

@@ -186,11 +186,28 @@ jobs:
 
           APP="$MOUNT_POINT/AX Studio.app"
           test -d "$APP"
+          test -f "$APP/Contents/Frameworks/libmlx.dylib"
+          test -f "$APP/Contents/Frameworks/libjaccl.dylib"
+          test -f "$APP/Contents/Resources/mlx.metallib"
+          otool -L "$APP/Contents/MacOS/ax-studio" | grep -F '@rpath/libmlx.dylib'
+          otool -L "$APP/Contents/Frameworks/libmlx.dylib" | grep -F '@rpath/libjaccl.dylib'
+          otool -l "$APP/Contents/MacOS/ax-studio" | grep -F '@executable_path/../Frameworks'
+          test "$(plutil -extract LSMinimumSystemVersion raw "$APP/Contents/Info.plist")" = "15.0"
           codesign --verify --deep --strict --verbose=2 "$APP"
-          SIGNATURE_DETAILS="$(codesign -dv --verbose=4 "$APP" 2>&1)"
-          printf '%s\n' "$SIGNATURE_DETAILS"
-          grep -F "Authority=Developer ID Application: DEFAI PRIVATE LIMITED" <<< "$SIGNATURE_DETAILS"
-          grep -F "TeamIdentifier=${APPLE_TEAM_ID}" <<< "$SIGNATURE_DETAILS"
+          for SIGNED_ITEM in \
+            "$APP" \
+            "$APP/Contents/MacOS/ax-studio" \
+            "$APP/Contents/MacOS/bun" \
+            "$APP/Contents/MacOS/uv" \
+            "$APP/Contents/Frameworks/libmlx.dylib" \
+            "$APP/Contents/Frameworks/libjaccl.dylib"; do
+            codesign --verify --strict --verbose=2 "$SIGNED_ITEM"
+            SIGNATURE_DETAILS="$(codesign -dv --verbose=4 "$SIGNED_ITEM" 2>&1)"
+            printf '%s\n' "$SIGNATURE_DETAILS"
+            grep -F "Authority=Developer ID Application: DEFAI PRIVATE LIMITED" <<< "$SIGNATURE_DETAILS"
+            grep -F "TeamIdentifier=${APPLE_TEAM_ID}" <<< "$SIGNATURE_DETAILS"
+            grep -E '^Timestamp=' <<< "$SIGNATURE_DETAILS"
+          done
           spctl --assess --type execute --verbose=2 "$APP"
 
   verify-windows-authenticode:
@@ -560,10 +577,27 @@ jobs:
           set -euo pipefail
           APP="/Applications/AX Studio.app"
           test -d "$APP"
+          test -f "$APP/Contents/Frameworks/libmlx.dylib"
+          test -f "$APP/Contents/Frameworks/libjaccl.dylib"
+          test -f "$APP/Contents/Resources/mlx.metallib"
+          otool -L "$APP/Contents/MacOS/ax-studio" | grep -F '@rpath/libmlx.dylib'
+          otool -L "$APP/Contents/Frameworks/libmlx.dylib" | grep -F '@rpath/libjaccl.dylib'
+          otool -l "$APP/Contents/MacOS/ax-studio" | grep -F '@executable_path/../Frameworks'
+          test "$(plutil -extract LSMinimumSystemVersion raw "$APP/Contents/Info.plist")" = "15.0"
           codesign --verify --deep --strict --verbose=2 "$APP"
-          SIGNATURE_DETAILS="$(codesign -dv --verbose=4 "$APP" 2>&1)"
-          grep -F "Authority=Developer ID Application: DEFAI PRIVATE LIMITED" <<< "$SIGNATURE_DETAILS"
-          grep -F "TeamIdentifier=${APPLE_TEAM_ID}" <<< "$SIGNATURE_DETAILS"
+          for SIGNED_ITEM in \
+            "$APP" \
+            "$APP/Contents/MacOS/ax-studio" \
+            "$APP/Contents/MacOS/bun" \
+            "$APP/Contents/MacOS/uv" \
+            "$APP/Contents/Frameworks/libmlx.dylib" \
+            "$APP/Contents/Frameworks/libjaccl.dylib"; do
+            codesign --verify --strict --verbose=2 "$SIGNED_ITEM"
+            SIGNATURE_DETAILS="$(codesign -dv --verbose=4 "$SIGNED_ITEM" 2>&1)"
+            grep -F "Authority=Developer ID Application: DEFAI PRIVATE LIMITED" <<< "$SIGNATURE_DETAILS"
+            grep -F "TeamIdentifier=${APPLE_TEAM_ID}" <<< "$SIGNATURE_DETAILS"
+            grep -E '^Timestamp=' <<< "$SIGNATURE_DETAILS"
+          done
           spctl --assess --type execute --verbose=2 "$APP"
 
       - name: Uninstall test application

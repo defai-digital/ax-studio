@@ -63,6 +63,7 @@ endif
 
 dev: ensure-dev-port-free ensure-dev-setup
 	$(NODE) scripts/copy-assets-tauri.mjs
+	@if [ "$$(uname -s)" = "Darwin" ]; then $(YARN) prepare:mlx; fi
 	# desktop enables hardware + llamacpp plugins (required for capability ACL).
 	$(TAURI_CLI) dev --features desktop
 

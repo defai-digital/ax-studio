@@ -89,6 +89,7 @@ type StreamEvent =
        * Kept for diagnostics and possible speed display fallbacks.
        */
       elapsed_ms: number
+      performance?: AxEnginePerformanceWireMetrics
     }
   | { type: 'error'; message: string }
 
@@ -99,6 +100,89 @@ interface AxEngineWireMetrics {
   elapsed_ms: number
   output_token_count: number
   generation_kind: 'autoregressive' | 'block_diffusion'
+  performance?: AxEnginePerformanceWireMetrics
+}
+
+interface AxEngineMtpWireMetrics {
+  available: boolean
+  requested: boolean
+  active: boolean
+  direct_fallback_steps: number
+  draft_tokens: number
+  accepted_tokens: number
+  decode_steps: number
+}
+
+interface AxEnginePerformanceWireMetrics {
+  metrics_version: number
+  total_time_us: number
+  time_to_first_token_us?: number | null
+  generation_time_us?: number | null
+  generation_token_count: number
+  generation_kind: 'autoregressive' | 'block_diffusion'
+  mtp: AxEngineMtpWireMetrics
+}
+
+const AX_ENGINE_METRICS_VERSION = 1
+
+const isNonNegativeFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0
+
+function readAxEnginePerformanceWireMetrics(
+  value: unknown
+): AxEnginePerformanceWireMetrics | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return
+  const record = value as Record<string, unknown>
+  const mtpValue = record.mtp
+  if (!mtpValue || typeof mtpValue !== 'object' || Array.isArray(mtpValue)) {
+    return
+  }
+  const mtp = mtpValue as Record<string, unknown>
+
+  const optionalDurationIsValid = (duration: unknown) =>
+    duration == null || isNonNegativeFiniteNumber(duration)
+  if (
+    record.metrics_version !== AX_ENGINE_METRICS_VERSION ||
+    !isNonNegativeFiniteNumber(record.total_time_us) ||
+    !optionalDurationIsValid(record.time_to_first_token_us) ||
+    !optionalDurationIsValid(record.generation_time_us) ||
+    !isNonNegativeFiniteNumber(record.generation_token_count) ||
+    (record.generation_kind !== 'autoregressive' &&
+      record.generation_kind !== 'block_diffusion') ||
+    typeof mtp.available !== 'boolean' ||
+    typeof mtp.requested !== 'boolean' ||
+    typeof mtp.active !== 'boolean' ||
+    !isNonNegativeFiniteNumber(mtp.direct_fallback_steps) ||
+    !isNonNegativeFiniteNumber(mtp.draft_tokens) ||
+    !isNonNegativeFiniteNumber(mtp.accepted_tokens) ||
+    !isNonNegativeFiniteNumber(mtp.decode_steps)
+  ) {
+    return
+  }
+
+  return {
+    metrics_version: record.metrics_version,
+    total_time_us: record.total_time_us,
+    time_to_first_token_us: record.time_to_first_token_us as
+      | number
+      | null
+      | undefined,
+    generation_time_us: record.generation_time_us as
+      | number
+      | null
+      | undefined,
+    generation_token_count: record.generation_token_count,
+    generation_kind: record.generation_kind,
+    mtp: {
+      available: mtp.available,
+      requested: mtp.requested,
+      active: mtp.active,
+      direct_fallback_steps: mtp.direct_fallback_steps,
+      draft_tokens: mtp.draft_tokens,
+      accepted_tokens: mtp.accepted_tokens,
+      decode_steps: mtp.decode_steps,
+    },
+  }
 }
 
 function readAxEngineWireMetrics(value: unknown): AxEngineWireMetrics | undefined {
@@ -129,19 +213,64 @@ function readAxEngineWireMetrics(value: unknown): AxEngineWireMetrics | undefine
     elapsed_ms: elapsedMs,
     output_token_count: outputTokenCount,
     generation_kind: generationKind,
+    performance: readAxEnginePerformanceWireMetrics(record.performance),
   }
 }
 
 function providerMetadataForMetrics(metrics: AxEngineWireMetrics) {
+  const performance = metrics.performance
+  const generationDurationMs =
+    performance?.generation_time_us != null
+      ? performance.generation_time_us / 1000
+      : undefined
+  const generationTokenCount = performance?.generation_token_count
+  const nativeTokensPerSecond =
+    generationDurationMs != null &&
+    generationDurationMs > 0 &&
+    generationTokenCount != null &&
+    generationTokenCount > 0
+      ? (generationTokenCount * 1000) / generationDurationMs
+      : undefined
+  const mtp = performance?.mtp
+  const accelerationMode = mtp
+    ? mtp.active
+      ? 'mtp'
+      : mtp.available && mtp.requested && mtp.direct_fallback_steps > 0
+        ? 'mtp_fallback'
+        : 'direct'
+    : undefined
+
   return {
     axEngine: {
       elapsedMs: metrics.elapsed_ms,
       outputTokenCount: metrics.output_token_count,
       tokensPerSecond:
-        metrics.elapsed_ms > 0
+        nativeTokensPerSecond ??
+        (metrics.elapsed_ms > 0
           ? (metrics.output_token_count * 1000) / metrics.elapsed_ms
-          : 0,
-      generationKind: metrics.generation_kind,
+          : 0),
+      generationKind: performance?.generation_kind ?? metrics.generation_kind,
+      metricsVersion: performance?.metrics_version,
+      totalDurationMs:
+        performance != null ? performance.total_time_us / 1000 : undefined,
+      timeToFirstTokenMs:
+        performance?.time_to_first_token_us != null
+          ? performance.time_to_first_token_us / 1000
+          : undefined,
+      generationDurationMs,
+      generationTokenCount,
+      accelerationMode,
+      mtpAvailable: mtp?.available,
+      mtpRequested: mtp?.requested,
+      mtpActive: mtp?.active,
+      mtpDirectFallbackSteps: mtp?.direct_fallback_steps,
+      mtpDraftTokens: mtp?.draft_tokens,
+      mtpAcceptedTokens: mtp?.accepted_tokens,
+      mtpDecodeSteps: mtp?.decode_steps,
+      mtpAcceptanceRate:
+        mtp != null && mtp.draft_tokens > 0
+          ? mtp.accepted_tokens / mtp.draft_tokens
+          : undefined,
     },
   }
 }
@@ -327,9 +456,12 @@ function streamingResponse(
               ax_engine_metrics: {
                 elapsed_ms: evt.elapsed_ms,
                 output_token_count: evt.output_token_count,
-                generation_kind: isDiffusionGemmaModelId(modelId)
-                  ? 'block_diffusion'
-                  : 'autoregressive',
+                generation_kind:
+                  evt.performance?.generation_kind ??
+                  (isDiffusionGemmaModelId(modelId)
+                    ? 'block_diffusion'
+                    : 'autoregressive'),
+                performance: evt.performance,
               },
             }
 

@@ -291,6 +291,41 @@ describe('ModelFactory', () => {
       )
     })
 
+    it('preserves top_k for AX Engine so sampled MTP can use its exact route', async () => {
+      const ipcFetch = vi.fn(async () => new Response('{}'))
+      vi.mocked(createMlxIpcFetch).mockReturnValueOnce(
+        ipcFetch as unknown as typeof fetch
+      )
+      const provider: ProviderObject = {
+        provider: 'ax-engine',
+        api_key: '',
+        base_url: 'http://127.0.0.1:0/v1',
+        models: [],
+        settings: [],
+        active: true,
+      }
+
+      await ModelFactory.createModel(
+        'mlx-community/Qwen3.6-27B-MTP',
+        provider,
+        { temperature: 0.7, top_p: 0.8, top_k: 20 }
+      )
+      const config = vi.mocked(createOpenAICompatible).mock.calls.at(-1)?.[0]
+      await config?.fetch?.('http://localhost/v1/chat/completions', {
+        method: 'POST',
+        body: JSON.stringify({ model: 'mlx-community/Qwen3.6-27B-MTP' }),
+      })
+
+      const forwardedBody = JSON.parse(
+        (ipcFetch.mock.calls[0]?.[1] as RequestInit | undefined)?.body as string
+      )
+      expect(forwardedBody).toMatchObject({
+        temperature: 0.7,
+        top_p: 0.8,
+        top_k: 20,
+      })
+    })
+
     it('should create an OpenAI-compatible model for groq provider', async () => {
       const provider: ProviderObject = {
         provider: 'groq',

@@ -101,7 +101,7 @@ describe('createMlxIpcFetch', () => {
     await reader.cancel()
   })
 
-  it('preserves native AX Engine elapsed time for diffusion speed metadata', async () => {
+  it('preserves legacy native elapsed time for diffusion speed metadata', async () => {
     mocks.invoke.mockImplementation(async (command: string, args: any) => {
       if (command === 'mlx_load_model') return undefined
       if (command === 'mlx_chat_stream') {
@@ -158,6 +158,88 @@ describe('createMlxIpcFetch', () => {
         outputTokenCount: 27,
         tokensPerSecond: 27 / 8.218,
         generationKind: 'block_diffusion',
+      },
+    })
+  })
+
+  it('forwards versioned generation timing and the actual MTP route', async () => {
+    mocks.invoke.mockImplementation(async (command: string, args: any) => {
+      if (command === 'mlx_load_model') return undefined
+      if (command === 'mlx_chat_stream') {
+        args.onEvent.onmessage({
+          type: 'start',
+          model_id: 'ax-local/Qwen3.6-27B-MTP',
+          prompt_token_count: 120,
+        })
+        args.onEvent.onmessage({ type: 'delta', text: 'answer' })
+        args.onEvent.onmessage({
+          type: 'done',
+          prompt_token_count: 120,
+          output_token_count: 82,
+          finish_reason: 'stop',
+          elapsed_ms: 9000,
+          performance: {
+            metrics_version: 1,
+            total_time_us: 8_500_000,
+            time_to_first_token_us: 1_250_000,
+            generation_time_us: 4_000_000,
+            generation_token_count: 80,
+            generation_kind: 'autoregressive',
+            mtp: {
+              available: true,
+              requested: true,
+              active: true,
+              direct_fallback_steps: 2,
+              draft_tokens: 100,
+              accepted_tokens: 75,
+              decode_steps: 30,
+            },
+          },
+        })
+        return undefined
+      }
+      throw new Error(`unexpected command ${command}`)
+    })
+
+    const response = await createMlxIpcFetch()(
+      'http://localhost/v1/chat/completions',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          model: 'ax-local/Qwen3.6-27B-MTP',
+          stream: true,
+          messages: [{ role: 'user', content: 'hi' }],
+        }),
+      }
+    )
+    const chunks = (await response.text())
+      .split('\n')
+      .filter((line) => line.startsWith('data: {'))
+      .map((line) => JSON.parse(line.slice('data: '.length)))
+    const streamExtractor =
+      createAxEngineMetadataExtractor().createStreamExtractor()
+    for (const chunk of chunks) streamExtractor.processChunk(chunk)
+
+    expect(streamExtractor.buildMetadata()).toEqual({
+      axEngine: {
+        elapsedMs: 9000,
+        outputTokenCount: 82,
+        tokensPerSecond: 20,
+        generationKind: 'autoregressive',
+        metricsVersion: 1,
+        totalDurationMs: 8500,
+        timeToFirstTokenMs: 1250,
+        generationDurationMs: 4000,
+        generationTokenCount: 80,
+        accelerationMode: 'mtp',
+        mtpAvailable: true,
+        mtpRequested: true,
+        mtpActive: true,
+        mtpDirectFallbackSteps: 2,
+        mtpDraftTokens: 100,
+        mtpAcceptedTokens: 75,
+        mtpDecodeSteps: 30,
+        mtpAcceptanceRate: 0.75,
       },
     })
   })

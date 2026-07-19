@@ -343,7 +343,7 @@ dependencies = [
 [[package]]
 name = "ax-engine-core"
 version = "6.9.0"
-source = "git+https://github.com/defai-digital/ax-engine?rev=aa42a7d1481cb235cb6d4da553a50e7440c949c1#aa42a7d1481cb235cb6d4da553a50e7440c949c1"
+source = "git+https://github.com/defai-digital/ax-engine?rev=2d5c34a43b122a2f8cc1d7161b4f130be03e8468#2d5c34a43b122a2f8cc1d7161b4f130be03e8468"
 dependencies = [
  "metal",
  "objc",
@@ -357,7 +357,7 @@ dependencies = [
 [[package]]
 name = "ax-engine-mlx"
 version = "6.9.0"
-source = "git+https://github.com/defai-digital/ax-engine?rev=aa42a7d1481cb235cb6d4da553a50e7440c949c1#aa42a7d1481cb235cb6d4da553a50e7440c949c1"
+source = "git+https://github.com/defai-digital/ax-engine?rev=2d5c34a43b122a2f8cc1d7161b4f130be03e8468#2d5c34a43b122a2f8cc1d7161b4f130be03e8468"
 dependencies = [
  "ax-engine-core",
  "fs2",
@@ -373,7 +373,7 @@ dependencies = [
 [[package]]
 name = "ax-engine-sdk"
 version = "6.9.0"
-source = "git+https://github.com/defai-digital/ax-engine?rev=aa42a7d1481cb235cb6d4da553a50e7440c949c1#aa42a7d1481cb235cb6d4da553a50e7440c949c1"
+source = "git+https://github.com/defai-digital/ax-engine?rev=2d5c34a43b122a2f8cc1d7161b4f130be03e8468#2d5c34a43b122a2f8cc1d7161b4f130be03e8468"
 dependencies = [
  "ax-engine-core",
  "ax-engine-mlx",
@@ -389,12 +389,13 @@ dependencies = [
 
 [[package]]
 name = "ax-studio"
-version = "2.1.0"
+version = "2.2.0"
 dependencies = [
  "ax-engine-core",
  "ax-engine-sdk",
  "ax-studio-utils",
  "base64 0.22.1",
+ "cc",
  "chrono",
  "cpal",
  "dirs",
@@ -3392,7 +3393,7 @@ dependencies = [
 [[package]]
 name = "mlx-sys"
 version = "6.9.0"
-source = "git+https://github.com/defai-digital/ax-engine?rev=aa42a7d1481cb235cb6d4da553a50e7440c949c1#aa42a7d1481cb235cb6d4da553a50e7440c949c1"
+source = "git+https://github.com/defai-digital/ax-engine?rev=2d5c34a43b122a2f8cc1d7161b4f130be03e8468#2d5c34a43b122a2f8cc1d7161b4f130be03e8468"
 dependencies = [
  "bindgen",
  "cc",
@@ -6349,7 +6350,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-hardware"
-version = "2.1.0"
+version = "2.2.0"
 dependencies = [
  "libc",
  "libloading 0.8.9",
@@ -6390,7 +6391,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-llamacpp"
-version = "2.1.0"
+version = "2.2.0"
 dependencies = [
  "ax-studio-utils",
  "base64 0.22.1",

@@ -1,6 +1,6 @@
 [package]
 name = "ax-studio"
-version = "2.1.0"
+version = "2.2.0"
 description = "AX Studio — AI desktop application powered by your own backend services."
 authors = ["AX Studio"]
 license = "Apache-2.0"
@@ -61,6 +61,7 @@ test-tauri = [
 [build-dependencies]
 tauri-build = { version = "2.6.3", features = [] }
 sha2 = "0.10"
+cc = "1.2.60"
 
 [dependencies]
 dirs = "6.0.0"
@@ -154,10 +155,11 @@ keyring = { version = "3.6.3", default-features = false, features = ["windows-na
 # do NOT use `branch = "main"`, which would silently auto-pull every new
 # commit and could break our integration without notice.
 #
-# Pinned to ax-engine v6.9.0 (peeled commit for refs/tags/v6.9.0).
+# Pinned to the validated AX Engine revision that separates packaged MTP from
+# standalone n-gram speculation and reports versioned generation metrics.
 [target.'cfg(target_os = "macos")'.dependencies]
-ax-engine-core = { git = "https://github.com/defai-digital/ax-engine", rev = "aa42a7d1481cb235cb6d4da553a50e7440c949c1" }
-ax-engine-sdk = { git = "https://github.com/defai-digital/ax-engine", rev = "aa42a7d1481cb235cb6d4da553a50e7440c949c1", features = ["mlx-native", "tokenizer"] }
+ax-engine-core = { git = "https://github.com/defai-digital/ax-engine", rev = "2d5c34a43b122a2f8cc1d7161b4f130be03e8468" }
+ax-engine-sdk = { git = "https://github.com/defai-digital/ax-engine", rev = "2d5c34a43b122a2f8cc1d7161b4f130be03e8468", features = ["mlx-native", "tokenizer"] }
 keyring = { version = "3.6.3", default-features = false, features = ["apple-native"] }
 objc2-app-kit = { version = "0.3.2", features = ["NSWindow"] }
 # Direct `tokenizers` dep so we can decode generated token ids back to text —

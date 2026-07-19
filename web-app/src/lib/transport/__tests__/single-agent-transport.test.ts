@@ -292,7 +292,7 @@ describe('executeSingleAgentStream', () => {
     })
   })
 
-  it('does not apply native total elapsed time to autoregressive models', async () => {
+  it('uses generation-only native timing for autoregressive MTP models', async () => {
     await executeSingleAgentStream(
       makeConfig({
         model: {
@@ -311,8 +311,16 @@ describe('executeSingleAgentStream', () => {
         providerMetadata: {
           axEngine: {
             elapsedMs: 9000,
-            tokensPerSecond: 1,
+            totalDurationMs: 8500,
+            timeToFirstTokenMs: 1250,
+            generationDurationMs: 4000,
+            generationTokenCount: 80,
+            tokensPerSecond: 20,
             generationKind: 'autoregressive',
+            accelerationMode: 'mtp',
+            mtpDraftTokens: 100,
+            mtpAcceptedTokens: 75,
+            mtpDirectFallbackSteps: 2,
           },
         },
       },
@@ -320,16 +328,22 @@ describe('executeSingleAgentStream', () => {
     const result = messageMetadata({
       part: {
         type: 'finish',
-        totalUsage: { inputTokens: 10, outputTokens: 9, totalTokens: 19 },
+        totalUsage: { inputTokens: 120, outputTokens: 82, totalTokens: 202 },
         finishReason: 'stop',
       },
     })
 
     expect(result).toMatchObject({
       tokenSpeed: {
-        tokenSpeed: 0,
-        tokenCount: 9,
-        durationMs: 0,
+        tokenSpeed: 20,
+        tokenCount: 82,
+        durationMs: 4000,
+        generationTokenCount: 80,
+        totalDurationMs: 8500,
+        timeToFirstTokenMs: 1250,
+        accelerationMode: 'mtp',
+        mtpAcceptanceRate: 0.75,
+        mtpDirectFallbackSteps: 2,
       },
     })
   })

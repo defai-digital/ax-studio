@@ -7,14 +7,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 const repoRoot = path.resolve(import.meta.dirname, '..', '..')
 const signer = path.join(repoRoot, 'scripts', 'release', 'minisign-artifacts.mjs')
 const temporaryDirectories = []
-const sharedPublicKey = [
-  'untrusted comment: minisign public key CF42FC69BEEF0EA5',
-  'RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO',
-  '',
-].join('\n')
+const sharedPublicKey = readFileSync(
+  path.join(repoRoot, 'docs', 'ax-studio.minisign.pub'),
+  'utf8',
+)
 const realMinisignAvailable = spawnSync('minisign', ['-v'], {
   stdio: 'ignore',
 }).status === 0
+const subprocessTestTimeout = 30_000
 
 afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) {
@@ -97,7 +97,7 @@ process.stdout.write('from-keychain\\n')
       expect(securityArgs).toContain('ax-minisign')
       expect(securityArgs).toContain('ax-release')
     }
-  })
+  }, subprocessTestTimeout)
 
   it('rejects a selected public key that differs from the committed pin', () => {
     const root = mkdtempSync(path.join(os.tmpdir(), 'ax-studio-minisign-pin-'))
@@ -133,39 +133,43 @@ process.stdout.write('from-keychain\\n')
 
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('public key does not match pinned release key')
-  })
+  }, subprocessTestTimeout)
 
-  it.runIf(process.platform !== 'win32')('rejects a group-readable secret key', () => {
-    const root = mkdtempSync(path.join(os.tmpdir(), 'ax-studio-minisign-mode-'))
-    temporaryDirectories.push(root)
-    const keyDirectory = path.join(root, 'signkey')
-    const binDirectory = path.join(root, 'bin')
-    const artifact = path.join(root, 'artifact.zip')
-    mkdirSync(keyDirectory, { mode: 0o700 })
-    mkdirSync(binDirectory)
-    writeFileSync(path.join(keyDirectory, 'ax.minisign.key'), 'test secret key')
-    chmodSync(path.join(keyDirectory, 'ax.minisign.key'), 0o640)
-    writeFileSync(path.join(keyDirectory, 'ax.pub'), sharedPublicKey)
-    writeFileSync(artifact, 'artifact')
-    executable(path.join(binDirectory, 'minisign'), 'process.exit(0)')
+  it.runIf(process.platform !== 'win32')(
+    'rejects a group-readable secret key',
+    () => {
+      const root = mkdtempSync(path.join(os.tmpdir(), 'ax-studio-minisign-mode-'))
+      temporaryDirectories.push(root)
+      const keyDirectory = path.join(root, 'signkey')
+      const binDirectory = path.join(root, 'bin')
+      const artifact = path.join(root, 'artifact.zip')
+      mkdirSync(keyDirectory, { mode: 0o700 })
+      mkdirSync(binDirectory)
+      writeFileSync(path.join(keyDirectory, 'ax.minisign.key'), 'test secret key')
+      chmodSync(path.join(keyDirectory, 'ax.minisign.key'), 0o640)
+      writeFileSync(path.join(keyDirectory, 'ax.pub'), sharedPublicKey)
+      writeFileSync(artifact, 'artifact')
+      executable(path.join(binDirectory, 'minisign'), 'process.exit(0)')
 
-    const result = spawnSync(
-      process.execPath,
-      [signer, '--key-dir', keyDirectory, artifact],
-      {
-        cwd: repoRoot,
-        encoding: 'utf8',
-        env: {
-          ...process.env,
-          PATH: `${binDirectory}${path.delimiter}${process.env.PATH}`,
-          MINISIGN_PASSWORD: 'test',
+      const result = spawnSync(
+        process.execPath,
+        [signer, '--key-dir', keyDirectory, artifact],
+        {
+          cwd: repoRoot,
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            PATH: `${binDirectory}${path.delimiter}${process.env.PATH}`,
+            MINISIGN_PASSWORD: 'test',
+          },
         },
-      },
-    )
+      )
 
-    expect(result.status).toBe(1)
-    expect(result.stderr).toContain('secret key must not be group/world accessible')
-  })
+      expect(result.status).toBe(1)
+      expect(result.stderr).toContain('secret key must not be group/world accessible')
+    },
+    subprocessTestTimeout,
+  )
 
   it.runIf(realMinisignAvailable)(
     'signs and verifies an artifact with the real Minisign CLI',
@@ -210,5 +214,6 @@ process.stdout.write('from-keychain\\n')
         'AX Studio release artifact.zip sha256=',
       )
     },
+    subprocessTestTimeout,
   )
 })
