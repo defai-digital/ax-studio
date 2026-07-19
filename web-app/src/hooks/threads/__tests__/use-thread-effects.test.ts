@@ -203,7 +203,7 @@ describe('useThreadEffects', () => {
     expect(defaultInput.processAndSendMessage).not.toHaveBeenCalled()
   })
 
-  it('consumes the initial message before asynchronous queuing finishes', async () => {
+  it('consumes the initial message after asynchronous queuing finishes', async () => {
     const initialMsg = JSON.stringify({ text: 'retry me' })
     let finishQueuing: (() => void) | undefined
     defaultInput.processAndSendMessage = vi.fn().mockImplementation(
@@ -218,11 +218,14 @@ describe('useThreadEffects', () => {
     await vi.waitFor(() => {
       expect(defaultInput.processAndSendMessage).toHaveBeenCalledWith('retry me')
     })
-    expect(sessionStorage.getItem(`initial-message-${threadId}`)).toBeNull()
+    expect(sessionStorage.getItem(`initial-message-${threadId}`)).toBe(initialMsg)
     finishQueuing?.()
+    await vi.waitFor(() => {
+      expect(sessionStorage.getItem(`initial-message-${threadId}`)).toBeNull()
+    })
   })
 
-  it('does not restore a consumed initial message when queuing fails', async () => {
+  it('retains an initial message when queuing fails', async () => {
     sessionStorage.setItem(
       `initial-message-${threadId}`,
       JSON.stringify({ text: 'send once' })
@@ -236,7 +239,7 @@ describe('useThreadEffects', () => {
     await vi.waitFor(() => {
       expect(defaultInput.processAndSendMessage).toHaveBeenCalledWith('send once')
     })
-    expect(sessionStorage.getItem(`initial-message-${threadId}`)).toBeNull()
+    expect(sessionStorage.getItem(`initial-message-${threadId}`)).not.toBeNull()
   })
 
   it('does not mark an initial message sent when StrictMode cleanup cancels the dispatch timer', async () => {

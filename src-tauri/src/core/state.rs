@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
-    sync::Arc,
+    sync::{atomic::AtomicBool, Arc},
 };
 
 use crate::core::{downloads::models::DownloadManagerState, mcp::models::McpSettings};
@@ -22,8 +22,38 @@ pub struct ServerHandle {
 
 pub type ProviderModelIndex = HashMap<String, Vec<String>>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TrackedMcpProcess {
+    pub pid: u32,
+    start_time: Option<u64>,
+}
+
+impl TrackedMcpProcess {
+    pub fn capture(pid: u32) -> Self {
+        let sys_pid = sysinfo::Pid::from_u32(pid);
+        let mut system = sysinfo::System::new();
+        system.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[sys_pid]), true);
+        let start_time = system
+            .process(sys_pid)
+            .map(sysinfo::Process::start_time);
+        Self { pid, start_time }
+    }
+
+    pub fn still_matches(self) -> bool {
+        let Some(expected_start_time) = self.start_time else {
+            return false;
+        };
+        let sys_pid = sysinfo::Pid::from_u32(self.pid);
+        let mut system = sysinfo::System::new();
+        system.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[sys_pid]), true);
+        system
+            .process(sys_pid)
+            .is_some_and(|process| process.start_time() == expected_start_time)
+    }
+}
+
 /// Provider configuration for remote model providers
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct ProviderConfig {
     pub provider: String,
     #[serde(skip_serializing)]
@@ -31,6 +61,27 @@ pub struct ProviderConfig {
     pub base_url: Option<String>,
     pub custom_headers: Vec<ProviderCustomHeader>,
     pub models: Vec<String>,
+}
+
+impl std::fmt::Debug for ProviderConfig {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let custom_header_names: Vec<&str> = self
+            .custom_headers
+            .iter()
+            .map(|header| header.header.as_str())
+            .collect();
+        formatter
+            .debug_struct("ProviderConfig")
+            .field("provider", &self.provider)
+            .field(
+                "api_key",
+                &self.api_key.as_ref().map(|_| "[REDACTED]"),
+            )
+            .field("base_url", &self.base_url)
+            .field("custom_header_names", &custom_header_names)
+            .field("models", &self.models)
+            .finish()
+    }
 }
 
 fn is_reserved_provider_header(name: &str) -> bool {
@@ -199,10 +250,10 @@ pub struct AppState {
     pub tool_call_cancellations: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
     pub akidb_sync_cancellation: Arc<Mutex<Option<oneshot::Sender<()>>>>,
     pub mcp_settings: Arc<Mutex<McpSettings>>,
-    pub mcp_shutdown_in_progress: Arc<Mutex<bool>>,
+    pub mcp_shutdown_in_progress: Arc<AtomicBool>,
     pub mcp_monitoring_tasks: Arc<Mutex<HashMap<String, tauri::async_runtime::JoinHandle<()>>>>,
     pub background_cleanup_handle: Arc<Mutex<Option<tauri::async_runtime::JoinHandle<()>>>>,
-    pub mcp_server_pids: Arc<Mutex<HashMap<String, u32>>>,
+    pub mcp_server_pids: Arc<Mutex<HashMap<String, TrackedMcpProcess>>>,
     /// Remote provider configurations and model index are kept under one lock.
     pub provider_state: Arc<Mutex<ProviderState>>,
     /// One-time write targets approved via native save dialog

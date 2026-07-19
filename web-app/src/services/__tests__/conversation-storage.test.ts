@@ -19,6 +19,7 @@ const mockExtension = {
   listMessages: vi.fn(),
   createMessage: vi.fn(),
   modifyMessage: vi.fn(),
+  modifyMessages: vi.fn(),
   deleteMessage: vi.fn(),
 }
 
@@ -30,6 +31,7 @@ const mockNativeApi = {
   listMessages: vi.fn(),
   createMessage: vi.fn(),
   modifyMessage: vi.fn(),
+  modifyMessages: vi.fn(),
   deleteMessage: vi.fn(),
 }
 

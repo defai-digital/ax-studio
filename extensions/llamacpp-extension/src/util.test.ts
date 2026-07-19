@@ -4,6 +4,7 @@ import {
   getProxyConfig,
   buildProxyArg,
   estimateTokensFromText,
+  createRandomApiSecret,
   buildEmbedBatches,
   mergeEmbedResponses,
   parseSimpleYaml,
@@ -323,6 +324,24 @@ describe('estimateTokensFromText', () => {
 
   it('rounds up partial tokens', () => {
     expect(estimateTokensFromText('ab')).toBe(1) // ceil(2/3) = 1
+  })
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    'falls back to the default for invalid chars-per-token %s',
+    (charsPerToken) => {
+      expect(estimateTokensFromText('hello', charsPerToken)).toBe(2)
+    }
+  )
+})
+
+describe('createRandomApiSecret', () => {
+  it('returns independent 256-bit hexadecimal secrets', () => {
+    const first = createRandomApiSecret()
+    const second = createRandomApiSecret()
+
+    expect(first).toMatch(/^[a-f0-9]{64}$/)
+    expect(second).toMatch(/^[a-f0-9]{64}$/)
+    expect(first).not.toBe(second)
   })
 })
 

@@ -141,11 +141,15 @@ pub fn update_thread_metadata(path: &Path, thread: &ThreadRecord) -> Result<(), 
     let tmp_path = path.with_extension("json.tmp");
     let data = serde_json::to_string_pretty(thread).map_err(|e| e.to_string())?;
     fs::write(&tmp_path, &data).map_err(|e| e.to_string())?;
-    // fsync to ensure data is on disk before rename
-    if let Ok(f) = File::open(&tmp_path) {
-        let _ = f.sync_all();
+    // fsync to ensure data is on disk before rename. A sync failure must fail
+    // the update; reporting success here would violate the durability contract.
+    File::open(&tmp_path)
+        .and_then(|file| file.sync_all())
+        .map_err(|error| error.to_string())?;
+    if let Err(error) = fs::rename(&tmp_path, path) {
+        let _ = fs::remove_file(&tmp_path);
+        return Err(error.to_string());
     }
-    fs::rename(&tmp_path, path).map_err(|e| e.to_string())?;
     Ok(())
 }
 

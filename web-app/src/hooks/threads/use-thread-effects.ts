@@ -106,6 +106,10 @@ export function useThreadEffects({
   processAndSendMessageRef.current = processAndSendMessage
   const updateThreadRef = useRef(updateThread)
   updateThreadRef.current = updateThread
+  const chatMessagesRef = useRef(chatMessages)
+  chatMessagesRef.current = chatMessages
+  const persistedMessagesRef = useRef(persistedMessages)
+  persistedMessagesRef.current = persistedMessages
 
   useEffect(() => {
     // Do not act on a launch hand-off until persisted messages have hydrated.
@@ -156,7 +160,7 @@ export function useThreadEffects({
         // Prefer the live AI SDK transcript: after a live-session hydrate the
         // store may still lag (or briefly hold []) while chatMessages already
         // shows the user turn that must not be re-sent.
-        const existsInChat = chatMessages.some((chatMessage) => {
+        const existsInChat = chatMessagesRef.current.some((chatMessage) => {
           if (chatMessage.role !== 'user') return false
           const text = chatMessage.parts
             .map((part) => (part.type === 'text' ? part.text : ''))
@@ -164,7 +168,7 @@ export function useThreadEffects({
             .trim()
           return text === normalizedMessage
         })
-        const existsInStore = persistedMessages.some((storedMessage) => {
+        const existsInStore = persistedMessagesRef.current.some((storedMessage) => {
           if (storedMessage.role !== 'user') return false
           const text = storedMessage.content
             .map((part) => part.text?.value ?? '')
@@ -174,15 +178,18 @@ export function useThreadEffects({
         })
         const messageAlreadyExists = existsInChat || existsInStore
 
-        // Consume the launch hand-off before beginning any asynchronous
-        // preparation or generation. A Tauri reload can interrupt an active
-        // local-model request; leaving this marker behind makes the next app
-        // launch silently submit the same prompt again and can look like the
-        // application has hung while a long response is regenerated.
-        clearInitialMessage()
-        if (messageAlreadyExists) return
+        if (messageAlreadyExists) {
+          clearInitialMessage()
+          return
+        }
+
+        // Keep the durable hand-off until preparation has successfully queued
+        // the user turn. If preparation fails, a later render or app restart can
+        // retry it instead of silently losing the user's prompt.
         await processAndSendMessageRef.current(message)
+        clearInitialMessage()
       })().catch((error) => {
+        initialMessageSentForThreadRef.current = null
         console.error('Failed to process initial message:', error)
       })
     }, 0)
@@ -194,8 +201,6 @@ export function useThreadEffects({
     threadId,
     thread?.metadata?.pendingInitialMessage,
     messagesLoaded,
-    chatMessages,
-    persistedMessages,
   ])
 
   // ─── Apply thread prompt from sessionStorage ──────────────────────────────

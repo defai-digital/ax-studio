@@ -20,6 +20,22 @@ import {
 
 const LEGACY_ENCRYPTION_KEY = 'ax-studio-secure-proxy-key'
 
+let proxyStorageTail: Promise<void> = Promise.resolve()
+
+async function withProxyStorageLock<T>(operation: () => Promise<T>): Promise<T> {
+  const previous = proxyStorageTail
+  let release!: () => void
+  proxyStorageTail = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await previous
+  try {
+    return await operation()
+  } finally {
+    release()
+  }
+}
+
 const tryLegacyDecrypt = (value: string): string | null => {
   try {
     const plain = AES.decrypt(value, LEGACY_ENCRYPTION_KEY).toString(enc.Utf8)
@@ -30,9 +46,8 @@ const tryLegacyDecrypt = (value: string): string | null => {
 }
 
 export const proxyConfigStorage = {
-  getItem: async (
-    name: string
-  ): Promise<StorageValue<ProxyConfigState> | null> => {
+  getItem: (name: string): Promise<StorageValue<ProxyConfigState> | null> =>
+    withProxyStorageLock(async () => {
     const item = safeStorageGetItem(localStorage, name, 'useProxyConfig')
     if (!item) return null
     let parsed: StorageValue<ProxyConfigState>
@@ -84,11 +99,12 @@ export const proxyConfigStorage = {
         proxyPassword,
       },
     }
-  },
-  setItem: async (
+    }),
+  setItem: (
     name: string,
     value: StorageValue<ProxyConfigState>
-  ): Promise<void> => {
+  ): Promise<void> =>
+    withProxyStorageLock(async () => {
     const stateObj = value.state
     const plainPassword =
       typeof stateObj.proxyPassword === 'string' ? stateObj.proxyPassword : ''
@@ -111,11 +127,12 @@ export const proxyConfigStorage = {
     } else {
       await deleteSecureSecret(PROXY_PASSWORD_SECRET)
     }
-  },
-  removeItem: async (name: string) => {
-    safeStorageRemoveItem(localStorage, name, 'useProxyConfig')
-    await deleteSecureSecret(PROXY_PASSWORD_SECRET)
-  },
+    }),
+  removeItem: (name: string) =>
+    withProxyStorageLock(async () => {
+      safeStorageRemoveItem(localStorage, name, 'useProxyConfig')
+      await deleteSecureSecret(PROXY_PASSWORD_SECRET)
+    }),
 } satisfies PersistStorage<ProxyConfigState>
 
 type ProxyConfigState = {

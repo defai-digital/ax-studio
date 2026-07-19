@@ -905,6 +905,25 @@ fn should_prevent_exit_for_tray(code: Option<i32>, tray_enabled: bool) -> bool {
 
 /// Tauri `.setup()` callback — runs once after the app is built.
 pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(desktop)]
+    {
+        let data_folder = get_app_data_folder_path(app.handle().clone());
+        let llama_state = app.state::<tauri_plugin_llamacpp::state::LlamacppState>();
+        llama_state.add_trusted_binary_root(data_folder.join("llamacpp").join("backends"));
+        llama_state.add_trusted_binary_root(data_folder.join("ax-serving"));
+        llama_state.add_trusted_model_root(data_folder.join("llamacpp").join("models"));
+        #[cfg(unix)]
+        {
+            llama_state.add_trusted_binary_root(std::path::PathBuf::from("/usr/local/bin"));
+            llama_state.add_trusted_binary_root(std::path::PathBuf::from("/opt/homebrew/bin"));
+            llama_state.add_trusted_binary_root(std::path::PathBuf::from("/usr/bin"));
+        }
+        #[cfg(windows)]
+        if let Some(program_files) = std::env::var_os("ProgramFiles") {
+            llama_state.add_trusted_binary_root(std::path::PathBuf::from(program_files));
+        }
+    }
+
     // Extension modules are the only application-managed files loaded through
     // the asset protocol. User-selected files are granted individually by the
     // native dialog command.

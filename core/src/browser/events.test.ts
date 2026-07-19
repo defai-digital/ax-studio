@@ -16,10 +16,13 @@ describe('events module', () => {
     })
 
     it('on registers against the fallback bridge when bridge is not available', () => {
-      events.on('test-event', handler)
+      const unsubscribe = events.on('test-event', handler)
       events.emit('test-event', { value: 1 })
 
       expect(handler).toHaveBeenCalledWith({ value: 1 })
+      unsubscribe()
+      events.emit('test-event', { value: 2 })
+      expect(handler).toHaveBeenCalledOnce()
     })
 
     it('off unregisters from the fallback bridge when bridge is not available', () => {
@@ -50,9 +53,11 @@ describe('events module', () => {
     })
 
     it('on calls bridge.on with correct arguments', () => {
-      events.on('my-event', handler)
+      const unsubscribe = events.on('my-event', handler)
 
       expect(globalThis.core.events.on).toHaveBeenCalledWith('my-event', handler)
+      unsubscribe()
+      expect(globalThis.core.events.off).toHaveBeenCalledWith('my-event', handler)
     })
 
     it('off calls bridge.off with correct arguments', () => {

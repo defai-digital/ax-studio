@@ -15,6 +15,7 @@ const AppRoutes = [
   'listMessages',
   'createMessage',
   'modifyMessage',
+  'modifyMessages',
   'deleteMessage',
   'getThreadAssistant',
   'createThreadAssistant',

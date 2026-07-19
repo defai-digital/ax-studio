@@ -6,6 +6,7 @@ import { ThreadMessage } from '@ax-studio/core'
 // Mock the ServiceHub
 const mockCreateMessage = vi.fn()
 const mockModifyMessage = vi.fn()
+const mockModifyMessages = vi.fn()
 const mockDeleteMessage = vi.fn()
 
 vi.mock('@/hooks/useServiceHub', () => ({
@@ -13,6 +14,7 @@ vi.mock('@/hooks/useServiceHub', () => ({
     messages: () => ({
       createMessage: mockCreateMessage,
       modifyMessage: mockModifyMessage,
+      modifyMessages: mockModifyMessages,
       deleteMessage: mockDeleteMessage,
     }),
   }),
@@ -23,6 +25,7 @@ describe('useMessages', () => {
     vi.clearAllMocks()
     mockCreateMessage.mockImplementation(async (message) => message)
     mockModifyMessage.mockImplementation(async (message) => message)
+    mockModifyMessages.mockImplementation(async (messages) => messages)
     mockDeleteMessage.mockResolvedValue(undefined)
     // Reset store state
     act(() => {

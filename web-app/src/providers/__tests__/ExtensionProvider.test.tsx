@@ -1,7 +1,10 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
-import { ExtensionProvider } from '../ExtensionProvider'
+import {
+  ExtensionProvider,
+  resetExtensionFailureToastState,
+} from '../ExtensionProvider'
 
 const mocks = vi.hoisted(() => {
   const extensionManager = {
@@ -70,11 +73,13 @@ describe('ExtensionProvider', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    resetExtensionFailureToastState()
     for (const key of Object.keys(mocks.core)) {
       delete mocks.core[key]
     }
     mocks.extensionManager.registerActive.mockResolvedValue(undefined)
     mocks.extensionManager.load.mockResolvedValue(undefined)
+    mocks.extensionManager.getFailedExtensionNames.mockReturnValue([])
     mocks.listen.mockResolvedValue(vi.fn())
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
@@ -246,6 +251,31 @@ describe('ExtensionProvider', () => {
         'Download failed to load; related features may be unavailable'
       )
       expect(screen.getByTestId('child')).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('treats individually rejected extension loads as a failed setup pass', async () => {
+    vi.useFakeTimers()
+    try {
+      mocks.extensionManager.getFailedExtensionNames.mockReturnValue([
+        'Conversational',
+      ])
+
+      render(
+        <ExtensionProvider>
+          <div data-testid="child">App shell</div>
+        </ExtensionProvider>
+      )
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(6000)
+      })
+
+      expect(toast.error).toHaveBeenCalledWith(
+        'Conversational failed to load; related features may be unavailable'
+      )
     } finally {
       vi.useRealTimers()
     }

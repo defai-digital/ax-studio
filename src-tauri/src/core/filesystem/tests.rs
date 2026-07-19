@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, Arc};
 use tauri::test::mock_app;
 use tauri::Manager;
 use tokio::sync::{oneshot, Mutex};
@@ -24,7 +24,7 @@ fn test_app_state() -> AppState {
         tool_call_cancellations: Arc::new(Mutex::new(std::collections::HashMap::new())),
         akidb_sync_cancellation: Arc::new(Mutex::new(None)),
         mcp_settings: Arc::new(Mutex::new(crate::core::mcp::models::McpSettings::default())),
-        mcp_shutdown_in_progress: Arc::new(Mutex::new(false)),
+        mcp_shutdown_in_progress: Arc::new(AtomicBool::new(false)),
         mcp_monitoring_tasks: Arc::new(Mutex::new(std::collections::HashMap::new())),
         background_cleanup_handle: Arc::new(Mutex::new(None)),
         mcp_server_pids: Arc::new(Mutex::new(std::collections::HashMap::new())),

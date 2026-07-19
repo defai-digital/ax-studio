@@ -438,6 +438,14 @@ export const useModelProvider = create<ModelProviderState>()(
             pathSep
           )
 
+          // Provider refreshes run several times during startup. Keep the
+          // Zustand state object stable when normalized data did not change.
+          if (
+            JSON.stringify(mergedProviders) === JSON.stringify(state.providers)
+          ) {
+            return state
+          }
+
           return {
             providers: mergedProviders,
             ...syncSelectedModel(

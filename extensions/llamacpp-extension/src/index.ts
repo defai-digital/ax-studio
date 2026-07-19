@@ -79,6 +79,7 @@ import {
   buildEmbedBatches,
   mergeEmbedResponses,
   parseFiniteDecimalNumber,
+  createRandomApiSecret,
   EmbeddingResponse,
 } from './util'
 import { decideLocalProviderSync } from './provider-sync'
@@ -298,6 +299,7 @@ const DEFAULT_LOAD_TIMEOUT_SECONDS = 600
 const AX_SERVING_PORT_CHECK_TIMEOUT_MS = 3_000
 const AX_SERVING_HEALTH_CHECK_TIMEOUT_MS = 5_000
 const AX_SERVING_UNLOAD_TIMEOUT_MS = 10_000
+const IN_FLIGHT_LOAD_UNLOAD_WAIT_MS = 10_000
 const DEFAULT_UBATCH_SIZE = 512
 const AUTO_GPU_LAYERS_SENTINEL = 100
 const AX_SERVING_SERVICE_MODEL_ID = '__ax_serving__'
@@ -2196,7 +2198,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
 
     const embedding = isEmbedding || Boolean(cfg.embedding)
     const port = await getRandomPort()
-    const apiSecret = String(Date.now())
+    const apiSecret = createRandomApiSecret()
     const apiKey = await generateApiKey(modelId, apiSecret)
 
     // Merge global config with per-model override settings
@@ -2318,9 +2320,28 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       for (const id of allIds) {
         if (id === excludeModelId) continue
         // Wait for any in-progress load for this model to complete
-        await this.loadingModels.get(id)?.catch((error) => {
-          console.debug(`[llamacpp] Ignoring in-flight load failure for ${id} during unload sweep:`, error)
-        })
+        const inFlightLoad = this.loadingModels.get(id)
+        if (inFlightLoad) {
+          let timeoutId: ReturnType<typeof setTimeout> | undefined
+          await Promise.race([
+            inFlightLoad.catch((error) => {
+              console.debug(
+                `[llamacpp] Ignoring in-flight load failure for ${id} during unload sweep:`,
+                error
+              )
+            }),
+            new Promise<void>((resolve) => {
+              timeoutId = setTimeout(() => {
+                console.warn(
+                  `[llamacpp] Timed out waiting for in-flight load of ${id}; continuing unload sweep`
+                )
+                resolve()
+              }, IN_FLIGHT_LOAD_UNLOAD_WAIT_MS)
+            }),
+          ]).finally(() => {
+            if (timeoutId) clearTimeout(timeoutId)
+          })
+        }
         try {
           // Check ax-serving sessions first
           const axSession = this.axServingSessions.get(id)
@@ -2668,12 +2689,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   async import(modelId: string, opts: ImportOptions): Promise<void> {
     debugLog('[import] called with:', { modelId, modelPath: opts.modelPath })
     const importOptions = opts as ImportOptionsWithHeaders
-    // Validate model ID — no path traversal
-    if (!/^[a-zA-Z0-9/\-_.]+$/.test(modelId) || modelId.includes('..')) {
-      throw new Error(
-        `Invalid model ID: "${modelId}". Use only alphanumeric, /, -, _, . characters.`
-      )
-    }
+    this._validateModelId(modelId)
 
     const _wrap = async <T>(label: string, fn: () => Promise<T>): Promise<T> => {
       try {
@@ -2819,7 +2835,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       relativeMmprojPath = `llamacpp/models/${modelId}/mmproj.gguf`
       await this._validatePathWithinModelsDir(mmprojFilePath, 'MMProj')
 
-      if (opts.mmprojPath.startsWith('http')) {
+      if (opts.mmprojPath.startsWith('https://')) {
         if (!downloadExt) throw new Error('Download extension not available')
         const proxy = await getProxyConfig()
         await downloadExt.downloadFile(
@@ -2924,7 +2940,18 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   // ─── helpers ─────────────────────────────────────────────────────────────
 
   private _validateModelId(modelId: string): void {
-    if (!/^[a-zA-Z0-9/\-_.]+$/.test(modelId) || modelId.includes('..')) {
+    const segments = modelId.split('/')
+    if (
+      !/^[a-zA-Z0-9/\-_.]+$/.test(modelId) ||
+      segments.some(
+        (segment) =>
+          !segment ||
+          segment === '.' ||
+          segment === '..' ||
+          segment.startsWith('.') ||
+          segment.endsWith('.')
+      )
+    ) {
       throw new Error(
         `Invalid model ID: "${modelId}". Use only alphanumeric, /, -, _, . characters.`
       )

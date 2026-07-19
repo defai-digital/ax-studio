@@ -58,19 +58,36 @@ export function GlobalEventHandler() {
   // so a not-yet-mounted home composer can mount first (it also autofocuses on
   // mount; the event covers the already-mounted case).
   useEffect(() => {
+    let cancelled = false
     let unlisten: (() => void) | undefined
+    let focusTimer: ReturnType<typeof setTimeout> | undefined
     serviceHub
       .events()
       ?.listen(SystemEvent.GLOBAL_WAKE, () => {
         navigate({ to: route.home })
-        setTimeout(() => {
+        if (focusTimer) clearTimeout(focusTimer)
+        focusTimer = setTimeout(() => {
+          if (cancelled) return
           window.dispatchEvent(new CustomEvent(COMPOSER_FOCUS_EVENT))
         }, 50)
       })
       .then((unsub) => {
+        if (cancelled) {
+          unsub()
+          return
+        }
         unlisten = unsub
       })
-    return () => unlisten?.()
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('[GlobalEventHandler] Failed to listen for global wake:', error)
+        }
+      })
+    return () => {
+      cancelled = true
+      if (focusTimer) clearTimeout(focusTimer)
+      unlisten?.()
+    }
   }, [serviceHub, navigate])
 
   // ─── OS file open (macOS Dock drop / Windows "Open with") ───────────────

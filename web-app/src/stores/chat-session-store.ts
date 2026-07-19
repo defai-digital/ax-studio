@@ -63,21 +63,35 @@ export const useChatSessions = create<ChatSessionState>((set, get) => ({
         // Only recreate the Chat instance when the transport changes.
         // A title-only change (e.g. thread rename on first message) must NOT
         // recreate Chat — that would discard any in-flight streaming request.
-        const updatedChat = transportChanged && createChatFn
-          ? createChatFn(sessionId, transport)
-          : existing.chat
+        if (transportChanged) {
+          const replacement = createSession(
+            sessionId,
+            transport,
+            createChatFn,
+            title ?? existing.title,
+            existing.data,
+            (id, status) => get().updateStatus(id, status)
+          )
+          destroySession(existing)
+          set((state) => ({
+            sessions: {
+              ...state.sessions,
+              [sessionId]: replacement,
+            },
+          }))
+          return replacement.chat
+        }
+
         set((state) => ({
           sessions: {
             ...state.sessions,
             [sessionId]: {
               ...existing,
-              transport,
               title: title ?? existing.title,
-              chat: updatedChat,
             },
           },
         }))
-        return updatedChat
+        return existing.chat
       }
       return existing.chat
     }

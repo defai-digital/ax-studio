@@ -27,6 +27,7 @@ import {
   getMcpToolFailureMessage,
   normalizeMcpResultForToolOutput,
 } from '@/lib/ax-bi/mcp-result'
+import { resolveApprovedAxBiFile } from '@/lib/ax-bi/approved-file'
 
 export type AddToolOutputFn = (...args: unknown[]) => unknown
 
@@ -523,7 +524,17 @@ export function useThreadTools({
               try {
                 const { fs } = await import('@ax-studio/core')
                 const input = toolCall.input as { file_path: string; filename: string }
-                const fileContent = await fs.readFileBase64(input.file_path)
+                const approvedFile = resolveApprovedAxBiFile(
+                  threadId,
+                  input.file_path,
+                  projectId
+                )
+                if (!approvedFile) {
+                  throw new Error(
+                    'The requested file was not attached by the user or indexed for this thread'
+                  )
+                }
+                const fileContent = await fs.readFileBase64(approvedFile.path)
                 if (signal.aborted) throw abortError()
                 result = await callMcpTool({
                   serverName: 'ax-bi',
@@ -531,7 +542,7 @@ export function useThreadTools({
                   arguments: {
                     request: {
                       file_content: fileContent,
-                      filename: input.filename,
+                      filename: approvedFile.name || input.filename,
                     },
                   },
                 })

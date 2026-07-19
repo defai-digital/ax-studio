@@ -40,4 +40,8 @@ export abstract class ConversationalExtension
     assistant: ThreadAssistantInfo
   ): Promise<ThreadAssistantInfo>
   abstract modifyMessage(message: ThreadMessage): Promise<ThreadMessage>
+
+  async modifyMessages(messages: ThreadMessage[]): Promise<ThreadMessage[]> {
+    return Promise.all(messages.map((message) => this.modifyMessage(message)))
+  }
 }

@@ -101,7 +101,13 @@ function buildKeywordFallbackQueries(query: string): string[] {
 function isRecoverableLocalKnowledgeError(error: unknown): boolean {
   const message = extractErrorMessage(error, String(error))
 
-  return /transport closed|connection closed|server disconnected|server .*not found|timed out/i.test(message)
+  // Client-side local-knowledge timeouts are final — retrying would only
+  // double the wait after we already cancelled the MCP call.
+  if (/local knowledge search timed out/i.test(message)) return false
+
+  return /transport closed|connection closed|server disconnected|server .*not found|timed out/i.test(
+    message
+  )
 }
 
 async function retryRecoverableSearch<T>(operation: () => Promise<T>): Promise<T> {
@@ -138,13 +144,16 @@ function buildNoKnowledgeContext(reason: string): string {
   return `\n\n## Local Knowledge Base (ACTIVE)\nThe app searched the user's local knowledge base before sending this message, but no relevant context was retrieved.\n\n### Retrieval Status:\n${reason}\n\n### Instruction:\nAnswer only from the retrieved local-knowledge context. Since no relevant context was retrieved, say: "I could not find relevant information in the knowledge base." Do not invent an answer from general knowledge. Do not write tool calls, Python imports, JSON tool-call markup, or search instructions.`
 }
 
-function withLocalKnowledgeTimeout<T>(promise: Promise<T>): Promise<T> {
+function withLocalKnowledgeTimeout<T>(
+  promise: Promise<T>,
+  cancel: () => Promise<void>
+): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(
-      () => reject(new Error('Local knowledge search timed out')),
-      LOCAL_KNOWLEDGE_SEARCH_TIMEOUT_MS
-    )
+    timeoutId = setTimeout(() => {
+      void cancel()
+      reject(new Error('Local knowledge search timed out'))
+    }, LOCAL_KNOWLEDGE_SEARCH_TIMEOUT_MS)
   })
 
   return Promise.race([promise, timeout]).finally(() => {
@@ -152,18 +161,25 @@ function withLocalKnowledgeTimeout<T>(promise: Promise<T>): Promise<T> {
   })
 }
 
+function callFabricTool(
+  serviceHub: ReturnType<typeof getServiceHub>,
+  toolName: 'fabric_search' | 'fabric_extract',
+  toolArguments: Record<string, unknown>
+) {
+  const cancellable = serviceHub.mcp().callToolWithCancellation({
+    toolName,
+    serverName: 'ax-studio',
+    arguments: toolArguments,
+  })
+  return withLocalKnowledgeTimeout(cancellable.promise, cancellable.cancel)
+}
+
 function callFabricSearch(
   serviceHub: ReturnType<typeof getServiceHub>,
   toolArguments: Record<string, unknown>
 ) {
   return retryRecoverableSearch(() =>
-    withLocalKnowledgeTimeout(
-      serviceHub.mcp().callTool({
-        toolName: 'fabric_search',
-        serverName: 'ax-studio',
-        arguments: toolArguments,
-      })
-    )
+    callFabricTool(serviceHub, 'fabric_search', toolArguments)
   )
 }
 
@@ -171,13 +187,7 @@ function callFabricExtract(
   serviceHub: ReturnType<typeof getServiceHub>,
   filePath: string
 ) {
-  return withLocalKnowledgeTimeout(
-    serviceHub.mcp().callTool({
-      toolName: 'fabric_extract',
-      serverName: 'ax-studio',
-      arguments: { file_path: filePath },
-    })
-  )
+  return callFabricTool(serviceHub, 'fabric_extract', { file_path: filePath })
 }
 
 async function buildContextFromSearchResult(
@@ -328,12 +338,16 @@ export function useThreadLocalKnowledge(threadId: string) {
         return buildContextFromSearchResult(serviceHub, result)
       } catch (err) {
         console.error('[LocalKnowledge] Failed to prepare knowledge context:', err)
+        const detail = extractErrorMessage(
+          err,
+          'The local knowledge search failed before results could be injected.'
+        )
         return {
-          context: buildNoKnowledgeContext('The local knowledge search failed before results could be injected.'),
+          context: buildNoKnowledgeContext(detail),
           retrieval: {
             searched: true,
             extracted: false,
-            error: 'The local knowledge search failed before results could be injected.',
+            error: detail,
           },
         }
       }

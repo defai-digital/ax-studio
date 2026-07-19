@@ -6,7 +6,8 @@ use tokio::process::Command;
 use tokio::time::timeout;
 
 use crate::error::{ErrorCode, LlamacppError, ServerError, ServerResult};
-use crate::path::validate_binary_path;
+use crate::path::{is_dangerous_process_env_key, validate_binary_path};
+use std::path::PathBuf;
 use ax_studio_utils::{
     add_cuda_paths, binary_requires_cuda, setup_library_path, setup_windows_process_flags,
 };
@@ -22,15 +23,24 @@ pub struct DeviceInfo {
 pub async fn get_devices_from_backend(
     backend_path: &str,
     envs: HashMap<String, String>,
+    trusted_roots: &[PathBuf],
 ) -> ServerResult<Vec<DeviceInfo>> {
     log::info!("Getting devices from server at path: {:?}", backend_path);
 
-    let bin_path = validate_binary_path(backend_path)?;
+    let bin_path = validate_binary_path(
+        backend_path,
+        trusted_roots,
+        &["llama-server", "llama-server.exe"],
+    )?;
 
     // Configure the command to run the server with --list-devices
     let mut command = Command::new(&bin_path);
     command.arg("--list-devices");
-    command.envs(envs);
+    command.envs(
+        envs
+            .iter()
+            .filter(|(key, _)| !is_dangerous_process_env_key(key)),
+    );
 
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());

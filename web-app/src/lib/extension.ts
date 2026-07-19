@@ -57,6 +57,45 @@ export type ExtensionManifest = {
   extensionInstance?: BaseExtension // For web extensions
 }
 
+/** Resolve an extension entry only when it stays inside the managed directory. */
+export function resolveLocalExtensionPath(
+  extensionUrl: string,
+  extensionsPath: string
+): string {
+  const raw = extensionUrl.trim().normalize('NFKC')
+  const root = extensionsPath.replace(/\\/g, '/').replace(/\/+$/, '')
+  if (!raw || !root || /[\0\x00-\x1F\x7F-\x9F]/.test(raw)) {
+    throw new Error('Invalid extension entry path')
+  }
+  if (/^[a-z][a-z\d+.-]*:/i.test(raw) && !/^[a-z]:[\\/]/i.test(raw)) {
+    throw new Error('Remote and data extension URLs are not allowed')
+  }
+  if (raw.startsWith('//')) {
+    throw new Error('Protocol-relative extension URLs are not allowed')
+  }
+
+  const normalized = raw.replace(/\\/g, '/')
+  const isAbsolute = normalized.startsWith('/') || /^[a-z]:\//i.test(normalized)
+  const candidate = isAbsolute ? normalized : `${root}/${normalized}`
+  const segments = candidate.split('/')
+  if (segments.some((segment) => segment === '..')) {
+    throw new Error('Extension entry path escapes the managed directory')
+  }
+
+  const caseInsensitive = /^[a-z]:\//i.test(root)
+  const comparableRoot = caseInsensitive ? root.toLowerCase() : root
+  const comparableCandidate = caseInsensitive
+    ? candidate.toLowerCase()
+    : candidate
+  if (
+    comparableCandidate !== comparableRoot &&
+    !comparableCandidate.startsWith(`${comparableRoot}/`)
+  ) {
+    throw new Error('Extension entry path escapes the managed directory')
+  }
+  return candidate
+}
+
 /**
  * Manages the registration and retrieval of extensions.
  */
@@ -203,14 +242,14 @@ export class ExtensionManager {
     }
 
     // Import class for Tauri extensions
-    let extensionUrl = extension.url
     try {
-      if (!/^(?:[a-z]+:|\/|[A-Za-z]:[\\/])/.test(extensionUrl)) {
-        const extensionsPath = await getServiceHub()
-          .core()
-          .invoke<string>('get_app_extensions_path')
-        extensionUrl = `${extensionsPath}/${extensionUrl}`
-      }
+      const extensionsPath = await getServiceHub()
+        .core()
+        .invoke<string>('get_app_extensions_path')
+      const extensionUrl = resolveLocalExtensionPath(
+        extension.url,
+        extensionsPath
+      )
 
       const extensionClass = await import(
         /* @vite-ignore */ getServiceHub().core().convertFileSrc(extensionUrl)

@@ -55,11 +55,14 @@ function threadMessagesFromUiMessages(
   threadId: string
 ): ThreadMessage[] {
   return uiMessages.map((message) => {
+    const rawCreatedAt = (
+      message as UIMessage & { createdAt?: Date | number }
+    ).createdAt
     const createdAt =
-      message.createdAt instanceof Date
-        ? message.createdAt.getTime()
-        : typeof message.createdAt === 'number'
-          ? message.createdAt
+      rawCreatedAt instanceof Date
+        ? rawCreatedAt.getTime()
+        : typeof rawCreatedAt === 'number'
+          ? rawCreatedAt
           : Date.now()
     return {
       id: message.id,
@@ -75,8 +78,9 @@ function threadMessagesFromUiMessages(
       content: extractContentPartsFromUIMessage(message),
       status: MessageStatus.Ready,
       created_at: createdAt,
+      completed_at: createdAt,
       metadata: (message.metadata ?? {}) as ThreadMessage['metadata'],
-    } as ThreadMessage
+    } as unknown as ThreadMessage
   })
 }
 
@@ -120,6 +124,7 @@ export type ThreadChatParams = {
   regenerate: RegenerateFn
   chatMessages: UIMessage[]
   setChatMessages: (msgs: UIMessage[]) => void
+  resetTurnState?: () => void
 
   prepareLocalKnowledge?: (text: string) => Promise<{
     context: string
@@ -153,11 +158,13 @@ export function useThreadChat({
   regenerate,
   chatMessages,
   setChatMessages,
+  resetTurnState,
   prepareLocalKnowledge,
 }: ThreadChatParams): ThreadChatResult {
   const serviceHub = useServiceHub()
   const addMessage = useMessages((state) => state.addMessage)
   const updateMessage = useMessages((state) => state.updateMessage)
+  const updateMessages = useMessages((state) => state.updateMessages)
   const deleteMessage = useMessages((state) => state.deleteMessage)
   const setMessages = useMessages((state) => state.setMessages)
   const renameThread = useThreads((state) => state.renameThread)
@@ -388,6 +395,16 @@ export function useThreadChat({
         attachments,
         messageId
       )
+      if (docAttachments.length > 0) {
+        userMessage.metadata = {
+          ...(userMessage.metadata as Record<string, unknown> | undefined),
+          document_attachments: docAttachments.map((attachment) => ({
+            name: attachment.name,
+            path: attachment.path,
+            fileType: attachment.fileType,
+          })),
+        } as ThreadMessage['metadata']
+      }
       if (localKnowledge.retrieval) {
         userMessage.metadata = {
           ...(userMessage.metadata as Record<string, unknown> | undefined),
@@ -468,10 +485,8 @@ export function useThreadChat({
       // Preserve document attachment metadata so workflows (e.g. AX BI) can
       // access the original file paths even though documents are inlined as
       // text rather than added as file parts.
-      const existingMeta = userMessage.metadata as Record<string, unknown> ?? {}
-      const messageMeta = docAttachments.length > 0
-        ? { ...existingMeta, document_attachments: docAttachments.map((a) => ({ name: a.name, path: a.path, fileType: a.fileType })) }
-        : existingMeta
+      const messageMeta =
+        (userMessage.metadata as Record<string, unknown> | undefined) ?? {}
 
       sendMessage({
         parts: requestParts,
@@ -570,6 +585,7 @@ export function useThreadChat({
 
   const handleRegenerate = useCallback(
     (messageId?: string) => {
+      resetTurnState?.()
       const allMessages = useMessages.getState().getMessages(threadId)
       const visibleMessages = selectVisibleMessages(allMessages)
 
@@ -611,8 +627,8 @@ export function useThreadChat({
               .filter((v): v is number => typeof v === 'number')
             const nextIndex = Math.max(oldTailIndex, ...existingIndices, 0) + 1
 
-            oldTail.forEach((msg) => {
-              updateMessage({
+            updateMessages(
+              oldTail.map((msg) => ({
                 ...msg,
                 metadata: {
                   ...(msg.metadata as Record<string, unknown> | undefined),
@@ -620,8 +636,8 @@ export function useThreadChat({
                   versionIndex: oldTailIndex,
                   isActiveVersion: false,
                 },
-              })
-            })
+              }))
+            )
 
             pendingVersionTagRef.current = { groupId, versionIndex: nextIndex }
           }
@@ -630,7 +646,7 @@ export function useThreadChat({
 
       regenerate(messageId ? { messageId } : undefined)
     },
-    [threadId, updateMessage, regenerate]
+    [threadId, updateMessages, regenerate, resetTurnState]
   )
 
   // ─── Switch version ─────────────────────────────────────────────────────────
@@ -676,19 +692,20 @@ export function useThreadChat({
       const targetIndex = indices[targetPos]
       if (targetIndex === activeIndex) return
 
-      groupMessages.forEach((msg) => {
+      const changedMessages = groupMessages.flatMap((msg) => {
         const meta = getVersionMeta(msg)
         const shouldBeActive = meta.versionIndex === targetIndex
-        if (Boolean(meta.isActiveVersion) !== shouldBeActive) {
-          updateMessage({
+        return Boolean(meta.isActiveVersion) !== shouldBeActive
+          ? [{
             ...msg,
             metadata: {
               ...(msg.metadata as Record<string, unknown> | undefined),
               isActiveVersion: shouldBeActive,
             },
-          })
-        }
+          }]
+          : []
       })
+      updateMessages(changedMessages)
 
       const refreshedMessages = useMessages.getState().getMessages(threadId)
       setChatMessages(
@@ -697,7 +714,7 @@ export function useThreadChat({
         )
       )
     },
-    [threadId, updateMessage, setChatMessages]
+    [threadId, updateMessages, setChatMessages]
   )
 
   // ─── Edit message ───────────────────────────────────────────────────────────

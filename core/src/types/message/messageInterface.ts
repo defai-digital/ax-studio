@@ -27,6 +27,9 @@ export interface MessageInterface {
    */
   modifyMessage(message: ThreadMessage): Promise<ThreadMessage>
 
+  /** Updates several messages in a single storage transaction. */
+  modifyMessages(messages: ThreadMessage[]): Promise<ThreadMessage[]>
+
   /**
    * Deletes a specific message from a thread.
    * @param {string} threadId - The ID of the thread from which the message will be deleted.

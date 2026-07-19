@@ -84,7 +84,7 @@ mod tests {
     };
     use crate::core::state::{AppState, ProviderState, SharedMcpServers};
     use std::collections::{HashMap, HashSet};
-    use std::sync::Arc;
+    use std::sync::{atomic::AtomicBool, Arc};
     use tauri::{test::mock_app, Manager};
     use tokio::sync::Mutex;
 
@@ -100,7 +100,7 @@ mod tests {
             tool_call_cancellations: Arc::new(Mutex::new(HashMap::new())),
             akidb_sync_cancellation: Arc::new(Mutex::new(None)),
             mcp_settings: Arc::new(Mutex::new(crate::core::mcp::models::McpSettings::default())),
-            mcp_shutdown_in_progress: Arc::new(Mutex::new(false)),
+            mcp_shutdown_in_progress: Arc::new(AtomicBool::new(false)),
             mcp_monitoring_tasks: Arc::new(Mutex::new(HashMap::new())),
             background_cleanup_handle: Arc::new(Mutex::new(None)),
             mcp_server_pids: Arc::new(Mutex::new(HashMap::new())),

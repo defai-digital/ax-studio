@@ -31,8 +31,33 @@ const messageContentText = (message: ThreadMessage): string => {
     .join('')
 }
 
+const messageContentLength = (message: ThreadMessage): number => {
+  const { content } = message as unknown as { content?: unknown }
+  if (typeof content === 'string') return content.length
+  if (!Array.isArray(content)) return 0
+
+  let length = 0
+  for (const item of content) {
+    if (!item || typeof item !== 'object') continue
+    const part = item as {
+      text?: { value?: string } | string
+      image_url?: { url?: string }
+    }
+    if (typeof part.text === 'string') {
+      length += part.text.length
+    } else if (typeof part.text?.value === 'string') {
+      length += part.text.value.length
+    } else if (typeof part.image_url?.url === 'string') {
+      length += part.image_url.url.length
+    }
+  }
+  return length
+}
+
 const messagesText = (messages: ThreadMessage[]): string =>
   messages.map(messageContentText).join(' ')
+
+const TOKEN_COUNT_NOT_FOUND_BACKOFF_MS = 5 * 60 * 1000
 
 const HOSTED_MODEL_CONTEXT_WINDOWS: Array<{ pattern: RegExp; tokens: number }> =
   [
@@ -134,11 +159,19 @@ export const useTokensCount = (
     if (messages.length === 0) return ''
     let totalLen = 0
     for (const m of messages) {
-      totalLen += messageContentText(m).length
+      totalLen += messageContentLength(m)
     }
     return `${messages.length}:${totalLen}:${messages[messages.length - 1].role}`
   }, [messages])
   const modelSignature = `${selectedModel?.id ?? ''}:${(selectedModel as { provider?: string } | undefined)?.provider ?? ''}:${getModelContextLength(selectedModel ?? undefined) ?? ''}`
+  const previousModelSignatureRef = useRef(modelSignature)
+
+  useEffect(() => {
+    if (previousModelSignatureRef.current === modelSignature) return
+    previousModelSignatureRef.current = modelSignature
+    backoffUntilRef.current = 0
+    consecutiveErrorsRef.current = 0
+  }, [modelSignature])
 
   const getMaxTokens = useCallback((): number | undefined => {
     const ctxLength = getModelContextLength(selectedModel ?? undefined)
@@ -245,7 +278,8 @@ export const useTokensCount = (
 
       if (!isHosted) {
         if (msg.includes('404')) {
-          backoffUntilRef.current = Date.now() + 60 * 60 * 1000
+          backoffUntilRef.current =
+            Date.now() + TOKEN_COUNT_NOT_FOUND_BACKOFF_MS
         } else {
           consecutiveErrorsRef.current += 1
           if (consecutiveErrorsRef.current >= 3) {

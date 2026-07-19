@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { Extension, ExtensionManager } from '../extension'
+import {
+  Extension,
+  ExtensionManager,
+  resolveLocalExtensionPath,
+} from '../extension'
 
 // Mock dependencies
 vi.mock('@ax-studio/core', () => ({
@@ -125,6 +129,36 @@ describe('extension.ts', () => {
   })
 
   describe('Extension loading', () => {
+    it('resolves relative entries inside the managed extension directory', () => {
+      expect(
+        resolveLocalExtensionPath(
+          'conversational/index.js',
+          '/app-data/extensions'
+        )
+      ).toBe('/app-data/extensions/conversational/index.js')
+    })
+
+    it.each([
+      'https://example.com/extension.js',
+      'data:text/javascript,alert(1)',
+      '../outside.js',
+      '/tmp/outside.js',
+      '//example.com/extension.js',
+    ])('rejects unmanaged extension entry %s', (entry) => {
+      expect(() =>
+        resolveLocalExtensionPath(entry, '/app-data/extensions')
+      ).toThrow()
+    })
+
+    it('allows an absolute entry under the managed directory', () => {
+      expect(
+        resolveLocalExtensionPath(
+          '/app-data/extensions/download/index.js',
+          '/app-data/extensions'
+        )
+      ).toBe('/app-data/extensions/download/index.js')
+    })
+
     it('should convert file source correctly', async () => {
       const { convertFileSrc } = await import('@tauri-apps/api/core')
       convertFileSrc('/path/to/extension.js')

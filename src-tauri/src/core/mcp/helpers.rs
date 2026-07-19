@@ -18,7 +18,7 @@ use crate::core::{
     app::commands::get_app_data_folder_path,
     mcp::legacy_sse::LegacySseTransport,
     mcp::models::{McpServerConfig, McpSettings},
-    state::{AppState, RunningServiceEnum, SharedMcpServers},
+    state::{AppState, RunningServiceEnum, SharedMcpServers, TrackedMcpProcess},
 };
 use ax_studio_utils::{can_override_npx, can_override_uvx};
 
@@ -495,7 +495,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
             log::info!("MCP server {name} spawned with PID {pid}");
             let app_state = app.state::<AppState>();
             let mut pids = app_state.mcp_server_pids.lock().await;
-            pids.insert(name.clone(), pid);
+            pids.insert(name.clone(), TrackedMcpProcess::capture(pid));
         }
 
         let service = ()
@@ -518,7 +518,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
                 if let Some(pid) = process_pid {
                     let app_state = app.state::<AppState>();
                     let mut pids = app_state.mcp_server_pids.lock().await;
-                    if pids.get(&name) == Some(&pid) {
+                    if pids.get(&name).is_some_and(|process| process.pid == pid) {
                         pids.remove(&name);
                     }
                 }
@@ -615,7 +615,11 @@ pub fn extract_command_args(config: &Value) -> Option<McpServerConfig> {
         .clone();
 
     // Filter out dangerous environment variables
-    envs.retain(|k, _| !DANGEROUS_ENV_KEYS.contains(&k.as_str()));
+    envs.retain(|key, _| {
+        let normalized = key.to_ascii_uppercase();
+        !DANGEROUS_ENV_KEYS.contains(&normalized.as_str())
+            && !normalized.starts_with("DYLD_")
+    });
 
     // Block env overrides for security-sensitive variables.  PATH is
     // intentionally absent — MCP servers with custom toolchains (e.g. uvx)
@@ -762,6 +766,8 @@ mod tests {
             "env": {
                 "NODE_ENV": "production",
                 "LD_PRELOAD": "/evil/lib.so",
+                "ld_library_path": "/evil/lowercase",
+                "DyLd_Insert_Libraries": "/evil/mixed-case.dylib",
                 "PATH": "/custom/tools:/usr/bin",
                 "HOME": "/evil/home",
                 "USER": "evil",
@@ -780,6 +786,8 @@ mod tests {
         );
         // Blocked by DANGEROUS_ENV_KEYS (key-level filter)
         assert!(result.envs.get("LD_PRELOAD").is_none());
+        assert!(result.envs.get("ld_library_path").is_none());
+        assert!(result.envs.get("DyLd_Insert_Libraries").is_none());
         // Blocked by BLOCKED_ENV_KEYS_BY_VALUE (key=value prefix filter)
         assert!(result.envs.get("HOME").is_none());
         assert!(result.envs.get("USER").is_none());
@@ -984,10 +992,16 @@ pub async fn restart_active_mcp_servers<R: Runtime>(
 }
 
 #[cfg(unix)]
-async fn kill_process_by_pid(pid: u32) -> Result<(), String> {
+async fn kill_process_by_pid(process: TrackedMcpProcess) -> Result<(), String> {
     use nix::sys::signal::{kill, Signal};
     use nix::unistd::Pid;
 
+    let pid = process.pid;
+    if !process.still_matches() {
+        return Err(format!(
+            "Refusing to signal PID {pid}: the original MCP child has exited or its identity cannot be verified"
+        ));
+    }
     let nix_pid = Pid::from_raw(pid as i32);
 
     kill(nix_pid, Signal::SIGTERM)
@@ -1001,6 +1015,11 @@ async fn kill_process_by_pid(pid: u32) -> Result<(), String> {
     }
 
     log::warn!("Process {} unresponsive, sending SIGKILL", pid);
+    if !process.still_matches() {
+        return Err(format!(
+            "Refusing to force-kill PID {pid}: it no longer matches the original MCP child"
+        ));
+    }
     kill(nix_pid, Signal::SIGKILL)
         .map_err(|e| format!("Failed to send SIGKILL to PID {}: {}", pid, e))?;
 
@@ -1008,12 +1027,18 @@ async fn kill_process_by_pid(pid: u32) -> Result<(), String> {
 }
 
 #[cfg(windows)]
-async fn kill_process_by_pid(pid: u32) -> Result<(), String> {
+async fn kill_process_by_pid(process: TrackedMcpProcess) -> Result<(), String> {
     use std::process::Command;
 
     #[cfg(windows)]
     use std::os::windows::process::CommandExt;
 
+    let pid = process.pid;
+    if !process.still_matches() {
+        return Err(format!(
+            "Refusing to kill PID {pid}: it no longer matches the original MCP child"
+        ));
+    }
     let mut cmd = Command::new("taskkill");
     cmd.args(&["/F", "/PID", &pid.to_string()]);
 
@@ -1050,20 +1075,13 @@ pub async fn background_cleanup_mcp_servers<R: Runtime>(
 }
 
 struct ShutdownGuard {
-    flag: Arc<Mutex<bool>>,
+    flag: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Drop for ShutdownGuard {
     fn drop(&mut self) {
-        if let Ok(mut guard) = self.flag.try_lock() {
-            *guard = false;
-        } else {
-            let flag = self.flag.clone();
-            tauri::async_runtime::spawn(async move {
-                let mut guard = flag.lock().await;
-                *guard = false;
-            });
-        }
+        self.flag
+            .store(false, std::sync::atomic::Ordering::Release);
     }
 }
 
@@ -1072,12 +1090,17 @@ pub async fn stop_mcp_servers_with_context<R: Runtime>(
     state: &State<'_, AppState>,
     context: ShutdownContext,
 ) -> Result<(), String> {
+    if state
+        .mcp_shutdown_in_progress
+        .compare_exchange(
+            false,
+            true,
+            std::sync::atomic::Ordering::AcqRel,
+            std::sync::atomic::Ordering::Acquire,
+        )
+        .is_err()
     {
-        let mut shutdown_in_progress = state.mcp_shutdown_in_progress.lock().await;
-        if *shutdown_in_progress {
-            return Ok(());
-        }
-        *shutdown_in_progress = true;
+        return Ok(());
     }
 
     let _guard = ShutdownGuard {
@@ -1096,7 +1119,7 @@ pub async fn stop_mcp_servers_with_context<R: Runtime>(
 
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    let pids_snapshot: std::collections::HashMap<String, u32> = {
+    let pids_snapshot: std::collections::HashMap<String, TrackedMcpProcess> = {
         let pids = state.mcp_server_pids.lock().await;
         pids.clone()
     };
@@ -1174,10 +1197,14 @@ pub async fn stop_mcp_servers_with_context<R: Runtime>(
 
     // Force-kill processes that didn't stop gracefully
     for server_name in &failed_servers {
-        if let Some(&pid) = pids_snapshot.get(server_name) {
-            log::warn!("Force-killing MCP server {} (PID {})", server_name, pid);
-            if let Err(e) = kill_process_by_pid(pid).await {
-                log::error!("Failed to force-kill PID {}: {}", pid, e);
+        if let Some(&process) = pids_snapshot.get(server_name) {
+            log::warn!(
+                "Force-killing MCP server {} (PID {})",
+                server_name,
+                process.pid
+            );
+            if let Err(e) = kill_process_by_pid(process).await {
+                log::error!("Failed to force-kill PID {}: {}", process.pid, e);
             }
         }
     }

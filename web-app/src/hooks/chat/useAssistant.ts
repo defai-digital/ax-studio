@@ -90,20 +90,26 @@ const getInitialAssistantState = () => {
 export const useAssistant = create<AssistantState>((set, get) => ({
   ...getInitialAssistantState(),
   addAssistant: (assistant) => {
-    const previousAssistants = get().assistants
-    set({ assistants: [...previousAssistants, assistant] })
+    set((state) => ({ assistants: [...state.assistants, assistant] }))
     getServiceHub()
       .assistants()
       .createAssistant(assistant as unknown as CoreAssistant)
       .catch((error) => {
         console.error('Failed to create assistant:', error)
-        // Rollback
-        set({ assistants: previousAssistants })
+        // Remove only this optimistic entry. Replaying a whole snapshot would
+        // erase assistants added while the request was in flight.
+        set((state) => ({
+          assistants: state.assistants.filter(
+            (candidate) => candidate !== assistant
+          ),
+        }))
       })
   },
   updateAssistant: (assistant) => {
     const state = get()
-    const previousAssistants = state.assistants
+    const previousAssistant = state.assistants.find(
+      (candidate) => candidate.id === assistant.id
+    )
     const previousCurrentAssistant = state.currentAssistant
     set({
       assistants: state.assistants.map((a) =>
@@ -119,11 +125,17 @@ export const useAssistant = create<AssistantState>((set, get) => ({
       .createAssistant(assistant as unknown as CoreAssistant)
       .catch((error) => {
         console.error('Failed to update assistant:', error)
-        // Rollback
-        set({
-          assistants: previousAssistants,
-          currentAssistant: previousCurrentAssistant,
-        })
+        set((current) => ({
+          assistants: previousAssistant
+            ? current.assistants.map((candidate) =>
+                candidate === assistant ? previousAssistant : candidate
+              )
+            : current.assistants.filter((candidate) => candidate !== assistant),
+          currentAssistant:
+            current.currentAssistant === assistant
+              ? previousCurrentAssistant
+              : current.currentAssistant,
+        }))
       })
   },
   deleteAssistant: (id) => {
@@ -135,8 +147,8 @@ export const useAssistant = create<AssistantState>((set, get) => ({
 
     // Check if we're deleting the current assistant
     const wasCurrentAssistant = state.currentAssistant?.id === id
-    const previousAssistants = state.assistants
     const previousCurrentAssistant = state.currentAssistant
+    const deletedIndex = state.assistants.indexOf(assistantToDelete)
     const nextCurrentAssistant = wasCurrentAssistant
       ? defaultAssistant
       : state.currentAssistant
@@ -156,11 +168,28 @@ export const useAssistant = create<AssistantState>((set, get) => ({
       .deleteAssistant(assistantToDelete as unknown as CoreAssistant)
       .catch((error) => {
         console.error('Failed to delete assistant:', error)
-        set({
-          assistants: previousAssistants,
-          currentAssistant: previousCurrentAssistant,
+        let restoredCurrent = false
+        set((current) => {
+          if (current.assistants.some((assistant) => assistant.id === id)) {
+            return current
+          }
+          const assistants = [...current.assistants]
+          assistants.splice(
+            Math.min(deletedIndex, assistants.length),
+            0,
+            assistantToDelete
+          )
+          const shouldRestoreCurrent =
+            wasCurrentAssistant && current.currentAssistant === defaultAssistant
+          restoredCurrent = shouldRestoreCurrent
+          return {
+            assistants,
+            currentAssistant: shouldRestoreCurrent
+              ? previousCurrentAssistant
+              : current.currentAssistant,
+          }
         })
-        if (previousCurrentAssistant) {
+        if (restoredCurrent && previousCurrentAssistant) {
           setLastUsedAssistantId(previousCurrentAssistant.id)
         }
       })

@@ -281,6 +281,19 @@ export abstract class AIEngine extends BaseExtension {
 
     if (existingEngine && existingEngine !== this) {
       console.warn(`Overwriting registered engine for provider "${this.provider}"`)
+      try {
+        void Promise.resolve(existingEngine.onUnload()).catch((error) => {
+          console.error(
+            `Failed to unload replaced engine for provider "${this.provider}":`,
+            error
+          )
+        })
+      } catch (error) {
+        console.error(
+          `Failed to unload replaced engine for provider "${this.provider}":`,
+          error
+        )
+      }
     }
 
     manager.register(this)

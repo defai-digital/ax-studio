@@ -57,11 +57,63 @@ fn resolve_binary_path(backend_path: &str) -> Option<PathBuf> {
     None
 }
 
-/// Validate that a binary path exists and is accessible.
+pub fn is_dangerous_process_env_key(key: &str) -> bool {
+    let key = key.to_ascii_uppercase();
+    matches!(
+        key.as_str(),
+        "PATH"
+            | "PATHEXT"
+            | "LD_PRELOAD"
+            | "LD_LIBRARY_PATH"
+            | "PYTHONHOME"
+            | "PYTHONPATH"
+            | "NODE_OPTIONS"
+            | "RUBYOPT"
+            | "PERL5OPT"
+            | "BASH_ENV"
+            | "ENV"
+            | "GCONV_PATH"
+            | "AX_ENGINE_BIN"
+    ) || key.starts_with("DYLD_")
+}
+
+pub fn validate_path_within_roots(
+    path: &Path,
+    trusted_roots: &[PathBuf],
+    label: &str,
+) -> ServerResult<PathBuf> {
+    let canonical = std::fs::canonicalize(path).map_err(|error| {
+        LlamacppError::new(
+            ErrorCode::ModelFileNotFound,
+            format!("The specified {label} path could not be resolved safely."),
+            Some(error.to_string()),
+        )
+    })?;
+    let allowed = trusted_roots.iter().any(|root| {
+        let normalized_root = std::fs::canonicalize(root).unwrap_or_else(|_| root.clone());
+        canonical.starts_with(normalized_root)
+    });
+    if !allowed {
+        return Err(LlamacppError::new(
+            ErrorCode::InvalidArgument,
+            format!("The {label} path is outside AX Studio's managed model directories."),
+            Some(canonical.display().to_string()),
+        )
+        .into());
+    }
+    Ok(canonical)
+}
+
+/// Validate that a binary path exists, has an expected executable name, and
+/// resolves beneath a native-configured trusted install root.
 /// On macOS, also strips quarantine/provenance extended attributes that can
 /// prevent copied or downloaded binaries from executing properly.
 /// Only strips quarantine for binaries inside the app's own data directory.
-pub fn validate_binary_path(backend_path: &str) -> ServerResult<PathBuf> {
+pub fn validate_binary_path(
+    backend_path: &str,
+    trusted_roots: &[PathBuf],
+    allowed_names: &[&str],
+) -> ServerResult<PathBuf> {
     let Some(server_path_buf) = resolve_binary_path(backend_path) else {
         let err_msg = format!("Binary not found at {:?}", backend_path);
         log::error!(
@@ -76,11 +128,55 @@ pub fn validate_binary_path(backend_path: &str) -> ServerResult<PathBuf> {
         .into());
     };
 
+    let canonical = std::fs::canonicalize(&server_path_buf).map_err(|error| {
+        LlamacppError::new(
+            ErrorCode::BinaryNotFound,
+            "The inference backend binary could not be resolved safely.".into(),
+            Some(error.to_string()),
+        )
+    })?;
+    if !canonical.is_file() {
+        return Err(LlamacppError::new(
+            ErrorCode::BinaryNotFound,
+            "The inference backend path is not a file.".into(),
+            Some(canonical.display().to_string()),
+        )
+        .into());
+    }
+
+    let binary_name = canonical
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if !allowed_names
+        .iter()
+        .any(|allowed| binary_name == allowed.to_ascii_lowercase())
+    {
+        return Err(LlamacppError::new(
+            ErrorCode::InvalidArgument,
+            "The inference backend executable name is not allowed.".into(),
+            Some(binary_name),
+        )
+        .into());
+    }
+
+    let within_trusted_root = trusted_roots.iter().any(|root| {
+        let normalized_root = std::fs::canonicalize(root).unwrap_or_else(|_| root.clone());
+        canonical.starts_with(normalized_root)
+    });
+    if !within_trusted_root {
+        return Err(LlamacppError::new(
+            ErrorCode::InvalidArgument,
+            "The inference backend is outside AX Studio's trusted install directories.".into(),
+            Some(canonical.display().to_string()),
+        )
+        .into());
+    }
+
     #[cfg(target_os = "macos")]
     {
-        let path_str = server_path_buf.display().to_string();
-        let canonical =
-            std::fs::canonicalize(&server_path_buf).unwrap_or_else(|_| server_path_buf.clone());
+        let path_str = canonical.display().to_string();
         let canonical_str = canonical.to_string_lossy();
         let is_in_user_dir = canonical_str.contains("/.ax-studio/")
             || canonical_str.contains("/Library/Application Support/")
@@ -102,12 +198,12 @@ pub fn validate_binary_path(backend_path: &str) -> ServerResult<PathBuf> {
         } else {
             log::debug!(
                 "Skipping quarantine removal for binary outside user data dir: {:?}",
-                server_path_buf
+                canonical
             );
         }
     }
 
-    Ok(server_path_buf)
+    Ok(canonical)
 }
 
 fn path_arg(
@@ -211,19 +307,49 @@ mod tests {
 
     #[test]
     fn test_validate_binary_path_existing() {
-        let temp_file = NamedTempFile::new().unwrap();
-        let path = temp_file.path().to_str().unwrap();
+        let dir = tempdir().unwrap();
+        let binary = dir.path().join("llama-server");
+        fs::write(&binary, "").unwrap();
+        let path = binary.to_str().unwrap();
 
-        let result = validate_binary_path(path);
+        let result = validate_binary_path(path, &[dir.path().to_path_buf()], &["llama-server"]);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), PathBuf::from(path));
+        assert_eq!(result.unwrap(), std::fs::canonicalize(path).unwrap());
     }
 
     #[test]
     fn test_validate_binary_path_nonexistent() {
         let nonexistent_path = "/tmp/definitely_does_not_exist_123456789";
-        let result = validate_binary_path(nonexistent_path);
+        let result = validate_binary_path(
+            nonexistent_path,
+            &[std::env::temp_dir()],
+            &["llama-server"],
+        );
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_binary_path_rejects_outside_trusted_root() {
+        let trusted = tempdir().unwrap();
+        let untrusted = tempdir().unwrap();
+        let binary = untrusted.path().join("llama-server");
+        fs::write(&binary, "").unwrap();
+
+        assert!(validate_binary_path(
+            binary.to_str().unwrap(),
+            &[trusted.path().to_path_buf()],
+            &["llama-server"],
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn test_dangerous_process_env_keys_are_case_insensitive() {
+        assert!(is_dangerous_process_env_key("LD_PRELOAD"));
+        assert!(is_dangerous_process_env_key("dyld_insert_libraries"));
+        assert!(is_dangerous_process_env_key("Path"));
+        assert!(is_dangerous_process_env_key("AX_ENGINE_BIN"));
+        assert!(!is_dangerous_process_env_key("GGML_CUDA_ENABLE_UNIFIED_MEMORY"));
     }
 
     #[test]

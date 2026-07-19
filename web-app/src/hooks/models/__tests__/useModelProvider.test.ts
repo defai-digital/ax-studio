@@ -129,6 +129,25 @@ describe('useModelProvider - displayName functionality', () => {
     expect(provider?.models[0].displayName).toBe('My Custom Model')
   })
 
+  it('does not publish a new state when refreshed providers are unchanged', () => {
+    const provider = {
+      provider: 'test-provider',
+      active: true,
+      models: [{ id: 'test-model', capabilities: ['completion'] }],
+      settings: [],
+    } as any
+    useModelProvider.getState().setProviders([provider])
+    const stateBefore = useModelProvider.getState()
+    const listener = vi.fn()
+    const unsubscribe = useModelProvider.subscribe(listener)
+
+    useModelProvider.getState().setProviders([provider])
+
+    expect(useModelProvider.getState()).toBe(stateBefore)
+    expect(listener).not.toHaveBeenCalled()
+    unsubscribe()
+  })
+
   it('refreshes selectedModel when setProviders replaces model metadata', () => {
     const { result } = renderHook(() => useModelProvider())
 

@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{atomic::{AtomicBool, Ordering}, Arc};
 use tauri::{test::mock_app, Manager};
 use tokio::sync::Mutex;
 
@@ -21,7 +21,7 @@ fn test_app_state(mcp_servers: SharedMcpServers) -> AppState {
         tool_call_cancellations: Arc::new(Mutex::new(HashMap::new())),
         akidb_sync_cancellation: Arc::new(Mutex::new(None)),
         mcp_settings: Arc::new(Mutex::new(crate::core::mcp::models::McpSettings::default())),
-        mcp_shutdown_in_progress: Arc::new(Mutex::new(false)),
+        mcp_shutdown_in_progress: Arc::new(AtomicBool::new(false)),
         mcp_monitoring_tasks: Arc::new(Mutex::new(HashMap::new())),
         background_cleanup_handle: Arc::new(Mutex::new(None)),
         mcp_server_pids: Arc::new(Mutex::new(HashMap::new())),
@@ -302,18 +302,14 @@ async fn test_stop_mcp_servers_prevents_concurrent_shutdown() {
 
     let state = app.state::<AppState>();
 
-    {
-        let mut shutdown_flag = state.mcp_shutdown_in_progress.lock().await;
-        *shutdown_flag = true;
-    }
+    state
+        .mcp_shutdown_in_progress
+        .store(true, Ordering::Release);
 
     let result =
         stop_mcp_servers_with_context(app.handle(), &state, ShutdownContext::AppExit).await;
 
     assert!(result.is_ok());
 
-    {
-        let shutdown_flag = state.mcp_shutdown_in_progress.lock().await;
-        assert!(*shutdown_flag);
-    }
+    assert!(state.mcp_shutdown_in_progress.load(Ordering::Acquire));
 }

@@ -429,6 +429,7 @@ dependencies = [
  "sha2",
  "sse-stream",
  "subtle",
+ "sysinfo",
  "tar",
  "tauri",
  "tauri-build",

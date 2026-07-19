@@ -231,6 +231,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     regenerate,
     chatMessages,
     setChatMessages,
+    resetTurnState,
     prepareLocalKnowledge,
   })
 

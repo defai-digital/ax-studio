@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
 } from 'react'
 import type { UIMessage, ChatStatus } from 'ai'
 import { RenderMarkdown } from './RenderMarkdown'
@@ -51,6 +52,8 @@ import type { VersionInfo } from '@/lib/messages/versions'
 import { RoutingBadge } from '@/components/RoutingBadge'
 import type { CitationData } from '@/types/citation-types'
 import { useTranslation } from '@/i18n/react-i18next-compat'
+import type { ThreadMessage } from '@ax-studio/core'
+import { splitThinkTaggedText } from '@/lib/messages'
 
 const CHAT_STATUS = {
   STREAMING: 'streaming',
@@ -92,6 +95,7 @@ export type MessageItemProps = {
   versionInfo?: VersionInfo
   onSwitchVersion?: (groupId: string, direction: 'prev' | 'next') => void
   assistant?: { avatar?: React.ReactNode; name?: string }
+  storedThreadMessage?: ThreadMessage
 }
 
 type PreviewImage = { url: string; filename?: string }
@@ -142,15 +146,11 @@ export const MessageItem = memo(
     onDelete,
     versionInfo,
     onSwitchVersion,
+    storedThreadMessage,
   }: MessageItemProps) => {
     const { t } = useTranslation()
     const selectedModel = useModelProvider((state) => state.selectedModel)
     const updateMessage = useMessages((state) => state.updateMessage)
-    const storedThreadMessage = useMessages((state) =>
-      threadId
-        ? state.messages[threadId]?.find((m) => m.id === message.id)
-        : undefined
-    )
     const [previewImage, setPreviewImage] = useState<{
       url: string
       filename?: string
@@ -241,15 +241,18 @@ export const MessageItem = memo(
 
     const forkThread = useForkThread()
     const [isForking, setIsForking] = useState(false)
+    const isForkingRef = useRef(false)
     const handleFork = useCallback(async () => {
-      if (!threadId || isForking) return
+      if (!threadId || isForkingRef.current) return
+      isForkingRef.current = true
       setIsForking(true)
       try {
         await forkThread(threadId, message.id)
       } finally {
+        isForkingRef.current = false
         setIsForking(false)
       }
-    }, [forkThread, threadId, message.id, isForking])
+    }, [forkThread, threadId, message.id])
 
     // Get image URLs from file parts for the edit dialog
     const imageUrls = useMemo(() => {
@@ -329,14 +332,14 @@ export const MessageItem = memo(
           ? extractFilesFromPrompt(part.text).cleanPrompt
           : part.text
 
-      const thinkMatch =
+      const thinkParts =
         message.role === 'assistant'
-          ? displayText.match(/<think[^>]*>([\s\S]*?)(?:<\/think>|$)([\s\S]*)/i)
+          ? splitThinkTaggedText(displayText)
           : null
 
-      if (thinkMatch) {
-        const reasoningText = thinkMatch[1]?.trim() ?? ''
-        const finalText = (thinkMatch[2] ?? '').trim()
+      if (thinkParts && thinkParts.text !== displayText) {
+        const reasoningText = thinkParts.reasoningText ?? ''
+        const finalText = thinkParts.text
 
         return (
           <div
@@ -453,7 +456,8 @@ export const MessageItem = memo(
       partIndex: number
     ) => {
       const isImage = part.mediaType?.startsWith('image/')
-      const isSafeUrl = part.url && /^https?:|^blob:|^data:/i.test(part.url)
+      const isSafeUrl =
+        part.url && /^(?:https?:|blob:|data:image\/)/i.test(part.url)
 
       if (message.role === 'user' && isImage && isSafeUrl) {
         return (

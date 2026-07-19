@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 import { ulid } from 'ulidx'
 import { localStorageKey } from '@/constants/localStorage'
 import { createSafeJSONStorage } from '@/lib/storage/storage'
+import { normalizeAxBiResultUrl } from '@/lib/ax-bi/tool-navigation'
 
 export type AxBiSessionStatus = 'idle' | 'draft' | 'running' | 'ready' | 'error'
 type AxBiRunStatus = Extract<AxBiSessionStatus, 'ready' | 'error'>
@@ -109,7 +110,10 @@ function normalizeAxBiRun(value: unknown): AxBiRun | undefined {
     prompt,
     message,
     status: value.status,
-    url: typeof value.url === 'string' ? value.url : undefined,
+    url:
+      typeof value.url === 'string'
+        ? normalizeAxBiResultUrl(value.url)
+        : undefined,
     createdAt,
   }
 }
@@ -143,19 +147,22 @@ function normalizeAxBiSession(
 function normalizeSessions(value: unknown): Record<string, AxBiSession> {
   if (!isPlainRecord(value)) return {}
 
-  return Object.fromEntries(
-    Object.entries(value)
-      .map(([sessionId, session]) => [sessionId.trim(), session] as const)
-      .filter(([sessionId]) => sessionId !== '')
-      .slice(-MAX_SESSIONS)
-      .map(([sessionId, session]) => [
-        sessionId,
-        normalizeAxBiSession(sessionId, session),
-      ])
-      .filter(
-        (entry): entry is [string, AxBiSession] => entry[1] !== undefined
-      )
-  )
+  const sessions = Object.entries(value)
+    .map(([sessionId, session]) => [sessionId.trim(), session] as const)
+    .filter(([sessionId]) => sessionId !== '')
+    .map(
+      ([sessionId, session]) =>
+        [sessionId, normalizeAxBiSession(sessionId, session)] as const
+    )
+    .filter(
+      (entry): entry is [string, AxBiSession] => entry[1] !== undefined
+    )
+    .sort((left, right) =>
+      left[1].updatedAt.localeCompare(right[1].updatedAt)
+    )
+    .slice(-MAX_SESSIONS)
+
+  return Object.fromEntries(sessions)
 }
 
 function getOwnSession(
@@ -299,7 +306,10 @@ export const useAxBiSessions = create<AxBiSessionState>()(
             prompt,
             message: normalizeString(outcome.message),
             status: outcome.status,
-            url: typeof outcome.url === 'string' ? outcome.url : undefined,
+            url:
+              typeof outcome.url === 'string'
+                ? normalizeAxBiResultUrl(outcome.url)
+                : undefined,
             createdAt: now,
           }
 

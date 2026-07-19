@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, Weak};
 use tokio::process::Child;
 use tokio::sync::{Mutex, OwnedMutexGuard};
@@ -25,6 +26,8 @@ pub struct LLamaBackendSession {
 pub struct LlamacppState {
     pub llama_server_process: Arc<Mutex<HashMap<i32, LLamaBackendSession>>>,
     startup_locks: Arc<Mutex<HashMap<String, Weak<Mutex<()>>>>>,
+    trusted_binary_roots: std::sync::RwLock<Vec<PathBuf>>,
+    trusted_model_roots: std::sync::RwLock<Vec<PathBuf>>,
 }
 
 impl Default for LlamacppState {
@@ -32,6 +35,8 @@ impl Default for LlamacppState {
         Self {
             llama_server_process: Arc::new(Mutex::new(HashMap::new())),
             startup_locks: Arc::new(Mutex::new(HashMap::new())),
+            trusted_binary_roots: std::sync::RwLock::new(Vec::new()),
+            trusted_model_roots: std::sync::RwLock::new(Vec::new()),
         }
     }
 }
@@ -39,6 +44,40 @@ impl Default for LlamacppState {
 impl LlamacppState {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn add_trusted_binary_root(&self, root: PathBuf) {
+        let mut roots = self
+            .trusted_binary_roots
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !roots.contains(&root) {
+            roots.push(root);
+        }
+    }
+
+    pub fn trusted_binary_roots(&self) -> Vec<PathBuf> {
+        self.trusted_binary_roots
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    pub fn add_trusted_model_root(&self, root: PathBuf) {
+        let mut roots = self
+            .trusted_model_roots
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !roots.contains(&root) {
+            roots.push(root);
+        }
+    }
+
+    pub fn trusted_model_roots(&self) -> Vec<PathBuf> {
+        self.trusted_model_roots
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     /// Serialize startup for the same logical model/service without blocking

@@ -4,7 +4,7 @@ mod core;
 use core::{
     downloads::models::DownloadManagerState, mcp::models::McpSettings, setup, state::AppState,
 };
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::{atomic::AtomicBool, Arc}};
 use tokio::sync::Mutex;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -61,7 +61,7 @@ pub fn run() {
         tool_call_cancellations: Arc::new(Mutex::new(HashMap::new())),
         akidb_sync_cancellation: Arc::new(Mutex::new(None)),
         mcp_settings: Arc::new(Mutex::new(McpSettings::default())),
-        mcp_shutdown_in_progress: Arc::new(Mutex::new(false)),
+        mcp_shutdown_in_progress: Arc::new(AtomicBool::new(false)),
         mcp_monitoring_tasks: Arc::new(Mutex::new(HashMap::new())),
         background_cleanup_handle: Arc::new(Mutex::new(None)),
         mcp_server_pids: Arc::new(Mutex::new(HashMap::new())),

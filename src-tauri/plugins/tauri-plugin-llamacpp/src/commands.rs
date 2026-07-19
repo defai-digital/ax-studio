@@ -13,7 +13,10 @@ use tokio::time::Instant;
 use crate::args::{ArgumentBuilder, AxServingArgumentBuilder, LlamacppConfig};
 use crate::device::{get_devices_from_backend, DeviceInfo};
 use crate::error::{ErrorCode, LlamacppError, ServerError, ServerResult};
-use crate::path::{validate_binary_path, validate_mmproj_path, validate_model_path};
+use crate::path::{
+    is_dangerous_process_env_key, validate_binary_path, validate_mmproj_path,
+    validate_model_path, validate_path_within_roots,
+};
 use crate::process::{
     find_session_by_model_id, get_all_active_sessions, get_all_loaded_model_ids,
     get_random_available_port, is_process_running_by_pid,
@@ -117,7 +120,17 @@ pub async fn load_llama_model<R: Runtime>(
     );
     log::info!("Using configuration: {:?}", config);
 
-    let bin_path = validate_binary_path(backend_path)?;
+    let trusted_roots = state.trusted_binary_roots();
+    let allowed_binary_names: &[&str] = if is_ax_serving {
+        &["ax-serving", "ax-serving.exe"]
+    } else {
+        &["llama-server", "llama-server.exe"]
+    };
+    let bin_path = validate_binary_path(
+        backend_path,
+        &trusted_roots,
+        allowed_binary_names,
+    )?;
 
     // Build arguments and env vars depending on engine type
     let (mut args, merged_envs, api_key) = if is_ax_serving {
@@ -160,11 +173,27 @@ pub async fn load_llama_model<R: Runtime>(
     // Validate paths (only for llamacpp — ax-serving takes raw paths)
     let (model_path_pb, mmproj_path_string) = if is_ax_serving {
         // For ax-serving, the model path is passed directly; no --mmproj support yet
-        let pb = std::path::PathBuf::from(&model_path);
+        let pb = validate_path_within_roots(
+            std::path::Path::new(&model_path),
+            &state.trusted_model_roots(),
+            "model",
+        )?;
         (pb, None)
     } else {
-        let model_path_pb = validate_model_path(&mut args)?;
+        let model_path_pb = validate_path_within_roots(
+            &validate_model_path(&mut args)?,
+            &state.trusted_model_roots(),
+            "model",
+        )?;
         let mmproj_path_pb = validate_mmproj_path(&mut args)?;
+
+        if let Some(ref mmproj_path) = mmproj_path_pb {
+            validate_path_within_roots(
+                mmproj_path,
+                &state.trusted_model_roots(),
+                "mmproj",
+            )?;
+        }
 
         let mmproj_path_string = if let Some(ref _mmproj_pb) = mmproj_path_pb {
             args.iter()
@@ -186,15 +215,8 @@ pub async fn load_llama_model<R: Runtime>(
     let mut command = Command::new(&bin_path);
 
     command.args(&args);
-    let dangerous_env = [
-        "LD_PRELOAD",
-        "DYLD_INSERT_LIBRARIES",
-        "LD_LIBRARY_PATH",
-        "DYLD_LIBRARY_PATH",
-        "PATH",
-    ];
     for (k, v) in &merged_envs {
-        if dangerous_env.contains(&k.as_str()) {
+        if is_dangerous_process_env_key(k) {
             log::warn!("Blocking dangerous env var {} from llama-server", k);
             continue;
         }
@@ -450,10 +472,11 @@ pub async fn unload_llama_model<R: Runtime>(
 /// Get available devices from the llama.cpp backend
 #[tauri::command]
 pub async fn get_devices(
+    state: State<'_, LlamacppState>,
     backend_path: &str,
     envs: HashMap<String, String>,
 ) -> ServerResult<Vec<DeviceInfo>> {
-    get_devices_from_backend(backend_path, envs).await
+    get_devices_from_backend(backend_path, envs, &state.trusted_binary_roots()).await
 }
 
 /// Generate API key using HMAC-SHA256
@@ -536,7 +559,11 @@ pub async fn start_ax_serving<R: Runtime>(
         port
     );
 
-    let bin_path = validate_binary_path(binary_path)?;
+    let bin_path = validate_binary_path(
+        binary_path,
+        &state.trusted_binary_roots(),
+        &["ax-serving", "ax-serving.exe"],
+    )?;
 
     let args = vec![
         "serve".to_string(),
@@ -553,7 +580,6 @@ pub async fn start_ax_serving<R: Runtime>(
     envs.insert("AX_SERVING_MODE".to_string(), "ngram".to_string());
     for key in [
         "AX_SERVING_MODE",
-        "AX_ENGINE_BIN",
         "AX_SERVING_CHILD_TIMEOUT_S",
         "AX_SERVING_MLX_LM_SERVER_URL",
         "AX_SERVING_LLAMA_SERVER_URL",
@@ -564,7 +590,13 @@ pub async fn start_ax_serving<R: Runtime>(
         }
     }
     if let Some(overrides) = env_overrides {
-        envs.extend(overrides);
+        for (key, value) in overrides {
+            if is_dangerous_process_env_key(&key) {
+                log::warn!("Blocking dangerous ax-serving env override {key}");
+            } else {
+                envs.insert(key, value);
+            }
+        }
     }
 
     log::info!("ax-serving args: {:?}", args);
@@ -577,7 +609,11 @@ pub async fn start_ax_serving<R: Runtime>(
 
     let mut command = Command::new(&bin_path);
     command.args(&args);
-    command.envs(&envs);
+    command.envs(
+        envs
+            .iter()
+            .filter(|(key, _)| !is_dangerous_process_env_key(key)),
+    );
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
     command.kill_on_drop(true);

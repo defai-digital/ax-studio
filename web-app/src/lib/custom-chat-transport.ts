@@ -33,6 +33,7 @@ import {
 } from '@/constants/providers'
 import { extractErrorMessage } from '@/lib/utils/error'
 import { normalizeMcpResultForToolOutput } from './ax-bi/mcp-result'
+import { resolveApprovedAxBiFile } from './ax-bi/approved-file'
 
 // Use native fetch — same reason as model-factory.ts (Tauri plugin ReadableStream
 // incompatibility). Proxy accepts CORS from tauri:// origins on loopback.
@@ -500,15 +501,27 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
               filename: string
             }) => {
               try {
+                if (!this.threadId) {
+                  throw new Error('A thread is required to upload an attached file')
+                }
+                const approvedFile = resolveApprovedAxBiFile(
+                  this.threadId,
+                  file_path
+                )
+                if (!approvedFile) {
+                  throw new Error(
+                    'The requested file was not attached by the user or indexed for this thread'
+                  )
+                }
                 const { fs } = await import('@ax-studio/core')
-                const fileContent = await fs.readFileBase64(file_path)
+                const fileContent = await fs.readFileBase64(approvedFile.path)
                 const result = await serviceHub.mcp().callTool({
                   serverName: 'ax-bi',
                   toolName: 'upload_file',
                   arguments: {
                     request: {
                       file_content: fileContent,
-                      filename: filename,
+                      filename: approvedFile.name || filename,
                     },
                   },
                 })

@@ -55,6 +55,20 @@ export class DefaultMessagesService implements MessagesService {
     )
   }
 
+  async modifyMessages(messages: ThreadMessage[]): Promise<ThreadMessage[]> {
+    if (messages.length === 0) return []
+    if (messages.every((message) => message.thread_id === TEMPORARY_CHAT_ID)) {
+      return messages
+    }
+
+    return runConversationalStorageMethod(
+      'modifyMessages',
+      [messages],
+      [{ messages }],
+      (error) => console.warn('Failed to modify messages:', error)
+    )
+  }
+
   async deleteMessage(threadId: string, messageId: string): Promise<void> {
     // Don't delete messages on server for temporary chat - it's local only
     if (threadId === TEMPORARY_CHAT_ID) {

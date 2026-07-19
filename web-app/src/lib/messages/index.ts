@@ -102,18 +102,42 @@ const parseReasoning = (text: string) => {
   return { reasoningSegment: undefined, textSegment: text }
 }
 
-const splitThinkTaggedText = (
+export const splitThinkTaggedText = (
   text: string
 ): {
   reasoningText?: string
   text: string
 } => {
-  const match = text.match(/<think[^>]*>([\s\S]*?)(?:<\/think>|$)([\s\S]*)/i)
-  if (!match) return { text }
-
+  const reasoning: string[] = []
+  const visible: string[] = []
+  const tagPattern = /<\/?think\b[^>]*>/gi
+  let depth = 0
+  let cursor = 0
+  let foundTag = false
+  for (const match of text.matchAll(tagPattern)) {
+    const index = match.index ?? cursor
+    const segment = text.slice(cursor, index)
+    ;(depth > 0 ? reasoning : visible).push(segment)
+    const closing = /^<\/think/i.test(match[0])
+    if (closing) {
+      if (depth > 0) {
+        depth -= 1
+        foundTag = true
+      } else {
+        visible.push(match[0])
+      }
+    } else {
+      if (depth === 0 && reasoning.length > 0) reasoning.push('\n\n')
+      depth += 1
+      foundTag = true
+    }
+    cursor = index + match[0].length
+  }
+  if (!foundTag) return { text }
+  ;(depth > 0 ? reasoning : visible).push(text.slice(cursor))
   return {
-    reasoningText: match[1]?.trim(),
-    text: (match[2] ?? '').trim(),
+    reasoningText: reasoning.join('').trim() || undefined,
+    text: visible.join('').trim(),
   }
 }
 

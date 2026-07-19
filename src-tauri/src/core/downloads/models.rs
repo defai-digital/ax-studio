@@ -1,6 +1,8 @@
 use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
 use tokio_util::sync::CancellationToken;
 
 const MAX_ACTIVE_DOWNLOAD_TASKS: usize = 16;
@@ -104,44 +106,53 @@ pub struct DownloadEvent {
 /// Tracks (transferred, total) per file_id
 #[derive(Clone)]
 pub struct ProgressTracker {
-    file_stats: Arc<Mutex<HashMap<String, (u64, u64)>>>,
+    file_stats: Arc<HashMap<String, FileProgress>>,
+}
+
+struct FileProgress {
+    transferred: AtomicU64,
+    total: AtomicU64,
 }
 
 impl ProgressTracker {
     pub fn new(initial_sizes: HashMap<String, u64>) -> Self {
         let mut file_stats = HashMap::new();
         for (id, size) in initial_sizes {
-            file_stats.insert(id, (0, size));
+            file_stats.insert(
+                id,
+                FileProgress {
+                    transferred: AtomicU64::new(0),
+                    total: AtomicU64::new(size),
+                },
+            );
         }
         ProgressTracker {
-            file_stats: Arc::new(Mutex::new(file_stats)),
+            file_stats: Arc::new(file_stats),
         }
     }
 
     /// Update transferred bytes for a file
     pub async fn update_progress(&self, file_id: &str, transferred: u64) {
-        let mut stats = self.file_stats.lock().await;
-        if let Some(entry) = stats.get_mut(file_id) {
-            entry.0 = transferred;
+        if let Some(entry) = self.file_stats.get(file_id) {
+            entry.transferred.store(transferred, Ordering::Relaxed);
         }
     }
 
     /// Refine total size for a file (useful if HEAD was 0 but GET has Content-Length)
     pub async fn set_file_total(&self, file_id: &str, total: u64) {
-        let mut stats = self.file_stats.lock().await;
-        if let Some(entry) = stats.get_mut(file_id) {
-            entry.1 = total;
+        if let Some(entry) = self.file_stats.get(file_id) {
+            entry.total.store(total, Ordering::Relaxed);
         }
     }
 
     /// Get combined (transferred, total) across all files
     pub async fn get_total_progress(&self) -> (u64, u64) {
-        let stats = self.file_stats.lock().await;
         let mut total_transferred: u64 = 0;
         let mut total_size: u64 = 0;
-        for (transferred, size) in stats.values() {
-            total_transferred = total_transferred.saturating_add(*transferred);
-            total_size = total_size.saturating_add(*size);
+        for progress in self.file_stats.values() {
+            total_transferred = total_transferred
+                .saturating_add(progress.transferred.load(Ordering::Relaxed));
+            total_size = total_size.saturating_add(progress.total.load(Ordering::Relaxed));
         }
         (total_transferred, total_size)
     }

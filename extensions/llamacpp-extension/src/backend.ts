@@ -621,6 +621,28 @@ export async function checkForBackendUpdate(
 
 // ─── Default backend selection (JS fallback) ─────────────────────────────────
 
+/** Natural ordering for backend tags such as b9730, b10000, and v1.12.3. */
+export function compareBackendVersions(left: string, right: string): number {
+  const leftParts = left.match(/\d+|\D+/g) ?? [left]
+  const rightParts = right.match(/\d+|\D+/g) ?? [right]
+  const count = Math.max(leftParts.length, rightParts.length)
+  for (let index = 0; index < count; index += 1) {
+    const leftPart = leftParts[index]
+    const rightPart = rightParts[index]
+    if (leftPart === undefined) return -1
+    if (rightPart === undefined) return 1
+    if (leftPart === rightPart) continue
+    if (/^\d+$/.test(leftPart) && /^\d+$/.test(rightPart)) {
+      const leftNumber = BigInt(leftPart)
+      const rightNumber = BigInt(rightPart)
+      if (leftNumber !== rightNumber) return leftNumber > rightNumber ? 1 : -1
+      continue
+    }
+    return leftPart.localeCompare(rightPart)
+  }
+  return 0
+}
+
 /**
  * Pick the best backend from a list purely in JS, without Rust IPC.
  * Used when Rust ranking calls hang or fail.
@@ -628,7 +650,9 @@ export async function checkForBackendUpdate(
 function pickDefaultBackend(osType: string, backends: BackendVersion[]): string | null {
   if (backends.length === 0) return null
   // Use the latest release version
-  const latest = backends.reduce((a, b) => (b.version > a.version ? b : a)).version
+  const latest = backends.reduce((a, b) =>
+    compareBackendVersions(b.version, a.version) > 0 ? b : a
+  ).version
   const candidates = backends.filter((b) => b.version === latest)
 
   const keywords =
@@ -782,7 +806,7 @@ export async function configureBackends(
         // can start even when GitHub is unreachable.
         if (!picked && compatibleLocalBackends.length > 0) {
           const latest = compatibleLocalBackends.reduce((a, b) =>
-            b.version > a.version ? b : a
+            compareBackendVersions(b.version, a.version) > 0 ? b : a
           )
           picked = `${latest.version}/${latest.backend}`
           console.debug(
@@ -893,7 +917,7 @@ export async function resolveBackendVersion(): Promise<string> {
 
     // Pick the latest version
     const latest = localBackends.reduce((a, b) =>
-      b.version > a.version ? b : a
+      compareBackendVersions(b.version, a.version) > 0 ? b : a
     )
     const result = `${latest.version}/${latest.backend}`
     console.debug(`[llamacpp] Resolved local backend: ${result}`)

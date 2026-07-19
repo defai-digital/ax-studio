@@ -94,6 +94,12 @@ export default class AxStudioConversationalExtension extends ConversationalExten
     return this.callApi('modifyMessage', () => api.modifyMessage({ message }))
   }
 
+  /** Modifies several messages atomically in the native store. */
+  async modifyMessages(messages: ThreadMessage[]): Promise<ThreadMessage[]> {
+    const api = this.getCoreApi()
+    return this.callApi('modifyMessages', () => api.modifyMessages({ messages }))
+  }
+
   /**
    * Deletes a specific message from a thread.
    * @param threadId The ID of the thread containing the message.

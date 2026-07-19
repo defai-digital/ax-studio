@@ -21,6 +21,11 @@ let extensionSetupWork: Promise<void> | null = null
 // Extensions that already triggered a load-failure toast (fires once per extension)
 const extensionFailureToastShown = new Set<string>()
 
+/** Clears toast de-dupe state — used after a successful load and in tests. */
+export function resetExtensionFailureToastState() {
+  extensionFailureToastShown.clear()
+}
+
 function notifyExtensionLoadFailures() {
   const failedNames = ExtensionManager.getInstance().getFailedExtensionNames()
   if (failedNames.length === 0) {
@@ -67,6 +72,12 @@ export function ExtensionProvider({ children }: PropsWithChildren) {
     extensionSetupWork ??= extensionManager
       .registerActive()
       .then(() => extensionManager.load())
+      .then(() => {
+        const failedNames = extensionManager.getFailedExtensionNames()
+        if (failedNames.length > 0) {
+          throw new Error(`Extensions failed to load: ${failedNames.join(', ')}`)
+        }
+      })
       .finally(() => {
         extensionSetupWork = null
       })
@@ -85,6 +96,7 @@ export function ExtensionProvider({ children }: PropsWithChildren) {
         if (isCancelled()) return false
 
         console.info('[ExtensionProvider] Extension setup finished')
+        resetExtensionFailureToastState()
         setInitError(null)
         return true
       } catch (err) {

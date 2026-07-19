@@ -14,6 +14,7 @@ export type ConversationalNativeApi = {
   listMessages: (payload: { threadId: string }) => Promise<ThreadMessage[]>
   createMessage: (payload: { message: ThreadMessage }) => Promise<ThreadMessage>
   modifyMessage: (payload: { message: ThreadMessage }) => Promise<ThreadMessage>
+  modifyMessages: (payload: { messages: ThreadMessage[] }) => Promise<ThreadMessage[]>
   deleteMessage: (payload: { threadId: string; messageId: string }) => Promise<void>
 }
 
@@ -26,6 +27,7 @@ export type ConversationalStorageMethods = Pick<
   | 'listMessages'
   | 'createMessage'
   | 'modifyMessage'
+  | 'modifyMessages'
   | 'deleteMessage'
 >
 

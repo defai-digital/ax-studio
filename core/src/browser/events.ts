@@ -39,8 +39,15 @@ const getEventsBridge = (): CoreEventsBridge => {
  * @param eventName The name of the event to observe.
  * @param handler The handler function to call when the event is observed.
  */
-const on = <T = unknown>(eventName: string, handler: EventHandler<T>): void => {
-  getEventsBridge().on(eventName, handler as EventHandler)
+const on = <T = unknown>(
+  eventName: string,
+  handler: EventHandler<T>
+): (() => void) => {
+  const bridge = getEventsBridge()
+  const unsubscribe = bridge.on(eventName, handler as EventHandler)
+  return typeof unsubscribe === 'function'
+    ? unsubscribe
+    : () => bridge.off(eventName, handler as EventHandler)
 }
 
 /**

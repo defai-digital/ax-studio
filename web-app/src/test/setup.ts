@@ -57,6 +57,7 @@ const mockServiceHub = {
     deleteMessage: vi.fn().mockResolvedValue(undefined),
     updateMessage: vi.fn().mockImplementation((msg) => Promise.resolve(msg)),
     modifyMessage: vi.fn().mockImplementation((msg) => Promise.resolve(msg)),
+    modifyMessages: vi.fn().mockImplementation((messages) => Promise.resolve(messages)),
     getMessages: vi.fn().mockResolvedValue([]),
     getMessage: vi.fn().mockResolvedValue(null),
     fetchMessages: vi.fn().mockResolvedValue([]),

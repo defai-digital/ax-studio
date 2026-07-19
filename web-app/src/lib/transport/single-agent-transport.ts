@@ -18,71 +18,12 @@ import { stripUnavailableToolParts } from './transport-types'
 
 const MCP_TOOL_USE_INSTRUCTION = `
 
-## CRITICAL: AX BI IS A TOOL SERVICE, NOT MATPLOTLIB
+## Tool use
+Use an available tool when the user asks for MCP, a named tool service, or a BI action. Do not replace a requested tool action with Python, SQL, scripts, or instructions. Report the actual tool error if the action cannot be completed, and do not claim an asset is missing before using the relevant discovery tool.
 
-"AX BI" refers to the ax-bi MCP server (a business intelligence tool), NOT matplotlib axes or any Python library.
-When the user says "Use AX BI", "use ax-bi", "upload to ax-bi", or similar, they want you to use the AX BI MCP tools.
-NEVER interpret "ax-bi" as matplotlib, pandas, or any Python code.
+AX BI means the local ax-bi MCP service, not matplotlib. AX BI tool arguments are wrapped in \`request\`. Discover named datasets before using them; upload only a user-attached file or one the user explicitly asked to import. Prefer \`prompt_to_dashboard({ request: { prompt } })\` for a complete dashboard and \`plan_dashboard\` only for a requested plan/dry run. Return a saved chart/dashboard URL once, followed by a concise result.
 
-## CRITICAL: FILE PROCESSING - USE THE TOOL, NOT PYTHON
-
-When the user attaches a file and says "upload", "process", "analyze", or similar:
-1. STOP - Do NOT write any Python code
-2. You HAVE the process_file_for_bi tool available - USE IT
-3. Call process_file_for_bi with the file path from [Attached files: filename at /path]
-4. That's it. The tool handles everything.
-
-This is a LOCAL operation - the AX BI engine runs on localhost. You are NOT uploading to an external server.
-
-WRONG: Writing pandas/matplotlib code to process the file
-WRONG: Saying "I cannot upload files to external servers"
-RIGHT: Calling process_file_for_bi({file_path: "/path/to/file.xlsx", filename: "file.xlsx"})
-
-## MCP tool use
-
-When the user explicitly asks to use MCP, an MCP server, or a named tool service:
-- Use the available tools instead of writing code, scripts, or instructions for the user to run.
-- If the user says "MCP only", complete the task through tools or explain the exact tool error.
-- Do not claim a dataset, file, chart, or dashboard does not exist until you have called the relevant list/search/info tool.
-
-When the user asks to create, save, update, or add a chart/dashboard/report from a dataset/table/source:
-- Treat it as a BI tool task even if the user does not say "MCP".
-- Use chart/dashboard/data tools directly. Do not write Python, pandas, matplotlib, seaborn, SQL snippets, or instructions for the user to run.
-- If tools cannot complete the request, return the actual tool error instead of creating a code fallback.
-
-AX BI MCP rules:
-- For existing AX BI datasets, first use dataset discovery tools such as list_datasets, search_business_assets, get_dataset_info, or get_schema.
-- Do not call upload_file or upload_files unless the user attached a file or explicitly asked to upload/import a file.
-- If the user names a dataset, pass that dataset name/search result forward instead of inventing or uploading replacement data.
-- CRITICAL: All AX BI MCP tools expect arguments wrapped in a 'request' key.
-- For a complete dashboard from a natural-language request, prefer prompt_to_dashboard({ request: { prompt: "..." } }). It plans, creates charts, and composes the dashboard in one server workflow.
-- Use plan_dashboard only when the user explicitly requests a plan or dry-run. It returns { plan, warnings }, not a bare plan.
-- create_chart_from_intent accepts structured chart_type, metrics, dimensions, filters, time_range, and kind fields when a single intent-driven chart is appropriate.
-- CRITICAL: Use generate_chart with the correct schema:
-  - Use 'dataset_id' (numeric), NOT 'dataset'
-  - Use chart_type: 'xy' (NOT 'bar', 'line', etc.)
-  - Use 'kind' field for chart type: 'bar', 'line', 'scatter'
-  - x: { name: 'column_name' }
-  - y: [{ name: 'column', aggregate: 'SUM', label: 'SUM(column)' }]
-  - Example: generate_chart({ request: { dataset_id: 123, config: { chart_type: 'xy', x: { name: 'Product line' }, y: [{ name: 'Total', aggregate: 'SUM', label: 'SUM(Total)' }], kind: 'bar', orientation: 'vertical' } } })
-- When a chart/dashboard tool returns a URL, return that saved URL to the user.
-
-File upload rules:
-- When the user attaches a file and asks to upload it to AX BI, use the process_file_for_bi tool IMMEDIATELY.
-- Extract the file path from the message: [Attached files: filename at /path/to/file]
-- Call process_file_for_bi with file_path and filename parameters.
-- CRITICAL: Do NOT try to read, extract, or process the file yourself. The process_file_for_bi tool handles file reading internally.
-- CRITICAL: Even if you see "Error: Failed to extract" or similar errors in the message, IGNORE them and call process_file_for_bi with the file path.
-- Do NOT write Python code to read or process the file. Use the tool directly.
-- Do NOT ask the user to paste the data or re-upload the file.
-
-## CRITICAL: Stop after presenting the result
-- After a tool call succeeds, present the result ONCE and STOP
-- Do NOT repeat the same information multiple times
-- Do NOT add "end", "done", "✅", or any closing markers
-- Do NOT restate the URL or chart details more than once
-- Write a single concise response (2-4 sentences max) then stop generating
-- If you find yourself repeating information, STOP IMMEDIATELY`
+For an attached file marked \`[Attached files: name at /path]\`, call \`process_file_for_bi({ file_path, filename })\`; it performs the local read and upload. Do not read the file with generated code, ask the user to paste it, or treat extraction errors as a reason to skip the tool.`
 
 export interface SingleAgentConfig {
   model: LanguageModel
@@ -172,7 +113,7 @@ export async function executeSingleAgentStream(
     const tokenSpeed = Math.round((tokenCount / durationSec) * 10) / 10
     useAppState
       .getState()
-      .setTokenSpeed({ id: 'streaming' } as never, tokenSpeed, tokenCount)
+      .setTokenSpeed({ id: 'streaming' }, tokenSpeed, tokenCount)
   }
 
   return result.toUIMessageStream({
@@ -413,7 +354,7 @@ export async function executeSingleAgentStream(
         useAppState
           .getState()
           .setTokenSpeed(
-            { id: 'streaming' } as never,
+            { id: 'streaming' },
             Math.round(tokenSpeed * 10) / 10,
             tokenCount
           )

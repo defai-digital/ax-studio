@@ -49,8 +49,22 @@ function cleanupThreadResources(threadId: string) {
   }).catch(() => {})
 }
 
-/** Shared in-flight create so concurrent callers await the same new thread. */
-let createThreadInFlightPromise: Promise<Thread> | null = null
+/** Deduplicate only genuinely identical concurrent creates. */
+const createThreadInFlightPromises = new Map<string, Promise<Thread>>()
+let activeThreadCreateCount = 0
+
+const createThreadRequestKey = (
+  model: ThreadModel,
+  title: string | undefined,
+  assistant: Assistant | undefined,
+  projectMetadata: {
+    id: string
+    name: string
+    updated_at: number
+    logo?: string
+    projectPrompt?: string | null
+  } | undefined
+) => JSON.stringify({ model, title, assistant, projectMetadata })
 type ThreadState = {
   threads: Record<string, Thread>
   currentThreadId?: string
@@ -269,17 +283,18 @@ export const useThreads = create<ThreadState>()((set, get) => ({
     projectMetadata,
     isTemporary
   ) => {
-    // Concurrent non-temporary creates must share one promise. Returning the
-    // previous currentThread while create is in flight caused double-send from
-    // home to write the pending message onto the wrong (old) thread.
-    if (!isTemporary && createThreadInFlightPromise) {
-      return createThreadInFlightPromise
+    const requestKey = !isTemporary
+      ? createThreadRequestKey(model, title, assistant, projectMetadata)
+      : undefined
+    const existingCreate = requestKey
+      ? createThreadInFlightPromises.get(requestKey)
+      : undefined
+    if (existingCreate) {
+      return existingCreate
     }
 
     const run = async (): Promise<Thread> => {
-      set({ _createThreadInFlight: true })
-      try {
-        const generalSettings = useGeneralSetting.getState()
+      const generalSettings = useGeneralSetting.getState()
         const shouldSnapshotGlobalPrompt =
           generalSettings.applyMode === 'new_chats_only' &&
           Boolean(generalSettings.globalDefaultPrompt.trim()) &&
@@ -339,18 +354,25 @@ export const useThreads = create<ThreadState>()((set, get) => ({
             currentThreadId: createdThread.id,
           }
         })
-        return createdThread
-      } finally {
-        if (!isTemporary) createThreadInFlightPromise = null
-        set({ _createThreadInFlight: false })
-      }
+      return createdThread
     }
 
-    if (!isTemporary) {
-      createThreadInFlightPromise = run()
-      return createThreadInFlightPromise
+    activeThreadCreateCount += 1
+    set({ _createThreadInFlight: true })
+    const pendingCreate = run().finally(() => {
+      activeThreadCreateCount = Math.max(0, activeThreadCreateCount - 1)
+      if (
+        requestKey &&
+        createThreadInFlightPromises.get(requestKey) === pendingCreate
+      ) {
+        createThreadInFlightPromises.delete(requestKey)
+      }
+      set({ _createThreadInFlight: activeThreadCreateCount > 0 })
+    })
+    if (requestKey) {
+      createThreadInFlightPromises.set(requestKey, pendingCreate)
     }
-    return run()
+    return pendingCreate
   },
   updateCurrentThreadAssistant: (assistant) => {
     set((state) => {

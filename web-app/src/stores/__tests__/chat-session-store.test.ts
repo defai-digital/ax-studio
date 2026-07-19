@@ -103,18 +103,32 @@ describe('ensureSession', () => {
   })
 
   it('updates transport and title when they change on an existing session', () => {
-    const chat = makeChat()
+    const oldChat = makeChat('streaming')
+    const newChat = makeChat()
+    const oldUnsubscribe = vi.fn()
+    const newUnsubscribe = vi.fn()
+    oldChat['~registerStatusCallback'] = vi
+      .fn()
+      .mockReturnValue(oldUnsubscribe)
+    newChat['~registerStatusCallback'] = vi
+      .fn()
+      .mockReturnValue(newUnsubscribe)
     const transport1 = makeTransport()
     const transport2 = makeTransport()
     useChatSessions
       .getState()
-      .ensureSession('s1', transport1, createChat(chat), 'Title1')
+      .ensureSession('s1', transport1, createChat(oldChat), 'Title1')
     useChatSessions
       .getState()
-      .ensureSession('s1', transport2, createChat(chat), 'Title2')
+      .ensureSession('s1', transport2, createChat(newChat), 'Title2')
     const session = useChatSessions.getState().sessions['s1']
     expect(session.transport).toBe(transport2)
     expect(session.title).toBe('Title2')
+    expect(session.chat).toBe(newChat)
+    expect(oldUnsubscribe).toHaveBeenCalledOnce()
+    expect(oldChat.stop).toHaveBeenCalledOnce()
+    expect(newChat['~registerStatusCallback']).toHaveBeenCalledOnce()
+    expect(newUnsubscribe).not.toHaveBeenCalled()
   })
 
   it('promotes standalone data into the new session', () => {

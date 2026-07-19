@@ -91,6 +91,7 @@ macro_rules! desktop_handlers {
             crate::core::threads::commands::list_messages,
             crate::core::threads::commands::create_message,
             crate::core::threads::commands::modify_message,
+            crate::core::threads::commands::modify_messages,
             crate::core::threads::commands::delete_message,
             crate::core::threads::commands::get_thread_assistant,
             crate::core::threads::commands::create_thread_assistant,

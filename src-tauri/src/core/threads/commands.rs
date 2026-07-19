@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::Write;
 use tauri::Runtime;
@@ -149,16 +150,7 @@ pub async fn modify_thread<R: Runtime>(
     let _guard = lock.lock().await;
 
     let path = get_thread_metadata_path(app_handle.clone(), thread_id);
-    let data = serde_json::to_string_pretty(&thread).map_err(|e| e.to_string())?;
-    let tmp_path = path.with_extension("json.tmp");
-    tokio::task::spawn_blocking(move || {
-        fs::write(&tmp_path, &data).map_err(|e| e.to_string())?;
-        if let Err(e) = fs::rename(&tmp_path, &path) {
-            let _ = fs::remove_file(&tmp_path);
-            return Err(e.to_string());
-        }
-        Ok(())
-    })
+    tokio::task::spawn_blocking(move || update_thread_metadata(&path, &thread))
     .await
     .map_err(|e| format!("modify_thread task error: {e}"))??;
     Ok(())
@@ -295,6 +287,74 @@ pub async fn modify_message<R: Runtime>(
     }
     prune_unused_message_locks().await;
     Ok(message)
+}
+
+/// Modifies several messages in one all-or-nothing rewrite of a thread's
+/// messages.jsonl file.
+#[tauri::command]
+pub async fn modify_messages<R: Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    messages: Vec<MessageRecord>,
+) -> Result<Vec<MessageRecord>, String> {
+    if messages.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let thread_id = messages[0].thread_id.clone();
+    if thread_id.is_empty() {
+        return Err("Missing thread_id".to_string());
+    }
+
+    let mut message_ids = HashSet::with_capacity(messages.len());
+    for message in &messages {
+        message.validate()?;
+        if message.thread_id != thread_id {
+            return Err("All messages in a batch must belong to the same thread".to_string());
+        }
+        if !message_ids.insert(message.id.clone()) {
+            return Err(format!("Duplicate message id '{}' in batch", message.id));
+        }
+    }
+
+    {
+        let lock = get_lock_for_thread(&thread_id).await;
+        let _guard = lock.lock().await;
+        let messages_path = get_messages_path(app_handle, &thread_id);
+        let expected_thread_id = thread_id.clone();
+        let replacements: HashMap<String, MessageRecord> = messages
+            .iter()
+            .cloned()
+            .map(|message| (message.id.clone(), message))
+            .collect();
+        let expected_ids = message_ids.clone();
+
+        task::spawn_blocking(move || -> Result<(), String> {
+            // Check every requested id before opening the temporary output so a
+            // partially valid batch cannot commit a subset of its changes.
+            let existing = read_messages_from_path(&messages_path, &expected_thread_id)?;
+            let existing_ids: HashSet<&str> =
+                existing.iter().map(|message| message.id.as_str()).collect();
+            if let Some(missing_id) = expected_ids
+                .iter()
+                .find(|id| !existing_ids.contains(id.as_str()))
+            {
+                return Err(format!("Message '{missing_id}' not found"));
+            }
+
+            rewrite_messages_file(&messages_path, |existing| {
+                replacements
+                    .get(&existing.id)
+                    .cloned()
+                    .or(Some(existing))
+            })?;
+            Ok(())
+        })
+        .await
+        .map_err(|e| format!("modify_messages task error: {e}"))??;
+    }
+
+    prune_unused_message_locks().await;
+    Ok(messages)
 }
 
 /// Deletes a message from a thread's messages.jsonl file by message ID.

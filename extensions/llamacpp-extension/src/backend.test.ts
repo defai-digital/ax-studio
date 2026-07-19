@@ -77,6 +77,7 @@ vi.mock('@ax-studio/core', () => ({
 import {
   clearRemoteBackendsCacheForTests,
   checkForBackendUpdate,
+  compareBackendVersions,
   configureBackends,
   downloadBackend,
   fetchRemoteBackends,
@@ -96,6 +97,12 @@ describe('llamacpp backend helpers', () => {
   let consoleDebugSpy: ReturnType<typeof vi.spyOn>
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>
   let consoleWarnSpy: ReturnType<typeof vi.spyOn>
+
+  it('compares numeric backend versions naturally', () => {
+    expect(compareBackendVersions('b10000', 'b9730')).toBeGreaterThan(0)
+    expect(compareBackendVersions('v1.10.0', 'v1.9.9')).toBeGreaterThan(0)
+    expect(compareBackendVersions('b9730', 'b9730')).toBe(0)
+  })
 
   beforeEach(() => {
     vi.clearAllMocks()

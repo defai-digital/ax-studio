@@ -177,7 +177,18 @@ export function buildProxyArg(
  * Used only for batching decisions, not for accuracy.
  */
 export function estimateTokensFromText(text: string, charsPerToken = 3): number {
-  return Math.ceil(text.length / charsPerToken)
+  const divisor =
+    Number.isFinite(charsPerToken) && charsPerToken > 0 ? charsPerToken : 3
+  return Math.ceil(text.length / divisor)
+}
+
+/** Generate a high-entropy secret without relying on clocks or model IDs. */
+export function createRandomApiSecret(byteLength = 32): string {
+  const length =
+    Number.isSafeInteger(byteLength) && byteLength >= 16 ? byteLength : 32
+  const bytes = new Uint8Array(length)
+  globalThis.crypto.getRandomValues(bytes)
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
 export interface EmbedBatch {

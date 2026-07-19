@@ -276,9 +276,6 @@ const ChatInput = memo(function ChatInput({
 
   useEffect(() => {
     textareaRef.current?.focus()
-  }, [])
-  useEffect(() => {
-    textareaRef.current?.focus()
   }, [effectiveThreadId])
 
   // Global wake hotkey: the app navigates home and dispatches this event so
@@ -290,14 +287,6 @@ const ChatInput = memo(function ChatInput({
       window.removeEventListener(COMPOSER_FOCUS_EVENT, handleComposerFocus)
     }
   }, [])
-
-  useEffect(() => {
-    if (chatStatus !== 'submitted') {
-      setTimeout(() => {
-        textareaRef.current?.focus()
-      }, 10)
-    }
-  }, [chatStatus])
 
   useEffect(() => {
     if (tooltipToolsAvailable && dropdownToolsAvailable)
@@ -316,9 +305,8 @@ const ChatInput = memo(function ChatInput({
   })
 
   const submitCurrentPrompt = useCallback(() => {
-    const currentPrompt = textareaRef.current?.value ?? prompt
-    if (!currentPrompt.trim() || ingestingDocs) return
-    void handleSendMessage(currentPrompt)
+    if (!prompt.trim() || ingestingDocs) return
+    void handleSendMessage(prompt)
   }, [handleSendMessage, ingestingDocs, prompt])
 
   // Voice input (on-device whisper.cpp STT) — mic button in the toolbar,

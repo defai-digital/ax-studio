@@ -23,19 +23,25 @@ const getOwnMessages = (
   return Array.isArray(threadMessages) ? threadMessages : undefined
 }
 
-const trackPersistedMessage = (message: ThreadMessage) => {
-  const key = trackedMessageKey(message.thread_id, message.id)
-  persistedMessages.set(key, message)
-  const successId = latestMessageMutationId.get(key) ?? 0
-  latestSuccessfulMutationId.set(key, successId)
-  if (!pendingMessageMutationIds.has(key)) {
-    visibleMessageMutationId.set(key, successId)
-  }
+const cleanupTrackedMessageIfIdle = (key: string) => {
+  if (pendingMessageMutationIds.get(key)?.size) return
+  persistedMessages.delete(key)
+  latestMessageMutationId.delete(key)
+  latestSuccessfulMutationId.delete(key)
+  visibleMessageMutationId.delete(key)
+  pendingMessageMutationIds.delete(key)
 }
 
 export const clearTrackedThreadMessages = (threadId: string) => {
   const prefix = `${threadId}:`
-  for (const key of persistedMessages.keys()) {
+  const trackedKeys = new Set([
+    ...persistedMessages.keys(),
+    ...latestMessageMutationId.keys(),
+    ...latestSuccessfulMutationId.keys(),
+    ...visibleMessageMutationId.keys(),
+    ...pendingMessageMutationIds.keys(),
+  ])
+  for (const key of trackedKeys) {
     if (key.startsWith(prefix)) {
       persistedMessages.delete(key)
       latestMessageMutationId.delete(key)
@@ -61,6 +67,7 @@ type MessageState = {
   setMessages: (threadId: string, messages: ThreadMessage[]) => void
   addMessage: (message: ThreadMessage) => void
   updateMessage: (message: ThreadMessage) => void
+  updateMessages: (messages: ThreadMessage[]) => void
   deleteMessage: (threadId: string, messageId: string) => void
   removeThreadMessages: (threadId: string) => void
   clearAllMessages: () => void
@@ -73,7 +80,6 @@ export const useMessages = create<MessageState>()((set, get) => ({
   },
   setMessages: (threadId, messages) => {
     clearTrackedThreadMessages(threadId)
-    messages.forEach(trackPersistedMessage)
     set((state) => ({
       messages: {
         ...state.messages,
@@ -106,7 +112,6 @@ export const useMessages = create<MessageState>()((set, get) => ({
         if (createdMessage.id !== newMessage.id) {
           removeTrackedMessage(newMessage.thread_id, newMessage.id)
         }
-        trackPersistedMessage(createdMessage)
         set((state) => ({
           messages: {
             ...state.messages,
@@ -137,6 +142,15 @@ export const useMessages = create<MessageState>()((set, get) => ({
       ...message,
     }
     const messageKey = trackedMessageKey(message.thread_id, message.id)
+    const currentMessage = getOwnMessages(
+      get().messages,
+      message.thread_id
+    )?.find((m) => m.id === message.id)
+    if (!pendingMessageMutationIds.has(messageKey) && currentMessage) {
+      persistedMessages.set(messageKey, currentMessage)
+      latestSuccessfulMutationId.set(messageKey, 0)
+      visibleMessageMutationId.set(messageKey, 0)
+    }
     const mutationId = (latestMessageMutationId.get(messageKey) ?? 0) + 1
     latestMessageMutationId.set(messageKey, mutationId)
     const pendingMutations =
@@ -148,9 +162,7 @@ export const useMessages = create<MessageState>()((set, get) => ({
     // Roll back to the last backend-confirmed version rather than a prior optimistic edit.
     const previousMessage =
       persistedMessages.get(messageKey) ??
-      getOwnMessages(get().messages, message.thread_id)?.find(
-        (m) => m.id === message.id
-      )
+      currentMessage
 
     // Optimistically update state immediately for instant UI feedback
     set((state) => ({
@@ -184,7 +196,10 @@ export const useMessages = create<MessageState>()((set, get) => ({
           pendingMessageMutationIds.get(messageKey) ?? []
         ).some((pendingId) => pendingId > mutationId)
         const currentVisible = visibleMessageMutationId.get(messageKey) ?? 0
-        if (higherPendingExists || currentVisible > mutationId) return
+        if (higherPendingExists || currentVisible > mutationId) {
+          cleanupTrackedMessageIfIdle(messageKey)
+          return
+        }
 
         visibleMessageMutationId.set(messageKey, mutationId)
 
@@ -196,6 +211,7 @@ export const useMessages = create<MessageState>()((set, get) => ({
             ).map((m) => (m.id === message.id ? persistedMessage : m)),
           },
         }))
+        cleanupTrackedMessageIfIdle(messageKey)
       })
       .catch((error) => {
         console.error('Failed to persist message update:', error)
@@ -206,22 +222,157 @@ export const useMessages = create<MessageState>()((set, get) => ({
           pendingMessageMutationIds.delete(messageKey)
         }
 
-        if ((visibleMessageMutationId.get(messageKey) ?? 0) !== mutationId)
+        if ((visibleMessageMutationId.get(messageKey) ?? 0) !== mutationId) {
+          cleanupTrackedMessageIfIdle(messageKey)
           return
+        }
 
         visibleMessageMutationId.set(
           messageKey,
           latestSuccessfulMutationId.get(messageKey) ?? 0
         )
-        if (previousMessage) {
+        const rollbackMessage =
+          persistedMessages.get(messageKey) ?? previousMessage
+        if (rollbackMessage) {
           set((state) => ({
             messages: {
               ...state.messages,
               [message.thread_id]: (
                 getOwnMessages(state.messages, message.thread_id) ?? []
-              ).map((m) => (m.id === message.id ? previousMessage : m)),
+              ).map((m) => (m.id === message.id ? rollbackMessage : m)),
             },
           }))
+        }
+        cleanupTrackedMessageIfIdle(messageKey)
+      })
+  },
+  updateMessages: (messages) => {
+    if (messages.length === 0) return
+
+    const mutations = messages.map((message) => {
+      const key = trackedMessageKey(message.thread_id, message.id)
+      const currentMessage = getOwnMessages(
+        get().messages,
+        message.thread_id
+      )?.find((candidate) => candidate.id === message.id)
+      if (!pendingMessageMutationIds.has(key) && currentMessage) {
+        persistedMessages.set(key, currentMessage)
+        latestSuccessfulMutationId.set(key, 0)
+        visibleMessageMutationId.set(key, 0)
+      }
+      const mutationId = (latestMessageMutationId.get(key) ?? 0) + 1
+      latestMessageMutationId.set(key, mutationId)
+      const pending = pendingMessageMutationIds.get(key) ?? new Set<number>()
+      pending.add(mutationId)
+      pendingMessageMutationIds.set(key, pending)
+      visibleMessageMutationId.set(key, mutationId)
+      return { message, key, mutationId, previousMessage: currentMessage }
+    })
+
+    const optimisticByThread = new Map<string, Map<string, ThreadMessage>>()
+    for (const { message } of mutations) {
+      const replacements =
+        optimisticByThread.get(message.thread_id) ?? new Map<string, ThreadMessage>()
+      replacements.set(message.id, message)
+      optimisticByThread.set(message.thread_id, replacements)
+    }
+    set((state) => {
+      const nextMessages = { ...state.messages }
+      for (const [threadId, replacements] of optimisticByThread) {
+        nextMessages[threadId] = (
+          getOwnMessages(state.messages, threadId) ?? []
+        ).map((message) => replacements.get(message.id) ?? message)
+      }
+      return { messages: nextMessages }
+    })
+
+    getServiceHub()
+      .messages()
+      .modifyMessages(messages)
+      .then((persistedBatch) => {
+        const persistedByKey = new Map(
+          persistedBatch.map((message) => [
+            trackedMessageKey(message.thread_id, message.id),
+            message,
+          ])
+        )
+        const visibleByThread = new Map<string, Map<string, ThreadMessage>>()
+
+        for (const { message, key, mutationId } of mutations) {
+          const pending = pendingMessageMutationIds.get(key)
+          pending?.delete(mutationId)
+          if (!pending?.size) pendingMessageMutationIds.delete(key)
+
+          const persistedMessage = persistedByKey.get(key) ?? message
+          const latestSuccess = latestSuccessfulMutationId.get(key) ?? 0
+          if (mutationId >= latestSuccess) {
+            persistedMessages.set(key, persistedMessage)
+            latestSuccessfulMutationId.set(key, mutationId)
+          }
+
+          const higherPendingExists = Array.from(
+            pendingMessageMutationIds.get(key) ?? []
+          ).some((pendingId) => pendingId > mutationId)
+          const currentVisible = visibleMessageMutationId.get(key) ?? 0
+          if (!higherPendingExists && currentVisible <= mutationId) {
+            visibleMessageMutationId.set(key, mutationId)
+            const replacements =
+              visibleByThread.get(message.thread_id) ??
+              new Map<string, ThreadMessage>()
+            replacements.set(message.id, persistedMessage)
+            visibleByThread.set(message.thread_id, replacements)
+          }
+          cleanupTrackedMessageIfIdle(key)
+        }
+
+        if (visibleByThread.size > 0) {
+          set((state) => {
+            const nextMessages = { ...state.messages }
+            for (const [threadId, replacements] of visibleByThread) {
+              nextMessages[threadId] = (
+                getOwnMessages(state.messages, threadId) ?? []
+              ).map((message) => replacements.get(message.id) ?? message)
+            }
+            return { messages: nextMessages }
+          })
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to persist message updates:', error)
+        const rollbackByThread = new Map<string, Map<string, ThreadMessage>>()
+        for (const { message, key, mutationId, previousMessage } of mutations) {
+          const pending = pendingMessageMutationIds.get(key)
+          pending?.delete(mutationId)
+          if (!pending?.size) pendingMessageMutationIds.delete(key)
+
+          if ((visibleMessageMutationId.get(key) ?? 0) === mutationId) {
+            visibleMessageMutationId.set(
+              key,
+              latestSuccessfulMutationId.get(key) ?? 0
+            )
+            const rollbackMessage =
+              persistedMessages.get(key) ?? previousMessage
+            if (rollbackMessage) {
+              const replacements =
+                rollbackByThread.get(message.thread_id) ??
+                new Map<string, ThreadMessage>()
+              replacements.set(message.id, rollbackMessage)
+              rollbackByThread.set(message.thread_id, replacements)
+            }
+          }
+          cleanupTrackedMessageIfIdle(key)
+        }
+
+        if (rollbackByThread.size > 0) {
+          set((state) => {
+            const nextMessages = { ...state.messages }
+            for (const [threadId, replacements] of rollbackByThread) {
+              nextMessages[threadId] = (
+                getOwnMessages(state.messages, threadId) ?? []
+              ).map((message) => replacements.get(message.id) ?? message)
+            }
+            return { messages: nextMessages }
+          })
         }
       })
   },

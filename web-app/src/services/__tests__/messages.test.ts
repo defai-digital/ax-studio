@@ -21,6 +21,7 @@ describe('DefaultMessagesService', () => {
     listMessages: vi.fn(),
     createMessage: vi.fn(),
     modifyMessage: vi.fn(),
+    modifyMessages: vi.fn(),
     deleteMessage: vi.fn(),
   }
 
@@ -32,6 +33,7 @@ describe('DefaultMessagesService', () => {
     listMessages: vi.fn(),
     createMessage: vi.fn(),
     modifyMessage: vi.fn(),
+    modifyMessages: vi.fn(),
     deleteMessage: vi.fn(),
     openExternalUrl: vi.fn(),
   }

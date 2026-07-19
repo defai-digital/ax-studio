@@ -235,7 +235,7 @@ impl StreamCancellationRegistry {
         let mut flags = self
             .flags
             .lock()
-            .map_err(|_| "MLX stream cancellation registry is unavailable".to_string())?;
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if flags.contains_key(request_id) {
             return Err(format!("MLX stream request already exists: {request_id}"));
         }
@@ -248,7 +248,7 @@ impl StreamCancellationRegistry {
         let flags = self
             .flags
             .lock()
-            .map_err(|_| "MLX stream cancellation registry is unavailable".to_string())?;
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let Some(cancellation) = flags.get(request_id) else {
             return Ok(false);
         };
@@ -262,7 +262,7 @@ impl StreamCancellationRegistry {
         let flags = self
             .flags
             .lock()
-            .map_err(|_| "MLX stream cancellation registry is unavailable".to_string())?;
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let count = flags.len();
         for cancellation in flags.values() {
             cancellation.store(true, Ordering::Release);
@@ -271,10 +271,10 @@ impl StreamCancellationRegistry {
     }
 
     fn unregister(&self, request_id: &str, cancellation: &Arc<AtomicBool>) {
-        let Ok(mut flags) = self.flags.lock() else {
-            log::warn!("MLX stream cancellation registry is unavailable during cleanup");
-            return;
-        };
+        let mut flags = self
+            .flags
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if flags
             .get(request_id)
             .is_some_and(|current| Arc::ptr_eq(current, cancellation))
@@ -293,19 +293,19 @@ pub struct MlxWorker {
 }
 
 impl MlxWorker {
-    pub fn spawn() -> (Self, JoinHandle<()>) {
+    pub fn spawn() -> Result<(Self, JoinHandle<()>), String> {
         let (cmd_tx, cmd_rx) = std::sync::mpsc::channel();
         let join = thread::Builder::new()
             .name("ax-mlx-worker".to_string())
             .spawn(move || run_worker(cmd_rx))
-            .expect("failed to spawn mlx worker thread");
-        (
+            .map_err(|error| format!("failed to spawn mlx worker thread: {error}"))?;
+        Ok((
             Self {
                 cmd_tx,
                 stream_cancellations: StreamCancellationRegistry::default(),
             },
             join,
-        )
+        ))
     }
 
     fn dispatch(&self, cmd: MlxCommand) -> Result<(), String> {

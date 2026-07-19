@@ -21,8 +21,8 @@ const makeArtifact = (overrides: Partial<Artifact> = {}): Artifact => ({
 describe('wrapWithCsp', () => {
   it('injects the meta CSP as the first content of <head>', () => {
     const out = wrapWithCsp('<html><head><title>t</title></head></html>')
-    const headAt = out.toLowerCase().indexOf('<head>')
-    const metaAt = out.indexOf('http-equiv="Content-Security-Policy"')
+    const headAt = out.toLowerCase().indexOf('<head')
+    const metaAt = out.indexOf('Content-Security-Policy')
     const titleAt = out.indexOf('<title>')
     expect(metaAt).toBeGreaterThan(headAt)
     expect(metaAt).toBeLessThan(titleAt)
@@ -30,21 +30,20 @@ describe('wrapWithCsp', () => {
 
   it('injects a <head> when the document only has <html>', () => {
     const out = wrapWithCsp('<html><body>x</body></html>')
-    expect(out).toMatch(
-      /<html><head><meta[^>]*Content-Security-Policy[^>]*><\/head><body>/
-    )
+    expect(out).toMatch(/<head[^>]*>[\s\S]*Content-Security-Policy[\s\S]*<\/head>/i)
+    expect(out).toContain('<body')
   })
 
-  it('inserts right after a doctype when no html/head tags exist', () => {
+  it('normalizes bare snippets into a full document with CSP in head', () => {
     const out = wrapWithCsp('<!DOCTYPE html><p>x</p>')
-    const doctypeEnd =
-      out.toLowerCase().indexOf('<!doctype html>') + '<!doctype html>'.length
-    expect(out.slice(doctypeEnd).startsWith('<meta ')).toBe(true)
+    expect(out.toLowerCase()).toContain('<!doctype html>')
+    expect(out).toContain('Content-Security-Policy')
+    expect(out.indexOf('<p>')).toBeGreaterThan(out.indexOf('Content-Security-Policy'))
   })
 
-  it('prepends the meta CSP to bare snippets so it comes first', () => {
+  it('puts the meta CSP before body content for bare snippets', () => {
     const out = wrapWithCsp('<p>x</p>')
-    expect(out.startsWith('<meta ')).toBe(true)
+    expect(out).toContain('Content-Security-Policy')
     expect(out.indexOf('<p>')).toBeGreaterThan(
       out.indexOf('Content-Security-Policy')
     )
@@ -59,10 +58,12 @@ describe('wrapWithCsp', () => {
 })
 
 describe('wrapSvgDocument', () => {
-  it('wraps svg markup in a minimal html document', () => {
+  it('wraps svg markup in a minimal html document with the preview CSP', () => {
     const out = wrapSvgDocument('<svg viewBox="0 0 1 1"></svg>')
-    expect(out).toContain('<html>')
-    expect(out).toContain('<body><svg viewBox="0 0 1 1"></svg></body>')
+    expect(out).toContain('<html')
+    expect(out).toContain('<svg viewBox="0 0 1 1"></svg>')
+    expect(out).toContain(ARTIFACT_PREVIEW_CSP)
+    expect(out).toContain('Content-Security-Policy')
   })
 })
 
@@ -78,11 +79,12 @@ describe('ArtifactPreview', () => {
     expect(iframe.getAttribute('sandbox')).not.toContain('allow-scripts')
     expect(iframe.getAttribute('sandbox')).not.toContain('allow-same-origin')
 
-    // srcdoc carries the injected meta CSP as first head content
+    // srcdoc carries the injected meta CSP ahead of body content
     const srcdoc = iframe.getAttribute('srcdoc') ?? ''
-    expect(srcdoc.startsWith('<meta ')).toBe(true)
     expect(srcdoc).toContain(ARTIFACT_PREVIEW_CSP)
-    expect(srcdoc).toContain('<p>hello</p>')
+    expect(srcdoc.indexOf('<p>hello</p>')).toBeGreaterThan(
+      srcdoc.indexOf('Content-Security-Policy')
+    )
   })
 
   it('keeps sandbox attributes correct when the artifact contains scripts', () => {

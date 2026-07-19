@@ -54,9 +54,15 @@ class LazyTauriProvidersService implements ProvidersService {
 
   private async service(): Promise<ProvidersService> {
     if (!this.servicePromise) {
-      this.servicePromise = import('./providers/tauri').then(
+      const servicePromise = import('./providers/tauri').then(
         (module) => new module.TauriProvidersService()
       )
+      this.servicePromise = servicePromise
+      servicePromise.catch(() => {
+        if (this.servicePromise === servicePromise) {
+          this.servicePromise = null
+        }
+      })
     }
     return this.servicePromise
   }
@@ -482,12 +488,18 @@ export async function initializeServiceHub(): Promise<ServiceHub> {
   if (!serviceHubSingletonPromise || serviceHubSingletonIsTauri !== currentIsTauri) {
     serviceHubSingleton = null
     serviceHubSingletonIsTauri = currentIsTauri
-    serviceHubSingletonPromise = (async () => {
+    const initialization = (async () => {
       const serviceHub = new PlatformServiceHub()
       await serviceHub.initialize()
       serviceHubSingleton = serviceHub
       return serviceHub
     })()
+    serviceHubSingletonPromise = initialization
+    initialization.catch(() => {
+      if (serviceHubSingletonPromise === initialization) {
+        serviceHubSingletonPromise = null
+      }
+    })
   }
   return serviceHubSingleton ?? serviceHubSingletonPromise
 }

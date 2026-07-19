@@ -226,4 +226,20 @@ describe('createSafeJSONStorage', () => {
     expect(warn).not.toHaveBeenCalled()
     warn.mockRestore()
   })
+
+  it('throws when a resolved storage backend rejects a write', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const storage = createSafeJSONStorage(() =>
+      makeStorage({
+        setItem: () => {
+          throw new DOMException('Quota exceeded', 'QuotaExceededError')
+        },
+      })
+    )
+
+    expect(() =>
+      storage.setItem('important', { state: { count: 3 }, version: 0 })
+    ).toThrow('Failed to persist storage key "important"')
+    warn.mockRestore()
+  })
 })

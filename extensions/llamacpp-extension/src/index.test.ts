@@ -294,9 +294,11 @@ describe('AxStudioLlamacppExtension', () => {
 
   it('rejects invalid model identifiers', () => {
     const extension = new AxStudioLlamacppExtension('', '')
-    expect(() => (extension as any)._validateModelId('../escape')).toThrow(
-      'Invalid model ID'
-    )
+    for (const modelId of ['../escape', '///', '/model', 'model/', '.hidden']) {
+      expect(() => (extension as any)._validateModelId(modelId)).toThrow(
+        'Invalid model ID'
+      )
+    }
   })
 
   it('uses a shared helper to reject paths outside the models directory', async () => {

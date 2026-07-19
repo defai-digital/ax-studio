@@ -36,10 +36,18 @@ export abstract class OAIEngine extends AIEngine {
   private loaded = false
 
   private inferencing = false
+  private readonly pendingMessages: MessageRequest[] = []
 
   private readonly handleMessageSent = (data: MessageRequest) => {
     if (!data || typeof data !== 'object') return
-    if (this.inferencing) return
+    if (this.inferencing) {
+      this.pendingMessages.push(data)
+      return
+    }
+    this.runInference(data)
+  }
+
+  private readonly runInference = (data: MessageRequest) => {
     this.resetInferenceController()
     this.inferencing = true
     void Promise.resolve()
@@ -54,6 +62,8 @@ export abstract class OAIEngine extends AIEngine {
       })
       .finally(() => {
         this.inferencing = false
+        const nextMessage = this.pendingMessages.shift()
+        if (nextMessage) this.runInference(nextMessage)
       })
   }
 
@@ -92,6 +102,13 @@ export abstract class OAIEngine extends AIEngine {
     this.loaded = false
     events.off(MessageEvent.OnMessageSent, this.handleMessageSent)
     events.off(InferenceEvent.OnInferenceStopped, this.handleInferenceStopped)
+    for (const pending of this.pendingMessages.splice(0)) {
+      events.emit(MessageEvent.OnMessageResponse, {
+        ...pending,
+        status: 'error',
+        error: 'Inference engine unloaded before the request could run',
+      } as MessageRequest & { status: 'error'; error: string })
+    }
   }
 
   /** Override in subclasses to handle inference requests; default is a no-op. */

@@ -1,10 +1,31 @@
 use crate::core::network_security::{validate_public_url_dns, PublicDnsResolver};
 use futures_util::StreamExt;
 use scraper::{Html, Selector};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 const MAX_SCRAPE_REDIRECTS: usize = 5;
 const MAX_SCRAPE_BODY_BYTES: usize = 2 * 1024 * 1024;
+
+static SCRAPE_CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
+
+fn scrape_client() -> Result<&'static reqwest::Client, String> {
+    SCRAPE_CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(10))
+                .redirect(reqwest::redirect::Policy::none())
+                .dns_resolver(Arc::new(PublicDnsResolver::default()))
+                .user_agent(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
+                     AppleWebKit/537.36 (KHTML, like Gecko) \
+                     Chrome/124.0 Safari/537.36",
+                )
+                .build()
+                .map_err(|error| format!("HTTP client error: {error}"))
+        })
+        .as_ref()
+        .map_err(Clone::clone)
+}
 
 fn validate_scrape_url(url: &str) -> Result<url::Url, String> {
     let parsed = url::Url::parse(url).map_err(|_| "Invalid research URL".to_string())?;
@@ -110,19 +131,7 @@ async fn fetch_public_html(
 pub async fn scrape_url(url: &str) -> Result<String, String> {
     let parsed = validate_scrape_url(url)?;
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .redirect(reqwest::redirect::Policy::none())
-        .dns_resolver(Arc::new(PublicDnsResolver::default()))
-        .user_agent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
-             AppleWebKit/537.36 (KHTML, like Gecko) \
-             Chrome/124.0 Safari/537.36",
-        )
-        .build()
-        .map_err(|e| format!("HTTP client error: {e}"))?;
-
-    let html = fetch_public_html(&client, parsed).await?;
+    let html = fetch_public_html(scrape_client()?, parsed).await?;
 
     // HTML parsing is CPU-bound; offload to thread pool to keep the async runtime healthy.
     tokio::task::spawn_blocking(move || extract_text(&html))

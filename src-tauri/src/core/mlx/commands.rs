@@ -99,7 +99,7 @@ pub async fn mlx_load_model<R: Runtime>(
             })?
         }
     };
-    state.worker.load(model_id, path).await
+    state.worker()?.load(model_id, path).await
 }
 
 /// Resolve an MLX Hugging Face cache snapshot for ax-serving.
@@ -296,12 +296,12 @@ fn dir_contains_safetensors(path: &Path) -> bool {
 
 #[tauri::command]
 pub async fn mlx_unload_model(state: State<'_, MlxState>, model_id: String) -> Result<(), String> {
-    state.worker.unload(model_id).await
+    state.worker()?.unload(model_id).await
 }
 
 #[tauri::command]
 pub async fn mlx_list_loaded(state: State<'_, MlxState>) -> Result<Vec<String>, String> {
-    state.worker.list_loaded().await
+    state.worker()?.list_loaded().await
 }
 
 // ── OpenAI-style chat completion shapes ──────────────────────────────────────
@@ -358,7 +358,7 @@ pub async fn mlx_chat_stream(
     let params = params.unwrap_or_default();
     let sink = on_event.clone();
     state
-        .worker
+        .worker()?
         .generate_stream(request_id, model_id, messages, params, move |evt| {
             // Best-effort emit; if the frontend dropped the channel, log and
             // keep going so the worker can still drain its terminal event and
@@ -375,7 +375,7 @@ pub async fn mlx_chat_stream(
 /// Engine stream and session.
 #[tauri::command]
 pub fn mlx_cancel_stream(state: State<'_, MlxState>, request_id: String) -> Result<bool, String> {
-    state.worker.cancel_stream(&request_id)
+    state.worker()?.cancel_stream(&request_id)
 }
 
 /// In-process chat completion against a previously-loaded MLX model.
@@ -390,7 +390,7 @@ pub async fn mlx_chat_completion(
 ) -> Result<ChatCompletion, String> {
     let params = params.unwrap_or_default();
     let result = state
-        .worker
+        .worker()?
         .generate(model_id.clone(), messages, params)
         .await?;
 

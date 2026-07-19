@@ -5,6 +5,7 @@
 use ax_studio_utils::{is_valid_host, remove_prefix};
 use hyper::{Body, Request, Response, StatusCode};
 use reqwest::Client;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
@@ -16,6 +17,12 @@ const AUTH_MAX_ENTRIES: usize = 1024;
 const WHITELISTED_PATHS: &[&str] = &["/favicon.ico"];
 
 static AUTH_FAILURES: OnceLock<Mutex<HashMap<String, (usize, Instant)>>> = OnceLock::new();
+
+fn constant_time_secret_eq(candidate: &str, expected: &str) -> bool {
+    let candidate_hash = Sha256::digest(candidate.as_bytes());
+    let expected_hash = Sha256::digest(expected.as_bytes());
+    candidate_hash.ct_eq(&expected_hash).into()
+}
 
 fn lock_auth_map() -> std::sync::MutexGuard<'static, HashMap<String, (usize, Instant)>> {
     AUTH_FAILURES
@@ -358,18 +365,13 @@ fn validate_request(
             .get(hyper::header::AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
             .and_then(extract_bearer_token)
-            .map(|token| {
-                token
-                    .as_bytes()
-                    .ct_eq(config.proxy_api_key.as_bytes())
-                    .into()
-            })
+            .map(|token| constant_time_secret_eq(token, &config.proxy_api_key))
             .unwrap_or(false);
 
         let api_key_valid = headers
             .get("X-Api-Key")
             .and_then(|v| v.to_str().ok())
-            .map(|key| key.as_bytes().ct_eq(config.proxy_api_key.as_bytes()).into())
+            .map(|key| constant_time_secret_eq(key, &config.proxy_api_key))
             .unwrap_or(false);
 
         if auth_valid || api_key_valid {

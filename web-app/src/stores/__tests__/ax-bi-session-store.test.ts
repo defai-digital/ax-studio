@@ -236,6 +236,49 @@ describe('useAxBiSessions', () => {
     expect(merged?.sessions['session-54']?.runs).toHaveLength(20)
   })
 
+  it('keeps the most recently updated sessions when persisted state is capped', () => {
+    const merge = useAxBiSessions.persist.getOptions().merge
+    const current = useAxBiSessions.getState()
+    const sessions = Object.fromEntries(
+      Array.from({ length: 51 }, (_, index) => [
+        `session-${index}`,
+        {
+          title: `Session ${index}`,
+          source: '',
+          prompt: 'Prompt',
+          status: 'ready',
+          runs: [],
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt:
+            index === 0
+              ? '2026-07-19T12:00:00.000Z'
+              : new Date(Date.UTC(2026, 0, 1, index)).toISOString(),
+        },
+      ])
+    )
+
+    const merged = merge?.({ sessions }, current)
+
+    expect(merged?.sessions['session-0']).toBeDefined()
+    expect(merged?.sessions['session-1']).toBeUndefined()
+  })
+
+  it('drops unsafe AX BI result URLs from runtime and persisted runs', () => {
+    const session = useAxBiSessions
+      .getState()
+      .createSession({ prompt: 'Analyze revenue' })
+
+    useAxBiSessions.getState().recordRun(session.id, {
+      status: 'ready',
+      message: 'Done',
+      url: 'javascript:alert(1)',
+    })
+
+    expect(
+      useAxBiSessions.getState().sessions[session.id]?.runs[0]?.url
+    ).toBeUndefined()
+  })
+
   it('ignores invalid runtime statuses', () => {
     const session = useAxBiSessions
       .getState()

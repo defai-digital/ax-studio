@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { runAxBiAuthoringWorkflow } from '@/lib/ax-bi/authoring-workflow'
+import { normalizeAxBiResultUrl } from '@/lib/ax-bi/tool-navigation'
 import {
   DEFAULT_AX_BI_MCP_URL,
   connectAxBiMcpServer,
@@ -505,20 +506,24 @@ export function AxBiWorkspace() {
                     No analysis runs yet
                   </div>
                 ) : (
-                  activeSession.runs.map((run) => (
+                  activeSession.runs.map((run) => {
+                    const safeUrl = run.url
+                      ? normalizeAxBiResultUrl(run.url)
+                      : undefined
+                    return (
                     <div key={run.id} className="px-4 py-3">
                       <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
                         <span>{formatTime(run.createdAt)}</span>
-                        {run.url ? (
+                        {safeUrl ? (
                           <a
-                            href={run.url}
+                            href={safeUrl}
                             className="text-primary hover:underline"
                             onClick={(event) => {
                               // Tauri webviews do not honor target=_blank for
                               // external BI URLs; open via the opener plugin so
                               // localhost/127.0.0.1 chart links actually launch.
                               event.preventDefault()
-                              void serviceHub.opener().openUrl(run.url!)
+                              void serviceHub.opener().openUrl(safeUrl)
                             }}
                           >
                             Open result
@@ -532,7 +537,8 @@ export function AxBiWorkspace() {
                         {run.message}
                       </pre>
                     </div>
-                  ))
+                    )
+                  })
                 )}
               </div>
             </div>

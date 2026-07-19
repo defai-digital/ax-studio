@@ -40,9 +40,9 @@ type AppState = {
   updateMcpToolNames: (names: string[]) => void
   setAbortController: (threadId: string, controller: AbortController) => void
   clearAbortController: (threadId: string) => void
-  updateTokenSpeed: (message: ThreadMessage, increment?: number) => void
+  updateTokenSpeed: (message: Pick<ThreadMessage, 'id'>, increment?: number) => void
   setTokenSpeed: (
-    message: ThreadMessage,
+    message: Pick<ThreadMessage, 'id'>,
     speed: number,
     completionTokens: number
   ) => void

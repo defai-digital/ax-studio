@@ -5,6 +5,7 @@ import { useThreadLocalKnowledge } from '../use-thread-local-knowledge'
 
 const mockServiceHub = vi.hoisted(() => ({
   callTool: vi.fn(),
+  cancelTool: vi.fn().mockResolvedValue(undefined),
 }))
 
 const searchResult = (results: Array<Record<string, unknown>>) => ({
@@ -33,7 +34,11 @@ const extractResult = (text: string) => ({
 vi.mock('@/hooks/useServiceHub', () => ({
   getServiceHub: () => ({
     mcp: () => ({
-      callTool: mockServiceHub.callTool,
+      callToolWithCancellation: (args: Record<string, unknown>) => ({
+        promise: mockServiceHub.callTool(args),
+        cancel: mockServiceHub.cancelTool,
+        token: 'test-token',
+      }),
     }),
   }),
 }))
@@ -275,5 +280,20 @@ describe('useThreadLocalKnowledge', () => {
   it('returns prepareLocalKnowledge as a function', () => {
     const { result } = renderHook(() => useThreadLocalKnowledge(threadId))
     expect(typeof result.current.prepareLocalKnowledge).toBe('function')
+  })
+
+  it('cancels an MCP call that exceeds the local-knowledge timeout', async () => {
+    vi.useFakeTimers()
+    useLocalKnowledge.setState({ localKnowledgeEnabled: true })
+    mockServiceHub.callTool.mockReturnValue(new Promise(() => {}))
+
+    const { result } = renderHook(() => useThreadLocalKnowledge(threadId))
+    const request = result.current.prepareLocalKnowledge('find a document')
+    await vi.advanceTimersByTimeAsync(12_000)
+
+    const knowledge = await request
+    expect(mockServiceHub.cancelTool).toHaveBeenCalled()
+    expect(knowledge.retrieval?.error).toMatch(/timed out/i)
+    vi.useRealTimers()
   })
 })

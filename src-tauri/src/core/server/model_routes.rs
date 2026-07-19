@@ -328,13 +328,21 @@ fn build_upstream_url(
     }
 }
 
+/// Strip a single known provider endpoint suffix. Longest match first so
+/// `/chat/completions` is not partially reduced by `/completions`.
 fn strip_provider_endpoint_suffix(base_url: &str) -> &str {
-    let trimmed = base_url
-        .trim_end_matches('/')
-        .trim_end_matches("/messages")
-        .trim_end_matches("/chat/completions")
-        .trim_end_matches("/completions")
-        .trim_end_matches("/embeddings");
+    let trimmed = base_url.trim_end_matches('/');
+    const SUFFIXES: &[&str] = &[
+        "/chat/completions",
+        "/completions",
+        "/messages",
+        "/embeddings",
+    ];
+    for suffix in SUFFIXES {
+        if let Some(stripped) = trimmed.strip_suffix(suffix) {
+            return stripped.trim_end_matches('/');
+        }
+    }
     trimmed
 }
 
@@ -792,6 +800,37 @@ type StreamsCleanup = Option<(
     >,
 )>;
 
+/// Incrementally decode UTF-8 without treating a code point split across
+/// network chunks as invalid. Truly invalid bytes become replacement
+/// characters so no part of an SSE line bypasses the patching pipeline.
+fn append_utf8_chunk(pending: &mut Vec<u8>, output: &mut String, chunk: &[u8]) {
+    pending.extend_from_slice(chunk);
+    loop {
+        match std::str::from_utf8(pending) {
+            Ok(text) => {
+                output.push_str(text);
+                pending.clear();
+                return;
+            }
+            Err(error) => {
+                let valid_up_to = error.valid_up_to();
+                if valid_up_to > 0 {
+                    let valid = String::from_utf8_lossy(&pending[..valid_up_to]);
+                    output.push_str(&valid);
+                    pending.drain(..valid_up_to);
+                }
+                match error.error_len() {
+                    Some(invalid_len) => {
+                        output.push('\u{fffd}');
+                        pending.drain(..invalid_len);
+                    }
+                    None => return,
+                }
+            }
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_streaming_response(
     response: reqwest::Response,
@@ -841,6 +880,7 @@ fn build_streaming_response(
         let mut chunk_count: usize = 0;
         let mut patched_lines_logged: usize = 0;
         let mut line_buffer = String::new();
+        let mut utf8_buffer = Vec::new();
 
         let mut abort_rx = abort_rx;
         loop {
@@ -873,18 +913,9 @@ fn build_streaming_response(
                         continue;
                     }
 
-                    let s = match std::str::from_utf8(&chunk) {
-                        Ok(v) => v,
-                        Err(_) => {
-                            if sender.send_data(chunk).await.is_err() {
-                                break;
-                            }
-                            continue;
-                        }
-                    };
-                    line_buffer.push_str(s);
+                    append_utf8_chunk(&mut utf8_buffer, &mut line_buffer, &chunk);
 
-                    if line_buffer.len() > MAX_SSE_LINE_BUFFER {
+                    if line_buffer.len() + utf8_buffer.len() > MAX_SSE_LINE_BUFFER {
                         log::error!(
                             "SSE line buffer exceeded {} bytes, aborting stream",
                             MAX_SSE_LINE_BUFFER
@@ -922,6 +953,9 @@ fn build_streaming_response(
             }
         }
 
+        if !utf8_buffer.is_empty() {
+            line_buffer.push_str(&String::from_utf8_lossy(&utf8_buffer));
+        }
         if !line_buffer.is_empty() {
             let tail = patch_sse_line(&line_buffer);
             let _ = sender.send_data(hyper::body::Bytes::from(tail)).await;
@@ -1350,6 +1384,49 @@ fn patch_sse_line(line: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn incremental_utf8_decoder_preserves_split_code_points() {
+        let bytes = "data: café\n".as_bytes();
+        let split = bytes.iter().position(|byte| *byte == 0xc3).unwrap() + 1;
+        let mut pending = Vec::new();
+        let mut decoded = String::new();
+
+        append_utf8_chunk(&mut pending, &mut decoded, &bytes[..split]);
+        assert_eq!(decoded, "data: caf");
+        assert_eq!(pending, vec![0xc3]);
+
+        append_utf8_chunk(&mut pending, &mut decoded, &bytes[split..]);
+        assert_eq!(decoded, "data: café\n");
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn strip_provider_endpoint_suffix_prefers_longest_match() {
+        assert_eq!(
+            strip_provider_endpoint_suffix("https://api.example.com/v1/chat/completions"),
+            "https://api.example.com/v1"
+        );
+        assert_eq!(
+            strip_provider_endpoint_suffix("https://api.example.com/v1/completions"),
+            "https://api.example.com/v1"
+        );
+        assert_eq!(
+            strip_provider_endpoint_suffix("https://api.example.com/v1/messages/"),
+            "https://api.example.com/v1"
+        );
+        // Only one known suffix is stripped — nested fake suffixes stay intact.
+        assert_eq!(
+            strip_provider_endpoint_suffix(
+                "https://api.example.com/v1/chat/completions/completions"
+            ),
+            "https://api.example.com/v1/chat/completions"
+        );
+        assert_eq!(
+            strip_provider_endpoint_suffix("https://api.example.com/v1"),
+            "https://api.example.com/v1"
+        );
+    }
 
     #[tokio::test]
     async fn limited_body_reader_rejects_before_buffering_oversized_chunk() {

@@ -130,6 +130,10 @@ export function MessagesArea({
     () => getVersionInfoByMessageId(rawMessages ?? []),
     [rawMessages]
   )
+  const storedMessageById = useMemo(
+    () => new Map((rawMessages ?? []).map((message) => [message.id, message])),
+    [rawMessages]
+  )
   const metadata = thread?.metadata as Record<string, unknown> | undefined
   const forkedFrom = metadata?.forkedFrom ?? metadata?.parentThreadId
   const bannerKey = `branch-banner-dismissed-${threadId}`
@@ -176,6 +180,7 @@ export function MessagesArea({
                 onRegenerate={handleRegenerate}
                 onEdit={handleEditMessage}
                 onDelete={handleDeleteMessage}
+                storedThreadMessage={storedMessageById.get(message.id)}
                 versionInfo={versionInfoByMessageId.get(message.id)}
                 onSwitchVersion={handleSwitchVersion}
               />

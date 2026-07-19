@@ -130,7 +130,9 @@ export const createSafeJSONStorage = <T>(
     const storage = resolveStorage(getStorage, context)
     if (!storage) return
 
-    safeStorageSetJSON(storage, name, value, context)
+    if (!safeStorageSetJSON(storage, name, value, context)) {
+      throw new Error(`Failed to persist storage key "${name}"`)
+    }
   },
   removeItem: (name) => {
     const storage = resolveStorage(getStorage, context)
