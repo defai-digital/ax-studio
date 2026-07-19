@@ -7,10 +7,10 @@ use tokio::time::timeout;
 
 use crate::error::{ErrorCode, LlamacppError, ServerError, ServerResult};
 use crate::path::{is_dangerous_process_env_key, validate_binary_path};
-use std::path::PathBuf;
 use ax_studio_utils::{
     add_cuda_paths, binary_requires_cuda, setup_library_path, setup_windows_process_flags,
 };
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceInfo {
@@ -37,8 +37,7 @@ pub async fn get_devices_from_backend(
     let mut command = Command::new(&bin_path);
     command.arg("--list-devices");
     command.envs(
-        envs
-            .iter()
+        envs.iter()
             .filter(|(key, _)| !is_dangerous_process_env_key(key)),
     );
 

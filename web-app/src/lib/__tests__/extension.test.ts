@@ -150,6 +150,15 @@ describe('extension.ts', () => {
       ).toThrow()
     })
 
+    it.each(['nested/\u0000evil.js', 'nested/\u001fevil.js', 'nested/\u0085evil.js'])(
+      'rejects control characters in extension entry %s',
+      (entry) => {
+        expect(() =>
+          resolveLocalExtensionPath(entry, '/app-data/extensions')
+        ).toThrow('Invalid extension entry path')
+      }
+    )
+
     it('allows an absolute entry under the managed directory', () => {
       expect(
         resolveLocalExtensionPath(

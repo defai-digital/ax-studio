@@ -4,7 +4,10 @@ mod core;
 use core::{
     downloads::models::DownloadManagerState, mcp::models::McpSettings, setup, state::AppState,
 };
-use std::{collections::HashMap, sync::{atomic::AtomicBool, Arc}};
+use std::{
+    collections::HashMap,
+    sync::{atomic::AtomicBool, Arc},
+};
 use tokio::sync::Mutex;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

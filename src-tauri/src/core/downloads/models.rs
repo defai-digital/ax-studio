@@ -150,8 +150,8 @@ impl ProgressTracker {
         let mut total_transferred: u64 = 0;
         let mut total_size: u64 = 0;
         for progress in self.file_stats.values() {
-            total_transferred = total_transferred
-                .saturating_add(progress.transferred.load(Ordering::Relaxed));
+            total_transferred =
+                total_transferred.saturating_add(progress.transferred.load(Ordering::Relaxed));
             total_size = total_size.saturating_add(progress.total.load(Ordering::Relaxed));
         }
         (total_transferred, total_size)
