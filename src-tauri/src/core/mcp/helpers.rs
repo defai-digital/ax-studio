@@ -28,6 +28,13 @@ const DANGEROUS_ENV_KEYS: &[&str] = &[
     "DYLD_INSERT_LIBRARIES",
     "LD_LIBRARY_PATH",
     "DYLD_LIBRARY_PATH",
+    "NODE_OPTIONS",
+    "NODE_PATH",
+    "PYTHONPATH",
+    "PYTHONSTARTUP",
+    "BUN_INSTALL",
+    "npm_config_prefix",
+    "npm_config_node_gyp",
 ];
 
 fn build_mcp_headers(

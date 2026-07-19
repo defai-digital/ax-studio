@@ -72,6 +72,27 @@ const isUnsafeObjectKey = (value: string): boolean => {
   return value === '__proto__' || value === 'prototype' || value === 'constructor'
 }
 
+/**
+ * Compute a lightweight fingerprint of a providers array for fast equality
+ * checks. Avoids the O(n) JSON.stringify cost on every provider refresh.
+ * The fingerprint is a concatenation of provider names, model counts, and
+ * model IDs with capabilities — collisions are practically impossible for
+ * real-world data.
+ */
+const providersFingerprint = (providers: ModelProvider[]): string => {
+  const parts: string[] = []
+  for (const provider of providers) {
+    const modelParts = provider.models.map((m) => {
+      const caps = m.capabilities?.join(',') ?? ''
+      return `${m.id}[${caps}]`
+    })
+    parts.push(
+      `${provider.provider}:${provider.active}:${provider.base_url ?? ''}:${modelParts.join(',')}`
+    )
+  }
+  return parts.join('|')
+}
+
 const normalizeStringList = (value: unknown, maxItems: number): string[] => {
   if (!Array.isArray(value)) return []
 

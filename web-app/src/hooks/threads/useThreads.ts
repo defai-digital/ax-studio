@@ -191,27 +191,24 @@ export const useThreads = create<ThreadState>()((set, get) => ({
     )
   },
   toggleFavorite: (threadId) => {
-    set((state) => {
-      const thread = getOwnThread(state.threads, threadId)
-      if (!thread) return state
-      getServiceHub()
-        .threads()
-        .updateThread({
-          ...thread,
-          isFavorite: !thread.isFavorite,
-        })
-        .catch(reportPersistenceError('toggle favorite'))
-      return {
-        threads: {
-          ...state.threads,
-          [threadId]: {
-            ...thread,
-            isFavorite: !thread.isFavorite,
-            updated: Math.floor(Date.now() / 1000),
-          },
-        },
-      }
-    })
+    const thread = getOwnThread(get().threads, threadId)
+    if (!thread) return
+    const updatedThread = {
+      ...thread,
+      isFavorite: !thread.isFavorite,
+      updated: Math.floor(Date.now() / 1000),
+    }
+    set((state) => ({
+      threads: {
+        ...state.threads,
+        [threadId]: updatedThread,
+      },
+    }))
+    // Persist outside of set() to avoid side-effects in the updater
+    getServiceHub()
+      .threads()
+      .updateThread(updatedThread)
+      .catch(reportPersistenceError('toggle favorite'))
   },
   deleteThread: (threadId) => {
     cleanupThreadResources(threadId)
@@ -247,23 +244,23 @@ export const useThreads = create<ThreadState>()((set, get) => ({
     )
   },
   unstarAllThreads: () => {
-    set((state) => {
-      const updatedThreads = Object.fromEntries(
-        Object.entries(state.threads).map(([threadId, thread]) => [
-          threadId,
-          {
-            ...thread,
-            isFavorite: false,
-          },
-        ])
-      ) as Record<string, Thread>
-      Object.values(updatedThreads).forEach((thread) => {
-        getServiceHub()
-          .threads()
-          .updateThread({ ...thread, isFavorite: false })
-          .catch(console.error)
-      })
-      return { threads: updatedThreads }
+    const currentThreads = get().threads
+    const updatedThreads = Object.fromEntries(
+      Object.entries(currentThreads).map(([threadId, thread]) => [
+        threadId,
+        {
+          ...thread,
+          isFavorite: false,
+        },
+      ])
+    ) as Record<string, Thread>
+    set({ threads: updatedThreads })
+    // Persist outside of set() to avoid side-effects in the updater
+    Object.values(updatedThreads).forEach((thread) => {
+      getServiceHub()
+        .threads()
+        .updateThread({ ...thread, isFavorite: false })
+        .catch(reportPersistenceError('unstar thread'))
     })
   },
   getFavoriteThreads: () => {
@@ -401,44 +398,43 @@ export const useThreads = create<ThreadState>()((set, get) => ({
     })
   },
   updateCurrentThreadModel: (model) => {
-    set((state) => {
-      if (!state.currentThreadId) return state
-      const currentThread = state.getCurrentThread()
-      if (!currentThread) return state
-      getServiceHub()
-        .threads()
-        .updateThread({ ...currentThread, model })
-        .catch(reportPersistenceError('update thread model'))
-      return {
-        threads: {
-          ...state.threads,
-          [state.currentThreadId as string]: {
-            ...currentThread,
-            model,
-          },
-        },
-      }
-    })
+    const { currentThreadId, getCurrentThread } = get()
+    if (!currentThreadId) return
+    const currentThread = getCurrentThread()
+    if (!currentThread) return
+    const updatedThread = { ...currentThread, model }
+    set((state) => ({
+      threads: {
+        ...state.threads,
+        [currentThreadId]: updatedThread,
+      },
+    }))
+    // Persist outside of set() to avoid side-effects in the updater
+    getServiceHub()
+      .threads()
+      .updateThread(updatedThread)
+      .catch(reportPersistenceError('update thread model'))
   },
   renameThread: (threadId, newTitle) => {
+    const thread = getOwnThread(get().threads, threadId)
+    if (!thread) return
+    const updatedThread = {
+      ...thread,
+      title: newTitle,
+      updated: Math.floor(Date.now() / 1000),
+    }
     set((state) => {
-      const thread = getOwnThread(state.threads, threadId)
-      if (!thread) return state
-      const updatedThread = {
-        ...thread,
-        title: newTitle,
-        updated: Math.floor(Date.now() / 1000),
-      }
-      getServiceHub()
-        .threads()
-        .updateThread(updatedThread)
-        .catch(reportPersistenceError('rename thread'))
       const newThreads = { ...state.threads, [threadId]: updatedThread }
       return {
         threads: newThreads,
         searchIndex: buildSearchIndex(newThreads),
       }
     })
+    // Persist outside of set() to avoid side-effects in the updater
+    getServiceHub()
+      .threads()
+      .updateThread(updatedThread)
+      .catch(reportPersistenceError('rename thread'))
   },
   getCurrentThread: () => {
     const { currentThreadId, threads } = get()

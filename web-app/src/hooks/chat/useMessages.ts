@@ -145,17 +145,23 @@ export const useMessages = create<MessageState>()((set, get) => ({
         if (createdMessage.id !== newMessage.id) {
           removeTrackedMessage(newMessage.thread_id, newMessage.id)
         }
-        set((state) => ({
-          messages: {
-            ...state.messages,
-            [message.thread_id]: getOwnMessages(
-              state.messages,
-              message.thread_id
-            )?.map((existing) =>
-              existing.id === newMessage.id ? createdMessage : existing
-            ) ?? [createdMessage],
-          },
-        }))
+        set((state) => {
+          const existingMessages = getOwnMessages(
+            state.messages,
+            message.thread_id
+          )
+          // If the thread was cleared during the async gap, don't resurrect it
+          // with a single message — that would lose all context.
+          if (!existingMessages) return state
+          return {
+            messages: {
+              ...state.messages,
+              [message.thread_id]: existingMessages.map((existing) =>
+                existing.id === newMessage.id ? createdMessage : existing
+              ),
+            },
+          }
+        })
       })
       .catch((error) => {
         console.error('Failed to persist message:', error)
