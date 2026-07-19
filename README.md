@@ -127,7 +127,7 @@ All release assets are published on the
 [AX Studio releases page](https://github.com/defai-digital/ax-studio/releases).
 Every stable release asset includes a detached `.minisig` signature. The
 verification key and command are documented in
-[`docs/release/ax.minisign.pub`](docs/release/ax.minisign.pub) and
+[`docs/release/ax-minisign.pub`](docs/release/ax-minisign.pub) and
 [`docs/release/release.md`](docs/release/release.md).
 
 The `curl -fsSL` command above is only Homebrew's official bootstrap command;
