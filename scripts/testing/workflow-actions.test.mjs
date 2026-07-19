@@ -100,6 +100,7 @@ describe('GitHub Actions dependency boundaries', () => {
     expect(releaseWorkflow).not.toContain('Contents/MacOS/AX Studio')
     expect(releaseWorkflow).toContain('@executable_path/../Frameworks')
     expect(releaseWorkflow).toContain('LSMinimumSystemVersion')
+    expect(releaseWorkflow).toContain('vtool -show-build "$MLX_LIBRARY"')
     expect(releaseWorkflow).toContain("grep -E '^Timestamp='")
     expect(releaseWorkflow).toContain('verify-windows-authenticode:')
     expect(releaseWorkflow).toContain('Get-AuthenticodeSignature')
@@ -128,8 +129,8 @@ describe('GitHub Actions dependency boundaries', () => {
     )
 
     for (const workflow of [macBuildWorkflow, testWorkflow]) {
-      expect(workflow).toContain('MLX_VERSION="$(tr -d')
-      expect(workflow).toContain('"mlx==${MLX_VERSION}"')
+      expect(workflow).toContain('PYO3_PYTHON="$MLX_VENV/bin/python"')
+      expect(workflow).toContain('scripts/prepare-mlx-runtime.mjs')
       expect(workflow).toContain('VIRTUAL_ENV=$MLX_VENV')
       expect(workflow).not.toContain('brew install mlx')
     }

@@ -21,6 +21,7 @@ use std::thread::{self, JoinHandle};
 use ax_engine_sdk::{
     current_host_report, EngineSession, EngineSessionConfig, GenerateRequest, GenerateSampling,
     GenerateStreamEvent as SdkGenerateStreamEvent, MlxMtpPolicy, NativeModelArtifactsSource,
+    StatelessGenerateContext,
 };
 use serde::{Deserialize, Serialize};
 use tokenizers::Tokenizer;
@@ -75,6 +76,11 @@ pub struct StreamPerformanceMetrics {
     pub time_to_first_token_us: Option<u64>,
     pub generation_time_us: Option<u64>,
     pub generation_token_count: u32,
+    pub prompt_eval_time_us: Option<u64>,
+    pub prompt_runner_time_us: Option<u64>,
+    pub model_eval_time_us: Option<u64>,
+    pub model_runner_time_us: Option<u64>,
+    pub model_eval_token_count: Option<u32>,
     pub generation_kind: String,
     pub mtp: StreamMtpMetrics,
 }
@@ -100,6 +106,11 @@ impl StreamPerformanceMetrics {
             time_to_first_token_us: performance.time_to_first_token_us,
             generation_time_us: performance.generation_time_us,
             generation_token_count: performance.generation_token_count,
+            prompt_eval_time_us: performance.prompt_eval_time_us,
+            prompt_runner_time_us: performance.prompt_runner_time_us,
+            model_eval_time_us: performance.model_eval_time_us,
+            model_runner_time_us: performance.model_runner_time_us,
+            model_eval_token_count: performance.model_eval_token_count,
             generation_kind: if response.route.decision("ax_mlx_generation_kind") == Some(1) {
                 "block_diffusion"
             } else {
@@ -119,10 +130,25 @@ impl StreamPerformanceMetrics {
     }
 
     fn tokens_per_second(&self) -> Option<f64> {
-        let generation_time_us = self.generation_time_us?;
-        (generation_time_us > 0 && self.generation_token_count > 0).then(|| {
-            f64::from(self.generation_token_count) * 1_000_000.0 / generation_time_us as f64
-        })
+        let (token_count, time_us) = match (self.model_eval_token_count, self.model_eval_time_us) {
+            (Some(token_count), Some(time_us)) => (token_count, time_us),
+            _ => (self.generation_token_count, self.generation_time_us?),
+        };
+        (time_us > 0 && token_count > 0)
+            .then(|| f64::from(token_count) * 1_000_000.0 / time_us as f64)
+    }
+
+    fn delivery_tokens_per_second(&self) -> Option<f64> {
+        let time_us = self.generation_time_us?;
+        (time_us > 0 && self.generation_token_count > 0)
+            .then(|| f64::from(self.generation_token_count) * 1_000_000.0 / time_us as f64)
+    }
+
+    fn runner_tokens_per_second(&self) -> Option<f64> {
+        let time_us = self.model_runner_time_us?;
+        let token_count = self.model_eval_token_count?;
+        (time_us > 0 && token_count > 0)
+            .then(|| f64::from(token_count) * 1_000_000.0 / time_us as f64)
     }
 
     fn acceleration_mode(&self) -> &'static str {
@@ -230,6 +256,20 @@ impl StreamCancellationRegistry {
         Ok(true)
     }
 
+    /// Signal every in-flight stream to stop. Used before model load/unload so
+    /// a multi-minute generation cannot block the single-threaded worker queue.
+    fn cancel_all(&self) -> Result<usize, String> {
+        let flags = self
+            .flags
+            .lock()
+            .map_err(|_| "MLX stream cancellation registry is unavailable".to_string())?;
+        let count = flags.len();
+        for cancellation in flags.values() {
+            cancellation.store(true, Ordering::Release);
+        }
+        Ok(count)
+    }
+
     fn unregister(&self, request_id: &str, cancellation: &Arc<AtomicBool>) {
         let Ok(mut flags) = self.flags.lock() else {
             log::warn!("MLX stream cancellation registry is unavailable during cleanup");
@@ -275,6 +315,16 @@ impl MlxWorker {
     }
 
     pub async fn load(&self, model_id: String, model_dir: PathBuf) -> Result<(), String> {
+        // Model switch must not wait behind an unrelated long generation. Flag
+        // active streams cancelled; the worker checks between decode steps and
+        // will drain the GenerateStream command before processing this Load.
+        match self.stream_cancellations.cancel_all() {
+            Ok(0) => {}
+            Ok(n) => log::info!(
+                "[mlx-worker] cancelling {n} in-flight stream(s) before load of {model_id}"
+            ),
+            Err(e) => log::warn!("[mlx-worker] could not cancel streams before load: {e}"),
+        }
         let (reply, rx) = oneshot::channel();
         self.dispatch(MlxCommand::Load {
             model_id,
@@ -286,6 +336,13 @@ impl MlxWorker {
     }
 
     pub async fn unload(&self, model_id: String) -> Result<(), String> {
+        match self.stream_cancellations.cancel_all() {
+            Ok(0) => {}
+            Ok(n) => log::info!(
+                "[mlx-worker] cancelling {n} in-flight stream(s) before unload of {model_id}"
+            ),
+            Err(e) => log::warn!("[mlx-worker] could not cancel streams before unload: {e}"),
+        }
         let (reply, rx) = oneshot::channel();
         self.dispatch(MlxCommand::Unload { model_id, reply })?;
         rx.await
@@ -367,8 +424,8 @@ impl MlxWorker {
 /// user-visible first-token path without depending on post-generation session
 /// reuse.
 struct LoadedModel {
-    model_dir: PathBuf,
     tokenizer: Tokenizer,
+    session_context: StatelessGenerateContext,
     warm_session: Option<EngineSession>,
 }
 
@@ -386,9 +443,9 @@ impl LoadedModel {
     }
 }
 
-/// Build a fresh `EngineSession` pointed at the model dir. The worker keeps at
-/// most one unused session warm per loaded model and consumes it for the next
-/// generate / generate_stream request.
+/// Build the per-model session factory. Every request still gets a fresh
+/// `EngineSession` (avoiding the historical post-generation reuse crash), but
+/// sessions created by this context share validated prompt-prefix snapshots.
 ///
 /// **Packaged MTP: AUTO; standalone n-gram: OFF by default.** AX Engine only
 /// admits MTP when the loaded package contains a validated Qwen MTP sidecar or
@@ -400,7 +457,7 @@ impl LoadedModel {
 /// crash, or once upstream fixes it), set env var `AX_MLX_NGRAM=1` when
 /// launching the app. `AX_MLX_MTP_POLICY=disabled|required|auto` is available
 /// for direct baselines and package validation; normal users should keep Auto.
-fn build_session(model_dir: &Path) -> Result<EngineSession, String> {
+fn build_session_context(model_dir: &Path) -> Result<StatelessGenerateContext, String> {
     let enable_ngram = std::env::var("AX_MLX_NGRAM")
         .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "True"))
         .unwrap_or(false);
@@ -417,7 +474,7 @@ fn build_session(model_dir: &Path) -> Result<EngineSession, String> {
         ..Default::default()
     };
     log::info!(
-        "[mlx-worker] build_session model_dir={} mtp={mtp_policy:?} ngram={}",
+        "[mlx-worker] build_session_context model_dir={} mtp={mtp_policy:?} ngram={}",
         model_dir.display(),
         if enable_ngram {
             "ON (set via AX_MLX_NGRAM=1 — expect crash on 4-bit)"
@@ -425,22 +482,29 @@ fn build_session(model_dir: &Path) -> Result<EngineSession, String> {
             "OFF (default; independent from packaged MTP)"
         },
     );
+    StatelessGenerateContext::new(config)
+        .map_err(|e| format!("StatelessGenerateContext::new failed: {e:?}"))
+}
+
+fn build_session(context: &StatelessGenerateContext) -> Result<EngineSession, String> {
     // Wrap in catch_unwind: the MLX FFI layer may panic on unsupported
     // configurations or corrupted model files. Without this, the panic
     // kills the worker thread and the frontend sees only "worker dropped
     // reply" with no useful error message.
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| EngineSession::new(config)))
-        .map_err(|panic_info| {
-            let detail = if let Some(s) = panic_info.downcast_ref::<String>() {
-                s.clone()
-            } else if let Some(s) = panic_info.downcast_ref::<&str>() {
-                s.to_string()
-            } else {
-                "unknown panic".to_string()
-            };
-            format!("MLX engine panicked during model initialization: {detail}")
-        })?
-        .map_err(|e| format!("EngineSession::new failed: {e:?}"))
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        context.build_stateful_session()
+    }))
+    .map_err(|panic_info| {
+        let detail = if let Some(s) = panic_info.downcast_ref::<String>() {
+            s.clone()
+        } else if let Some(s) = panic_info.downcast_ref::<&str>() {
+            s.to_string()
+        } else {
+            "unknown panic".to_string()
+        };
+        format!("MLX engine panicked during model initialization: {detail}")
+    })?
+    .map_err(|e| format!("StatelessGenerateContext::build_stateful_session failed: {e:?}"))
 }
 
 fn mtp_policy_from_env() -> MlxMtpPolicy {
@@ -466,13 +530,13 @@ fn take_warm_session(entry: &mut LoadedModel, model_id: &str) -> Result<EngineSe
         Ok(session)
     } else {
         log::info!("[mlx-worker] no prebuilt session for {model_id}; building on demand");
-        build_session(&entry.model_dir)
+        build_session(&entry.session_context)
     }
 }
 
 fn prepare_next_session(entry: &mut LoadedModel, model_id: &str) {
     let started = std::time::Instant::now();
-    match build_session(&entry.model_dir) {
+    match build_session(&entry.session_context) {
         Ok(session) => {
             let elapsed_ms = started.elapsed().as_millis();
             entry.warm_session = Some(session);
@@ -580,12 +644,12 @@ fn run_worker(rx: Receiver<MlxCommand>) {
 /// Drop every resident model, then clear process-global MLX compile caches.
 ///
 /// This mirrors `ax-engine-server`'s `NativeGenerationService::spawn_replacement`
-/// contract: `EngineSession` drop frees request-local weights and KV state, but
-/// **process-global** compiled per-layer decode closures (MoE, dense FFN, Gemma4
-/// dual-path) and the MLX allocator cache survive. After a large Qwen MTP run
-/// those graphs still reference the old model's buffers; loading Gemma 4 without
-/// clearing them hangs Metal eval or SIGSEGVs in sampling
-/// (`sample_categorical_with_topp_gpu`).
+/// contract: `EngineSession` / `StatelessGenerateContext` drop free request-local
+/// weights and prefix state, but **process-global** compiled per-layer decode
+/// closures (MoE, dense FFN, Gemma4 dual-path) and the MLX allocator cache
+/// survive. After a large Qwen MTP run those graphs still reference the old
+/// model's buffers; loading Gemma 4 without clearing them hangs Metal eval or
+/// SIGSEGVs in sampling (`sample_categorical_with_topp_gpu`).
 fn drain_loaded_models(models: &mut HashMap<String, LoadedModel>, reason: &str) {
     if models.is_empty() {
         return;
@@ -647,14 +711,16 @@ fn handle_load(
         "[mlx-worker] loading model {model_id} from {}",
         model_dir.display()
     );
-    let warm_session = build_session(model_dir)
+    let session_context = build_session_context(model_dir)
+        .map_err(|e| format!("session context probe failed for {model_id}: {e}"))?;
+    let warm_session = build_session(&session_context)
         .map_err(|e| format!("EngineSession::new probe failed for {model_id}: {e}"))?;
 
     models.insert(
         model_id.to_string(),
         LoadedModel {
-            model_dir: model_dir.to_path_buf(),
             tokenizer,
+            session_context,
             warm_session: Some(warm_session),
         },
     );
@@ -834,8 +900,18 @@ fn handle_generate_stream(
     let mut accumulated_output_tokens = Vec::new();
     let mut emitted_text = String::new();
     let mut strip_gemma4_thought_prefix = is_gemma4_family(model_id);
+    // Hugging Face's DecodeStream keeps only the small context window needed
+    // for whitespace and byte-fallback correctness. Re-decoding the complete
+    // growing output after every engine step is O(n²) and blocks the next GPU
+    // pull. Gemma 4 keeps its channel-aware decoder until that state machine is
+    // migrated separately.
+    let mut output_decode_stream =
+        (!is_gemma4_family(model_id)).then(|| entry.tokenizer.decode_stream(true));
+    let mut text_decode_time_us = 0_u64;
+    let mut delta_delivery_time_us = 0_u64;
     let mut cancelled = false;
     let mut performance = None;
+    let mut prefix_reused_tokens = 0_u32;
 
     loop {
         if cancellation.load(Ordering::Acquire) {
@@ -876,26 +952,89 @@ fn handle_generate_stream(
                     saw_start = true;
                 }
                 if !step_event.delta_tokens.is_empty() {
+                    let decode_started = std::time::Instant::now();
                     accumulated_output_tokens.extend(step_event.delta_tokens.iter().copied());
-                    let mut full_text = entry
-                        .decode_chat_output(model_id, &accumulated_output_tokens)
-                        .map_err(|e| format!("tokenizer.decode failed for {model_id}: {e}"))?;
-                    if is_gemma4_family(model_id) {
-                        full_text = strip_gemma4_leading_thought_label(&full_text);
-                        if !full_text.is_empty() {
-                            strip_gemma4_thought_prefix = false;
+                    let incremental_result = output_decode_stream.as_mut().map(|decoder| {
+                        let mut text = String::new();
+                        for &token in &step_event.delta_tokens {
+                            let step_result =
+                                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                    decoder.step(token)
+                                }));
+                            match step_result {
+                                Ok(Ok(Some(chunk))) => text.push_str(&chunk),
+                                Ok(Ok(None)) => {}
+                                Ok(Err(error)) => return Err(error.to_string()),
+                                Err(_) => return Err("decoder panicked".to_string()),
+                            }
                         }
-                    }
-                    if decoded_text_has_incomplete_trailing_codepoint(&full_text) {
-                        log::debug!(
-                            "[mlx-worker] holding back incomplete trailing codepoint for {model_id}"
+                        Ok(text)
+                    });
+                    let text = match incremental_result {
+                        Some(Ok(text)) => {
+                            emitted_text.push_str(&text);
+                            text
+                        }
+                        Some(Err(error)) => {
+                            // A decoder is third-party stateful code. Never let
+                            // an internal error or panic kill the long-lived MLX
+                            // worker; fall back to the proven cumulative path
+                            // for the rest of this response.
+                            log::warn!(
+                                "[mlx-worker] incremental tokenizer failed for {model_id}: \
+                                 {error}; falling back to cumulative decode"
+                            );
+                            output_decode_stream = None;
+                            let full_text = entry
+                                .decode_chat_output(model_id, &accumulated_output_tokens)
+                                .map_err(|e| {
+                                    format!("tokenizer.decode failed for {model_id}: {e}")
+                                })?;
+                            if decoded_text_has_incomplete_trailing_codepoint(&full_text) {
+                                String::new()
+                            } else {
+                                let text = decoded_text_delta(&emitted_text, &full_text);
+                                emitted_text = full_text;
+                                text
+                            }
+                        }
+                        None => {
+                            let mut full_text = entry
+                                .decode_chat_output(model_id, &accumulated_output_tokens)
+                                .map_err(|e| {
+                                    format!("tokenizer.decode failed for {model_id}: {e}")
+                                })?;
+                            full_text = strip_gemma4_leading_thought_label(&full_text);
+                            if !full_text.is_empty() {
+                                strip_gemma4_thought_prefix = false;
+                            }
+                            if decoded_text_has_incomplete_trailing_codepoint(&full_text) {
+                                log::debug!(
+                                "[mlx-worker] holding back incomplete trailing codepoint for {model_id}"
+                            );
+                                String::new()
+                            } else {
+                                let text = decoded_text_delta(&emitted_text, &full_text);
+                                emitted_text = full_text;
+                                text
+                            }
+                        }
+                    };
+                    text_decode_time_us = text_decode_time_us.saturating_add(
+                        decode_started
+                            .elapsed()
+                            .as_micros()
+                            .min(u128::from(u64::MAX)) as u64,
+                    );
+                    if !text.is_empty() {
+                        let delivery_started = std::time::Instant::now();
+                        on_event(StreamEvent::Delta { text });
+                        delta_delivery_time_us = delta_delivery_time_us.saturating_add(
+                            delivery_started
+                                .elapsed()
+                                .as_micros()
+                                .min(u128::from(u64::MAX)) as u64,
                         );
-                    } else {
-                        let text = decoded_text_delta(&emitted_text, &full_text);
-                        emitted_text = full_text;
-                        if !text.is_empty() {
-                            on_event(StreamEvent::Delta { text });
-                        }
                     }
                 } else if let Some(text) = step_event.delta_text {
                     let text = if strip_gemma4_thought_prefix {
@@ -905,13 +1044,26 @@ fn handle_generate_stream(
                     };
                     if !text.is_empty() {
                         emitted_text.push_str(&text);
+                        let delivery_started = std::time::Instant::now();
                         on_event(StreamEvent::Delta { text });
+                        delta_delivery_time_us = delta_delivery_time_us.saturating_add(
+                            delivery_started
+                                .elapsed()
+                                .as_micros()
+                                .min(u128::from(u64::MAX)) as u64,
+                        );
                     }
                 }
             }
             SdkGenerateStreamEvent::Response(response_event) => {
                 let response = response_event.response;
+                prefix_reused_tokens = response
+                    .route
+                    .decision("ax_mlx_prefix_cache_reused_tokens")
+                    .or_else(|| response.route.decision("prefix_reused_tokens"))
+                    .unwrap_or_default();
                 if !response.output_tokens.is_empty() {
+                    let decode_started = std::time::Instant::now();
                     let mut final_text = entry
                         .decode_chat_output(model_id, &response.output_tokens)
                         .map_err(|e| format!("tokenizer.decode failed for {model_id}: {e}"))?;
@@ -920,8 +1072,21 @@ fn handle_generate_stream(
                     }
                     let text = decoded_text_delta(&emitted_text, &final_text);
                     emitted_text = final_text;
+                    text_decode_time_us = text_decode_time_us.saturating_add(
+                        decode_started
+                            .elapsed()
+                            .as_micros()
+                            .min(u128::from(u64::MAX)) as u64,
+                    );
                     if !text.is_empty() {
+                        let delivery_started = std::time::Instant::now();
                         on_event(StreamEvent::Delta { text });
+                        delta_delivery_time_us = delta_delivery_time_us.saturating_add(
+                            delivery_started
+                                .elapsed()
+                                .as_micros()
+                                .min(u128::from(u64::MAX)) as u64,
+                        );
                     }
                 }
                 prompt_token_count = response
@@ -950,14 +1115,27 @@ fn handle_generate_stream(
             0.0
         };
         log::info!(
-            "[mlx-worker] stream done: {} measured tokens in {:?}us = {:.1} t/s, \
-             total={}us, ttft={:?}us, route={}, mtp={}/{} ({:.1}%), \
-             mtp_steps={}, direct_fallback_steps={}, finish_reason={finish_reason}",
+            "[mlx-worker] stream done: model={} tokens/{:?}us = {:.1} t/s, \
+             runner={:.1} t/s, delivered={} tokens/{:?}us = {:.1} t/s, \
+             total={}us, ttft={:?}us, prompt_eval={:?}us, prefix_reused={}, \
+             decode={}us, ipc={}us, \
+             route={}, mtp={}/{} ({:.1}%), mtp_steps={}, direct_fallback_steps={}, \
+             finish_reason={finish_reason}",
+            metrics
+                .model_eval_token_count
+                .unwrap_or(metrics.generation_token_count),
+            metrics.model_eval_time_us.or(metrics.generation_time_us),
+            metrics.tokens_per_second().unwrap_or_default(),
+            metrics.runner_tokens_per_second().unwrap_or_default(),
             metrics.generation_token_count,
             metrics.generation_time_us,
-            metrics.tokens_per_second().unwrap_or_default(),
+            metrics.delivery_tokens_per_second().unwrap_or_default(),
             metrics.total_time_us,
             metrics.time_to_first_token_us,
+            metrics.prompt_eval_time_us,
+            prefix_reused_tokens,
+            text_decode_time_us,
+            delta_delivery_time_us,
             metrics.acceleration_mode(),
             metrics.mtp.accepted_tokens,
             metrics.mtp.draft_tokens,
@@ -980,6 +1158,7 @@ fn handle_generate_stream(
         performance,
     });
 
+    drop(output_decode_stream);
     drop(stream);
     if cancelled {
         if let Some(engine_request_id) = engine_request_id {
@@ -991,7 +1170,12 @@ fn handle_generate_stream(
         }
     }
     drop(session);
-    prepare_next_session(entry, model_id);
+    // Skip warm-session prep after cancel: the user is often switching models
+    // or aborting. Building another EngineSession here blocks the single-threaded
+    // worker (~1s+) and delays the next load/unload, which looks like a hang.
+    if !cancelled {
+        prepare_next_session(entry, model_id);
+    }
 
     Ok(())
 }
@@ -1657,6 +1841,39 @@ mod tests {
     }
 
     #[test]
+    fn incremental_decode_survives_a_skipped_leading_special_token() {
+        use tokenizers::{models::wordlevel::WordLevel, AddedToken};
+
+        let vocab = [
+            ("<unk>".to_string(), 0),
+            ("<special>".to_string(), 1),
+            ("hello".to_string(), 2),
+        ]
+        .into_iter()
+        .collect();
+        let model = WordLevel::builder()
+            .vocab(vocab)
+            .unk_token("<unk>".to_string())
+            .build()
+            .expect("word-level tokenizer should build");
+        let mut tokenizer = Tokenizer::new(model);
+        tokenizer
+            .add_special_tokens([AddedToken::from("<special>", true)])
+            .expect("special token should register");
+
+        let mut decoder = tokenizer.decode_stream(true);
+        assert_eq!(decoder.step(1).expect("special token should decode"), None);
+
+        let mut decoded = String::new();
+        for _ in 0..32 {
+            if let Some(chunk) = decoder.step(2).expect("word token should decode") {
+                decoded.push_str(&chunk);
+            }
+        }
+        assert_eq!(decoded.split_whitespace().count(), 32);
+    }
+
+    #[test]
     fn stream_cancellation_registry_signals_and_cleans_up_requests() {
         let registry = StreamCancellationRegistry::default();
         let cancellation = registry.register("stream-1").unwrap();
@@ -1667,6 +1884,21 @@ mod tests {
 
         registry.unregister("stream-1", &cancellation);
         assert_eq!(registry.cancel("stream-1"), Ok(false));
+    }
+
+    #[test]
+    fn stream_cancellation_registry_cancel_all_flags_every_active_stream() {
+        let registry = StreamCancellationRegistry::default();
+        let a = registry.register("a").unwrap();
+        let b = registry.register("b").unwrap();
+        assert_eq!(registry.cancel_all().unwrap(), 2);
+        assert!(a.load(Ordering::Acquire));
+        assert!(b.load(Ordering::Acquire));
+        // Second call still sees registered flags until unregister.
+        assert_eq!(registry.cancel_all().unwrap(), 2);
+        registry.unregister("a", &a);
+        registry.unregister("b", &b);
+        assert_eq!(registry.cancel_all().unwrap(), 0);
     }
 
     #[test]

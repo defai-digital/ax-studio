@@ -14,6 +14,8 @@ interface TokenSpeed {
   tokenCount?: number
   durationMs?: number
   generationTokenCount?: number
+  deliveryTokenSpeed?: number
+  runnerTokenSpeed?: number
   totalDurationMs?: number
   timeToFirstTokenMs?: number
   accelerationMode?: 'mtp' | 'mtp_fallback' | 'direct'
@@ -31,11 +33,15 @@ function formatLatency(durationMs: number): string {
     : `${(durationMs / 1000).toFixed(1)}s`
 }
 
+function formatRate(tokensPerSecond: number): string {
+  return String(Math.round(tokensPerSecond * 10) / 10)
+}
+
 export const TokenSpeedIndicator = memo(
   ({ metadata, streaming }: TokenSpeedIndicatorProps) => {
     // Get real-time token speed from global state during streaming
-    const streamingTokenSpeed = useAppState((state) =>
-      state.tokenSpeed ? Math.round(state.tokenSpeed.tokenSpeed) : 0
+    const streamingTokenSpeed = useAppState(
+      (state) => state.tokenSpeed?.tokenSpeed ?? 0
     )
     const streamingTokenCount = useAppState(
       (state) => state.tokenSpeed?.tokenCount || 0
@@ -60,14 +66,14 @@ export const TokenSpeedIndicator = memo(
     // Use streaming data if available, otherwise fall back to metadata
     const displaySpeed = streaming
       ? streamingTokenSpeed
-      : Math.round(toNumber(persistedTokenSpeed))
+      : toNumber(persistedTokenSpeed)
 
     const displayTokenCount = streaming
       ? streamingTokenCount
       : (usage?.outputTokens ?? persistedTokenCount)
 
     // Hide the indicator if token speed is 0 and not streaming
-    if (displaySpeed === 0) return
+    if (!Number.isFinite(displaySpeed) || displaySpeed <= 0) return
 
     // Show indicator during streaming OR when we have persisted data
     const shouldShow = streaming || (displaySpeed > 0 && displayTokenCount > 0)
@@ -92,11 +98,32 @@ export const TokenSpeedIndicator = memo(
       persistedMetrics.timeToFirstTokenMs >= 0
         ? `TTFT ${formatLatency(persistedMetrics.timeToFirstTokenMs)}`
         : undefined
+    const runnerSpeedLabel =
+      !streaming &&
+      persistedMetrics?.runnerTokenSpeed != null &&
+      Number.isFinite(persistedMetrics.runnerTokenSpeed) &&
+      persistedMetrics.runnerTokenSpeed > 0
+        ? `runner ${formatRate(persistedMetrics.runnerTokenSpeed)} t/s`
+        : undefined
+    const deliverySpeedLabel =
+      !streaming &&
+      persistedMetrics?.deliveryTokenSpeed != null &&
+      Number.isFinite(persistedMetrics.deliveryTokenSpeed) &&
+      persistedMetrics.deliveryTokenSpeed > 0
+        ? `E2E ${formatRate(persistedMetrics.deliveryTokenSpeed)} t/s`
+        : undefined
+    const speedLabel = streaming
+      ? `~${formatRate(displaySpeed)} t/s`
+      : deliverySpeedLabel
+        ? `${formatRate(displaySpeed)} model t/s`
+        : `${formatRate(displaySpeed)} t/s`
 
     return (
       <div className="flex items-center gap-1 text-[11px] text-muted-foreground/40">
         <Gauge size={12} />
-        <span>{displaySpeed} t/s</span>
+        <span>{speedLabel}</span>
+        {runnerSpeedLabel && <span>&middot; {runnerSpeedLabel}</span>}
+        {deliverySpeedLabel && <span>&middot; {deliverySpeedLabel}</span>}
         {displayTokenCount > 0 && (
           <span>&middot; {displayTokenCount} tokens</span>
         )}

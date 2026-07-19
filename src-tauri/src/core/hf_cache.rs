@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+#[cfg(target_os = "macos")]
 use std::time::SystemTime;
 
 use ax_studio_utils::normalize_path;

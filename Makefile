@@ -106,6 +106,7 @@ ifeq ($(OS),Windows_NT)
 endif
 	$(YARN) test
 	$(YARN) copy:assets:tauri
+	$(YARN) prepare:mlx
 	$(YARN) build:icon
 	cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
 	cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --no-default-features --features test-tauri -- -D warnings

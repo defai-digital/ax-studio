@@ -4,7 +4,11 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
+  isTargetedMlxInstallation,
+  macosWheelPlatform,
+  parseMacosMinimumVersion,
   prepareMlxRuntime,
+  readMinimumMacosVersion,
   readPinnedMlxVersion,
 } from '../prepare-mlx-runtime.mjs'
 
@@ -21,6 +25,11 @@ function fixture() {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ax-studio-mlx-'))
   temporaryDirectories.push(repoRoot)
   fs.writeFileSync(path.join(repoRoot, 'mlx.version'), '0.32.0\n')
+  fs.mkdirSync(path.join(repoRoot, 'src-tauri'), { recursive: true })
+  fs.writeFileSync(
+    path.join(repoRoot, 'src-tauri', 'tauri.macos.conf.json'),
+    JSON.stringify({ bundle: { macOS: { minimumSystemVersion: '15.0' } } }),
+  )
 
   const packageRoot = path.join(repoRoot, 'wheel', 'mlx')
   const libraryDirectory = path.join(packageRoot, 'lib')
@@ -35,6 +44,7 @@ describe('MLX runtime preparation', () => {
   it('copies the pinned wheel runtime into Tauri bundle inputs', () => {
     const { repoRoot, packageRoot } = fixture()
     expect(readPinnedMlxVersion(repoRoot)).toBe('0.32.0')
+    expect(readMinimumMacosVersion(repoRoot)).toBe('15.0')
 
     const result = prepareMlxRuntime({
       repoRoot,
@@ -59,5 +69,41 @@ describe('MLX runtime preparation', () => {
         packageRoot,
       }),
     ).toThrow(/does not match pinned 0\.32\.0/u)
+  })
+
+  it('requires wheel tags for the configured macOS deployment target', () => {
+    const wheelPlatform = macosWheelPlatform('15.0')
+    const probe = {
+      installedVersion: '0.32.0',
+      metalVersion: '0.32.0',
+      mlxWheelTags: ['cp312-cp312-macosx_15_0_arm64'],
+      metalWheelTags: ['py3-none-macosx_15_0_arm64'],
+    }
+
+    expect(wheelPlatform).toBe('macosx_15_0_arm64')
+    expect(isTargetedMlxInstallation(probe, '0.32.0', wheelPlatform)).toBe(true)
+    expect(
+      isTargetedMlxInstallation(
+        {
+          ...probe,
+          metalWheelTags: ['py3-none-macosx_26_0_arm64'],
+        },
+        '0.32.0',
+        wheelPlatform,
+      ),
+    ).toBe(false)
+  })
+
+  it('reads the native macOS minimum from vtool output', () => {
+    expect(
+      parseMacosMinimumVersion(`
+Load command 10
+      cmd LC_BUILD_VERSION
+  cmdsize 32
+ platform MACOS
+    minos 15.0
+      sdk 26.5
+`),
+    ).toBe('15.0')
   })
 })

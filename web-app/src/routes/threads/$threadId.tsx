@@ -53,6 +53,8 @@ export const Route = createFileRoute('/threads/$threadId')({
   component: ThreadDetail,
 })
 
+const EMPTY_THREAD_MESSAGES: ThreadMessage[] = []
+
 function ThreadDetail() {
   const { threadId } = useParams({ from: Route.id })
   const navigate = useNavigate()
@@ -89,6 +91,9 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   const { globalDefaultPrompt, autoTuningEnabled } = useGeneralSetting()
   const threadMessageCount = useMessages(
     (state) => state.messages[threadId]?.length ?? 0
+  )
+  const persistedThreadMessages = useMessages(
+    (state) => state.messages[threadId] ?? EMPTY_THREAD_MESSAGES
   )
 
   // ─── Domain hooks ─────────────────────────────────────────────────────────
@@ -211,6 +216,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   })
 
   const {
+    messagesLoaded,
     processAndSendMessage,
     persistMessageOnFinish,
     handleRegenerate,
@@ -237,6 +243,8 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     threadId,
     thread,
     chatMessages,
+    persistedMessages: persistedThreadMessages,
+    messagesLoaded,
     status,
     assistants,
     selectedModel,

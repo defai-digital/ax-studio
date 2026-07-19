@@ -149,6 +149,88 @@ describe('useThreadChat', () => {
     axBiWorkflowMocks.runAxBiAuthoringWorkflow.mockResolvedValue({ handled: false })
   })
 
+  it('marks an empty persisted history as loaded', async () => {
+    const { result } = renderHook(() => useThreadChat(defaultParams()))
+
+    await vi.waitFor(() => {
+      expect(result.current.messagesLoaded).toBe(true)
+      expect(
+        Object.prototype.hasOwnProperty.call(
+          useMessages.getState().messages,
+          threadId
+        )
+      ).toBe(true)
+    })
+    expect(useMessages.getState().getMessages(threadId)).toEqual([])
+    expect(mockSetChatMessages).toHaveBeenCalledWith([])
+  })
+
+  it('marks the thread loaded when persisted fetch fails', async () => {
+    const { useServiceHub } = await import('@/hooks/useServiceHub')
+    const hub = useServiceHub() as {
+      messages: (...args: unknown[]) => unknown
+    }
+    const fetchMessages = vi.fn().mockRejectedValue(new Error('disk offline'))
+    const messagesSpy = vi.spyOn(hub, 'messages').mockReturnValue({
+      fetchMessages,
+    })
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {})
+
+    const { result } = renderHook(() => useThreadChat(defaultParams()))
+
+    await vi.waitFor(() => {
+      expect(result.current.messagesLoaded).toBe(true)
+      expect(
+        Object.prototype.hasOwnProperty.call(
+          useMessages.getState().messages,
+          threadId
+        )
+      ).toBe(true)
+    })
+    expect(useMessages.getState().getMessages(threadId)).toEqual([])
+    expect(fetchMessages).toHaveBeenCalledWith(threadId)
+    expect(consoleErrorSpy).toHaveBeenCalled()
+    messagesSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
+  })
+
+  it('hydrates the message store when a live chat session already exists', async () => {
+    const getStateSpy = vi.mocked(useChatSessions.getState)
+    getStateSpy.mockReturnValue({
+      sessions: {
+        [threadId]: {
+          chat: {
+            messages: [
+              {
+                id: 'live-1',
+                role: 'user',
+                parts: [{ type: 'text', text: 'from session' }],
+              },
+            ],
+          },
+          isStreaming: false,
+        },
+      },
+    } as never)
+
+    const { result } = renderHook(() => useThreadChat(defaultParams()))
+
+    await vi.waitFor(() => {
+      expect(result.current.messagesLoaded).toBe(true)
+      expect(
+        Object.prototype.hasOwnProperty.call(
+          useMessages.getState().messages,
+          threadId
+        )
+      ).toBe(true)
+    })
+    // No persisted fetch needed; store key is present so hand-off gates can run.
+    expect(useMessages.getState().getMessages(threadId)).toEqual([])
+    getStateSpy.mockReturnValue({ sessions: {} } as never)
+  })
+
   describe('processAndSendMessage', () => {
     it('trims whitespace from input', async () => {
       const { result } = renderHook(() => useThreadChat(defaultParams()))

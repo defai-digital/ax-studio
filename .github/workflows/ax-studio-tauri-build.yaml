@@ -193,6 +193,11 @@ jobs:
           otool -L "$APP/Contents/Frameworks/libmlx.dylib" | grep -F '@rpath/libjaccl.dylib'
           otool -l "$APP/Contents/MacOS/ax-studio" | grep -F '@executable_path/../Frameworks'
           test "$(plutil -extract LSMinimumSystemVersion raw "$APP/Contents/Info.plist")" = "15.0"
+          for MLX_LIBRARY in \
+            "$APP/Contents/Frameworks/libmlx.dylib" \
+            "$APP/Contents/Frameworks/libjaccl.dylib"; do
+            test "$(vtool -show-build "$MLX_LIBRARY" | awk '$1 == "minos" { print $2; exit }')" = "15.0"
+          done
           codesign --verify --deep --strict --verbose=2 "$APP"
           for SIGNED_ITEM in \
             "$APP" \
@@ -584,6 +589,11 @@ jobs:
           otool -L "$APP/Contents/Frameworks/libmlx.dylib" | grep -F '@rpath/libjaccl.dylib'
           otool -l "$APP/Contents/MacOS/ax-studio" | grep -F '@executable_path/../Frameworks'
           test "$(plutil -extract LSMinimumSystemVersion raw "$APP/Contents/Info.plist")" = "15.0"
+          for MLX_LIBRARY in \
+            "$APP/Contents/Frameworks/libmlx.dylib" \
+            "$APP/Contents/Frameworks/libjaccl.dylib"; do
+            test "$(vtool -show-build "$MLX_LIBRARY" | awk '$1 == "minos" { print $2; exit }')" = "15.0"
+          done
           codesign --verify --deep --strict --verbose=2 "$APP"
           for SIGNED_ITEM in \
             "$APP" \

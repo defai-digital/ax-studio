@@ -28,7 +28,9 @@ function executable(file, source) {
 }
 
 describe('minisign release artifact signer', () => {
-  it('uses the shared key names, pin, and generic macOS Keychain item', () => {
+  it.runIf(process.platform !== 'win32')(
+    'uses the shared key names, pin, and generic macOS Keychain item',
+    () => {
     const root = mkdtempSync(path.join(os.tmpdir(), 'ax-studio-minisign-'))
     temporaryDirectories.push(root)
 
@@ -97,9 +99,13 @@ process.stdout.write('from-keychain\\n')
       expect(securityArgs).toContain('ax-minisign')
       expect(securityArgs).toContain('ax-release')
     }
-  }, subprocessTestTimeout)
+    },
+    subprocessTestTimeout,
+  )
 
-  it('rejects a selected public key that differs from the committed pin', () => {
+  it.runIf(process.platform !== 'win32')(
+    'rejects a selected public key that differs from the committed pin',
+    () => {
     const root = mkdtempSync(path.join(os.tmpdir(), 'ax-studio-minisign-pin-'))
     temporaryDirectories.push(root)
 
@@ -133,7 +139,9 @@ process.stdout.write('from-keychain\\n')
 
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('public key does not match pinned release key')
-  }, subprocessTestTimeout)
+    },
+    subprocessTestTimeout,
+  )
 
   it.runIf(process.platform !== 'win32')(
     'rejects a group-readable secret key',

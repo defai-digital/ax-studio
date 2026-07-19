@@ -119,11 +119,16 @@ interface AxEnginePerformanceWireMetrics {
   time_to_first_token_us?: number | null
   generation_time_us?: number | null
   generation_token_count: number
+  prompt_eval_time_us?: number | null
+  prompt_runner_time_us?: number | null
+  model_eval_time_us?: number | null
+  model_runner_time_us?: number | null
+  model_eval_token_count?: number | null
   generation_kind: 'autoregressive' | 'block_diffusion'
   mtp: AxEngineMtpWireMetrics
 }
 
-const AX_ENGINE_METRICS_VERSION = 1
+const AX_ENGINE_METRICS_VERSIONS = new Set([1, 2])
 
 const isNonNegativeFiniteNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0
@@ -142,10 +147,16 @@ function readAxEnginePerformanceWireMetrics(
   const optionalDurationIsValid = (duration: unknown) =>
     duration == null || isNonNegativeFiniteNumber(duration)
   if (
-    record.metrics_version !== AX_ENGINE_METRICS_VERSION ||
+    !isNonNegativeFiniteNumber(record.metrics_version) ||
+    !AX_ENGINE_METRICS_VERSIONS.has(record.metrics_version) ||
     !isNonNegativeFiniteNumber(record.total_time_us) ||
     !optionalDurationIsValid(record.time_to_first_token_us) ||
     !optionalDurationIsValid(record.generation_time_us) ||
+    !optionalDurationIsValid(record.prompt_eval_time_us) ||
+    !optionalDurationIsValid(record.prompt_runner_time_us) ||
+    !optionalDurationIsValid(record.model_eval_time_us) ||
+    !optionalDurationIsValid(record.model_runner_time_us) ||
+    !optionalDurationIsValid(record.model_eval_token_count) ||
     !isNonNegativeFiniteNumber(record.generation_token_count) ||
     (record.generation_kind !== 'autoregressive' &&
       record.generation_kind !== 'block_diffusion') ||
@@ -172,6 +183,26 @@ function readAxEnginePerformanceWireMetrics(
       | null
       | undefined,
     generation_token_count: record.generation_token_count,
+    prompt_eval_time_us: record.prompt_eval_time_us as
+      | number
+      | null
+      | undefined,
+    prompt_runner_time_us: record.prompt_runner_time_us as
+      | number
+      | null
+      | undefined,
+    model_eval_time_us: record.model_eval_time_us as
+      | number
+      | null
+      | undefined,
+    model_runner_time_us: record.model_runner_time_us as
+      | number
+      | null
+      | undefined,
+    model_eval_token_count: record.model_eval_token_count as
+      | number
+      | null
+      | undefined,
     generation_kind: record.generation_kind,
     mtp: {
       available: mtp.available,
@@ -224,13 +255,40 @@ function providerMetadataForMetrics(metrics: AxEngineWireMetrics) {
       ? performance.generation_time_us / 1000
       : undefined
   const generationTokenCount = performance?.generation_token_count
-  const nativeTokensPerSecond =
+  const deliveryTokensPerSecond =
     generationDurationMs != null &&
     generationDurationMs > 0 &&
     generationTokenCount != null &&
     generationTokenCount > 0
       ? (generationTokenCount * 1000) / generationDurationMs
       : undefined
+  const modelEvalDurationMs =
+    performance?.model_eval_time_us != null
+      ? performance.model_eval_time_us / 1000
+      : undefined
+  const modelEvalTokenCount = performance?.model_eval_token_count ?? undefined
+  const modelTokensPerSecond =
+    modelEvalDurationMs != null &&
+    modelEvalDurationMs > 0 &&
+    modelEvalTokenCount != null &&
+    modelEvalTokenCount > 0
+      ? (modelEvalTokenCount * 1000) / modelEvalDurationMs
+      : undefined
+  const runnerDurationMs =
+    performance?.model_runner_time_us != null
+      ? performance.model_runner_time_us / 1000
+      : undefined
+  const runnerTokensPerSecond =
+    runnerDurationMs != null &&
+    runnerDurationMs > 0 &&
+    modelEvalTokenCount != null &&
+    modelEvalTokenCount > 0
+      ? (modelEvalTokenCount * 1000) / runnerDurationMs
+      : undefined
+  const hasSeparatedNativeTiming =
+    performance?.metrics_version === 2 &&
+    modelEvalDurationMs != null &&
+    modelEvalTokenCount != null
   const mtp = performance?.mtp
   const accelerationMode = mtp
     ? mtp.active
@@ -245,7 +303,8 @@ function providerMetadataForMetrics(metrics: AxEngineWireMetrics) {
       elapsedMs: metrics.elapsed_ms,
       outputTokenCount: metrics.output_token_count,
       tokensPerSecond:
-        nativeTokensPerSecond ??
+        modelTokensPerSecond ??
+        deliveryTokensPerSecond ??
         (metrics.elapsed_ms > 0
           ? (metrics.output_token_count * 1000) / metrics.elapsed_ms
           : 0),
@@ -257,8 +316,29 @@ function providerMetadataForMetrics(metrics: AxEngineWireMetrics) {
         performance?.time_to_first_token_us != null
           ? performance.time_to_first_token_us / 1000
           : undefined,
-      generationDurationMs,
-      generationTokenCount,
+      promptEvalDurationMs:
+        performance?.prompt_eval_time_us != null
+          ? performance.prompt_eval_time_us / 1000
+          : undefined,
+      promptRunnerDurationMs:
+        performance?.prompt_runner_time_us != null
+          ? performance.prompt_runner_time_us / 1000
+          : undefined,
+      generationDurationMs: modelEvalDurationMs ?? generationDurationMs,
+      generationTokenCount: modelEvalTokenCount ?? generationTokenCount,
+      modelEvalDurationMs,
+      modelEvalTokenCount,
+      runnerDurationMs,
+      runnerTokensPerSecond,
+      deliveryDurationMs: hasSeparatedNativeTiming
+        ? generationDurationMs
+        : undefined,
+      deliveryTokenCount: hasSeparatedNativeTiming
+        ? generationTokenCount
+        : undefined,
+      deliveryTokensPerSecond: hasSeparatedNativeTiming
+        ? deliveryTokensPerSecond
+        : undefined,
       accelerationMode,
       mtpAvailable: mtp?.available,
       mtpRequested: mtp?.requested,

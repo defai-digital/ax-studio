@@ -147,6 +147,11 @@ export async function executeSingleAgentStream(
   let tokensPerSecond = 0
   let nativeGenerationDurationMs = 0
   let nativeGenerationTokens = 0
+  let nativeDeliveryDurationMs = 0
+  let nativeDeliveryTokens = 0
+  let nativeRunnerDurationMs = 0
+  let nativeRunnerTokens = 0
+  let nativePromptEvalDurationMs = 0
   let nativeTotalDurationMs = 0
   let nativeTimeToFirstTokenMs: number | undefined
   let nativeAccelerationMode: 'mtp' | 'mtp_fallback' | 'direct' | undefined
@@ -221,6 +226,41 @@ export async function executeSingleAgentStream(
           hasNativeGenerationMetrics = true
           nativeGenerationDurationMs += reportedGenerationDurationMs
           nativeGenerationTokens += reportedGenerationTokens
+
+          const reportedDeliveryDurationMs =
+            axEngineMetrics?.deliveryDurationMs
+          const reportedDeliveryTokens = axEngineMetrics?.deliveryTokenCount
+          if (
+            typeof reportedDeliveryDurationMs === 'number' &&
+            Number.isFinite(reportedDeliveryDurationMs) &&
+            reportedDeliveryDurationMs >= 0 &&
+            typeof reportedDeliveryTokens === 'number' &&
+            Number.isFinite(reportedDeliveryTokens) &&
+            reportedDeliveryTokens >= 0
+          ) {
+            nativeDeliveryDurationMs += reportedDeliveryDurationMs
+            nativeDeliveryTokens += reportedDeliveryTokens
+          }
+
+          const reportedRunnerDurationMs = axEngineMetrics?.runnerDurationMs
+          if (
+            typeof reportedRunnerDurationMs === 'number' &&
+            Number.isFinite(reportedRunnerDurationMs) &&
+            reportedRunnerDurationMs >= 0
+          ) {
+            nativeRunnerDurationMs += reportedRunnerDurationMs
+            nativeRunnerTokens += reportedGenerationTokens
+          }
+
+          const reportedPromptEvalDurationMs =
+            axEngineMetrics?.promptEvalDurationMs
+          if (
+            typeof reportedPromptEvalDurationMs === 'number' &&
+            Number.isFinite(reportedPromptEvalDurationMs) &&
+            reportedPromptEvalDurationMs >= 0
+          ) {
+            nativePromptEvalDurationMs += reportedPromptEvalDurationMs
+          }
 
           const reportedTotalDurationMs = axEngineMetrics?.totalDurationMs
           nativeTotalDurationMs +=
@@ -362,6 +402,14 @@ export async function executeSingleAgentStream(
           nativeMtpDraftTokens > 0
             ? nativeMtpAcceptedTokens / nativeMtpDraftTokens
             : undefined
+        const deliveryTokenSpeed =
+          nativeDeliveryDurationMs > 0 && nativeDeliveryTokens > 0
+            ? (nativeDeliveryTokens * 1000) / nativeDeliveryDurationMs
+            : undefined
+        const runnerTokenSpeed =
+          nativeRunnerDurationMs > 0 && nativeRunnerTokens > 0
+            ? (nativeRunnerTokens * 1000) / nativeRunnerDurationMs
+            : undefined
         useAppState
           .getState()
           .setTokenSpeed(
@@ -383,6 +431,12 @@ export async function executeSingleAgentStream(
             generationTokenCount: hasNativeGenerationMetrics
               ? nativeGenerationTokens
               : tokenCount,
+            deliveryTokenSpeed,
+            deliveryDurationMs: nativeDeliveryDurationMs || undefined,
+            deliveryTokenCount: nativeDeliveryTokens || undefined,
+            runnerTokenSpeed,
+            runnerDurationMs: nativeRunnerDurationMs || undefined,
+            promptEvalDurationMs: nativePromptEvalDurationMs || undefined,
             totalDurationMs,
             timeToFirstTokenMs,
             accelerationMode: nativeAccelerationMode,

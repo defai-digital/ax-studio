@@ -34,6 +34,8 @@ describe('useThreadEffects', () => {
         assistants: [],
       } as unknown as Thread,
       chatMessages: [],
+      persistedMessages: [],
+      messagesLoaded: true,
       status: 'idle',
       assistants: [],
       selectedModel: undefined,
@@ -129,9 +131,63 @@ describe('useThreadEffects', () => {
     })
   })
 
-  it('keeps initial message in sessionStorage when queuing fails', async () => {
+  it('waits for message history before consuming an initial message', async () => {
+    sessionStorage.setItem(
+      `initial-message-${threadId}`,
+      JSON.stringify({ text: 'wait for history' })
+    )
+    defaultInput.messagesLoaded = false
+
+    const { rerender } = renderHook(() => useThreadEffects(defaultInput))
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(defaultInput.processAndSendMessage).not.toHaveBeenCalled()
+    expect(sessionStorage.getItem(`initial-message-${threadId}`)).not.toBeNull()
+
+    defaultInput.messagesLoaded = true
+    rerender()
+
+    await vi.waitFor(() => {
+      expect(defaultInput.processAndSendMessage).toHaveBeenCalledWith(
+        'wait for history'
+      )
+    })
+  })
+
+  it('consumes a stale handoff without replaying an existing user message', async () => {
+    sessionStorage.setItem(
+      `initial-message-${threadId}`,
+      JSON.stringify({ text: 'already sent' })
+    )
+    defaultInput.persistedMessages = [
+      {
+        id: 'user-1',
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: { value: 'already sent', annotations: [] },
+          },
+        ],
+      },
+    ] as unknown as ThreadEffectsInput['persistedMessages']
+
+    renderHook(() => useThreadEffects(defaultInput))
+
+    await vi.waitFor(() => {
+      expect(sessionStorage.getItem(`initial-message-${threadId}`)).toBeNull()
+    })
+    expect(defaultInput.processAndSendMessage).not.toHaveBeenCalled()
+  })
+
+  it('consumes the initial message before asynchronous queuing finishes', async () => {
     const initialMsg = JSON.stringify({ text: 'retry me' })
-    defaultInput.processAndSendMessage = vi.fn().mockRejectedValue(new Error('not ready'))
+    let finishQueuing: (() => void) | undefined
+    defaultInput.processAndSendMessage = vi.fn().mockImplementation(
+      () => new Promise<void>((resolve) => {
+        finishQueuing = resolve
+      })
+    )
     sessionStorage.setItem(`initial-message-${threadId}`, initialMsg)
 
     renderHook(() => useThreadEffects(defaultInput))
@@ -139,7 +195,25 @@ describe('useThreadEffects', () => {
     await vi.waitFor(() => {
       expect(defaultInput.processAndSendMessage).toHaveBeenCalledWith('retry me')
     })
-    expect(sessionStorage.getItem(`initial-message-${threadId}`)).toBe(initialMsg)
+    expect(sessionStorage.getItem(`initial-message-${threadId}`)).toBeNull()
+    finishQueuing?.()
+  })
+
+  it('does not restore a consumed initial message when queuing fails', async () => {
+    sessionStorage.setItem(
+      `initial-message-${threadId}`,
+      JSON.stringify({ text: 'send once' })
+    )
+    defaultInput.processAndSendMessage = vi
+      .fn()
+      .mockRejectedValue(new Error('not ready'))
+
+    renderHook(() => useThreadEffects(defaultInput))
+
+    await vi.waitFor(() => {
+      expect(defaultInput.processAndSendMessage).toHaveBeenCalledWith('send once')
+    })
+    expect(sessionStorage.getItem(`initial-message-${threadId}`)).toBeNull()
   })
 
   it('does not mark an initial message sent when StrictMode cleanup cancels the dispatch timer', async () => {

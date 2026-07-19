@@ -6,7 +6,7 @@
  * Returns pure callbacks + side-effects; no JSX.
  */
 
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { generateId } from 'ai'
 import type { UIMessage } from '@ai-sdk/react'
 import { useServiceHub } from '@/hooks/useServiceHub'
@@ -67,6 +67,7 @@ export type ThreadChatParams = {
 }
 
 type ThreadChatResult = {
+  messagesLoaded: boolean
   processAndSendMessage: (text: string) => Promise<void>
   persistMessageOnFinish: (
     message: UIMessage,
@@ -98,6 +99,7 @@ export function useThreadChat({
   const selectedProvider = useModelProvider((state) => state.selectedProvider)
   const selectedModel = useModelProvider((state) => state.selectedModel)
   const getProviderByName = useModelProvider((state) => state.getProviderByName)
+  const [messagesLoaded, setMessagesLoaded] = useState(false)
 
   // ─── Message loading ────────────────────────────────────────────────────────
 
@@ -126,57 +128,83 @@ export function useThreadChat({
   }, [threadId])
 
   useEffect(() => {
+    if (loadedThreadRef.current === threadId) {
+      setMessagesLoaded(true)
+      return
+    }
+
     const existingSession = useChatSessions.getState().sessions[threadId]
+    // Live chat already owns this thread (messages or in-flight stream). Still
+    // stamp the message-store key so `messagesLoaded` / launch hand-off gates
+    // do not wait forever on a fetch we intentionally skip.
     if (
       (existingSession?.chat?.messages?.length ?? 0) > 0 ||
-      existingSession?.isStreaming ||
-      loadedThreadRef.current === threadId
+      existingSession?.isStreaming
     ) {
+      const alreadyHydrated = Object.prototype.hasOwnProperty.call(
+        useMessages.getState().messages,
+        threadId
+      )
+      if (!alreadyHydrated) {
+        setMessages(threadId, useMessages.getState().getMessages(threadId))
+      }
+      loadedThreadRef.current = threadId
+      setMessagesLoaded(true)
       return
     }
 
     const controller = new AbortController()
+
+    const hydrateFrom = (messagesToSet: ThreadMessage[]) => {
+      const uiMessages = convertThreadMessagesToUIMessages(
+        selectVisibleMessages(messagesToSet)
+      )
+      setChatMessages(uiMessages)
+      setMessages(threadId, messagesToSet)
+      loadedThreadRef.current = threadId
+      // This is the only reliable hand-off gate: both the AI SDK chat and the
+      // persisted-message store are synchronized before consumers can act.
+      setMessagesLoaded(true)
+    }
 
     serviceHub
       .messages()
       .fetchMessages(threadId)
       .then((fetchedMessages) => {
         if (controller.signal.aborted) return
-        if (fetchedMessages && fetchedMessages.length > 0) {
-          const currentLocalMessages = useMessages
-            .getState()
-            .getMessages(threadId)
+        const storedMessages = fetchedMessages ?? []
+        const currentLocalMessages = useMessages
+          .getState()
+          .getMessages(threadId)
 
-          let messagesToSet = fetchedMessages
+        let messagesToSet = storedMessages
 
-          // Merge with local-only messages if needed
-          if (currentLocalMessages && currentLocalMessages.length > 0) {
-            const fetchedIds = new Set(fetchedMessages.map((m) => m.id))
-            const localOnlyMessages = currentLocalMessages.filter(
-              (m) => !fetchedIds.has(m.id)
-            )
-            if (localOnlyMessages.length > 0) {
-              messagesToSet = [...fetchedMessages, ...localOnlyMessages].sort(
-                (a, b) => (a.created_at || 0) - (b.created_at || 0)
-              )
-            }
-          }
-
-          setMessages(threadId, messagesToSet)
-          const uiMessages = convertThreadMessagesToUIMessages(
-            selectVisibleMessages(messagesToSet)
+        // Merge with local-only messages if needed
+        if (currentLocalMessages.length > 0) {
+          const fetchedIds = new Set(storedMessages.map((m) => m.id))
+          const localOnlyMessages = currentLocalMessages.filter(
+            (m) => !fetchedIds.has(m.id)
           )
-          setChatMessages(uiMessages)
-          loadedThreadRef.current = threadId
+          if (localOnlyMessages.length > 0) {
+            messagesToSet = [...storedMessages, ...localOnlyMessages].sort(
+              (a, b) => (a.created_at || 0) - (b.created_at || 0)
+            )
+          }
         }
+
+        // Record an empty result too. Consumers need to distinguish a new,
+        // hydrated thread from one whose persisted history is still loading.
+        hydrateFrom(messagesToSet)
       })
       .catch((error) => {
-        if (!controller.signal.aborted) {
-          console.error(
-            `Failed to fetch messages for thread ${threadId}:`,
-            error
-          )
-        }
+        if (controller.signal.aborted) return
+        console.error(
+          `Failed to fetch messages for thread ${threadId}:`,
+          error
+        )
+        // Failure must still leave the thread "loaded". Otherwise launch
+        // hand-off / initial-message gates wait forever on a missing store key.
+        hydrateFrom(useMessages.getState().getMessages(threadId))
       })
 
     return () => {
@@ -737,6 +765,7 @@ export function useThreadChat({
   ])
 
   return {
+    messagesLoaded,
     processAndSendMessage,
     persistMessageOnFinish,
     handleRegenerate,

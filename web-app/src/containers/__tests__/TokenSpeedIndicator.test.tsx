@@ -46,6 +46,22 @@ describe('TokenSpeedIndicator', () => {
     expect(screen.getByText(/100 tokens/)).toBeInTheDocument()
   })
 
+  it('separates runner, model-eval, and end-to-end native rates', () => {
+    const metadata = {
+      tokenSpeed: {
+        tokenSpeed: 40.04,
+        tokenCount: 80,
+        runnerTokenSpeed: 53.33,
+        deliveryTokenSpeed: 20.01,
+      },
+      usage: { outputTokens: 82 },
+    }
+    render(<TokenSpeedIndicator metadata={metadata} />)
+    expect(screen.getByText('40 model t/s')).toBeInTheDocument()
+    expect(screen.getByText(/runner 53\.3 t\/s/)).toBeInTheDocument()
+    expect(screen.getByText(/E2E 20 t\/s/)).toBeInTheDocument()
+  })
+
   it('shows the native MTP route, acceptance rate, and TTFT', () => {
     const metadata = {
       tokenSpeed: {
@@ -80,7 +96,7 @@ describe('TokenSpeedIndicator', () => {
     mockStreamingTokenSpeed = 55
     mockStreamingTokenCount = 200
     render(<TokenSpeedIndicator streaming metadata={{}} />)
-    expect(screen.getByText('55 t/s')).toBeInTheDocument()
+    expect(screen.getByText('~55 t/s')).toBeInTheDocument()
     expect(screen.getByText(/200 tokens/)).toBeInTheDocument()
   })
 
@@ -106,7 +122,7 @@ describe('TokenSpeedIndicator', () => {
     mockStreamingTokenSpeed = 30
     mockStreamingTokenCount = 0
     render(<TokenSpeedIndicator streaming metadata={{}} />)
-    expect(screen.getByText('30 t/s')).toBeInTheDocument()
+    expect(screen.getByText('~30 t/s')).toBeInTheDocument()
     expect(screen.queryByText(/tokens/)).not.toBeInTheDocument()
   })
 

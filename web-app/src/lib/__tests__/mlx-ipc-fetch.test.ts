@@ -179,11 +179,16 @@ describe('createMlxIpcFetch', () => {
           finish_reason: 'stop',
           elapsed_ms: 9000,
           performance: {
-            metrics_version: 1,
+            metrics_version: 2,
             total_time_us: 8_500_000,
             time_to_first_token_us: 1_250_000,
             generation_time_us: 4_000_000,
             generation_token_count: 80,
+            prompt_eval_time_us: 1_000_000,
+            prompt_runner_time_us: 900_000,
+            model_eval_time_us: 2_000_000,
+            model_runner_time_us: 1_500_000,
+            model_eval_token_count: 80,
             generation_kind: 'autoregressive',
             mtp: {
               available: true,
@@ -224,13 +229,22 @@ describe('createMlxIpcFetch', () => {
       axEngine: {
         elapsedMs: 9000,
         outputTokenCount: 82,
-        tokensPerSecond: 20,
+        tokensPerSecond: 40,
         generationKind: 'autoregressive',
-        metricsVersion: 1,
+        metricsVersion: 2,
         totalDurationMs: 8500,
         timeToFirstTokenMs: 1250,
-        generationDurationMs: 4000,
+        promptEvalDurationMs: 1000,
+        promptRunnerDurationMs: 900,
+        generationDurationMs: 2000,
         generationTokenCount: 80,
+        modelEvalDurationMs: 2000,
+        modelEvalTokenCount: 80,
+        runnerDurationMs: 1500,
+        runnerTokensPerSecond: 80 / 1.5,
+        deliveryDurationMs: 4000,
+        deliveryTokenCount: 80,
+        deliveryTokensPerSecond: 20,
         accelerationMode: 'mtp',
         mtpAvailable: true,
         mtpRequested: true,
@@ -240,6 +254,70 @@ describe('createMlxIpcFetch', () => {
         mtpAcceptedTokens: 75,
         mtpDecodeSteps: 30,
         mtpAcceptanceRate: 0.75,
+      },
+    })
+  })
+
+  it('keeps legacy v1 timing as one unlabelled generation rate', async () => {
+    mocks.invoke.mockImplementation(async (command: string, args: any) => {
+      if (command === 'mlx_load_model') return undefined
+      if (command === 'mlx_chat_stream') {
+        args.onEvent.onmessage({
+          type: 'done',
+          prompt_token_count: 10,
+          output_token_count: 20,
+          finish_reason: 'stop',
+          elapsed_ms: 2500,
+          performance: {
+            metrics_version: 1,
+            total_time_us: 2_500_000,
+            time_to_first_token_us: 500_000,
+            generation_time_us: 2_000_000,
+            generation_token_count: 20,
+            generation_kind: 'autoregressive',
+            mtp: {
+              available: false,
+              requested: false,
+              active: false,
+              direct_fallback_steps: 0,
+              draft_tokens: 0,
+              accepted_tokens: 0,
+              decode_steps: 20,
+            },
+          },
+        })
+        return undefined
+      }
+      throw new Error(`unexpected command ${command}`)
+    })
+
+    const response = await createMlxIpcFetch()(
+      'http://localhost/v1/chat/completions',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          model: 'ax-local/Qwen3-4B',
+          stream: true,
+          messages: [{ role: 'user', content: 'hi' }],
+        }),
+      }
+    )
+    const chunks = (await response.text())
+      .split('\n')
+      .filter((line) => line.startsWith('data: {'))
+      .map((line) => JSON.parse(line.slice('data: '.length)))
+    const streamExtractor =
+      createAxEngineMetadataExtractor().createStreamExtractor()
+    for (const chunk of chunks) streamExtractor.processChunk(chunk)
+
+    expect(streamExtractor.buildMetadata()).toMatchObject({
+      axEngine: {
+        metricsVersion: 1,
+        tokensPerSecond: 10,
+        generationDurationMs: 2000,
+        generationTokenCount: 20,
+        deliveryDurationMs: undefined,
+        deliveryTokensPerSecond: undefined,
       },
     })
   })

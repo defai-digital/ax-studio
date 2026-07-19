@@ -156,17 +156,18 @@ keyring = { version = "3.6.3", default-features = false, features = ["windows-na
 # commit and could break our integration without notice.
 #
 # Pinned to the validated AX Engine revision that separates packaged MTP from
-# standalone n-gram speculation and reports versioned generation metrics.
+# standalone n-gram speculation and reports model-eval separately from stream
+# delivery timing.
 [target.'cfg(target_os = "macos")'.dependencies]
-ax-engine-core = { git = "https://github.com/defai-digital/ax-engine", rev = "2d5c34a43b122a2f8cc1d7161b4f130be03e8468" }
-ax-engine-sdk = { git = "https://github.com/defai-digital/ax-engine", rev = "2d5c34a43b122a2f8cc1d7161b4f130be03e8468", features = ["mlx-native", "tokenizer"] }
+ax-engine-core = { git = "https://github.com/defai-digital/ax-engine", rev = "83a6b34715665e6ec2f0bd83395afd6a2f8ec083" }
+ax-engine-sdk = { git = "https://github.com/defai-digital/ax-engine", rev = "83a6b34715665e6ec2f0bd83395afd6a2f8ec083", features = ["mlx-native", "tokenizer"] }
 keyring = { version = "3.6.3", default-features = false, features = ["apple-native"] }
 objc2-app-kit = { version = "0.3.2", features = ["NSWindow"] }
 # Direct `tokenizers` dep so we can decode generated token ids back to text —
 # EngineTokenizer (from ax-engine-sdk) only exposes `encode`. The SDK already
 # pulls this in transitively with matching features; declared here so we can
 # call it without going through the SDK wrapper.
-tokenizers = { version = "0.20", default-features = false, features = ["onig", "esaxx_fast"] }
+tokenizers = { version = "0.23.1", default-features = false, features = ["onig", "esaxx_fast"] }
 # Local speech-to-text (whisper.cpp). `metal` accelerates inference with the
 # Apple GPU; other desktop platforms fall back to the CPU build (no cuda).
 whisper-rs = { version = "0.16", features = ["metal"] }
@@ -192,3 +193,18 @@ debug = false
 debug-assertions = false
 incremental = false
 rpath = false
+
+# `tauri dev` is the normal local inference test path. Keep the app itself
+# quick to compile, while optimizing the native inference and tokenizer crates
+# so development measurements are not dominated by unoptimized Rust code.
+[profile.dev.package.ax-engine-core]
+opt-level = 3
+
+[profile.dev.package.ax-engine-mlx]
+opt-level = 3
+
+[profile.dev.package.ax-engine-sdk]
+opt-level = 3
+
+[profile.dev.package.tokenizers]
+opt-level = 3

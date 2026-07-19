@@ -7,6 +7,7 @@
  */
 import { useEffect, useRef } from 'react'
 import type { UIMessage } from '@ai-sdk/react'
+import type { ThreadMessage } from '@ax-studio/core'
 import { SESSION_STORAGE_PREFIX, SESSION_STORAGE_KEY } from '@/constants/chat'
 import { defaultAssistant } from '@/hooks/chat/useAssistant'
 import {
@@ -19,6 +20,8 @@ export type ThreadEffectsInput = {
   threadId: string
   thread: Thread | undefined
   chatMessages: UIMessage[]
+  persistedMessages: ThreadMessage[]
+  messagesLoaded: boolean
   status: string
   assistants: Assistant[]
   selectedModel: Model | undefined
@@ -34,6 +37,8 @@ export function useThreadEffects({
   threadId,
   thread,
   chatMessages,
+  persistedMessages,
+  messagesLoaded,
   status,
   assistants,
   selectedModel: _selectedModel,
@@ -103,6 +108,10 @@ export function useThreadEffects({
   updateThreadRef.current = updateThread
 
   useEffect(() => {
+    // Do not act on a launch hand-off until persisted messages have hydrated.
+    // WebKit can restore sessionStorage after a Tauri process restart; without
+    // this gate, a stale marker wins the race against history loading.
+    if (!messagesLoaded) return
     if (initialMessageSentForThreadRef.current === threadId) return
 
     const initialMessageKey = `${SESSION_STORAGE_PREFIX.INITIAL_MESSAGE}${threadId}`
@@ -142,10 +151,26 @@ export function useThreadEffects({
           initialMessageSentForThreadRef.current = null
           return
         }
-        await processAndSendMessageRef.current(message)
+
+        const normalizedMessage = message.trim()
+        const messageAlreadyExists = persistedMessages.some((storedMessage) => {
+          if (storedMessage.role !== 'user') return false
+          const text = storedMessage.content
+            .map((part) => part.text?.value ?? '')
+            .join('')
+            .trim()
+          return text === normalizedMessage
+        })
+
+        // Consume the launch hand-off before beginning any asynchronous
+        // preparation or generation. A Tauri reload can interrupt an active
+        // local-model request; leaving this marker behind makes the next app
+        // launch silently submit the same prompt again and can look like the
+        // application has hung while a long response is regenerated.
         clearInitialMessage()
+        if (messageAlreadyExists) return
+        await processAndSendMessageRef.current(message)
       })().catch((error) => {
-        initialMessageSentForThreadRef.current = null
         console.error('Failed to process initial message:', error)
       })
     }, 0)
@@ -153,7 +178,12 @@ export function useThreadEffects({
     return () => {
       window.clearTimeout(dispatchTimer)
     }
-  }, [threadId, thread?.metadata?.pendingInitialMessage])
+  }, [
+    threadId,
+    thread?.metadata?.pendingInitialMessage,
+    messagesLoaded,
+    persistedMessages,
+  ])
 
   // ─── Apply thread prompt from sessionStorage ──────────────────────────────
   const sessionCarryAppliedForThreadRef = useRef<string | null>(null)
