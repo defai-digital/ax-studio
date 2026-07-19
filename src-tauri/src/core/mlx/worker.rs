@@ -285,9 +285,6 @@ pub enum MlxCommand {
         model_id: String,
         reply: oneshot::Sender<Result<(), String>>,
     },
-    ListLoaded {
-        reply: oneshot::Sender<Vec<String>>,
-    },
     Generate {
         model_id: String,
         messages: Vec<ChatMessage>,
@@ -741,11 +738,6 @@ fn run_worker(rx: Receiver<MlxCommand>, loaded_ids: Arc<Mutex<Vec<String>>>) {
                     Err(format!("model not loaded: {model_id}"))
                 };
                 let _ = reply.send(result);
-            }
-            MlxCommand::ListLoaded { reply } => {
-                let mut ids: Vec<String> = models.keys().cloned().collect();
-                ids.sort();
-                let _ = reply.send(ids);
             }
             MlxCommand::Generate {
                 model_id,

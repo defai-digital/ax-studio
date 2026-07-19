@@ -11,6 +11,8 @@ use std::path::{Path, PathBuf};
 /// Install channel reported to the frontend.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InstallChannel {
+    /// Constructed on macOS when the executable path is under Homebrew Caskroom.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     Homebrew,
     Standalone,
     Unknown,
@@ -33,15 +35,14 @@ impl InstallChannel {
 /// 2. Path walks through `Caskroom` + cask name `ax-studio`.
 /// 3. Otherwise standalone.
 pub fn detect_install_channel_from_exe(exe: &Path) -> InstallChannel {
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = exe;
-        return InstallChannel::Standalone;
-    }
-
     #[cfg(target_os = "macos")]
     {
         detect_macos_channel(exe)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = exe;
+        InstallChannel::Standalone
     }
 }
 
@@ -57,6 +58,7 @@ fn detect_macos_channel(exe: &Path) -> InstallChannel {
 }
 
 /// Collect the original path, canonical path, and parent chain for matching.
+#[cfg(target_os = "macos")]
 fn path_candidates(exe: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     out.push(exe.to_path_buf());
@@ -69,6 +71,10 @@ fn path_candidates(exe: &Path) -> Vec<PathBuf> {
 }
 
 /// True when the path is under a Homebrew Caskroom install of ax-studio.
+///
+/// Available on all platforms so unit tests can exercise path heuristics even
+/// when production detection only runs on macOS.
+#[cfg_attr(not(any(test, target_os = "macos")), allow(dead_code))]
 pub fn path_looks_like_homebrew_cask(path: &Path) -> bool {
     let normalized = path.to_string_lossy().replace('\\', "/");
     let lower = normalized.to_ascii_lowercase();

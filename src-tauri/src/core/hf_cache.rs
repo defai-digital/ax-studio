@@ -4,8 +4,10 @@ use std::time::SystemTime;
 
 use ax_studio_utils::normalize_path;
 
+#[cfg(target_os = "macos")]
 pub const AX_NATIVE_MODEL_MANIFEST_FILE: &str = "model-manifest.json";
 
+#[cfg(target_os = "macos")]
 #[derive(Debug, Clone)]
 pub struct CachedModelEntry {
     pub model_id: String,

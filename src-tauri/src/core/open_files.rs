@@ -46,6 +46,9 @@ impl PendingOpenFiles {
 
 /// Convert `RunEvent::Opened` URLs into filesystem paths, dropping anything
 /// that is not a local file URL.
+///
+/// macOS-only: `RunEvent::Opened` is delivered for Dock/Finder opens on macOS.
+#[cfg(target_os = "macos")]
 pub fn paths_from_opened_urls(urls: Vec<url::Url>) -> Vec<String> {
     urls.iter()
         .filter_map(|url| url.to_file_path().ok())
@@ -103,6 +106,7 @@ pub fn take_pending_open_files(state: tauri::State<'_, AppState>) -> Vec<String>
 mod tests {
     use super::*;
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn paths_from_opened_urls_keeps_only_local_files() {
         let local_path = std::env::temp_dir().join("AX Studio").join("report.pdf");
@@ -115,6 +119,7 @@ mod tests {
         assert_eq!(paths, vec![local_path.to_string_lossy().into_owned()]);
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn paths_from_opened_urls_handles_spaces_and_unicode() {
         let local_path = std::env::temp_dir()

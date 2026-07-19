@@ -85,9 +85,8 @@ if (windowsConfig.bundle?.windows?.nsis?.installMode !== 'perMachine') {
     'src-tauri/tauri.windows.conf.json must set bundle.windows.nsis.installMode to perMachine (matches winget Scope: machine)',
   )
 }
-if (windowsConfig.bundle?.windows?.nsis?.oneClick !== false) {
-  fail('src-tauri/tauri.windows.conf.json must set bundle.windows.nsis.oneClick to false')
-}
+// oneClick is not a valid NsisConfig field in tauri-build 2.6.x / CLI 2.8.x;
+// perMachine + displayLanguageSelector:false is the supported multi-user setup.
 
 assertArrayEqual(
   'src-tauri/tauri.macos.conf.json bundled MLX libraries',

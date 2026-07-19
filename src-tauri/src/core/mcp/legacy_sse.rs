@@ -43,13 +43,6 @@ pub struct LegacySseTransport {
 }
 
 impl LegacySseTransport {
-    pub async fn start(
-        client: reqwest::Client,
-        sse_endpoint: impl AsRef<str>,
-    ) -> Result<Self, LegacySseTransportError> {
-        Self::start_with_timeout(client, sse_endpoint, Duration::from_secs(30)).await
-    }
-
     pub async fn start_with_timeout(
         client: reqwest::Client,
         sse_endpoint: impl AsRef<str>,
@@ -201,7 +194,6 @@ fn message_endpoint(base: Uri, endpoint: String) -> Result<Uri, LegacySseTranspo
     }
 
     let mut base_parts = base.into_parts();
-    let endpoint_clone = endpoint.clone();
 
     if endpoint.starts_with('?') {
         if let Some(base_path_and_query) = &base_parts.path_and_query {

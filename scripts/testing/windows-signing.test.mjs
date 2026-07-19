@@ -20,7 +20,8 @@ describe('Windows signing and packaging practice', () => {
     const windowsConfig = JSON.parse(read('src-tauri/tauri.windows.conf.json'))
     expect(windowsConfig.bundle.targets).toEqual(['nsis'])
     expect(windowsConfig.bundle.windows.nsis.installMode).toBe('perMachine')
-    expect(windowsConfig.bundle.windows.nsis.oneClick).toBe(false)
+    // oneClick is not part of NsisConfig in current tauri-build; do not set it.
+    expect(windowsConfig.bundle.windows.nsis).not.toHaveProperty('oneClick')
   })
 
   it('evaluates cert expiry tiers with an injectable clock', () => {
