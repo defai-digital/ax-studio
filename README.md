@@ -127,8 +127,8 @@ All release assets are published on the
 [AX Studio releases page](https://github.com/defai-digital/ax-studio/releases).
 Every stable release asset includes a detached `.minisig` signature. The
 verification key and command are documented in
-[`docs/ax-studio.minisign.pub`](docs/ax-studio.minisign.pub) and
-[`docs/release.md`](docs/release.md).
+[`docs/release/ax-studio.minisign.pub`](docs/release/ax-studio.minisign.pub) and
+[`docs/release/release.md`](docs/release/release.md).
 
 The `curl -fsSL` command above is only Homebrew's official bootstrap command;
 it is not an AX Studio download or integrity check. Do not install AX Studio
@@ -325,7 +325,7 @@ plane.
 
 ![AX Studio runtime architecture](docs/images/ax-studio-runtime.png)
 
-Source: [docs/ax-studio-runtime.mmd](docs/ax-studio-runtime.mmd)
+Source: [docs/architecture/ax-studio-runtime.mmd](docs/architecture/ax-studio-runtime.mmd)
 
 The important distinction is that AX Studio has a native control layer around
 the chat experience:
@@ -476,7 +476,7 @@ depends on the selected provider, MCP server, and local runtime.
 - Provider keys and sensitive settings should be treated as local secrets.
 - The local API binds to localhost by default.
 
-For packaging and release controls, see [docs/release.md](docs/release.md).
+For packaging and release controls, see [docs/release/release.md](docs/release/release.md).
 
 ## Developer Setup
 
@@ -569,20 +569,20 @@ Production desktop builds do not open the Vite ports.
 | `extensions/` | Bundled assistant, conversation, download, and local-inference extensions |
 | `src-tauri/` | Rust Tauri host, IPC commands, MCP, downloads, local API, native capabilities |
 | `src-tauri/plugins/` | Native Rust plugins for hardware telemetry and local inference |
-| `docs/` | Architecture notes, conventions, release docs, PRDs, ADR-style drafts |
+| `docs/` | Public docs: legal, release, architecture, ADRs, product |
 | `scripts/` | Build, release, test, and quality-gate utilities |
 
 For contribution rules, start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Documentation
 
+- [Docs index](docs/README.md)
 - [Contributing](CONTRIBUTING.md)
-- [Frontend and backend conventions](docs/CONVENTIONS.md)
-- [Release deployment](docs/release.md)
-- [Release checklist](docs/release-checklist.md)
-- [Runtime architecture source](docs/ax-studio-runtime.mmd)
-- [Deep research engine notes](docs/DEEP_RESEARCH_ENGINE.md)
-- [Integration notes](docs/Integrations.md)
+- [Code conventions](docs/architecture/conventions.md)
+- [Release deployment](docs/release/release.md)
+- [Microsoft Store](docs/release/microsoft-store.md)
+- [Deep research](docs/architecture/deep-research.md)
+- [Privacy](docs/legal/privacy.md) · [Terms](docs/legal/terms.md)
 
 ## Community
 

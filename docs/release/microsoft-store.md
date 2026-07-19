@@ -9,8 +9,8 @@ and updater behavior.
 
 - Use a verified Company account for **DEFAI Private Limited**.
 - Reserve the product name **AX Studio** before preparing listing artwork.
-- Have company counsel approve [`privacy.md`](privacy.md) and
-  [`terms.md`](terms.md) before submission.
+- Have company counsel approve [`privacy.md`](../legal/privacy.md) and
+  [`terms.md`](../legal/terms.md) before submission.
 - Host the approved documents at stable public HTTPS URLs and update
   `web-app/src/constants/external-links.ts` if those URLs differ from the
   repository copies.
@@ -76,8 +76,8 @@ Include this live-AI disclosure or equivalent approved wording:
 
 Partner Center fields:
 
-- Privacy policy: the approved public version of `docs/privacy.md`.
-- License terms: the approved public version of `docs/terms.md`.
+- Privacy policy: the approved public version of `docs/legal/privacy.md`.
+- License terms: the approved public version of `docs/legal/terms.md`.
 - Support: `https://github.com/defai-digital/ax-studio/issues/new/choose` or an
   approved company support portal.
 - AI-content reporting: the in-app link and GitHub issue form provided by this

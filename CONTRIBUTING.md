@@ -31,7 +31,7 @@ Use this file as the contributor entry point, then follow the package-specific g
 | `extensions/` | Packaged feature extensions |
 | `src-tauri/` | Rust host app, IPC commands, capabilities, plugins |
 | `autoqa/` | Automated quality assurance and end-to-end runners |
-| `docs/` | Product notes, architecture docs, PRDs, ADR-style design docs |
+| `docs/` | Public documentation (legal, release, architecture, ADRs, product) |
 | `scripts/` | Build, test, and quality-gate utilities |
 
 ## Prerequisites
@@ -150,10 +150,13 @@ Documentation improvements are welcome and needed. Prefer:
 
 - one canonical source for setup instructions
 - package-specific docs that describe only that package
-- stable guides in `README.md` or `CONTRIBUTING.md`
-- planning material and drafts under `docs/`
+- stable guides in `README.md`, `CONTRIBUTING.md`, or the index at `docs/README.md`
+- release runbooks under `docs/release/`
+- architecture decisions under local-only `.internal/adr/` (not public `docs/`)
 
-If a doc is historical, exploratory, or design-only, label it clearly so readers do not mistake it for current user guidance.
+Do not add expired reviews, gap dumps, or unchecked implementation plans to
+`docs/`. Speculative design and ADRs belong under `.internal/`, not the public
+docs tree.
 
 ## Getting Help
 

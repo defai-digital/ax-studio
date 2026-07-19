@@ -16,11 +16,12 @@ core/lib/**
 test_results.html
 pre-install
 *.md
-!docs/microsoft-store.md
-!docs/privacy.md
-!docs/terms.md
-# docs
-docs/yarn.lock
+# Public docs that must stay trackable (global *.md ignore)
+!docs/README.md
+!docs/**/README.md
+!docs/legal/**
+!docs/release/**
+!docs/architecture/**
 src-tauri/resources/lib
 src-tauri/icons
 !src-tauri/icons/icon.png
