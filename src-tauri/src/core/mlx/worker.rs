@@ -534,7 +534,26 @@ fn take_warm_session(entry: &mut LoadedModel, model_id: &str) -> Result<EngineSe
     }
 }
 
+/// Optionally prebuild the next `EngineSession` after a successful generation.
+///
+/// **Default: OFF.** Rebuilding a full session after every reply keeps a second
+/// copy of large models (e.g. Qwen 27B MTP) resident in unified memory. When the
+/// user then switches to Gemma 4, Metal has to free that working set before the
+/// new load can proceed — that free+alloc thrash is the multi-minute "hang"
+/// after Qwen → Gemma. Opt in with `AX_MLX_WARM_NEXT_SESSION=1` for small-model
+/// TTFT experiments only.
 fn prepare_next_session(entry: &mut LoadedModel, model_id: &str) {
+    let enable = std::env::var("AX_MLX_WARM_NEXT_SESSION")
+        .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "True" | "on" | "ON"))
+        .unwrap_or(false);
+    if !enable {
+        entry.warm_session = None;
+        log::debug!(
+            "[mlx-worker] skipping next-session warm for {model_id} \
+             (set AX_MLX_WARM_NEXT_SESSION=1 to re-enable)"
+        );
+        return;
+    }
     let started = std::time::Instant::now();
     match build_session(&entry.session_context) {
         Ok(session) => {
@@ -658,13 +677,44 @@ fn drain_loaded_models(models: &mut HashMap<String, LoadedModel>, reason: &str) 
     for previous_model in &previous_models {
         log::info!("[mlx-worker] unloading previous model ({reason}): {previous_model}");
     }
-    models.clear();
+    // Drop warm sessions first (full weight sets), then contexts. Logging the
+    // wall time makes Metal free stalls visible in app.log when switching from
+    // large MTP packages to smaller models.
+    let drop_started = std::time::Instant::now();
+    for (model_id, mut entry) in models.drain() {
+        let warm_started = std::time::Instant::now();
+        if entry.warm_session.take().is_some() {
+            log::info!(
+                "[mlx-worker] dropped warm session for {model_id} in {}ms",
+                warm_started.elapsed().as_millis()
+            );
+        }
+        let ctx_started = std::time::Instant::now();
+        drop(entry);
+        log::info!(
+            "[mlx-worker] dropped session context for {model_id} in {}ms",
+            ctx_started.elapsed().as_millis()
+        );
+    }
+    log::info!(
+        "[mlx-worker] finished dropping previous model(s) for {reason} in {}ms",
+        drop_started.elapsed().as_millis()
+    );
     clear_native_caches_after_model_drain(reason);
 }
 
 fn clear_native_caches_after_model_drain(reason: &str) {
+    let started = std::time::Instant::now();
     log::info!("[mlx-worker] clearing native MLX compile caches after {reason}");
     EngineSession::clear_native_model_compile_caches();
+    // Second pass: after large MTP packages the allocator can still hold
+    // peak-watermark slabs; one more clear after the first free helps the
+    // subsequent model load fit in unified memory without thrashing.
+    EngineSession::clear_native_model_compile_caches();
+    log::info!(
+        "[mlx-worker] native MLX compile caches cleared in {}ms",
+        started.elapsed().as_millis()
+    );
 }
 
 fn handle_load(
@@ -704,24 +754,31 @@ fn handle_load(
     // here gives the user a clear message instead of a silent crash.
     validate_model_architecture(model_dir, model_id)?;
 
-    // Build the first warm session up-front, so the user gets a clear error
-    // here instead of on first generate and the first request can skip
-    // EngineSession::new on the visible path.
+    // Probe that the model can initialize, then drop the probe session so large
+    // packages (Qwen 27B MTP) are not kept resident between load and the first
+    // chat turn — and so a subsequent model switch does not have to free a
+    // full weight set that was never used for generation.
     log::info!(
         "[mlx-worker] loading model {model_id} from {}",
         model_dir.display()
     );
     let session_context = build_session_context(model_dir)
         .map_err(|e| format!("session context probe failed for {model_id}: {e}"))?;
-    let warm_session = build_session(&session_context)
+    let probe_started = std::time::Instant::now();
+    let probe_session = build_session(&session_context)
         .map_err(|e| format!("EngineSession::new probe failed for {model_id}: {e}"))?;
+    drop(probe_session);
+    log::info!(
+        "[mlx-worker] model probe ok for {model_id} in {}ms (session not retained)",
+        probe_started.elapsed().as_millis()
+    );
 
     models.insert(
         model_id.to_string(),
         LoadedModel {
             tokenizer,
             session_context,
-            warm_session: Some(warm_session),
+            warm_session: None,
         },
     );
     log::info!("[mlx-worker] loaded model {model_id}");
@@ -1159,6 +1216,7 @@ fn handle_generate_stream(
     });
 
     drop(output_decode_stream);
+    // Stream borrows session mutably; drop it before cancel_request / drop.
     drop(stream);
     if cancelled {
         if let Some(engine_request_id) = engine_request_id {
@@ -1170,9 +1228,8 @@ fn handle_generate_stream(
         }
     }
     drop(session);
-    // Skip warm-session prep after cancel: the user is often switching models
-    // or aborting. Building another EngineSession here blocks the single-threaded
-    // worker (~1s+) and delays the next load/unload, which looks like a hang.
+    // Warm-next is off by default (see prepare_next_session). After cancel we
+    // never warm — the user is usually switching models.
     if !cancelled {
         prepare_next_session(entry, model_id);
     }
@@ -1195,10 +1252,13 @@ fn format_prompt(messages: &[ChatMessage], model_id: &str) -> String {
 
 fn effective_stop_sequences(model_id: &str, requested: Option<Vec<String>>) -> Vec<String> {
     let mut stops = requested.unwrap_or_default();
+    // Gemma 4's generation_config lists multiple EOS ids (<eos>, <turn|>,
+    // <|tool_response>). The engine also stops on model eos ids, but string
+    // stop sequences cover the decoded path when packages omit full eos wiring.
     let family_stops: &[&str] = if is_gemma4_family(model_id) {
-        &["<turn|>"]
+        &["<turn|>", "<eos>", "<|tool_response>"]
     } else if is_gemma_family(model_id) {
-        &["<end_of_turn>"]
+        &["<end_of_turn>", "<eos>"]
     } else if model_id.to_lowercase().contains("qwen") {
         &["<|im_end|>"]
     } else {
@@ -1764,6 +1824,8 @@ mod tests {
 
         assert!(stops.contains(&"custom-stop".to_string()));
         assert!(stops.contains(&"<turn|>".to_string()));
+        assert!(stops.contains(&"<eos>".to_string()));
+        assert!(stops.contains(&"<|tool_response>".to_string()));
         assert!(!stops.contains(&"<|turn>".to_string()));
         assert!(!stops.contains(&"<|channel>".to_string()));
         assert!(!stops.contains(&"<channel|>".to_string()));
@@ -1774,6 +1836,19 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[test]
+    fn prepare_next_session_defaults_to_off_without_env() {
+        // Safety: do not leave a full second EngineSession resident after every
+        // reply — that is what made Qwen 27B → Gemma switches thrash Metal.
+        let enable = std::env::var("AX_MLX_WARM_NEXT_SESSION")
+            .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "True" | "on" | "ON"))
+            .unwrap_or(false);
+        // In CI / normal test runs the env is unset, so warm-next stays off.
+        if std::env::var_os("AX_MLX_WARM_NEXT_SESSION").is_none() {
+            assert!(!enable);
+        }
     }
 
     #[test]
