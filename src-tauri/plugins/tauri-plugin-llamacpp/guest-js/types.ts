@@ -17,7 +17,11 @@ export interface UnloadResult {
 export interface DeviceInfo {
   id: string
   name: string
+  /** Device memory in bytes (Rust field is `mem`; guest normalizes both). */
   memory: number
+  /** Alias for `memory` — matches the Rust `DeviceInfo.mem` field. */
+  mem?: number
+  free?: number
 }
 
 export interface GgufMetadata {

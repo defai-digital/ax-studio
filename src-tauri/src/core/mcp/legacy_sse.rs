@@ -1,4 +1,4 @@
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 
 use futures::{Stream, StreamExt};
 use http::Uri;
@@ -29,6 +29,10 @@ pub enum LegacySseTransportError {
     UnexpectedEndOfStream,
     #[error("unexpected content type: {0:?}")]
     UnexpectedContentType(Option<String>),
+    #[error("SSE handshake timed out waiting for endpoint event")]
+    HandshakeTimeout,
+    #[error("SSE message endpoint is not same-origin with the SSE URL")]
+    EndpointOriginMismatch,
 }
 
 pub struct LegacySseTransport {
@@ -43,18 +47,31 @@ impl LegacySseTransport {
         client: reqwest::Client,
         sse_endpoint: impl AsRef<str>,
     ) -> Result<Self, LegacySseTransportError> {
+        Self::start_with_timeout(client, sse_endpoint, Duration::from_secs(30)).await
+    }
+
+    pub async fn start_with_timeout(
+        client: reqwest::Client,
+        sse_endpoint: impl AsRef<str>,
+        timeout: Duration,
+    ) -> Result<Self, LegacySseTransportError> {
         let sse_endpoint = sse_endpoint.as_ref().parse::<Uri>()?;
         let mut stream = get_stream(&client, sse_endpoint.clone(), None).await?;
-        let initial_message_endpoint = loop {
-            let sse = stream
-                .next()
-                .await
-                .ok_or(LegacySseTransportError::UnexpectedEndOfStream)??;
-            if sse.event.as_deref() != Some("endpoint") {
-                continue;
+        let endpoint_wait = async {
+            loop {
+                let sse = stream
+                    .next()
+                    .await
+                    .ok_or(LegacySseTransportError::UnexpectedEndOfStream)??;
+                if sse.event.as_deref() != Some("endpoint") {
+                    continue;
+                }
+                break message_endpoint(sse_endpoint.clone(), sse.data.unwrap_or_default());
             }
-            break message_endpoint(sse_endpoint.clone(), sse.data.unwrap_or_default())?;
         };
+        let initial_message_endpoint = tokio::time::timeout(timeout, endpoint_wait)
+            .await
+            .map_err(|_| LegacySseTransportError::HandshakeTimeout)??;
 
         Ok(Self {
             client,
@@ -94,6 +111,7 @@ impl Transport<RoleClient> for LegacySseTransport {
             };
             if sse.event.as_deref() == Some("endpoint") {
                 if let Some(data) = sse.data {
+                    // Re-validate origin on every endpoint update (SSRF guard).
                     if let Ok(endpoint) = message_endpoint(self.sse_endpoint.clone(), data) {
                         *self.message_endpoint.write().await = endpoint;
                     }
@@ -146,9 +164,37 @@ async fn get_stream(
     Ok(SseStream::from_byte_stream(response.bytes_stream()).boxed())
 }
 
-fn message_endpoint(base: Uri, endpoint: String) -> Result<Uri, http::uri::InvalidUri> {
+fn same_origin(a: &Uri, b: &Uri) -> bool {
+    let scheme_eq = a.scheme_str().unwrap_or("").eq_ignore_ascii_case(b.scheme_str().unwrap_or(""));
+    let host_eq = a
+        .host()
+        .unwrap_or("")
+        .eq_ignore_ascii_case(b.host().unwrap_or(""));
+    let port_a = a.port_u16().or_else(|| match a.scheme_str() {
+        Some("https") => Some(443),
+        Some("http") => Some(80),
+        _ => None,
+    });
+    let port_b = b.port_u16().or_else(|| match b.scheme_str() {
+        Some("https") => Some(443),
+        Some("http") => Some(80),
+        _ => None,
+    });
+    scheme_eq && host_eq && port_a == port_b
+}
+
+fn message_endpoint(base: Uri, endpoint: String) -> Result<Uri, LegacySseTransportError> {
     if endpoint.starts_with("http://") || endpoint.starts_with("https://") {
-        return endpoint.parse::<Uri>();
+        // Absolute endpoints must stay same-origin with the SSE URL so a
+        // malicious server cannot repoint JSON-RPC POSTs at internal hosts
+        // (SSRF / data exfiltration).
+        let absolute = endpoint
+            .parse::<Uri>()
+            .map_err(LegacySseTransportError::InvalidUri)?;
+        if !same_origin(&base, &absolute) {
+            return Err(LegacySseTransportError::EndpointOriginMismatch);
+        }
+        return Ok(absolute);
     }
 
     let mut base_parts = base.into_parts();
@@ -157,9 +203,17 @@ fn message_endpoint(base: Uri, endpoint: String) -> Result<Uri, http::uri::Inval
     if endpoint.starts_with('?') {
         if let Some(base_path_and_query) = &base_parts.path_and_query {
             let base_path = base_path_and_query.path();
-            base_parts.path_and_query = Some(format!("{base_path}{endpoint}").parse()?);
+            base_parts.path_and_query = Some(
+                format!("{base_path}{endpoint}")
+                    .parse()
+                    .map_err(LegacySseTransportError::InvalidUri)?,
+            );
         } else {
-            base_parts.path_and_query = Some(format!("/{endpoint}").parse()?);
+            base_parts.path_and_query = Some(
+                format!("/{endpoint}")
+                    .parse()
+                    .map_err(LegacySseTransportError::InvalidUri)?,
+            );
         }
     } else {
         let path_to_use = if endpoint.starts_with('/') {
@@ -167,10 +221,14 @@ fn message_endpoint(base: Uri, endpoint: String) -> Result<Uri, http::uri::Inval
         } else {
             format!("/{endpoint}")
         };
-        base_parts.path_and_query = Some(path_to_use.parse()?);
+        base_parts.path_and_query = Some(
+            path_to_use
+                .parse()
+                .map_err(LegacySseTransportError::InvalidUri)?,
+        );
     }
 
-    Uri::from_parts(base_parts).map_err(|_| endpoint_clone.parse::<Uri>().unwrap_err())
+    Uri::from_parts(base_parts).map_err(LegacySseTransportError::InvalidUriParts)
 }
 
 #[cfg(test)]
@@ -199,14 +257,23 @@ mod tests {
                 .to_string(),
             "https://localhost/message?sessionId=x"
         );
+        // Same-origin absolute endpoint is allowed.
         assert_eq!(
             message_endpoint(
-                base_url,
-                "https://example.com/message?sessionId=x".to_string(),
+                base_url.clone(),
+                "https://localhost/message?sessionId=x".to_string(),
             )
             .unwrap()
             .to_string(),
-            "https://example.com/message?sessionId=x"
+            "https://localhost/message?sessionId=x"
         );
+        // Cross-origin absolute endpoint must be rejected (SSRF).
+        assert!(matches!(
+            message_endpoint(
+                base_url,
+                "https://example.com/message?sessionId=x".to_string(),
+            ),
+            Err(LegacySseTransportError::EndpointOriginMismatch)
+        ));
     }
 }

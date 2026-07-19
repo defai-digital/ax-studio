@@ -79,7 +79,8 @@ export const formatError = (error: unknown): string =>
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms))
 
-function getRuntimeOsType(): 'windows' | 'macOS' | 'linux' {
+/** Runtime OS detection (navigator). Prefer this over build-time IS_* flags. */
+export function getRuntimeOsType(): 'windows' | 'macOS' | 'linux' {
   const nav = (globalThis as { navigator?: Navigator & { userAgentData?: { platform?: string } } }).navigator
   const platform = [
     nav?.userAgentData?.platform,

@@ -236,17 +236,20 @@ pub async fn factory_reset<R: Runtime>(
         if let Err(e) = cleanup_own_locks(&app_handle) {
             ::log::warn!("Failed to cleanup lock files: {}", e);
         }
-        if data_folder.exists() {
-            if let Err(e) = fs::remove_dir_all(&data_folder) {
-                let message = format!("Failed to remove data folder: {e}");
-                ::log::error!("{message}");
-                return Err(message);
+        // Multi-GB data folders must not block the async runtime.
+        let data_folder_for_delete = data_folder.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            if data_folder_for_delete.exists() {
+                fs::remove_dir_all(&data_folder_for_delete).map_err(|e| {
+                    format!("Failed to remove data folder: {e}")
+                })?;
             }
-        }
-
-        fs::create_dir_all(&data_folder)
-            .map_err(|e| format!("Failed to recreate data folder: {e}"))?;
-        write_data_folder_marker(&data_folder)?;
+            fs::create_dir_all(&data_folder_for_delete)
+                .map_err(|e| format!("Failed to recreate data folder: {e}"))?;
+            write_data_folder_marker(&data_folder_for_delete)
+        })
+        .await
+        .map_err(|e| format!("Factory reset I/O task failed: {e}"))??;
     }
 
     // Reset the configuration

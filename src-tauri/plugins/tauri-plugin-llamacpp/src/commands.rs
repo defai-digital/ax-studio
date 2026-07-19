@@ -29,7 +29,7 @@ use ax_studio_utils::{
 #[cfg(unix)]
 use crate::process::graceful_terminate_process;
 
-#[cfg(all(windows, target_arch = "x86_64"))]
+#[cfg(windows)]
 use crate::process::force_terminate_process;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -220,6 +220,19 @@ pub async fn load_llama_model<R: Runtime>(
     command.kill_on_drop(true);
     setup_windows_process_flags(&mut command);
 
+    // Make ax-serving a process group leader so graceful_terminate_process can
+    // signal the whole group (including child llama-server processes). Without
+    // this, unload/exit leaves orphaned grandchildren holding ports and GPU.
+    if is_ax_serving {
+        #[cfg(unix)]
+        unsafe {
+            command.pre_exec(|| {
+                libc::setpgid(0, 0);
+                Ok(())
+            });
+        }
+    }
+
     if !is_ax_serving {
         // CUDA paths only apply to llama-server
         let cuda_found = add_cuda_paths(&mut command);
@@ -296,12 +309,17 @@ pub async fn load_llama_model<R: Runtime>(
         }
     });
 
-    // Spawn task to capture stderr and monitor for errors
+    // Spawn task to capture stderr and monitor for errors.
+    // Cap the in-memory buffer: it is only needed for startup error reporting.
+    // After readiness (or buffer cap) keep streaming to the logger only so we
+    // do not retain multi-MB verbose logs for the lifetime of the process.
+    const STDERR_BUFFER_CAP: usize = 64 * 1024;
     let engine_label_stderr = engine_label.to_string();
     let stderr_task = tokio::spawn(async move {
         let mut reader = BufReader::new(stderr);
         let mut byte_buffer = Vec::new();
         let mut stderr_buffer = String::new();
+        let mut capture = true;
 
         loop {
             byte_buffer.clear();
@@ -312,8 +330,16 @@ pub async fn load_llama_model<R: Runtime>(
                     let line = line.trim_end();
 
                     if !line.is_empty() {
-                        stderr_buffer.push_str(line);
-                        stderr_buffer.push('\n');
+                        if capture {
+                            if stderr_buffer.len() < STDERR_BUFFER_CAP {
+                                let remaining = STDERR_BUFFER_CAP - stderr_buffer.len();
+                                let take = line.len().min(remaining);
+                                stderr_buffer.push_str(&line[..take]);
+                                stderr_buffer.push('\n');
+                            } else {
+                                capture = false;
+                            }
+                        }
                         log::info!("[{}] {}", engine_label_stderr, line);
 
                         // Check for readiness indicator
@@ -331,6 +357,8 @@ pub async fn load_llama_model<R: Runtime>(
                         if is_ready {
                             log::info!("Model appears to be ready based on logs: '{}'", line);
                             let _ = ready_tx.send(true).await;
+                            // Buffer only needed for startup failures; stop growing.
+                            capture = false;
                         }
                     }
                 }
@@ -442,7 +470,9 @@ pub async fn unload_llama_model<R: Runtime>(
             graceful_terminate_process(&mut child).await;
         }
 
-        #[cfg(all(windows, target_arch = "x86_64"))]
+        // All Windows targets (x86_64 and aarch64) need force-terminate;
+        // previously ARM64 only removed the session and left the child running.
+        #[cfg(windows)]
         {
             force_terminate_process(&mut child).await;
         }

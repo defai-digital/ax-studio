@@ -86,8 +86,12 @@ export function ArtifactPanel({ threadId, messages }: ArtifactPanelProps) {
   const setPrompt = usePrompt((s) => s.setPrompt)
 
   // Artifacts are derived live from the messages — nothing persisted.
+  // Skip the O(conversation) scan while the panel is closed so streaming
+  // tokens do not re-walk every assistant message on every tick.
+  const isOpen = Boolean(panel?.open)
   const artifactsByMessage = useMemo(() => {
     const map = new Map<string, Artifact[]>()
+    if (!isOpen) return map
     for (const message of messages) {
       if (message.role !== 'assistant') continue
       const artifacts = extractArtifactsFromTextParts(
@@ -97,7 +101,7 @@ export function ArtifactPanel({ threadId, messages }: ArtifactPanelProps) {
       if (artifacts.length > 0) map.set(message.id, artifacts)
     }
     return map
-  }, [messages])
+  }, [messages, isOpen])
 
   const allArtifacts = useMemo(
     () => [...artifactsByMessage.values()].flat(),
@@ -185,7 +189,6 @@ export function ArtifactPanel({ threadId, messages }: ArtifactPanelProps) {
   }
 
   // Esc closes the panel.
-  const isOpen = Boolean(panel?.open)
   useEffect(() => {
     if (!isOpen) return
     const onKeyDown = (event: KeyboardEvent) => {

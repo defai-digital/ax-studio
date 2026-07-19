@@ -199,11 +199,28 @@ export class ExtensionManager {
 
   /**
    * Unloads all registered extensions.
+   * Awaits each onUnload independently so one throwing handler cannot abort
+   * the rest (which would leave listeners registered and duplicate on reload).
    */
-  unload() {
-    this.listExtensions().forEach((ext) => {
-      ext.onUnload()
-    })
+  async unload(): Promise<void> {
+    const results = await Promise.allSettled(
+      this.listExtensions().map(async (ext) => {
+        try {
+          await Promise.resolve(ext.onUnload())
+        } catch (error) {
+          console.error(
+            `[ExtensionManager] onUnload failed for ${ext.name ?? 'unknown'}:`,
+            error
+          )
+          throw error
+        }
+      })
+    )
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.error('[ExtensionManager] extension unload error:', result.reason)
+      }
+    }
   }
 
   /**

@@ -123,8 +123,8 @@ describe('extension.ts', () => {
       expect(extension).toBeUndefined()
     })
 
-    it('should handle unloading extensions', () => {
-      expect(() => manager.unload()).not.toThrow()
+    it('should handle unloading extensions', async () => {
+      await expect(manager.unload()).resolves.toBeUndefined()
     })
   })
 

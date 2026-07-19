@@ -95,8 +95,8 @@ pub async fn graceful_terminate_process(child: &mut tokio::process::Child) {
     }
 }
 
-/// Force terminate a process on Windows
-#[cfg(all(windows, target_arch = "x86_64"))]
+/// Force terminate a process on Windows (x86_64 and aarch64).
+#[cfg(windows)]
 pub async fn force_terminate_process(child: &mut tokio::process::Child) {
     if let Some(raw_pid) = child.id() {
         log::warn!(

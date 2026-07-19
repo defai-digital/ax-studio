@@ -187,7 +187,7 @@ export function ExtensionProvider({ children }: PropsWithChildren) {
         clearTimeout(retryTimer)
       }
       cleanupExtensionsUpdated()
-      ExtensionManager.getInstance().unload()
+      void ExtensionManager.getInstance().unload()
     }
   }, [serviceHub, runSetup])
 

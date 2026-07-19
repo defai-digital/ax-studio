@@ -37,10 +37,96 @@ const GEMMA4_CHANNEL_CLOSE: &str = "<channel|>";
 static NEXT_DIFFUSION_REQUEST_SEED: AtomicU64 = AtomicU64::new(1);
 
 /// OpenAI-style chat message.
+///
+/// `content` accepts either a plain string or `null` (AI SDK serializes
+/// tool-call assistant turns as `content: null`). Multimodal content arrays
+/// are rejected at the IPC boundary by the frontend shim; if they reach here
+/// they deserialize as a string failure — keep the wire type simple.
 #[derive(Clone, Debug, Deserialize)]
 pub struct ChatMessage {
     pub role: String,
+    #[serde(default, deserialize_with = "deserialize_content_string")]
     pub content: String,
+}
+
+fn deserialize_content_string<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::{self, Visitor};
+    use std::fmt;
+
+    struct ContentVisitor;
+    impl<'de> Visitor<'de> for ContentVisitor {
+        type Value = String;
+
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str("a string, null, or a text-only content array")
+        }
+
+        fn visit_str<E: de::Error>(self, v: &str) -> Result<String, E> {
+            Ok(v.to_string())
+        }
+
+        fn visit_string<E: de::Error>(self, v: String) -> Result<String, E> {
+            Ok(v)
+        }
+
+        fn visit_unit<E: de::Error>(self) -> Result<String, E> {
+            Ok(String::new())
+        }
+
+        fn visit_none<E: de::Error>(self) -> Result<String, E> {
+            Ok(String::new())
+        }
+
+        fn visit_some<D2: serde::Deserializer<'de>>(
+            self,
+            deserializer: D2,
+        ) -> Result<String, D2::Error> {
+            deserializer.deserialize_any(ContentVisitor)
+        }
+
+        fn visit_seq<A: de::SeqAccess<'de>>(self, mut seq: A) -> Result<String, A::Error> {
+            // Multimodal content parts: extract text, reject image-only payloads
+            // with a clear error (native multimodal wire path is not ready yet).
+            let mut texts = Vec::new();
+            let mut saw_non_text = false;
+            while let Some(value) = seq.next_element::<serde_json::Value>()? {
+                match value {
+                    serde_json::Value::String(s) => texts.push(s),
+                    serde_json::Value::Object(map) => {
+                        let part_type = map
+                            .get("type")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("text");
+                        if part_type == "text" {
+                            if let Some(t) = map.get("text").and_then(|v| v.as_str()) {
+                                texts.push(t.to_string());
+                            }
+                        } else {
+                            saw_non_text = true;
+                        }
+                    }
+                    _ => saw_non_text = true,
+                }
+            }
+            if saw_non_text && texts.is_empty() {
+                return Err(de::Error::custom(
+                    "ax-engine does not support multimodal content arrays yet; send text only",
+                ));
+            }
+            if saw_non_text {
+                // Drop image parts; keep text so the request still works.
+                log::warn!(
+                    "[mlx-worker] dropping non-text content parts from chat message (multimodal not supported)"
+                );
+            }
+            Ok(texts.join("\n"))
+        }
+    }
+
+    deserializer.deserialize_any(ContentVisitor)
 }
 
 /// Per-call sampling/length controls. Optional — sensible defaults applied
@@ -315,15 +401,29 @@ impl MlxWorker {
     }
 
     pub async fn load(&self, model_id: String, model_dir: PathBuf) -> Result<(), String> {
-        // Model switch must not wait behind an unrelated long generation. Flag
-        // active streams cancelled; the worker checks between decode steps and
-        // will drain the GenerateStream command before processing this Load.
-        match self.stream_cancellations.cancel_all() {
-            Ok(0) => {}
-            Ok(n) => log::info!(
-                "[mlx-worker] cancelling {n} in-flight stream(s) before load of {model_id}"
-            ),
-            Err(e) => log::warn!("[mlx-worker] could not cancel streams before load: {e}"),
+        // Only cancel in-flight streams when this load will actually switch
+        // models. Loading an already-resident model is a no-op in handle_load
+        // and must not kill cross-thread chats (every chat path re-invokes load).
+        let already_resident = match self.list_loaded().await {
+            Ok(ids) => ids.iter().any(|id| id == &model_id),
+            Err(e) => {
+                log::warn!(
+                    "[mlx-worker] list_loaded before load failed ({e}); treating as non-resident"
+                );
+                false
+            }
+        };
+        if !already_resident {
+            // Model switch must not wait behind an unrelated long generation.
+            // Flag active streams cancelled; the worker checks between decode
+            // steps and will drain the GenerateStream command before Load.
+            match self.stream_cancellations.cancel_all() {
+                Ok(0) => {}
+                Ok(n) => log::info!(
+                    "[mlx-worker] cancelling {n} in-flight stream(s) before load of {model_id}"
+                ),
+                Err(e) => log::warn!("[mlx-worker] could not cancel streams before load: {e}"),
+            }
         }
         let (reply, rx) = oneshot::channel();
         self.dispatch(MlxCommand::Load {
@@ -1339,10 +1439,38 @@ fn decoded_text_has_incomplete_trailing_codepoint(text: &str) -> bool {
     text.ends_with('\u{FFFD}')
 }
 
+/// Architectures known to make the MLX C library `abort()` (or hang) rather
+/// than return a recoverable error. Text / Gemma / Qwen3.5 MoE causal LMs are
+/// intentionally *not* listed — they are supported by ax-engine-mlx.
+const UNSUPPORTED_ARCHITECTURE_MARKERS: &[&str] = &[
+    "Llava",
+    "Idefics",
+    "InternVL",
+    "InternVideo",
+    "Phi3V",
+    "Phi4MM",
+    "Qwen2VL",
+    "Qwen2_5_VL",
+    "Qwen2_VL",
+    "Whisper",
+    "CLIP",
+    "Blip",
+    "Blip2",
+    "Chameleon",
+    "AyaVision",
+    "Pixtral",
+    "Mllama",
+    "PaliGemma",
+    "Fuyu",
+    "Kosmos",
+    "GitForCausalLM",
+    "VisionEncoderDecoder",
+];
+
 /// Validate the model architecture from `config.json` before calling into MLX
 /// FFI. The MLX C library calls `abort()` on unsupported architectures, which
-/// kills the worker thread irrecoverably. We reject known-unsupported types
-/// (multimodal MoE, vision-conditional) with a clear error message.
+/// (with `panic = "abort"` historically, or native C abort) kills the whole
+/// process. Reject known-unsupported types with a clear error message.
 fn validate_model_architecture(model_dir: &Path, model_id: &str) -> Result<(), String> {
     let config_path = model_dir.join("config.json");
     if !config_path.is_file() {
@@ -1366,8 +1494,18 @@ fn validate_model_architecture(model_dir: &Path, model_id: &str) -> Result<(), S
     }
 
     let arch = &arch_block[0]; // primary architecture
-
     log::info!("[mlx-worker] model {model_id} architecture: {arch}");
+
+    for marker in UNSUPPORTED_ARCHITECTURE_MARKERS {
+        if arch.contains(marker) {
+            return Err(format!(
+                "Model '{model_id}' uses unsupported architecture '{arch}'. \
+                 AX Engine (MLX) cannot load this model family. \
+                 Use a supported text / Gemma / Qwen3 model, or the llama.cpp backend."
+            ));
+        }
+    }
+
     Ok(())
 }
 
@@ -1899,6 +2037,21 @@ mod tests {
         .unwrap();
         let result = validate_model_architecture(&dir, "mlx-community/Qwen3-8B-4bit");
         assert!(result.is_ok());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn validate_model_architecture_rejects_llava() {
+        let dir = std::env::temp_dir().join("test_mlx_arch_llava");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("config.json"),
+            r#"{"architectures": ["LlavaForConditionalGeneration"]}"#,
+        )
+        .unwrap();
+        let result = validate_model_architecture(&dir, "llava-hf/llava-1.5-7b");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("unsupported architecture"));
         std::fs::remove_dir_all(&dir).ok();
     }
 

@@ -397,22 +397,54 @@ struct FabricCliCommand {
 
 /// Validate that an MCP-config-supplied CLI command is on the allowlist.
 ///
-/// The knowledge-base MCP config is user-editable JSON on disk. Without
-/// this gate, a tampered config could direct ax-studio to spawn an
-/// arbitrary binary as part of an "innocent" sync. The allowlist
-/// restricts us to well-known interpreters; absolute paths are also
-/// allowed on the assumption that an attacker who can write absolute
-/// paths into the config already has filesystem access equivalent to
-/// arbitrary code execution.
+/// The knowledge-base MCP config is user-editable JSON on disk (via the
+/// renderer). Without this gate, a tampered config could direct ax-studio
+/// to spawn an arbitrary binary as part of an "innocent" sync.
+///
+/// Only bare allowlisted interpreter names are accepted — absolute/relative
+/// paths (e.g. `/bin/sh`) are rejected. Args are filtered for dangerous
+/// interpreter flags (`-c`, `-e`, `--eval`, …) to match the MCP spawn path.
 fn validate_mcp_cli_command(raw_command: &str) -> Result<(), String> {
     const ALLOWED: &[&str] = &["node", "npx", "bun", "python", "python3", "uvx"];
-    if !raw_command.contains('/') && !raw_command.contains('\\') && !ALLOWED.contains(&raw_command)
-    {
+    if raw_command.contains('/') || raw_command.contains('\\') {
+        return Err(format!(
+            "Blocked path-based command '{raw_command}' in knowledge-base MCP config; \
+             use a bare allowlisted name ({})",
+            ALLOWED.join(", ")
+        ));
+    }
+    if !ALLOWED.contains(&raw_command) {
         return Err(format!(
             "Blocked disallowed command '{raw_command}' in knowledge-base MCP config"
         ));
     }
     Ok(())
+}
+
+/// Drop dangerous interpreter flags from MCP-sourced args (same list as
+/// `mcp/helpers.rs`). Config args must be data, never shell evaluation.
+fn filter_mcp_cli_args(args: Vec<String>) -> Vec<String> {
+    const DANGEROUS_FLAGS: &[&str] = &[
+        "-c",
+        "-e",
+        "--eval",
+        "--command",
+        "-i",
+        "--interactive",
+        "--exec",
+    ];
+    args.into_iter()
+        .filter(|arg| {
+            if DANGEROUS_FLAGS.contains(&arg.as_str()) {
+                log::warn!(
+                    "Blocking dangerous interpreter flag '{arg}' from knowledge-base MCP config"
+                );
+                false
+            } else {
+                true
+            }
+        })
+        .collect()
 }
 
 /// Resolve the fabric-ingest CLI command from an explicit MCP config or a
@@ -461,6 +493,7 @@ fn resolve_fabric_cli_command<R: Runtime>(
                                 .collect()
                         })
                         .unwrap_or_default();
+                    let args = filter_mcp_cli_args(args);
                     return Ok(FabricCliCommand {
                         program: command,
                         args,

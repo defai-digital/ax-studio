@@ -188,7 +188,10 @@ opt-level = 3       # Optimize for SPEED (compute-bound MLX kernels)
 lto = "fat"         # Whole-program optimization across crate boundaries
 strip = "symbols"   # Smaller binary, no perf impact
 codegen-units = 1   # Single codegen unit → better inlining
-panic = "abort"     # Matches ax-engine bench setup, no unwind overhead
+# Default panic = "unwind" so MLX worker catch_unwind + MlxState respawn can
+# contain FFI panics. panic="abort" made that machinery dead code and turned
+# any MLX panic into a full app crash. Unwind cost is irrelevant on the
+# GPU-bound decode path.
 overflow-checks = false  # No bounds-check tax in tight loops
 debug = false
 debug-assertions = false

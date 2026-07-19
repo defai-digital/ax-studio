@@ -693,14 +693,39 @@ pub async fn remove_old_backend_versions(
     latest_version: String,
     backend_type: String,
 ) -> Result<Vec<String>, String> {
-    let mut removed_paths = Vec::new();
-    let backends_path = PathBuf::from(&backends_dir);
-
-    if !backends_path.exists() {
-        return Ok(removed_paths);
+    // Reject path traversal in backend_type (renderer-controlled).
+    if backend_type.is_empty()
+        || backend_type.contains("..")
+        || backend_type.contains('/')
+        || backend_type.contains('\\')
+    {
+        return Err(format!(
+            "Invalid backend_type '{backend_type}': must be a single path segment without separators"
+        ));
+    }
+    // latest_version is used only for name equality, but still reject traversal.
+    if latest_version.contains("..")
+        || latest_version.contains('/')
+        || latest_version.contains('\\')
+    {
+        return Err(format!(
+            "Invalid latest_version '{latest_version}': must be a single path segment"
+        ));
     }
 
-    let version_dirs = fs::read_dir(&backends_path)
+    let mut removed_paths = Vec::new();
+    let backends_path = PathBuf::from(&backends_dir);
+    let backends_canon = match fs::canonicalize(&backends_path) {
+        Ok(p) => p,
+        Err(_) if !backends_path.exists() => return Ok(removed_paths),
+        Err(e) => {
+            return Err(format!(
+                "Failed to canonicalize backends directory: {e}"
+            ))
+        }
+    };
+
+    let version_dirs = fs::read_dir(&backends_canon)
         .map_err(|e| format!("Failed to read backends directory: {}", e))?;
 
     for version_entry in version_dirs {
@@ -720,6 +745,19 @@ pub async fn remove_old_backend_versions(
 
         // Check if this version has the specific backend type
         let backend_type_path = version_path.join(&backend_type);
+
+        // Ensure the resolved path stays under backends_dir (defense in depth).
+        let backend_canon = match fs::canonicalize(&backend_type_path) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        if !backend_canon.starts_with(&backends_canon) {
+            log::warn!(
+                "Skipping backend path outside backends_dir: {}",
+                backend_canon.display()
+            );
+            continue;
+        }
 
         if backend_type_path.exists() {
             // Verify it's actually installed before removing

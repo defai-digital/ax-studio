@@ -177,11 +177,16 @@ export async function startAxServing(
 
 export async function getDevices(
   backendPath: string,
-  libraryPath?: string
+  envs: Record<string, string> = {},
+  /** @deprecated unused; kept for call-site compatibility */
+  _libraryPath?: string
 ): Promise<DeviceInfo[]> {
+  // Rust requires `backend_path` + `envs` (snake_case via serde rename from
+  // camelCase). Previously we sent `libraryPath` and omitted `envs`, so every
+  // invoke failed and GPU enumeration always returned [].
   return await invoke('plugin:llamacpp|get_devices', {
     backendPath,
-    libraryPath,
+    envs,
   })
 }
 

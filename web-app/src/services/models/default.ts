@@ -406,6 +406,17 @@ export class DefaultModelsService implements ModelsService {
   }
 
   async getActiveModels(provider?: string): Promise<string[]> {
+    // No-arg callers need both engines: llamacpp sessions + in-process MLX.
+    // Previously only llamacpp was queried, so MLX models never appeared
+    // "running", stopModel skipped them, and startModel was called spuriously.
+    if (provider == null || provider === '') {
+      const [llamaCppModels, axEngineModels] = await Promise.all([
+        this.getActiveModels('llamacpp').catch(() => [] as string[]),
+        this.getActiveModels('ax-engine').catch(() => [] as string[]),
+      ])
+      return [...new Set([...(llamaCppModels ?? []), ...(axEngineModels ?? [])])]
+    }
+
     if (isAxEngineProvider(provider)) {
       return invoke<string[]>('mlx_list_loaded')
     }

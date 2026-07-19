@@ -358,13 +358,15 @@ async fn schedule_mcp_start_task<R: Runtime>(
         if let Some(connect_timeout) = config_params.timeout {
             log::debug!("MCP SSE server {name} configured connect timeout: {connect_timeout:?}");
         }
-        let transport = LegacySseTransport::start(
+        let handshake_timeout = config_params.timeout.unwrap_or(Duration::from_secs(30));
+        let transport = LegacySseTransport::start_with_timeout(
             reqwest12::Client::builder()
                 .default_headers(build_reqwest12_headers(&config_params.headers)?)
-                .connect_timeout(config_params.timeout.unwrap_or(Duration::from_secs(30)))
+                .connect_timeout(handshake_timeout)
                 .build()
                 .map_err(|e| format!("Failed to build SSE client for {name}: {e}"))?,
             transport_url,
+            handshake_timeout,
         )
         .await
         .map_err(|e| {

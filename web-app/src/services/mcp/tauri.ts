@@ -132,7 +132,8 @@ export class TauriMCPService implements MCPService {
     try {
       parsed = JSON.parse(configString) as MCPConfig & Record<string, unknown>
     } catch {
-      console.error('Failed to parse MCP config JSON:', configString)
+      // Never log the payload — MCP configs routinely carry API keys.
+      console.error('Failed to parse MCP config JSON')
       return defaultResponse()
     }
 

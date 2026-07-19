@@ -496,9 +496,11 @@ export function useThreadChat({
 
       if (knowledgeContext) {
         queueMicrotask(() => {
+          // Read live session store inside the microtask so this callback does
+          // not depend on `chatMessages` identity (which changes every streamed
+          // token and would re-render the memoized composer).
           const liveMessages =
-            useChatSessions.getState().sessions[threadId]?.chat?.messages ??
-            chatMessages
+            useChatSessions.getState().sessions[threadId]?.chat?.messages ?? []
           setChatMessages(
             liveMessages.map((message) =>
               message.id === messageId
@@ -524,7 +526,6 @@ export function useThreadChat({
       updateThreadTimestamp,
       renameThread,
       sendMessage,
-      chatMessages,
       setChatMessages,
       prepareLocalKnowledge,
       serviceHub,

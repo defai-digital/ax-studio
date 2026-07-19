@@ -329,6 +329,137 @@ describe('createMlxIpcFetch', () => {
     expect(isDiffusionGemmaModelId('org/gemma-4-model')).toBe(false)
   })
 
+  it('coerces content:null tool-call history into empty strings for IPC', async () => {
+    mocks.invoke.mockImplementation(async (command: string, args: any) => {
+      if (command === 'mlx_load_model') return undefined
+      if (command === 'mlx_chat_completion') {
+        expect(args.messages).toEqual([
+          { role: 'user', content: 'hi' },
+          { role: 'assistant', content: '' },
+          { role: 'user', content: 'again' },
+        ])
+        return {
+          id: 'mlx-1',
+          object: 'chat.completion',
+          created: 1,
+          model: 'test-model',
+          choices: [
+            {
+              index: 0,
+              message: { role: 'assistant', content: 'ok' },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+        }
+      }
+      throw new Error(`unexpected command ${command}`)
+    })
+
+    const response = await createMlxIpcFetch()(
+      'http://localhost/v1/chat/completions',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          model: 'test-model',
+          stream: false,
+          messages: [
+            { role: 'user', content: 'hi' },
+            {
+              role: 'assistant',
+              content: null,
+              tool_calls: [{ id: 't1', type: 'function', function: { name: 'x', arguments: '{}' } }],
+            },
+            { role: 'user', content: 'again' },
+          ],
+        }),
+      }
+    )
+    expect(response.status).toBe(200)
+  })
+
+  it('rejects image-only multimodal content with a clear error', async () => {
+    const response = await createMlxIpcFetch()(
+      'http://localhost/v1/chat/completions',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          model: 'test-model',
+          stream: false,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'image_url',
+                  image_url: { url: 'data:image/png;base64,abc' },
+                },
+              ],
+            },
+          ],
+        }),
+      }
+    )
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      error: expect.stringContaining('image'),
+    })
+    expect(mocks.invoke).not.toHaveBeenCalled()
+  })
+
+  it('surfaces finish_reason cancelled as AbortError (not a complete reply)', async () => {
+    mocks.invoke.mockImplementation(async (command: string, args: any) => {
+      if (command === 'mlx_load_model') return undefined
+      if (command === 'mlx_chat_stream') {
+        args.onEvent.onmessage({
+          type: 'start',
+          model_id: 'test-model',
+          prompt_token_count: 1,
+        })
+        args.onEvent.onmessage({ type: 'delta', text: 'partial' })
+        args.onEvent.onmessage({
+          type: 'done',
+          prompt_token_count: 1,
+          output_token_count: 1,
+          finish_reason: 'cancelled',
+          elapsed_ms: 10,
+        })
+        return undefined
+      }
+      throw new Error(`unexpected command ${command}`)
+    })
+
+    const response = await createMlxIpcFetch()(
+      'http://localhost/v1/chat/completions',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          model: 'test-model',
+          stream: true,
+          messages: [{ role: 'user', content: 'hi' }],
+        }),
+      }
+    )
+
+    const reader = response.body!.getReader()
+    let sawError = false
+    try {
+      // Drain until the cancelled done event errors the stream.
+      for (let i = 0; i < 20; i++) {
+        const { done } = await reader.read()
+        if (done) break
+      }
+    } catch (e) {
+      sawError = true
+      expect(e).toMatchObject({ name: 'AbortError' })
+    }
+    // ReadableStream may surface cancel via controller.error as a read throw
+    // or as a failed body. Accept either form.
+    if (!sawError) {
+      await expect(response.text()).rejects.toBeTruthy()
+    }
+  })
+
   it('maps OpenAI chat params onto mlx_chat_completion IPC args', async () => {
     mocks.invoke.mockImplementation(async (command: string, args: any) => {
       if (command === 'mlx_load_model') {

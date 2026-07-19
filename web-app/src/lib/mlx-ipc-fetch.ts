@@ -32,7 +32,10 @@ import type { MetadataExtractor } from '@ai-sdk/openai-compatible'
 
 interface OpenAIChatMessage {
   role: string
-  content: string
+  /** OpenAI allows string | null | content-part arrays (vision / tool turns). */
+  content?: string | null | Array<Record<string, unknown> | string>
+  tool_calls?: unknown
+  name?: string
 }
 
 interface OpenAIChatRequest {
@@ -47,6 +50,95 @@ interface OpenAIChatRequest {
   frequency_penalty?: number
   seed?: number
   stop?: string | string[]
+}
+
+/** Wire shape sent to Rust `ChatMessage` (plain string content only). */
+interface MlxWireChatMessage {
+  role: string
+  content: string
+}
+
+/**
+ * Coerce AI SDK / OpenAI message shapes into the plain string content the
+ * MLX worker expects. Without this:
+ *  - tool-call assistant turns (`content: null`) fail serde permanently
+ *  - image attachment arrays fail serde permanently
+ */
+function sanitizeMessagesForMlx(
+  messages: OpenAIChatMessage[]
+): { messages: MlxWireChatMessage[]; rejectedReason?: string } {
+  const out: MlxWireChatMessage[] = []
+  for (const msg of messages) {
+    const role = typeof msg.role === 'string' ? msg.role : 'user'
+    const raw = msg.content
+
+    if (raw == null) {
+      // Tool-call turns often have content: null + tool_calls. Drop tool_calls
+      // (ax-engine has no tools wire yet) and send empty text.
+      out.push({ role, content: '' })
+      continue
+    }
+
+    if (typeof raw === 'string') {
+      out.push({ role, content: raw })
+      continue
+    }
+
+    if (Array.isArray(raw)) {
+      const texts: string[] = []
+      let sawImage = false
+      for (const part of raw) {
+        if (typeof part === 'string') {
+          texts.push(part)
+          continue
+        }
+        if (part && typeof part === 'object') {
+          const type = String((part as { type?: unknown }).type ?? 'text')
+          if (type === 'text' && typeof (part as { text?: unknown }).text === 'string') {
+            texts.push((part as { text: string }).text)
+          } else if (
+            type === 'image_url' ||
+            type === 'image' ||
+            type === 'file' ||
+            type === 'input_image'
+          ) {
+            sawImage = true
+          }
+        }
+      }
+      if (sawImage && texts.length === 0) {
+        return {
+          messages: [],
+          rejectedReason:
+            'AX Engine does not support image attachments yet. Remove images or use a different provider.',
+        }
+      }
+      if (sawImage) {
+        console.warn(
+          '[mlx-ipc-fetch] dropping image content parts (ax-engine multimodal not wired)'
+        )
+      }
+      out.push({ role, content: texts.join('\n') })
+      continue
+    }
+
+    out.push({ role, content: String(raw) })
+  }
+  return { messages: out }
+}
+
+/** Module-level mutex: at most one active MLX generation at a time. */
+let mlxRequestChain: Promise<unknown> = Promise.resolve()
+
+function withMlxRequestLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = mlxRequestChain.then(fn, fn)
+  // Keep the chain alive regardless of success/failure; swallow so a
+  // rejected request doesn't poison subsequent ones.
+  mlxRequestChain = run.then(
+    () => undefined,
+    () => undefined
+  )
+  return run
 }
 
 interface MlxGenerateParams {
@@ -386,13 +478,19 @@ export function createAxEngineMetadataExtractor(): MetadataExtractor {
 
 function toMlxParams(req: OpenAIChatRequest): MlxGenerateParams {
   const stop = typeof req.stop === 'string' ? [req.stop] : req.stop
+  // OpenAI frequency_penalty is [-2, 2]; MLX repetition_penalty is typically
+  // [1.0, ~2.0]. Map and clamp so we never send invalid values.
+  let repetition_penalty: number | undefined
+  if (req.frequency_penalty != null) {
+    const mapped = 1 + req.frequency_penalty
+    repetition_penalty = Math.min(2, Math.max(1, mapped))
+  }
   return {
     max_output_tokens: req.max_completion_tokens ?? req.max_tokens,
     temperature: req.temperature,
     top_p: req.top_p,
     top_k: req.top_k,
-    repetition_penalty:
-      req.frequency_penalty != null ? 1 + req.frequency_penalty : undefined,
+    repetition_penalty,
     seed: req.seed,
     stop,
   }
@@ -414,7 +512,7 @@ function nonStreamResponse(result: MlxChatCompletion): Response {
  */
 function streamingResponse(
   modelId: string,
-  messages: OpenAIChatMessage[],
+  messages: MlxWireChatMessage[],
   params: MlxGenerateParams,
   signal?: AbortSignal
 ): Response {
@@ -438,156 +536,186 @@ function streamingResponse(
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const channel = new Channel<StreamEvent>()
+      await withMlxRequestLock(async () => {
+        const channel = new Channel<StreamEvent>()
 
-      let firstDeltaSent = false
-      let lastErr: string | null = null
-      let streamClosed = false
+        let firstDeltaSent = false
+        let lastErr: string | null = null
+        let streamClosed = false
+        let wasCancelled = false
 
-      // Wrap controller writes so we silently no-op if the stream has been
-      // closed (e.g. the user navigated away mid-generation). Without this
-      // guard a pending setTimeout could call enqueue() on a closed
-      // controller and throw.
-      const safeEnqueue = (bytes: Uint8Array) => {
-        if (streamClosed) return
-        try {
-          controller.enqueue(bytes)
-        } catch {
-          streamClosed = true
-        }
-      }
-      const safeClose = () => {
-        if (streamClosed) return
-        streamClosed = true
-        try {
-          controller.close()
-        } catch {
-          /* already closed */
-        }
-      }
-      const safeError = (error: unknown) => {
-        if (streamClosed) return
-        streamClosed = true
-        try {
-          controller.error(error)
-        } catch {
-          /* already closed */
-        }
-      }
-      const handleAbort = () => {
-        safeError(new DOMException('The operation was aborted.', 'AbortError'))
-        void cancelNativeStream()
-      }
-
-      if (signal?.aborted) {
-        handleAbort()
-        return
-      }
-      signal?.addEventListener('abort', handleAbort, { once: true })
-
-      const enqueueChunk = (
-        delta: { role?: string; content?: string },
-        finish_reason: string | null
-      ) => {
-        const chunk = {
-          id,
-          object: 'chat.completion.chunk',
-          created,
-          model: modelId,
-          choices: [{ index: 0, delta, finish_reason }],
-        }
-        safeEnqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`))
-      }
-
-      channel.onmessage = (evt) => {
-        try {
-          if (evt.type === 'start') {
-            // Send a role-only opening chunk to match OpenAI's SSE shape.
-            enqueueChunk({ role: 'assistant' }, null)
-            firstDeltaSent = true
-          } else if (evt.type === 'delta') {
-            if (!firstDeltaSent) {
-              enqueueChunk({ role: 'assistant' }, null)
-              firstDeltaSent = true
-            }
-            if (evt.text.length > 0) {
-              enqueueChunk({ content: evt.text }, null)
-            }
-          } else if (evt.type === 'done') {
-            nativeStreamFinished = true
-            if (!firstDeltaSent) {
-              enqueueChunk({ role: 'assistant' }, null)
-              firstDeltaSent = true
-            }
-
-            const finalChunk = {
-              id,
-              object: 'chat.completion.chunk',
-              created,
-              model: modelId,
-              choices: [
-                { index: 0, delta: {}, finish_reason: evt.finish_reason },
-              ],
-              usage: {
-                prompt_tokens: evt.prompt_token_count,
-                completion_tokens: evt.output_token_count,
-                total_tokens: evt.prompt_token_count + evt.output_token_count,
-              },
-              ax_engine_metrics: {
-                elapsed_ms: evt.elapsed_ms,
-                output_token_count: evt.output_token_count,
-                generation_kind:
-                  evt.performance?.generation_kind ??
-                  (isDiffusionGemmaModelId(modelId)
-                    ? 'block_diffusion'
-                    : 'autoregressive'),
-                performance: evt.performance,
-              },
-            }
-
-            safeEnqueue(
-              encoder.encode(`data: ${JSON.stringify(finalChunk)}\n\n`)
-            )
-            safeEnqueue(encoder.encode('data: [DONE]\n\n'))
-            safeClose()
-          } else if (evt.type === 'error') {
-            lastErr = evt.message
-            // Don't close yet — the `done` event should still arrive from the
-            // worker. If it doesn't, the invoke() rejection below handles it.
-          }
-        } catch (e) {
-          if (!streamClosed) {
-            controller.error(e)
+        // Wrap controller writes so we silently no-op if the stream has been
+        // closed (e.g. the user navigated away mid-generation). Without this
+        // guard a pending setTimeout could call enqueue() on a closed
+        // controller and throw.
+        const safeEnqueue = (bytes: Uint8Array) => {
+          if (streamClosed) return
+          try {
+            controller.enqueue(bytes)
+          } catch {
             streamClosed = true
           }
         }
-      }
-
-      try {
-        // Idempotent — Rust resolves the HF cache snapshot from modelId.
-        await invoke('mlx_load_model', { modelId })
-        if (cancellationRequested || signal?.aborted) return
-
-        nativeStreamStarted = true
-        const nativeStream = invoke('mlx_chat_stream', {
-          requestId: id,
-          modelId,
-          messages,
-          params,
-          onEvent: channel,
-        })
-        if (cancellationRequested || signal?.aborted) {
+        const safeClose = () => {
+          if (streamClosed) return
+          streamClosed = true
+          try {
+            controller.close()
+          } catch {
+            /* already closed */
+          }
+        }
+        const safeError = (error: unknown) => {
+          if (streamClosed) return
+          streamClosed = true
+          try {
+            controller.error(error)
+          } catch {
+            /* already closed */
+          }
+        }
+        const handleAbort = () => {
+          wasCancelled = true
+          safeError(new DOMException('The operation was aborted.', 'AbortError'))
           void cancelNativeStream()
         }
-        await nativeStream
-        nativeStreamFinished = true
-      } catch (e) {
-        if (lastErr == null)
-          lastErr = e instanceof Error ? e.message : String(e)
-        safeError(new Error(`[mlx-ipc-fetch] ${lastErr}`))
-      } finally {
-        signal?.removeEventListener('abort', handleAbort)
-      }
+
+        if (signal?.aborted) {
+          handleAbort()
+          return
+        }
+        signal?.addEventListener('abort', handleAbort, { once: true })
+
+        const enqueueChunk = (
+          delta: { role?: string; content?: string },
+          finish_reason: string | null
+        ) => {
+          const chunk = {
+            id,
+            object: 'chat.completion.chunk',
+            created,
+            model: modelId,
+            choices: [{ index: 0, delta, finish_reason }],
+          }
+          safeEnqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`))
+        }
+
+        channel.onmessage = (evt) => {
+          try {
+            if (evt.type === 'start') {
+              // Send a role-only opening chunk to match OpenAI's SSE shape.
+              enqueueChunk({ role: 'assistant' }, null)
+              firstDeltaSent = true
+            } else if (evt.type === 'delta') {
+              if (!firstDeltaSent) {
+                enqueueChunk({ role: 'assistant' }, null)
+                firstDeltaSent = true
+              }
+              if (evt.text.length > 0) {
+                enqueueChunk({ content: evt.text }, null)
+              }
+            } else if (evt.type === 'done') {
+              nativeStreamFinished = true
+              // Preempted / cancelled streams must not be persisted as
+              // complete answers (AX-C1). Surface as AbortError so the AI SDK
+              // marks the message aborted rather than finalized.
+              if (evt.finish_reason === 'cancelled' || wasCancelled) {
+                safeError(
+                  new DOMException('The operation was aborted.', 'AbortError')
+                )
+                return
+              }
+              if (!firstDeltaSent) {
+                enqueueChunk({ role: 'assistant' }, null)
+                firstDeltaSent = true
+              }
+
+              const finalChunk = {
+                id,
+                object: 'chat.completion.chunk',
+                created,
+                model: modelId,
+                choices: [
+                  { index: 0, delta: {}, finish_reason: evt.finish_reason },
+                ],
+                usage: {
+                  prompt_tokens: evt.prompt_token_count,
+                  completion_tokens: evt.output_token_count,
+                  total_tokens: evt.prompt_token_count + evt.output_token_count,
+                },
+                ax_engine_metrics: {
+                  elapsed_ms: evt.elapsed_ms,
+                  output_token_count: evt.output_token_count,
+                  generation_kind:
+                    evt.performance?.generation_kind ??
+                    (isDiffusionGemmaModelId(modelId)
+                      ? 'block_diffusion'
+                      : 'autoregressive'),
+                  performance: evt.performance,
+                },
+              }
+
+              safeEnqueue(
+                encoder.encode(`data: ${JSON.stringify(finalChunk)}\n\n`)
+              )
+              safeEnqueue(encoder.encode('data: [DONE]\n\n'))
+              safeClose()
+            } else if (evt.type === 'error') {
+              lastErr = evt.message
+              // Don't close yet — the `done` event should still arrive from the
+              // worker. If it doesn't, the invoke() rejection below handles it.
+            }
+          } catch (e) {
+            if (!streamClosed) {
+              controller.error(e)
+              streamClosed = true
+            }
+          }
+        }
+
+        try {
+          // Idempotent — Rust resolves the HF cache snapshot from modelId.
+          // With the residency check in load(), this no longer cancels
+          // in-flight streams for the same model.
+          await invoke('mlx_load_model', { modelId })
+          if (cancellationRequested || signal?.aborted) return
+
+          nativeStreamStarted = true
+          const nativeStream = invoke('mlx_chat_stream', {
+            requestId: id,
+            modelId,
+            messages,
+            params,
+            onEvent: channel,
+          })
+          if (cancellationRequested || signal?.aborted) {
+            void cancelNativeStream()
+          }
+          await nativeStream
+          nativeStreamFinished = true
+          // Defensive: if the channel never delivered `done`, close so the UI
+          // does not hang on "thinking" forever.
+          if (!streamClosed) {
+            safeClose()
+          }
+        } catch (e) {
+          if (lastErr == null)
+            lastErr = e instanceof Error ? e.message : String(e)
+          // AbortError must stay typed so the SDK treats it as cancellation.
+          if (
+            (e instanceof DOMException && e.name === 'AbortError') ||
+            wasCancelled
+          ) {
+            safeError(
+              new DOMException('The operation was aborted.', 'AbortError')
+            )
+          } else {
+            safeError(new Error(`[mlx-ipc-fetch] ${lastErr}`))
+          }
+        } finally {
+          signal?.removeEventListener('abort', handleAbort)
+        }
+      })
     },
     async cancel() {
       await cancelNativeStream()
@@ -645,7 +773,15 @@ export function createMlxIpcFetch(): typeof fetch {
     }
 
     const modelId = parsed.model
-    const messages = parsed.messages ?? []
+    const { messages, rejectedReason } = sanitizeMessagesForMlx(
+      parsed.messages ?? []
+    )
+    if (rejectedReason) {
+      return new Response(JSON.stringify({ error: rejectedReason }), {
+        status: 400,
+        headers: JSON_HEADERS,
+      })
+    }
     const params = toMlxParams(parsed)
     const signal = init?.signal ?? request?.signal
 
@@ -658,14 +794,22 @@ export function createMlxIpcFetch(): typeof fetch {
     }
 
     try {
-      await invoke('mlx_load_model', { modelId })
-      const result = await invoke<MlxChatCompletion>('mlx_chat_completion', {
-        modelId,
-        messages,
-        params,
+      return await withMlxRequestLock(async () => {
+        await invoke('mlx_load_model', { modelId })
+        if (signal?.aborted) {
+          throw new DOMException('The operation was aborted.', 'AbortError')
+        }
+        const result = await invoke<MlxChatCompletion>('mlx_chat_completion', {
+          modelId,
+          messages,
+          params,
+        })
+        return nonStreamResponse(result)
       })
-      return nonStreamResponse(result)
     } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        throw e
+      }
       const message = e instanceof Error ? e.message : String(e)
       return new Response(
         JSON.stringify({ error: `[mlx-ipc-fetch] ${message}` }),
