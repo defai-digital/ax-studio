@@ -18,7 +18,8 @@ export function sanitizeRouterUntrustedText(
   maxChars = ROUTER_UNTRUSTED_TEXT_MAX_CHARS
 ): string {
   const normalized = text
-    .replace(/\u0000/g, '')
+    .split('\u0000')
+    .join('')
     // Prevent early fence closure: """ is the delimiter used below.
     .replace(/"{3,}/g, '""')
     // Neutralize common instruction-injection markers without changing meaning much.

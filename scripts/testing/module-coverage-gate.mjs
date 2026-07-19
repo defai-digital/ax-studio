@@ -7,7 +7,7 @@
  *
  * Usage:
  *   node scripts/testing/module-coverage-gate.mjs \
- *     --audit report/testing/module-coverage-audit.json \
+ *     --audit .internal/reports/testing/module-coverage-audit.json \
  *     --thresholds scripts/testing/module-thresholds.json \
  *     --mode advisory
  */
@@ -156,7 +156,7 @@ function parseCliArgs(argv) {
     options: {
       audit: {
         type: 'string',
-        default: 'report/testing/module-coverage-audit.json',
+        default: '.internal/reports/testing/module-coverage-audit.json',
       },
       thresholds: {
         type: 'string',

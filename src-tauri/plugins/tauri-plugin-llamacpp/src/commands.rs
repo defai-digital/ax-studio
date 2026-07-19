@@ -14,8 +14,8 @@ use crate::args::{ArgumentBuilder, AxServingArgumentBuilder, LlamacppConfig};
 use crate::device::{get_devices_from_backend, DeviceInfo};
 use crate::error::{ErrorCode, LlamacppError, ServerError, ServerResult};
 use crate::path::{
-    is_dangerous_process_env_key, validate_binary_path, validate_mmproj_path,
-    validate_model_path, validate_path_within_roots,
+    is_dangerous_process_env_key, validate_binary_path, validate_mmproj_path, validate_model_path,
+    validate_path_within_roots,
 };
 use crate::process::{
     find_session_by_model_id, get_all_active_sessions, get_all_loaded_model_ids,
@@ -126,11 +126,7 @@ pub async fn load_llama_model<R: Runtime>(
     } else {
         &["llama-server", "llama-server.exe"]
     };
-    let bin_path = validate_binary_path(
-        backend_path,
-        &trusted_roots,
-        allowed_binary_names,
-    )?;
+    let bin_path = validate_binary_path(backend_path, &trusted_roots, allowed_binary_names)?;
 
     // Build arguments and env vars depending on engine type
     let (mut args, merged_envs, api_key) = if is_ax_serving {
@@ -188,11 +184,7 @@ pub async fn load_llama_model<R: Runtime>(
         let mmproj_path_pb = validate_mmproj_path(&mut args)?;
 
         if let Some(ref mmproj_path) = mmproj_path_pb {
-            validate_path_within_roots(
-                mmproj_path,
-                &state.trusted_model_roots(),
-                "mmproj",
-            )?;
+            validate_path_within_roots(mmproj_path, &state.trusted_model_roots(), "mmproj")?;
         }
 
         let mmproj_path_string = if let Some(ref _mmproj_pb) = mmproj_path_pb {
@@ -610,8 +602,7 @@ pub async fn start_ax_serving<R: Runtime>(
     let mut command = Command::new(&bin_path);
     command.args(&args);
     command.envs(
-        envs
-            .iter()
+        envs.iter()
             .filter(|(key, _)| !is_dangerous_process_env_key(key)),
     );
     command.stdout(Stdio::piped());

@@ -88,7 +88,7 @@ open -a "AX Studio"
 Already have Homebrew? Start from step 2. The `brew trust` command supports
 Homebrew setups that require explicit trust for third-party taps.
 
-![Install AX Studio with Homebrew](docs/images/install-homebrew-ax-studio.gif)
+![Install AX Studio with Homebrew](assets/install-homebrew-ax-studio.gif)
 
 The Homebrew cask is the fastest install path for supported Macs. Manual
 downloads are available from GitHub Releases if you prefer not to use Homebrew.
@@ -127,8 +127,8 @@ All release assets are published on the
 [AX Studio releases page](https://github.com/defai-digital/ax-studio/releases).
 Every stable release asset includes a detached `.minisig` signature. The
 verification key and command are documented in
-[`docs/ax-studio.minisign.pub`](docs/ax-studio.minisign.pub) and
-[`docs/release.md`](docs/release.md).
+[`scripts/release/ax-studio.minisign.pub`](scripts/release/ax-studio.minisign.pub) and
+[`scripts/release/release.md`](scripts/release/release.md).
 
 The `curl -fsSL` command above is only Homebrew's official bootstrap command;
 it is not an AX Studio download or integrity check. Do not install AX Studio
@@ -323,9 +323,7 @@ plane.
 
 ## Runtime Architecture
 
-![AX Studio runtime architecture](docs/images/ax-studio-runtime.png)
-
-Source: [docs/ax-studio-runtime.mmd](docs/ax-studio-runtime.mmd)
+![AX Studio runtime architecture](assets/ax-studio-runtime.png)
 
 The important distinction is that AX Studio has a native control layer around
 the chat experience:
@@ -476,7 +474,7 @@ depends on the selected provider, MCP server, and local runtime.
 - Provider keys and sensitive settings should be treated as local secrets.
 - The local API binds to localhost by default.
 
-For packaging and release controls, see [docs/release.md](docs/release.md).
+For packaging and release controls, see [scripts/release/release.md](scripts/release/release.md).
 
 ## Developer Setup
 
@@ -569,20 +567,20 @@ Production desktop builds do not open the Vite ports.
 | `extensions/` | Bundled assistant, conversation, download, and local-inference extensions |
 | `src-tauri/` | Rust Tauri host, IPC commands, MCP, downloads, local API, native capabilities |
 | `src-tauri/plugins/` | Native Rust plugins for hardware telemetry and local inference |
-| `docs/` | Architecture notes, conventions, release docs, PRDs, ADR-style drafts |
+| `assets/` | README images and other static assets |
 | `scripts/` | Build, release, test, and quality-gate utilities |
+| `privacy.md` / `terms.md` | Public privacy notice and terms of use |
+| `.internal/` | Local design docs (gitignored): PRDs, ADRs, active specs |
 
 For contribution rules, start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Documentation
 
 - [Contributing](CONTRIBUTING.md)
-- [Frontend and backend conventions](docs/CONVENTIONS.md)
-- [Release deployment](docs/release.md)
-- [Release checklist](docs/release-checklist.md)
-- [Runtime architecture source](docs/ax-studio-runtime.mmd)
-- [Deep research engine notes](docs/DEEP_RESEARCH_ENGINE.md)
-- [Integration notes](docs/Integrations.md)
+- [Release deployment](scripts/release/release.md)
+- [Release checklist](scripts/release/release-checklist.md)
+- [Microsoft Store packaging](scripts/release/microsoft-store.md)
+- [Privacy](privacy.md) · [Terms](terms.md)
 
 ## Community
 

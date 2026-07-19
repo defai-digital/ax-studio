@@ -6,7 +6,7 @@
  * produces a per-module breakdown JSON file consumed by module-coverage-gate.mjs.
  *
  * Usage:
- *   node scripts/testing/module-coverage-audit.mjs --out-dir report/testing
+ *   node scripts/testing/module-coverage-audit.mjs --out-dir .internal/reports/testing
  */
 
 import fs from 'fs'
@@ -16,7 +16,7 @@ import { parseArgs } from 'util'
 const { values } = parseArgs({
   args: process.argv.slice(2),
   options: {
-    'out-dir': { type: 'string', default: 'report/testing' },
+    'out-dir': { type: 'string', default: '.internal/reports/testing' },
     'coverage-file': { type: 'string', default: 'coverage/coverage-summary.json' },
   },
 })

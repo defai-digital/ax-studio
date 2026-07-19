@@ -59,12 +59,12 @@ secrets before publishing:
 | `AX_STUDIO_MINISIGN_PASSWORD` | Password for the encrypted Minisign secret key. |
 
 The matching public verification key is committed at
-[`docs/ax-studio.minisign.pub`](ax-studio.minisign.pub). Verify a downloaded
+[`scripts/release/ax-studio.minisign.pub`](ax-studio.minisign.pub). Verify a downloaded
 asset with:
 
 ```bash
 minisign -Vm AX.Studio_2.0.0_aarch64.dmg \
-  -p docs/ax-studio.minisign.pub \
+  -p scripts/release/ax-studio.minisign.pub \
   -x AX.Studio_2.0.0_aarch64.dmg.minisig
 ```
 
@@ -173,7 +173,7 @@ builds macOS Apple Silicon, Windows x64, and Windows ARM64 in parallel. It then:
    DEFAI certificate thumbprint, subject, and trusted timestamp.
 3. Writes and validates `latest.json` for Tauri updater delivery.
 4. Signs every release asset with Minisign, downloads the signatures again,
-   and verifies them with `docs/ax-studio.minisign.pub`.
+   and verifies them with `scripts/release/ax-studio.minisign.pub`.
 5. Publishes the GitHub release only after all artifact checks pass.
 6. Updates `defai-digital/homebrew-ax-studio`, installs the new cask on a clean
    macOS runner, and verifies the installed application with Gatekeeper.

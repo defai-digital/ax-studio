@@ -76,8 +76,8 @@ Include this live-AI disclosure or equivalent approved wording:
 
 Partner Center fields:
 
-- Privacy policy: the approved public version of `docs/privacy.md`.
-- License terms: the approved public version of `docs/terms.md`.
+- Privacy policy: the approved public version of `privacy.md`.
+- License terms: the approved public version of `terms.md`.
 - Support: `https://github.com/defai-digital/ax-studio/issues/new/choose` or an
   approved company support portal.
 - AI-content reporting: the in-app link and GitHub issue form provided by this

@@ -16,11 +16,10 @@ core/lib/**
 test_results.html
 pre-install
 *.md
-!docs/microsoft-store.md
-!docs/privacy.md
-!docs/terms.md
-# docs
-docs/yarn.lock
+!privacy.md
+!terms.md
+!scripts/release/*.md
+!scripts/release/ax-studio.minisign.pub
 src-tauri/resources/lib
 src-tauri/icons
 !src-tauri/icons/icon.png
@@ -92,7 +91,7 @@ agent-teams/
 # IDE
 .idea/
 
-# Generated reports
+# Generated reports (canonical location: .internal/reports/, already under /.internal/)
 report/
 outputs/
 /.scannerwork/

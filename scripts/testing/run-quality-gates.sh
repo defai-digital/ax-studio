@@ -29,14 +29,14 @@ echo "--- Step 1: Run tests with coverage ---"
 # 2. Generate per-module audit from coverage output
 echo ""
 echo "--- Step 2: Module coverage audit ---"
-node scripts/testing/module-coverage-audit.mjs --out-dir report/testing
+node scripts/testing/module-coverage-audit.mjs --out-dir .internal/reports/testing
 
 # 3. Enforce thresholds
 echo ""
 echo "--- Step 3: Coverage gate ---"
 MODE="${COVERAGE_GATE_MODE:-blocking}"
 node scripts/testing/module-coverage-gate.mjs \
-  --audit report/testing/module-coverage-audit.json \
+  --audit .internal/reports/testing/module-coverage-audit.json \
   --thresholds scripts/testing/module-thresholds.json \
   --mode "$MODE"
 

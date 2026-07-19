@@ -151,8 +151,8 @@ pub async fn modify_thread<R: Runtime>(
 
     let path = get_thread_metadata_path(app_handle.clone(), thread_id);
     tokio::task::spawn_blocking(move || update_thread_metadata(&path, &thread))
-    .await
-    .map_err(|e| format!("modify_thread task error: {e}"))??;
+        .await
+        .map_err(|e| format!("modify_thread task error: {e}"))??;
     Ok(())
 }
 
@@ -342,10 +342,7 @@ pub async fn modify_messages<R: Runtime>(
             }
 
             rewrite_messages_file(&messages_path, |existing| {
-                replacements
-                    .get(&existing.id)
-                    .cloned()
-                    .or(Some(existing))
+                replacements.get(&existing.id).cloned().or(Some(existing))
             })?;
             Ok(())
         })

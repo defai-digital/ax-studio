@@ -29,6 +29,13 @@ describe('assertSafeExternalUrl', () => {
     ).toThrow(/credentials/)
   })
 
+  it.each(['https://example.com/\u0000path', 'https://example.com/\u001fpath'])(
+    'rejects control characters in %s',
+    (url) => {
+      expect(() => assertSafeExternalUrl(url)).toThrow(/control characters/)
+    }
+  )
+
   it('rejects empty or relative values', () => {
     expect(() => assertSafeExternalUrl('')).toThrow(/empty/)
     expect(() => assertSafeExternalUrl('/relative')).toThrow(/malformed|absolute/)

@@ -57,6 +57,16 @@ export type ExtensionManifest = {
   extensionInstance?: BaseExtension // For web extensions
 }
 
+function containsControlCharacter(value: string): boolean {
+  return [...value].some((character) => {
+    const codePoint = character.codePointAt(0)
+    return (
+      codePoint !== undefined &&
+      (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f))
+    )
+  })
+}
+
 /** Resolve an extension entry only when it stays inside the managed directory. */
 export function resolveLocalExtensionPath(
   extensionUrl: string,
@@ -64,7 +74,7 @@ export function resolveLocalExtensionPath(
 ): string {
   const raw = extensionUrl.trim().normalize('NFKC')
   const root = extensionsPath.replace(/\\/g, '/').replace(/\/+$/, '')
-  if (!raw || !root || /[\0\x00-\x1F\x7F-\x9F]/.test(raw)) {
+  if (!raw || !root || containsControlCharacter(raw)) {
     throw new Error('Invalid extension entry path')
   }
   if (/^[a-z][a-z\d+.-]*:/i.test(raw) && !/^[a-z]:[\\/]/i.test(raw)) {
