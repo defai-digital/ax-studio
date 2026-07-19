@@ -74,6 +74,16 @@ const mockCheckForUpdate = vi.fn()
 vi.mock('@/hooks/updater/useAppUpdater', () => ({
   useAppUpdater: () => ({
     checkForUpdate: mockCheckForUpdate,
+    updateState: {
+      isUpdateAvailable: false,
+      updateInfo: null,
+      isDownloading: false,
+      downloadProgress: 0,
+      downloadedBytes: 0,
+      totalBytes: 0,
+      remindMeLater: false,
+      installChannel: 'standalone',
+    },
   }),
 }))
 
@@ -268,6 +278,9 @@ vi.mock('@/hooks/useServiceHub', () => ({
     }),
     opener: () => ({
       revealItemInDir: vi.fn(),
+    }),
+    updater: () => ({
+      getInstallChannel: vi.fn().mockResolvedValue('standalone'),
     }),
   }),
 }))

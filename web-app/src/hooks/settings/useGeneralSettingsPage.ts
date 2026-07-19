@@ -15,7 +15,7 @@ const TOKEN_VALIDATION_TIMEOUT_MS = 10_000
 export function useGeneralSettingsPage() {
   const { t } = useTranslation()
   const serviceHub = useServiceHub()
-  const { checkForUpdate } = useAppUpdater()
+  const { checkForUpdate, updateState } = useAppUpdater()
   const { pausePolling } = useHardware()
   const { huggingfaceToken } = useGeneralSetting()
 
@@ -38,6 +38,33 @@ export function useGeneralSettingsPage() {
       tokenValidationAbortRef.current = null
     }
   }, [])
+
+  const [installChannel, setInstallChannel] = useState(
+    updateState.installChannel
+  )
+
+  // Resolve install channel early so Settings can show Homebrew vs standalone
+  // without running a full update check.
+  useEffect(() => {
+    if (isDev()) return
+    let cancelled = false
+    void serviceHub
+      .updater()
+      .getInstallChannel()
+      .then((channel) => {
+        if (!cancelled) setInstallChannel(channel)
+      })
+      .catch(() => {
+        // Non-fatal; UI falls back to standalone copy.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [serviceHub])
+
+  useEffect(() => {
+    setInstallChannel(updateState.installChannel)
+  }, [updateState.installChannel])
 
   useEffect(() => {
     let cancelled = false
@@ -130,7 +157,23 @@ export function useGeneralSettingsPage() {
       const update = await checkForUpdate(true)
       if (!mountedRef.current) return
 
-      if (!update) toast.info(t('settings:general.noUpdateAvailable'))
+      if (!update) {
+        toast.info(t('settings:general.noUpdateAvailable'))
+        return
+      }
+
+      // Homebrew installs must not use in-app binary replace; surface CLI path.
+      let channel = updateState.installChannel
+      try {
+        channel = await serviceHub.updater().getInstallChannel()
+      } catch {
+        // keep state
+      }
+      if (channel === 'homebrew') {
+        toast.info(t('settings:general.homebrewUpdateAvailable'), {
+          description: t('settings:general.homebrewUpdateAvailableDesc'),
+        })
+      }
     } catch (error) {
       if (!mountedRef.current) return
 
@@ -141,7 +184,7 @@ export function useGeneralSettingsPage() {
         setIsCheckingUpdate(false)
       }
     }
-  }, [t, checkForUpdate])
+  }, [t, checkForUpdate, serviceHub, updateState.installChannel])
 
   const resetApp = async () => {
     if (isRootDir(appDataFolder ?? '/')) {
@@ -258,6 +301,7 @@ export function useGeneralSettingsPage() {
     isCheckingUpdate,
     isValidatingToken,
     isResetting,
+    installChannel,
     openFileTitle,
     copyToClipboard,
     handleDataFolderChange,

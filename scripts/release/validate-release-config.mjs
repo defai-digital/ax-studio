@@ -262,6 +262,15 @@ if (!fs.existsSync(path.join(repoRoot, windowsCertPath))) {
   if (!releaseWorkflow.includes('SHA256SUMS-windows.txt')) {
     fail('release workflow must publish SHA256SUMS-windows.txt')
   }
+  if (!releaseWorkflow.includes('submit-winget-manifest:')) {
+    fail('release workflow must define optional submit-winget-manifest job')
+  }
+  if (!releaseWorkflow.includes('submit-winget-pr.mjs')) {
+    fail('release workflow must call scripts/release/submit-winget-pr.mjs')
+  }
+  if (!releaseWorkflow.includes('WINGET_PKGS_TOKEN')) {
+    fail('release workflow must gate winget submit on WINGET_PKGS_TOKEN')
+  }
 
   const storeWorkflow = fs.readFileSync(
     path.join(repoRoot, '.github/workflows/ax-studio-microsoft-store-build.yml'),
@@ -271,9 +280,27 @@ if (!fs.existsSync(path.join(repoRoot, windowsCertPath))) {
     fail('Microsoft Store workflow must call scripts/release/verify-windows-authenticode.ps1')
   }
 
+  const certExpiryWorkflowPath = '.github/workflows/windows-cert-expiry.yml'
+  if (!fs.existsSync(path.join(repoRoot, certExpiryWorkflowPath))) {
+    fail(`${certExpiryWorkflowPath} is required for scheduled cert expiry checks`)
+  } else {
+    const certExpiryWorkflow = fs.readFileSync(
+      path.join(repoRoot, certExpiryWorkflowPath),
+      'utf8',
+    )
+    if (!certExpiryWorkflow.includes('validate-release-config.mjs')) {
+      fail(`${certExpiryWorkflowPath} must run validate-release-config.mjs`)
+    }
+    if (!certExpiryWorkflow.includes('schedule:')) {
+      fail(`${certExpiryWorkflowPath} must run on a schedule`)
+    }
+  }
+
   for (const scriptPath of [
     'scripts/release/write-winget-manifest.mjs',
     'scripts/release/prepare-windows-distribution.mjs',
+    'scripts/release/submit-winget-pr.mjs',
+    'scripts/release/windows-cert-expiry.mjs',
   ]) {
     if (!fs.existsSync(path.join(repoRoot, scriptPath))) {
       fail(`${scriptPath} is required for Windows distribution packaging`)

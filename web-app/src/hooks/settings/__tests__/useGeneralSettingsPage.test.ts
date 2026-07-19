@@ -5,6 +5,7 @@ import { useGeneralSettingsPage } from '../useGeneralSettingsPage'
 
 const mocks = vi.hoisted(() => ({
   checkForUpdate: vi.fn(),
+  getInstallChannel: vi.fn(),
   getAppDataFolder: vi.fn(),
   generalSettingState: {
     huggingfaceToken: '',
@@ -12,6 +13,16 @@ const mocks = vi.hoisted(() => ({
   isDev: vi.fn(),
   pausePolling: vi.fn(),
   writeText: vi.fn(),
+  updateState: {
+    isUpdateAvailable: false,
+    updateInfo: null,
+    isDownloading: false,
+    downloadProgress: 0,
+    downloadedBytes: 0,
+    totalBytes: 0,
+    remindMeLater: false,
+    installChannel: 'standalone' as const,
+  },
 }))
 
 vi.mock('@/i18n/react-i18next-compat', () => ({
@@ -40,6 +51,9 @@ vi.mock('@/hooks/useServiceHub', () => ({
     opener: () => ({
       revealItemInDir: vi.fn().mockResolvedValue(undefined),
     }),
+    updater: () => ({
+      getInstallChannel: mocks.getInstallChannel,
+    }),
     window: () => ({
       openLogsWindow: vi.fn().mockResolvedValue(undefined),
     }),
@@ -49,6 +63,7 @@ vi.mock('@/hooks/useServiceHub', () => ({
 vi.mock('@/hooks/updater/useAppUpdater', () => ({
   useAppUpdater: () => ({
     checkForUpdate: mocks.checkForUpdate,
+    updateState: mocks.updateState,
   }),
 }))
 
@@ -85,6 +100,8 @@ describe('useGeneralSettingsPage', () => {
     vi.useFakeTimers()
     vi.clearAllMocks()
     mocks.generalSettingState.huggingfaceToken = ''
+    mocks.updateState.installChannel = 'standalone'
+    mocks.getInstallChannel.mockResolvedValue('standalone')
     mocks.getAppDataFolder.mockReturnValue(new Promise<string>(() => {}))
     mocks.isDev.mockReturnValue(false)
     mocks.writeText.mockResolvedValue(undefined)
@@ -204,6 +221,24 @@ describe('useGeneralSettingsPage', () => {
     expect(validationSignal?.aborted).toBe(true)
     expect(toast.error).not.toHaveBeenCalled()
     expect(toast.success).not.toHaveBeenCalled()
+  })
+
+  it('surfaces Homebrew upgrade instructions when an update is available', async () => {
+    mocks.checkForUpdate.mockResolvedValue({ version: '9.9.9' })
+    mocks.getInstallChannel.mockResolvedValue('homebrew')
+
+    const { result } = renderHook(() => useGeneralSettingsPage())
+
+    await act(async () => {
+      await result.current.handleCheckForUpdate()
+    })
+
+    expect(toast.info).toHaveBeenCalledWith(
+      'settings:general.homebrewUpdateAvailable',
+      expect.objectContaining({
+        description: 'settings:general.homebrewUpdateAvailableDesc',
+      })
+    )
   })
 
   it('ignores update check completion after unmount', async () => {
