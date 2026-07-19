@@ -2,31 +2,35 @@
 
 | 欄位 | 內容 |
 |---|---|
-| 狀態 | Accepted |
-| 日期 | 2026-07-14 |
-| 決策 Owner | AX Studio／AX BI |
-| PRD | ../prd/PRD-AX-STUDIO-AX-BI-DELEGATION.md |
-| 技術規格 | ../specs/TECH-SPEC-AX-STUDIO-AX-BI-DELEGATION.md |
+| Status | **Accepted** — Phase 1 **implemented** |
+| Date | 2026-07-14 |
+| Owners | AX Studio / AX BI |
+| Implementation | `web-app/src/lib/ax-bi/authoring-workflow.ts`, `authoring-client.ts`, MCP high-level tools |
+| PRD | [../prd/PRD-AX-STUDIO-AX-BI-DELEGATION.md](../prd/PRD-AX-STUDIO-AX-BI-DELEGATION.md) |
+| Tech Spec | [../specs/TECH-SPEC-AX-STUDIO-AX-BI-DELEGATION.md](../specs/TECH-SPEC-AX-STUDIO-AX-BI-DELEGATION.md) (historical Phase 1 notes) |
+| Supersedes | none |
 
 ## Context
 
-AX Studio 是 local-first AI workspace，核心職責是 chat、models、providers、MCP、memory、knowledge、projects、local execution 與 artifact presentation。AX BI 是獨立的資料視覺化與 GenAI BI 平台，擁有資料集、semantic metadata、chart、dashboard、RBAC、RLS、lineage 與 validation。
+AX Studio is a local-first AI workspace (chat, models, providers, MCP, memory, knowledge, projects, local execution, artifact presentation). AX BI is a separate GenAI BI platform (datasets, semantic metadata, charts, dashboards, RBAC/RLS, lineage, validation).
 
-兩個產品的現有邊界不一致：AX BI 已提供 `create_chart_from_intent`、`plan_dashboard`、`prompt_to_dashboard` 與 `upload_and_plan`，但 AX Studio 仍在 frontend 內維護一套大型圖表與儀表板產生器。這使 AX Studio 依賴 AX BI 的內部 chart schema，而不是穩定的產品 contract。
+**Historical problem (pre–Phase 1):** AX BI already exposed high-level tools such as `create_chart_from_intent`, `plan_dashboard`, `prompt_to_dashboard`, and `upload_and_plan`, while AX Studio still owned a large in-app chart/dashboard generator. That duplicated domain logic and coupled Studio to internal BI chart schemas.
+
+**Current state (post–Phase 1):** Studio delegates authoring through a thin MCP-based adapter. There is no local `dashboard-workflow` generator; Studio must not reintroduce BI domain compilation in the client.
 
 ## Decision
 
-採用單一 Owner 架構：
+Single-owner architecture:
 
-- AX BI 是所有 BI chart／dashboard authoring 的 authority。
-- AX Studio 是 authoring client、control surface 與結果 presenter。
-- AX Studio 不建立 chart config、metric expression、dataset-column mapping 或 dashboard layout。
-- 第一階段透過 AX BI MCP 高階工具委派。
-- 未來 deterministic UI 可使用 typed REST／SDK adapter，但 MCP、REST 與 SDK 必須呼叫同一個 AX BI application service。
-- AX Studio 保留通用 artifact rendering；這不代表它擁有 BI authoring。
-- AX BI 不可用時 fail explicitly，不建立 hidden local fallback。
+- AX BI is the authority for all BI chart/dashboard authoring.
+- AX Studio is the authoring client, control surface, and result presenter.
+- AX Studio does **not** build chart config, metric expressions, dataset–column mapping, or dashboard layout.
+- Phase 1 (shipped): delegate via AX BI MCP high-level tools.
+- Future deterministic UI may use typed REST/SDK adapters, but MCP, REST, and SDK must call the **same** AX BI application service.
+- Studio may render generic artifacts; that does not mean it owns BI authoring.
+- When AX BI is unavailable, **fail explicitly** — no hidden local chart fallback.
 
-目標資料流：
+Target data flow:
 
 ~~~text
 AX Studio dedicated UI ── typed client ──┐
@@ -36,8 +40,7 @@ AX Studio agent/chat ───── MCP ──────────┘
                               dataset / semantic / chart / dashboard commands
 ~~~
 
-第一階段 typed client 仍以 MCP streamable HTTP 為 transport；它只封裝高階 tool contract，不包含 BI domain logic。
-
+Phase 1 typed client uses MCP streamable HTTP as transport and only wraps high-level tool contracts (no BI domain logic in Studio).
 ## Responsibility boundary
 
 ### AX Studio owns
