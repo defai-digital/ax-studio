@@ -6,8 +6,9 @@ use tokio::task;
 use uuid::Uuid;
 
 use super::helpers::{
-    get_lock_for_thread, prune_unused_message_locks, read_messages_from_path,
-    remove_lock_for_thread, rewrite_messages_file, update_thread_metadata,
+    get_cached_thread_list, get_lock_for_thread, invalidate_thread_cache,
+    prune_unused_message_locks, read_messages_from_path, remove_lock_for_thread,
+    rewrite_messages_file, set_cached_thread_list, update_thread_metadata,
 };
 use super::models::{
     validate_storage_identifier, MessageRecord, ThreadRecord, MAX_THREAD_RECORD_BYTES,
@@ -21,14 +22,20 @@ use super::{
 
 /// Lists all threads by reading their metadata from the threads directory.
 /// Returns a vector of thread metadata as JSON values.
+/// Uses a short-lived in-memory cache to avoid redundant filesystem scans.
 #[tauri::command]
 pub async fn list_threads<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
 ) -> Result<Vec<ThreadRecord>, String> {
+    // Fast path: return cached list if still fresh.
+    if let Some(cached) = get_cached_thread_list().await {
+        return Ok(cached);
+    }
+
     ensure_data_dirs(app_handle.clone())?;
     let data_dir = get_data_dir(app_handle.clone());
 
-    task::spawn_blocking(move || -> Result<Vec<ThreadRecord>, String> {
+    let threads = task::spawn_blocking(move || -> Result<Vec<ThreadRecord>, String> {
         let mut threads = Vec::new();
         let mut skipped = 0u32;
         let mut scanned = 0usize;
@@ -90,7 +97,11 @@ pub async fn list_threads<R: Runtime>(
         Ok(threads)
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())??;
+
+    // Populate cache for subsequent rapid calls.
+    set_cached_thread_list(threads.clone()).await;
+    Ok(threads)
 }
 
 /// Creates a new thread, assigns it a unique ID, and persists its metadata.
@@ -126,6 +137,7 @@ pub async fn create_thread<R: Runtime>(
     })
     .await
     .map_err(|e| format!("create_thread task error: {e}"))??;
+    invalidate_thread_cache().await;
     Ok(thread)
 }
 
@@ -153,6 +165,7 @@ pub async fn modify_thread<R: Runtime>(
     tokio::task::spawn_blocking(move || update_thread_metadata(&path, &thread))
         .await
         .map_err(|e| format!("modify_thread task error: {e}"))??;
+    invalidate_thread_cache().await;
     Ok(())
 }
 
@@ -176,6 +189,7 @@ pub async fn delete_thread<R: Runtime>(
         }
     }
     remove_lock_for_thread(&thread_id).await;
+    invalidate_thread_cache().await;
     Ok(())
 }
 

@@ -376,19 +376,27 @@ impl StreamCancellationRegistry {
 pub struct MlxWorker {
     cmd_tx: Sender<MlxCommand>,
     stream_cancellations: StreamCancellationRegistry,
+    /// Shared snapshot of loaded model IDs, updated by the worker thread on
+    /// every Load/Unload. Allows `list_loaded()` to return immediately without
+    /// dispatching through the single-threaded command channel (which blocks
+    /// behind in-flight generations).
+    loaded_ids: Arc<Mutex<Vec<String>>>,
 }
 
 impl MlxWorker {
     pub fn spawn() -> Result<(Self, JoinHandle<()>), String> {
         let (cmd_tx, cmd_rx) = std::sync::mpsc::channel();
+        let loaded_ids: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let worker_loaded_ids = Arc::clone(&loaded_ids);
         let join = thread::Builder::new()
             .name("ax-mlx-worker".to_string())
-            .spawn(move || run_worker(cmd_rx))
+            .spawn(move || run_worker(cmd_rx, worker_loaded_ids))
             .map_err(|error| format!("failed to spawn mlx worker thread: {error}"))?;
         Ok((
             Self {
                 cmd_tx,
                 stream_cancellations: StreamCancellationRegistry::default(),
+                loaded_ids,
             },
             join,
         ))
@@ -450,10 +458,14 @@ impl MlxWorker {
     }
 
     pub async fn list_loaded(&self) -> Result<Vec<String>, String> {
-        let (reply, rx) = oneshot::channel();
-        self.dispatch(MlxCommand::ListLoaded { reply })?;
-        rx.await
-            .map_err(|_| "mlx worker dropped ListLoaded reply".to_string())
+        // Fast path: read the shared snapshot maintained by the worker thread.
+        // This avoids dispatching through the command channel, which would
+        // block behind any in-flight generation.
+        let ids = self
+            .loaded_ids
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Ok(ids.clone())
     }
 
     pub async fn generate(
@@ -668,7 +680,7 @@ fn prepare_next_session(entry: &mut LoadedModel, model_id: &str) {
     }
 }
 
-fn run_worker(rx: Receiver<MlxCommand>) {
+fn run_worker(rx: Receiver<MlxCommand>, loaded_ids: Arc<Mutex<Vec<String>>>) {
     // Sessions live here, on the worker thread. EngineSession + MlxRunner
     // are !Send, which is exactly why we need this single-thread design.
     let mut models: HashMap<String, LoadedModel> = HashMap::new();
@@ -700,6 +712,17 @@ fn run_worker(rx: Receiver<MlxCommand>) {
                 reply,
             } => {
                 let result = handle_load(&mut models, &model_id, &model_dir);
+                if result.is_ok() {
+                    // Update the shared snapshot so list_loaded() can read
+                    // without dispatching through the command channel.
+                    let mut ids = loaded_ids
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    if !ids.contains(&model_id) {
+                        ids.push(model_id.clone());
+                        ids.sort();
+                    }
+                }
                 let _ = reply.send(result);
             }
             MlxCommand::Unload { model_id, reply } => {
@@ -711,6 +734,11 @@ fn run_worker(rx: Receiver<MlxCommand>) {
                     if models.is_empty() {
                         clear_native_caches_after_model_drain("explicit unload");
                     }
+                    // Update the shared snapshot.
+                    let mut ids = loaded_ids
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    ids.retain(|id| id != &model_id);
                     Ok(())
                 } else {
                     Err(format!("model not loaded: {model_id}"))

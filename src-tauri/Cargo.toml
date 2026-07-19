@@ -192,7 +192,7 @@ codegen-units = 1   # Single codegen unit → better inlining
 # contain FFI panics. panic="abort" made that machinery dead code and turned
 # any MLX panic into a full app crash. Unwind cost is irrelevant on the
 # GPU-bound decode path.
-overflow-checks = false  # No bounds-check tax in tight loops
+overflow-checks = true  # Safety for app code; inference crates override below
 debug = false
 debug-assertions = false
 incremental = false
@@ -212,3 +212,18 @@ opt-level = 3
 
 [profile.dev.package.tokenizers]
 opt-level = 3
+
+# Keep overflow-checks disabled only for the compute-bound inference crates
+# where tight arithmetic loops are hot. All other application code (filesystem,
+# network, IPC, state management) benefits from overflow protection.
+[profile.release.package.ax-engine-core]
+overflow-checks = false
+
+[profile.release.package.ax-engine-mlx]
+overflow-checks = false
+
+[profile.release.package.ax-engine-sdk]
+overflow-checks = false
+
+[profile.release.package.tokenizers]
+overflow-checks = false

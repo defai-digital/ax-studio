@@ -52,6 +52,38 @@ export const clearTrackedThreadMessages = (threadId: string) => {
   }
 }
 
+/**
+ * Remove stale tracking entries for messages that no longer exist in the
+ * store. Guards against unbounded Map growth when in-flight persistence
+ * promises never settle (e.g. IPC channel dropped, backend crash) and their
+ * .then()/.catch() cleanup callbacks never fire.
+ */
+const pruneStaleTrackedMessages = (
+  threadId: string,
+  validMessages: ThreadMessage[]
+) => {
+  const prefix = `${threadId}:`
+  const validIds = new Set(validMessages.map((m) => m.id))
+  const trackedKeys = new Set([
+    ...persistedMessages.keys(),
+    ...latestMessageMutationId.keys(),
+    ...latestSuccessfulMutationId.keys(),
+    ...visibleMessageMutationId.keys(),
+    ...pendingMessageMutationIds.keys(),
+  ])
+  for (const key of trackedKeys) {
+    if (!key.startsWith(prefix)) continue
+    const messageId = key.slice(prefix.length)
+    if (!validIds.has(messageId)) {
+      persistedMessages.delete(key)
+      latestMessageMutationId.delete(key)
+      latestSuccessfulMutationId.delete(key)
+      visibleMessageMutationId.delete(key)
+      pendingMessageMutationIds.delete(key)
+    }
+  }
+}
+
 const removeTrackedMessage = (threadId: string, messageId: string) => {
   const key = trackedMessageKey(threadId, messageId)
   persistedMessages.delete(key)
@@ -80,6 +112,7 @@ export const useMessages = create<MessageState>()((set, get) => ({
   },
   setMessages: (threadId, messages) => {
     clearTrackedThreadMessages(threadId)
+    pruneStaleTrackedMessages(threadId, messages)
     set((state) => ({
       messages: {
         ...state.messages,

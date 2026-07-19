@@ -80,6 +80,15 @@ const getOwnToolCallCancellation = (
     ? cancellations[threadId]
     : undefined
 
+// ── Token speed throttle ────────────────────────────────────────────────────
+// Streaming can deliver 30+ tokens/sec. Committing each increment to Zustand
+// triggers a React reconciliation per token. We buffer increments and flush
+// at most every TOKEN_SPEED_FLUSH_MS so subscribers re-render ~10×/sec.
+const TOKEN_SPEED_FLUSH_MS = 100
+let pendingTokenIncrement = 0
+let pendingTokenMessageId: string | undefined
+let lastTokenSpeedFlush = 0
+
 export const useAppState = create<AppState>()((set) => ({
   streamingContent: undefined,
   loadingModel: false,
@@ -151,39 +160,57 @@ export const useAppState = create<AppState>()((set) => ({
       },
     }))
   },
-  updateTokenSpeed: (message, increment = 1) =>
+  updateTokenSpeed: (message, increment = 1) => {
+    // Accumulate in the module-level buffer.
+    const wasEmpty = pendingTokenMessageId === undefined
+    pendingTokenIncrement += increment
+    pendingTokenMessageId = message.id
+
+    const now = Date.now()
+    // Flush immediately on the first token of a new stream (wasEmpty) so the
+    // UI shows progress without delay; subsequent tokens are throttled.
+    if (!wasEmpty && now - lastTokenSpeedFlush < TOKEN_SPEED_FLUSH_MS) return
+    lastTokenSpeedFlush = now
+
+    const flushedIncrement = pendingTokenIncrement
+    const flushedMessageId = pendingTokenMessageId
+    pendingTokenIncrement = 0
+    pendingTokenMessageId = undefined
+
     set((state) => {
-      const currentTimestamp = new Date().getTime() // Get current time in milliseconds
+      const currentTimestamp = now
       if (!state.tokenSpeed) {
-        // If this is the first update, just set the lastTimestamp and return
         return {
           tokenSpeed: {
             lastTimestamp: currentTimestamp,
             tokenSpeed: 0,
-            tokenCount: increment,
-            message: message.id,
+            tokenCount: flushedIncrement,
+            message: flushedMessageId,
           },
         }
       }
 
       const timeDiffInSeconds =
-        (currentTimestamp - state.tokenSpeed.lastTimestamp) / 1000 // Time difference in seconds
-      const totalTokenCount = state.tokenSpeed.tokenCount + increment
+        (currentTimestamp - state.tokenSpeed.lastTimestamp) / 1000
+      const totalTokenCount = state.tokenSpeed.tokenCount + flushedIncrement
       const averageTokenSpeed =
-        totalTokenCount / (timeDiffInSeconds > 0 ? timeDiffInSeconds : 1) // Calculate average token speed
+        totalTokenCount / (timeDiffInSeconds > 0 ? timeDiffInSeconds : 1)
       return {
         tokenSpeed: {
           ...state.tokenSpeed,
           tokenSpeed: averageTokenSpeed,
           tokenCount: totalTokenCount,
-          message: message.id,
+          message: flushedMessageId,
         },
       }
-    }),
-  resetTokenSpeed: () =>
-    set({
-      tokenSpeed: undefined,
-    }),
+    })
+  },
+  resetTokenSpeed: () => {
+    pendingTokenIncrement = 0
+    pendingTokenMessageId = undefined
+    lastTokenSpeedFlush = 0
+    set({ tokenSpeed: undefined })
+  },
   clearAppState: () =>
     set((state) => {
       // Abort every in-flight stream before clearing — dropping the map

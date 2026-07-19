@@ -37,13 +37,18 @@ impl TrackedMcpProcess {
         Self { pid, start_time }
     }
 
+    /// Check whether the tracked PID still refers to the same process.
+    ///
+    /// Uses a targeted PID filter so only one process entry is refreshed
+    /// rather than the full process table, reducing overhead when called in
+    /// a monitoring loop for multiple MCP servers.
     pub fn still_matches(self) -> bool {
         let Some(expected_start_time) = self.start_time else {
             return false;
         };
         let sys_pid = sysinfo::Pid::from_u32(self.pid);
         let mut system = sysinfo::System::new();
-        system.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[sys_pid]), true);
+        system.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[sys_pid]), false);
         system
             .process(sys_pid)
             .is_some_and(|process| process.start_time() == expected_start_time)

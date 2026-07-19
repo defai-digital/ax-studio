@@ -1,6 +1,7 @@
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
+use std::time::Instant;
 
 // For async file write serialization
 use std::collections::HashMap;
@@ -212,4 +213,46 @@ pub async fn remove_lock_for_thread(thread_id: &str) {
         map.remove(thread_id);
         prune_unused_message_locks_locked(&mut map);
     }
+}
+
+// ── Thread listing cache ────────────────────────────────────────────────────
+// Avoids an O(n) filesystem scan on every `list_threads` call. The cache is
+// invalidated explicitly on create/modify/delete and expires after a short TTL
+// to guard against out-of-band changes (e.g. manual file edits, sync tools).
+
+const THREAD_CACHE_TTL_SECS: u64 = 5;
+
+struct ThreadListCache {
+    entries: Vec<ThreadRecord>,
+    populated_at: Instant,
+}
+
+static THREAD_LIST_CACHE: OnceLock<Mutex<Option<ThreadListCache>>> = OnceLock::new();
+
+fn thread_cache_slot() -> &'static Mutex<Option<ThreadListCache>> {
+    THREAD_LIST_CACHE.get_or_init(|| Mutex::new(None))
+}
+
+/// Return cached thread list if fresh, or `None` to trigger a rescan.
+pub async fn get_cached_thread_list() -> Option<Vec<ThreadRecord>> {
+    let guard = thread_cache_slot().lock().await;
+    guard.as_ref().and_then(|cache| {
+        (cache.populated_at.elapsed().as_secs() < THREAD_CACHE_TTL_SECS)
+            .then(|| cache.entries.clone())
+    })
+}
+
+/// Store a fresh thread list in the cache.
+pub async fn set_cached_thread_list(entries: Vec<ThreadRecord>) {
+    let mut guard = thread_cache_slot().lock().await;
+    *guard = Some(ThreadListCache {
+        entries,
+        populated_at: Instant::now(),
+    });
+}
+
+/// Invalidate the thread list cache (called on create/modify/delete).
+pub async fn invalidate_thread_cache() {
+    let mut guard = thread_cache_slot().lock().await;
+    *guard = None;
 }

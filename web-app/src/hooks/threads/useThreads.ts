@@ -496,9 +496,13 @@ export const useThreads = create<ThreadState>()((set, get) => ({
         .catch(reportPersistenceError('update thread'))
 
       const newThreads = { ...state.threads, [threadId]: updatedThread }
+      // The Fuse index is keyed on `title` only. Skip the O(n) rebuild when
+      // the update does not change the title (e.g. model switch, metadata).
+      const titleChanged =
+        updates.title !== undefined && updates.title !== thread.title
       return {
         threads: newThreads,
-        searchIndex: buildSearchIndex(newThreads),
+        ...(titleChanged && { searchIndex: buildSearchIndex(newThreads) }),
       }
     })
   },
