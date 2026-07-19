@@ -13,6 +13,7 @@ describe('useAppState', () => {
         tools: [],
         serverStatus: 'stopped',
         abortControllers: {},
+        toolCallCancellations: {},
         tokenSpeed: undefined,
         currentToolCall: undefined,
         showOutOfContextDialog: false,
@@ -211,5 +212,34 @@ describe('useAppState', () => {
     })
 
     expect(result.current.tokenSpeed).toBeUndefined()
+  })
+
+  it('cancels tool execution only for the requested thread', () => {
+    const { result } = renderHook(() => useAppState())
+    const cancelA = vi.fn()
+    const cancelB = vi.fn()
+
+    act(() => {
+      result.current.setToolCallCancellation('thread-a', cancelA)
+      result.current.setToolCallCancellation('thread-b', cancelB)
+      result.current.cancelToolCall('thread-a')
+    })
+
+    expect(cancelA).toHaveBeenCalledOnce()
+    expect(cancelB).not.toHaveBeenCalled()
+  })
+
+  it('does not let stale execution cleanup remove a newer cancellation', () => {
+    const { result } = renderHook(() => useAppState())
+    const oldCancel = vi.fn()
+    const newCancel = vi.fn()
+
+    act(() => {
+      result.current.setToolCallCancellation('thread-a', oldCancel)
+      result.current.setToolCallCancellation('thread-a', newCancel)
+      result.current.clearToolCallCancellation('thread-a', oldCancel)
+    })
+
+    expect(result.current.toolCallCancellations['thread-a']).toBe(newCancel)
   })
 })

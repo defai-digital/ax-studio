@@ -515,6 +515,13 @@ async fn schedule_mcp_start_task<R: Runtime>(
                 inserted_service
             }
             Err(_) => {
+                if let Some(pid) = process_pid {
+                    let app_state = app.state::<AppState>();
+                    let mut pids = app_state.mcp_server_pids.lock().await;
+                    if pids.get(&name) == Some(&pid) {
+                        pids.remove(&name);
+                    }
+                }
                 let mut buffer = String::new();
                 let error = if let Some(mut stderr_reader) = stderr {
                     match stderr_reader.read_to_string(&mut buffer).await {

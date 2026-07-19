@@ -69,6 +69,7 @@ export enum FileSystemRoute {
   mkdir = 'mkdir',
   readFileSync = 'readFileSync',
   readFileBase64 = 'readFileBase64',
+  validateSha256 = 'validateSha256',
   writeFileSync = 'writeFileSync',
 }
 export enum FileManagerRoute {

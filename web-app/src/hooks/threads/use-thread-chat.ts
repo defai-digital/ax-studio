@@ -106,9 +106,9 @@ export function useThreadChat({
   // Set by handleRegenerate right before calling the AI SDK's regenerate(),
   // and consumed once (one-shot) by persistMessageOnFinish to tag the newly
   // generated message as the next version in the group. Cleared whenever a
-  // fresh user message is sent, so a regenerate that's stopped mid-stream
-  // (which never reaches persistMessageOnFinish) can't bleed into a later,
-  // unrelated message.
+  // fresh user message is sent. Aborted completions also call
+  // persistMessageOnFinish (including empty ones) so the tag is always
+  // consumed before a later, unrelated message.
   const pendingVersionTagRef = useRef<{
     groupId: string
     versionIndex: number
@@ -413,12 +413,11 @@ export function useThreadChat({
 
   const persistMessageOnFinish = useCallback(
     (message: UIMessage, contentParts: ThreadMessage['content']) => {
-      if (contentParts.length === 0) return
-
       // Consume (one-shot) any pending regenerate-version tag so this newly
       // generated message takes its place as the next version in the group.
       const pendingTag = pendingVersionTagRef.current
       pendingVersionTagRef.current = null
+      if (contentParts.length === 0) return
       const baseMetadata = (message.metadata || {}) as Record<string, unknown>
       const metadata = pendingTag
         ? {

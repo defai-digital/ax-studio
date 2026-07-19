@@ -125,49 +125,46 @@ export function SplitThreadContainer({
     },
     experimental_throttle: 50,
     onFinish: ({ message, isAbort }) => {
-      if (!isAbort && message.role === 'assistant') {
-        // Attach routing metadata if the LLM router made a decision. Mirrors
-        // the behaviour of $threadId.tsx so split-thread mode also persists
-        // and renders the routing badge. The enriched copy is built
-        // immutably (no mutation of the AI SDK message object) and is used
-        // for both persistence and memory processing so the badge survives
-        // a reload.
+      if (message.role === 'assistant') {
         const routerResult = getLastRouterResult()
-        let messageForPersistence = message
-        if (routerResult?.routed) {
-          const routingMeta = {
+        const routingMeta = routerResult?.routed
+          ? {
             modelId: routerResult.modelId,
             providerId: routerResult.providerId,
             reason: routerResult.reason,
             routed: true,
             latencyMs: routerResult.latencyMs,
           }
-          messageForPersistence = {
-            ...message,
-            metadata: {
-              ...((message.metadata ?? {}) as Record<string, unknown>),
-              routing: routingMeta,
-            },
-          }
+          : undefined
+        const hasMetadataUpdate = isAbort || Boolean(routingMeta)
+        const messageForPersistence = hasMetadataUpdate
+          ? {
+              ...message,
+              metadata: {
+                ...((message.metadata ?? {}) as Record<string, unknown>),
+                ...(isAbort ? { aborted: true } : {}),
+                ...(routingMeta ? { routing: routingMeta } : {}),
+              },
+            }
+          : message
+
+        if (hasMetadataUpdate) {
+          const persistedMetadata = messageForPersistence.metadata
           setChatMessages((prev) =>
             prev.map((m) =>
               m.id === message.id
-                ? {
-                    ...m,
-                    metadata: {
-                      ...((m.metadata ?? {}) as Record<string, unknown>),
-                      routing: routingMeta,
-                    },
-                  }
-                : m,
-            ),
+                ? { ...m, metadata: persistedMetadata }
+                : m
+            )
           )
         }
         const contentParts =
           extractContentPartsFromUIMessage(messageForPersistence)
         persistMessageOnFinishRef.current?.(messageForPersistence, contentParts)
       }
-      startToolExecution(addToolOutput as unknown as AddToolOutputFn)
+      if (!isAbort) {
+        startToolExecution(addToolOutput as unknown as AddToolOutputFn)
+      }
     },
     onToolCall,
     sendAutomaticallyWhen: followUpMessage,

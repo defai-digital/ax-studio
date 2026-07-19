@@ -1,10 +1,46 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook, act } from '@testing-library/react'
+import { renderHook, act, waitFor } from '@testing-library/react'
 import type { UIMessage } from '@ai-sdk/react'
 import {
   extractRelevantSourceResult,
   useThreadTools,
 } from '../use-thread-tools'
+
+const appStateMocks = vi.hoisted(() => ({
+  cancelToolCall: vi.fn(),
+  setToolCallCancellation: vi.fn(),
+  clearToolCallCancellation: vi.fn(),
+}))
+const serviceMocks = vi.hoisted(() => ({
+  getRagToolNames: vi.fn().mockResolvedValue([]),
+  callRagTool: vi.fn(),
+  callMcpTool: vi.fn(),
+  callMcpToolWithCancellation: vi.fn(),
+  openUrl: vi.fn(),
+}))
+const mockSessionData = vi.hoisted(() => ({
+  tools: [] as Array<{
+    toolName: string
+    toolCallId: string
+    input: unknown
+  }>,
+  isStreaming: false,
+  chat: { messages: [] },
+}))
+
+vi.mock('@/hooks/useServiceHub', () => ({
+  useServiceHub: () => ({
+    rag: () => ({
+      getToolNames: serviceMocks.getRagToolNames,
+      callTool: serviceMocks.callRagTool,
+    }),
+    mcp: () => ({
+      callTool: serviceMocks.callMcpTool,
+      callToolWithCancellation: serviceMocks.callMcpToolWithCancellation,
+    }),
+    opener: () => ({ openUrl: serviceMocks.openUrl }),
+  }),
+}))
 
 // Mock ai SDK
 vi.mock('ai', () => ({
@@ -72,6 +108,8 @@ vi.mock('@/hooks/settings/useAppState', () => {
     {
       getState: vi.fn(() => ({
         mcpToolNames: new Set(['test_tool']),
+        tools: [],
+        ...appStateMocks,
       })),
       setState: vi.fn(),
       subscribe: vi.fn(),
@@ -82,11 +120,6 @@ vi.mock('@/hooks/settings/useAppState', () => {
 })
 
 vi.mock('@/stores/chat-session-store', () => {
-  const mockSessionData = {
-    tools: [],
-    isStreaming: false,
-    chat: { messages: [] },
-  }
   const store = Object.assign(
     (selector: (state: Record<string, unknown>) => unknown) =>
       selector({
@@ -128,6 +161,9 @@ describe('useThreadTools', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockSessionData.tools = []
+    serviceMocks.getRagToolNames.mockResolvedValue([])
+    serviceMocks.callMcpTool.mockResolvedValue({ error: '', content: [] })
   })
 
   it('returns the expected shape', () => {
@@ -237,6 +273,41 @@ describe('useThreadTools', () => {
       )
 
       expect(result.current.toolCallAbortController.current).toBeNull()
+    })
+
+    it('registers thread-scoped cancellation and forwards it to the native MCP call', async () => {
+      let resolveToolCall!: (value: { error: string; content: never[] }) => void
+      const cancelNative = vi.fn().mockResolvedValue(undefined)
+      const promise = new Promise<{ error: string; content: never[] }>(
+        (resolve) => {
+          resolveToolCall = resolve
+        }
+      )
+      serviceMocks.callMcpToolWithCancellation.mockReturnValue({
+        promise,
+        cancel: cancelNative,
+        token: 'token-1',
+      })
+      mockSessionData.tools = [
+        { toolName: 'test_tool', toolCallId: 'call-1', input: {} },
+      ]
+
+      const { result } = renderHook(() =>
+        useThreadTools({ threadId, projectId: undefined })
+      )
+      act(() => result.current.startToolExecution(vi.fn()))
+
+      await waitFor(() =>
+        expect(serviceMocks.callMcpToolWithCancellation).toHaveBeenCalledOnce()
+      )
+      const registeredCancel = appStateMocks.setToolCallCancellation.mock.calls[0][1]
+      act(() => registeredCancel())
+
+      expect(result.current.toolCallAbortController.current?.signal.aborted).toBe(
+        true
+      )
+      await waitFor(() => expect(cancelNative).toHaveBeenCalledOnce())
+      resolveToolCall({ error: '', content: [] })
     })
   })
 

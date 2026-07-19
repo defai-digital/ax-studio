@@ -192,6 +192,43 @@ async fn test_read_file_base64_requires_app_data_or_picker_approval() {
     );
 }
 
+#[tokio::test]
+async fn test_validate_sha256_streams_approved_files_and_fails_closed() {
+    let app = mock_app();
+    app.manage(test_app_state());
+    let state = app.state::<AppState>();
+    let file_path = get_app_data_folder_path(app.handle().clone()).join("sha256-test.bin");
+    fs::write(&file_path, b"hash me").unwrap();
+
+    let expected = "eb201af5aaf0d60629d3d2a61e466cfc0fedb517add831ecac5235e1daa963d6";
+    assert!(validate_sha256(
+        app.handle().clone(),
+        state.clone(),
+        file_path.to_string_lossy().into_owned(),
+        expected.to_uppercase(),
+    )
+    .await
+    .unwrap());
+    assert!(!validate_sha256(
+        app.handle().clone(),
+        state.clone(),
+        file_path.to_string_lossy().into_owned(),
+        "0".repeat(64),
+    )
+    .await
+    .unwrap());
+    assert!(validate_sha256(
+        app.handle().clone(),
+        state,
+        file_path.to_string_lossy().into_owned(),
+        "not-a-sha256".to_string(),
+    )
+    .await
+    .is_err());
+
+    fs::remove_file(file_path).unwrap();
+}
+
 #[test]
 fn test_write_file_sync_writes_typed_request_atomically() {
     let app = mock_app();

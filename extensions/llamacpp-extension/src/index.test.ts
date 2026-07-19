@@ -1423,6 +1423,36 @@ describe('AxStudioLlamacppExtension', () => {
     ).rejects.toThrow('Download extension not available')
   })
 
+  it('validates local model hashes through the native streaming command', async () => {
+    const validateSha256 = vi.fn().mockResolvedValue(true)
+    ;(globalThis as any).core.api.validateSha256 = validateSha256
+    const extension = new AxStudioLlamacppExtension('', '')
+
+    const valid = await (
+      extension as unknown as {
+        _validateSha256(path: string, expected: string): Promise<boolean>
+      }
+    )._validateSha256('/models/model.gguf', 'a'.repeat(64))
+
+    expect(valid).toBe(true)
+    expect(validateSha256).toHaveBeenCalledWith({
+      path: '/models/model.gguf',
+      expected: 'a'.repeat(64),
+    })
+  })
+
+  it('fails closed when local SHA-256 validation is unavailable', async () => {
+    const extension = new AxStudioLlamacppExtension('', '')
+
+    await expect(
+      (
+        extension as unknown as {
+          _validateSha256(path: string, expected: string): Promise<boolean>
+        }
+      )._validateSha256('/models/model.gguf', 'a'.repeat(64))
+    ).resolves.toBe(false)
+  })
+
   it('canonicalizes local import sources with the backend before copy operations', async () => {
     const extension = new AxStudioLlamacppExtension('', '')
     mocks.fsState.set('/private/tmp/model.gguf', 'gguf-binary')

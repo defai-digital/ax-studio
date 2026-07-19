@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import { useThreads } from '../useThreads'
+import { useChatSessions } from '@/stores/chat-session-store'
+import { useMessages } from '@/hooks/chat/useMessages'
+import { useAppState } from '@/hooks/settings/useAppState'
 
 // Mock the services
 vi.mock('@/services/threads', () => ({
@@ -33,6 +36,9 @@ describe('useThreads', () => {
     vi.clearAllMocks()
     // Reset Zustand store
     act(() => {
+      useChatSessions.getState().clearSessions()
+      useMessages.getState().clearAllMessages()
+      useAppState.setState({ toolCallCancellations: {} })
       useThreads.setState({
         threads: {},
         currentThreadId: undefined,
@@ -142,6 +148,45 @@ describe('useThreads', () => {
     expect(Object.keys(result.current.threads)).toHaveLength(1)
     expect(result.current.threads['thread1']).toBeUndefined()
     expect(result.current.threads['thread2']).toBeDefined()
+  })
+
+  it('evicts renderer resources before deleting a thread', () => {
+    const { result } = renderHook(() => useThreads())
+    const cancelToolCall = vi.fn()
+
+    act(() => {
+      result.current.setThreads([
+        { id: 'thread1', title: 'Thread 1', messages: [] },
+      ])
+      useChatSessions.getState().ensureSessionData('thread1')
+      useMessages.getState().setMessages('thread1', [
+        {
+          id: 'message-1',
+          thread_id: 'thread1',
+          role: 'user',
+          content: [],
+        } as never,
+      ])
+      useAppState
+        .getState()
+        .setToolCallCancellation('thread1', cancelToolCall)
+      result.current.deleteThread('thread1')
+    })
+
+    expect(cancelToolCall).toHaveBeenCalledOnce()
+    expect(useChatSessions.getState().getSessionData('thread1')).toBeNull()
+    expect(
+      Object.prototype.hasOwnProperty.call(
+        useMessages.getState().messages,
+        'thread1'
+      )
+    ).toBe(false)
+    expect(
+      Object.prototype.hasOwnProperty.call(
+        useAppState.getState().toolCallCancellations,
+        'thread1'
+      )
+    ).toBe(false)
   })
 
   it('should rename thread', () => {

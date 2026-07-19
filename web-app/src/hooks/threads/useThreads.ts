@@ -6,6 +6,9 @@ import Fuse, { type FuseResult } from 'fuse.js'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useFileRegistry, threadCollectionId } from '@/lib/file-registry'
+import { useChatSessions } from '@/stores/chat-session-store'
+import { useMessages } from '@/hooks/chat/useMessages'
+import { useAppState } from '@/hooks/settings/useAppState'
 
 const buildSearchIndex = (threads: Record<string, Thread>): Fuse<Thread> => {
   const entries = Object.values(threads).filter((t) => t.id !== TEMPORARY_CHAT_ID)
@@ -33,6 +36,10 @@ const reportPersistenceError = (operation: string) => (error: unknown) => {
 }
 
 function cleanupThreadResources(threadId: string) {
+  useAppState.getState().cancelToolCall(threadId)
+  useAppState.getState().clearToolCallCancellation(threadId)
+  useChatSessions.getState().removeSession(threadId)
+  useMessages.getState().removeThreadMessages(threadId)
   getServiceHub().threads().deleteThread(threadId).catch(console.error)
   const colId = threadCollectionId(threadId)
   useFileRegistry.getState().clearCollection(colId)
@@ -194,10 +201,6 @@ export const useThreads = create<ThreadState>()((set, get) => ({
   },
   deleteThread: (threadId) => {
     cleanupThreadResources(threadId)
-
-    import('@/hooks/chat/useMessages').then(({ clearTrackedThreadMessages }) => {
-      clearTrackedThreadMessages(threadId)
-    }).catch(() => {})
 
     set((state) => {
       const { [threadId]: _, ...remainingThreads } = state.threads

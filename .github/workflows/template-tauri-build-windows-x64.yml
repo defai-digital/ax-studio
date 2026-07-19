@@ -161,7 +161,8 @@ jobs:
           corepack enable
           corepack prepare yarn@4.5.3 --activate
           yarn --version
-          yarn config set -H enableImmutableInstalls false
+          yarn config set -H enableImmutableInstalls true
+          yarn install --immutable
 
       - name: Build app
         shell: bash

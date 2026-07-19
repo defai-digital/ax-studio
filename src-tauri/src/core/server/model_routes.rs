@@ -2,7 +2,7 @@
 //! requests, and handles upstream responses including Anthropic /messages fallback.
 use ax_studio_utils::{is_cors_header, is_private_ip};
 use futures_util::StreamExt;
-use hyper::body::Bytes;
+use hyper::body::{Bytes, HttpBody};
 use hyper::{Body, Response, StatusCode};
 use reqwest::Client;
 use serde_json;
@@ -22,6 +22,25 @@ const MODEL_LOAD_RETRY_DELAY: Duration = Duration::from_millis(500);
 const UPSTREAM_DNS_LOOKUP_TIMEOUT: Duration = Duration::from_secs(5);
 /// Guard against unbounded memory from malformed SSE (missing newlines) in the passthrough stream.
 const MAX_SSE_LINE_BUFFER: usize = 1_048_576; // 1 MB
+const MAX_MODEL_REQUEST_BODY_SIZE: usize = 10 * 1024 * 1024;
+
+#[derive(Debug)]
+enum ReadBodyError {
+    TooLarge,
+    Transport(hyper::Error),
+}
+
+async fn read_body_limited(mut body: Body, max_size: usize) -> Result<Bytes, ReadBodyError> {
+    let mut buffer = Vec::new();
+    while let Some(chunk) = body.data().await {
+        let chunk = chunk.map_err(ReadBodyError::Transport)?;
+        if buffer.len().saturating_add(chunk.len()) > max_size {
+            return Err(ReadBodyError::TooLarge);
+        }
+        buffer.extend_from_slice(&chunk);
+    }
+    Ok(Bytes::from(buffer))
+}
 
 /// Result of resolving a model route — all data needed to send the upstream request.
 pub(super) struct ProviderResolution {
@@ -455,29 +474,31 @@ pub(super) async fn resolve_model_route<R: tauri::Runtime>(
         );
     }
 
-    let body_bytes = hyper::body::to_bytes(body).await.map_err(|_| {
-        error_response(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Failed to read request body",
-            host_header,
-            origin_header,
-            config,
-        )
-    })?;
-
-    const MAX_BODY_SIZE: usize = 10 * 1024 * 1024;
-    if body_bytes.len() > MAX_BODY_SIZE {
-        return Err(error_response(
-            StatusCode::PAYLOAD_TOO_LARGE,
-            format!(
-                "Request body exceeds {} MB limit",
-                MAX_BODY_SIZE / 1024 / 1024
-            ),
-            host_header,
-            origin_header,
-            config,
-        ));
-    }
+    let body_bytes = match read_body_limited(body, MAX_MODEL_REQUEST_BODY_SIZE).await {
+        Ok(bytes) => bytes,
+        Err(ReadBodyError::TooLarge) => {
+            return Err(error_response(
+                StatusCode::PAYLOAD_TOO_LARGE,
+                format!(
+                    "Request body exceeds {} MB limit",
+                    MAX_MODEL_REQUEST_BODY_SIZE / 1024 / 1024
+                ),
+                host_header,
+                origin_header,
+                config,
+            ));
+        }
+        Err(ReadBodyError::Transport(error)) => {
+            log::warn!("Failed to read model request body: {error}");
+            return Err(error_response(
+                StatusCode::BAD_REQUEST,
+                "Failed to read request body",
+                host_header,
+                origin_header,
+                config,
+            ));
+        }
+    };
 
     let model_id = extract_model_id(&body_bytes).map_err(|message| {
         if is_anthropic_messages {
@@ -674,7 +695,7 @@ async fn try_anthropic_fallback(
     let openai_body = match transform_anthropic_to_openai(&json_body) {
         Some(t) => t,
         None => {
-            log::error!("transform_anthropic_to_openai returned None for body: {json_body}");
+            log::error!("transform_anthropic_to_openai could not transform the request body");
             return None;
         }
     };
@@ -880,8 +901,7 @@ fn build_streaming_response(
                             && patched.trim_start().starts_with("data:")
                         {
                             patched_lines_logged += 1;
-                            let preview: String = patched.chars().take(400).collect();
-                            log::info!("Patched SSE line #{patched_lines_logged}: {preview}");
+                            log::debug!("Patched SSE line #{patched_lines_logged}");
                         }
                         out.push_str(&patched);
                     }
@@ -1193,9 +1213,9 @@ pub(super) async fn dispatch_to_upstream<R: tauri::Runtime>(
                     }
 
                     // Non-/messages error - return error response with body
-                    let error_preview: String = error_body.chars().take(500).collect();
                     log::error!(
-                        "Upstream provider returned {status} for {destination_path}: {error_preview}"
+                        "Upstream provider returned {status} for {destination_path} ({} bytes)",
+                        error_body.len()
                     );
 
                     if let Some(ref sid) = stream_id {
@@ -1330,6 +1350,18 @@ fn patch_sse_line(line: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn limited_body_reader_rejects_before_buffering_oversized_chunk() {
+        let result = read_body_limited(Body::from(vec![0_u8; 6]), 5).await;
+        assert!(matches!(result, Err(ReadBodyError::TooLarge)));
+    }
+
+    #[tokio::test]
+    async fn limited_body_reader_accepts_payload_at_limit() {
+        let result = read_body_limited(Body::from("12345"), 5).await.unwrap();
+        assert_eq!(result, Bytes::from_static(b"12345"));
+    }
 
     fn make_provider(provider: &str, base_url: Option<&str>, models: &[&str]) -> ProviderConfig {
         ProviderConfig {

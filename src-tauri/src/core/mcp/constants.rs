@@ -42,13 +42,6 @@ pub const DEFAULT_MCP_CONFIG: &str = r#"{
       "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
       "env": {},
       "active": false
-    },
-    "ax-studio": {
-      "command": "npx",
-      "args": ["-y", "@ax-fabric/fabric-ingest", "mcp", "server"],
-      "env": {},
-      "active": false,
-      "official": true
     }
   },
   "mcpSettings": {
@@ -58,3 +51,15 @@ pub const DEFAULT_MCP_CONFIG: &str = r#"{
     "backoffMultiplier": 2.0
   }
 }"#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_config_does_not_reference_unpublished_ax_fabric_package() {
+        let parsed: serde_json::Value = serde_json::from_str(DEFAULT_MCP_CONFIG).unwrap();
+        assert!(parsed["mcpServers"]["ax-studio"].is_null());
+        assert!(!DEFAULT_MCP_CONFIG.contains("@ax-fabric/fabric-ingest"));
+    }
+}

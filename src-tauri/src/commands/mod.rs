@@ -10,6 +10,7 @@ macro_rules! desktop_handlers {
             crate::core::filesystem::commands::readdir_sync,
             crate::core::filesystem::commands::read_file_sync,
             crate::core::filesystem::commands::read_file_base64,
+            crate::core::filesystem::commands::validate_sha256,
             crate::core::filesystem::commands::rm,
             crate::core::filesystem::commands::mv,
             crate::core::filesystem::commands::copy_file,

@@ -165,42 +165,46 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     },
     experimental_throttle: 50,
     onFinish: ({ message, isAbort }) => {
-      if (!isAbort && message.role === 'assistant') {
-        // Attach routing metadata if the router made a decision. We build an
-        // immutable enriched copy (`messageForPersistence`) instead of mutating
-        // the AI SDK's message object, then use that copy for both the React
-        // state update and the on-disk persistence so the routing badge
-        // survives reloads.
+      if (message.role === 'assistant') {
         const routerResult = getLastRouterResult()
-        let messageForPersistence = message
-        if (routerResult?.routed) {
-          const routingMeta = {
+        const routingMeta = routerResult?.routed
+          ? {
             modelId: routerResult.modelId,
             providerId: routerResult.providerId,
             reason: routerResult.reason,
             routed: true,
             latencyMs: routerResult.latencyMs,
           }
-          messageForPersistence = {
-            ...message,
-            metadata: {
-              ...((message.metadata ?? {}) as Record<string, unknown>),
-              routing: routingMeta,
-            },
-          }
-          // Update chat state so the UI re-renders with the routing badge
+          : undefined
+        const hasMetadataUpdate = isAbort || Boolean(routingMeta)
+        const messageForPersistence = hasMetadataUpdate
+          ? {
+              ...message,
+              metadata: {
+                ...((message.metadata ?? {}) as Record<string, unknown>),
+                ...(isAbort ? { aborted: true } : {}),
+                ...(routingMeta ? { routing: routingMeta } : {}),
+              },
+            }
+          : message
+
+        if (hasMetadataUpdate) {
+          // Keep the in-memory SDK message aligned with what is persisted.
+          const persistedMetadata = messageForPersistence.metadata
           setChatMessages((prev) =>
             prev.map((m) =>
               m.id === message.id
-                ? { ...m, metadata: { ...((m.metadata ?? {}) as Record<string, unknown>), routing: routingMeta } }
-                : m,
-            ),
+                ? { ...m, metadata: persistedMetadata }
+                : m
+            )
           )
         }
         const contentParts = extractContentPartsFromUIMessage(messageForPersistence)
         persistMessageOnFinishRef.current?.(messageForPersistence, contentParts)
       }
-      startToolExecution(addToolOutput as unknown as AddToolOutputFn)
+      if (!isAbort) {
+        startToolExecution(addToolOutput as unknown as AddToolOutputFn)
+      }
     },
     onToolCall,
     sendAutomaticallyWhen: followUpMessage,

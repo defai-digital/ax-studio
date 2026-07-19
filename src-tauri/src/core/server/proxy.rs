@@ -340,22 +340,20 @@ fn validate_request(
         log::debug!("Bypassing host validation for whitelisted path: {path}");
     }
 
-    if !is_whitelisted_path && !config.proxy_api_key.is_empty() {
-        if is_rate_limited(client_id) {
-            let mut error_response = Response::builder().status(StatusCode::TOO_MANY_REQUESTS);
-            error_response = add_cors_headers_with_host_and_origin(
-                error_response,
-                host_header,
-                origin_header,
-                &config.trusted_hosts,
-                config.cors_enabled,
-            );
-            return Some(finalize_response(
-                error_response,
-                Body::from("Too many failed authentication attempts. Try again later."),
-            ));
-        }
+    // Browsers attach Origin to cross-origin POSTs even when the request is
+    // "simple" and skips preflight. Reject untrusted origins independently of
+    // CORS response headers so loopback/no-auth mode cannot be used for CSRF.
+    if !is_whitelisted_path
+        && !origin_header.is_empty()
+        && trusted_cors_origin(origin_header, host_header, &config.trusted_hosts).is_none()
+    {
+        return Some(finalize_response(
+            Response::builder().status(StatusCode::FORBIDDEN),
+            Body::from("Origin not allowed"),
+        ));
+    }
 
+    if !is_whitelisted_path && !config.proxy_api_key.is_empty() {
         let auth_valid = headers
             .get(hyper::header::AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
@@ -374,9 +372,20 @@ fn validate_request(
             .map(|key| key.as_bytes().ct_eq(config.proxy_api_key.as_bytes()).into())
             .unwrap_or(false);
 
-        if !auth_valid && !api_key_valid {
-            record_auth_failure(client_id);
-            let mut error_response = Response::builder().status(StatusCode::UNAUTHORIZED);
+        if auth_valid || api_key_valid {
+            // A valid credential must always recover the legitimate loopback
+            // client, even if another local process exhausted the failure budget.
+            clear_auth_failure(client_id);
+        } else {
+            let rate_limited = is_rate_limited(client_id);
+            if !rate_limited {
+                record_auth_failure(client_id);
+            }
+            let mut error_response = Response::builder().status(if rate_limited {
+                StatusCode::TOO_MANY_REQUESTS
+            } else {
+                StatusCode::UNAUTHORIZED
+            });
             error_response = add_cors_headers_with_host_and_origin(
                 error_response,
                 host_header,
@@ -386,10 +395,13 @@ fn validate_request(
             );
             return Some(finalize_response(
                 error_response,
-                Body::from("Invalid or missing authorization token"),
+                Body::from(if rate_limited {
+                    "Too many failed authentication attempts. Try again later."
+                } else {
+                    "Invalid or missing authorization token"
+                }),
             ));
         }
-        clear_auth_failure(client_id);
     } else if is_whitelisted_path {
         log::debug!("Bypassing authorization check for whitelisted path: {path}");
     } else {
@@ -906,6 +918,23 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_request_empty_api_key_rejects_untrusted_origin() {
+        let config = test_config(false, "");
+        let headers = hyper::HeaderMap::new();
+        let result = validate_request(
+            "/chat/completions",
+            "localhost:31419",
+            "https://evil.example",
+            &headers,
+            &config,
+            "client-origin",
+        )
+        .expect("untrusted browser origin must be rejected");
+
+        assert_eq!(result.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[test]
     fn test_validate_request_empty_api_key_ignores_token_headers() {
         // With an empty proxy_api_key, the proxy ignores any client-supplied
         // bearer/x-api-key entirely — neither matching nor non-matching tokens
@@ -946,6 +975,35 @@ mod tests {
 
         clear_auth_failure(blocked_client);
         clear_auth_failure(other_client);
+    }
+
+    #[test]
+    fn test_valid_auth_recovers_client_after_failure_limit() {
+        let client = "rate-limit-valid-recovery";
+        clear_auth_failure(client);
+        for _ in 0..MAX_AUTH_FAILURES {
+            record_auth_failure(client);
+        }
+        assert!(is_rate_limited(client));
+
+        let config = test_config(false, "my-secret");
+        let mut headers = hyper::HeaderMap::new();
+        headers.insert(
+            hyper::header::AUTHORIZATION,
+            "Bearer my-secret".parse().unwrap(),
+        );
+        let result = validate_request(
+            "/chat/completions",
+            "localhost:31419",
+            "",
+            &headers,
+            &config,
+            client,
+        );
+
+        assert!(result.is_none());
+        assert!(!is_rate_limited(client));
+        clear_auth_failure(client);
     }
 
     #[test]

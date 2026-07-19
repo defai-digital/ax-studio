@@ -92,9 +92,11 @@ pub async fn load_llama_model<R: Runtime>(
     timeout: u64,
 ) -> ServerResult<SessionInfo> {
     let state: State<LlamacppState> = app_handle.state();
+    let _startup_guard = state.acquire_startup_lock(&model_id).await;
 
-    // Check for existing session and drop lock immediately — don't hold it
-    // during the expensive child-process spawn and readiness wait.
+    // Check for an existing session without holding the active-session map
+    // during the expensive child-process spawn and readiness wait. The keyed
+    // startup guard above still serializes concurrent loads of this model.
     {
         let process_map = state.llama_server_process.lock().await;
         if let Some(existing) = process_map.values().find(|s| s.info.model_id == model_id) {
@@ -201,6 +203,7 @@ pub async fn load_llama_model<R: Runtime>(
 
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
+    command.kill_on_drop(true);
     setup_windows_process_flags(&mut command);
 
     if !is_ax_serving {
@@ -415,9 +418,9 @@ pub async fn unload_llama_model<R: Runtime>(
     pid: i32,
 ) -> ServerResult<UnloadResult> {
     let state: State<LlamacppState> = app_handle.state();
-    let mut map = state.llama_server_process.lock().await;
+    let session = state.llama_server_process.lock().await.remove(&pid);
 
-    if let Some(session) = map.remove(&pid) {
+    if let Some(session) = session {
         let mut child = session.child;
 
         #[cfg(unix)]
@@ -516,7 +519,16 @@ pub async fn start_ax_serving<R: Runtime>(
     env_overrides: Option<HashMap<String, String>>,
 ) -> ServerResult<SessionInfo> {
     let state: State<LlamacppState> = app_handle.state();
-    let mut process_map = state.llama_server_process.lock().await;
+    let _startup_guard = state.acquire_startup_lock("__ax_serving__").await;
+    {
+        let process_map = state.llama_server_process.lock().await;
+        if let Some(existing) = process_map
+            .values()
+            .find(|session| session.info.model_id == "__ax_serving__")
+        {
+            return Ok(existing.info.clone());
+        }
+    }
 
     log::info!(
         "Starting ax-serving service at: {:?}, port: {}",
@@ -568,6 +580,7 @@ pub async fn start_ax_serving<R: Runtime>(
     command.envs(&envs);
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
+    command.kill_on_drop(true);
     setup_windows_process_flags(&mut command);
 
     // Make ax-serving a process group leader so that killing the group
@@ -751,14 +764,16 @@ pub async fn start_ax_serving<R: Runtime>(
         mmproj_path: None,
     };
 
-    process_map.insert(
-        pid,
-        LLamaBackendSession {
-            child,
-            info: session_info.clone(),
-        },
-    );
-    drop(process_map);
+    {
+        let mut process_map = state.llama_server_process.lock().await;
+        process_map.insert(
+            pid,
+            LLamaBackendSession {
+                child,
+                info: session_info.clone(),
+            },
+        );
+    }
     spawn_session_reaper(app_handle, session_info.pid);
 
     Ok(session_info)

@@ -5,7 +5,7 @@
  * No JSX, no dependency on streaming internals.
  */
 
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { lastAssistantMessageIsCompleteWithToolCalls } from 'ai'
 import type { UIMessage } from '@ai-sdk/react'
 import { useServiceHub } from '@/hooks/useServiceHub'
@@ -46,6 +46,15 @@ type ToolExecutionResult = {
   structured_content?: unknown
   message?: string
 }
+type McpToolCallArgs = {
+  toolName: string
+  serverName?: string
+  arguments: object
+}
+type McpToolCaller = (args: McpToolCallArgs) => Promise<ToolExecutionResult>
+
+const isAbortError = (error: unknown): boolean =>
+  error instanceof Error && error.name === 'AbortError'
 
 function fabricSearchTermCoverage(
   result: { content?: ToolResultContent } | undefined,
@@ -104,10 +113,12 @@ export async function extractRelevantSourceResult({
   serviceHub,
   result,
   query,
+  callMcpTool,
 }: {
   serviceHub: ReturnType<typeof useServiceHub>
   result: { error?: string; content?: ToolResultContent }
   query: string
+  callMcpTool?: McpToolCaller
 }): Promise<{ error?: string; content?: ToolResultContent } | null> {
   if (!shouldExtractSourceForQuery(query)) return null
 
@@ -119,7 +130,11 @@ export async function extractRelevantSourceResult({
   if (!source) return null
 
   try {
-    const extracted = await serviceHub.mcp().callTool({
+    const invokeMcpTool: McpToolCaller =
+      callMcpTool ??
+      ((args) =>
+        serviceHub.mcp().callTool(args) as Promise<ToolExecutionResult>)
+    const extracted = await invokeMcpTool({
       toolName: 'fabric_extract',
       arguments: { file_path: source },
     }) as {
@@ -152,6 +167,7 @@ export async function extractRelevantSourceResult({
       }],
     }
   } catch (error) {
+    if (isAbortError(error)) throw error
     console.warn('[LocalKnowledge] source extraction fallback failed:', error)
     return null
   }
@@ -237,10 +253,12 @@ async function retryFabricSearchWithKeywordFallback({
   serviceHub,
   result,
   toolInput,
+  callMcpTool,
 }: {
   serviceHub: ReturnType<typeof useServiceHub>
   result: { error?: string; content?: ToolResultContent }
   toolInput: unknown
+  callMcpTool: McpToolCaller
 }) {
   const input = toolInput && typeof toolInput === 'object'
     ? { ...(toolInput as Record<string, unknown>) }
@@ -262,7 +280,7 @@ async function retryFabricSearchWithKeywordFallback({
   if ((requestedMode === 'vector' || requestedMode === 'hybrid') && asksForSpecificFact && namesKnownDocument) {
     try {
       const targetedQuery = query
-      const keywordResult = await serviceHub.mcp().callTool({
+      const keywordResult = await callMcpTool({
         toolName: 'fabric_search',
         arguments: {
           ...input,
@@ -277,6 +295,7 @@ async function retryFabricSearchWithKeywordFallback({
         result = keywordResult
       }
     } catch (error) {
+      if (isAbortError(error)) throw error
       console.warn('[LocalKnowledge] targeted keyword search failed:', error)
     }
   }
@@ -288,7 +307,7 @@ async function retryFabricSearchWithKeywordFallback({
 
   for (const fallbackQuery of buildKeywordFallbackQueries(query)) {
     try {
-      const fallback = await serviceHub.mcp().callTool({
+      const fallback = await callMcpTool({
         toolName: 'fabric_search',
         arguments: {
           ...input,
@@ -306,6 +325,7 @@ async function retryFabricSearchWithKeywordFallback({
         }
       }
     } catch (error) {
+      if (isAbortError(error)) throw error
       console.warn('[LocalKnowledge] keyword fallback search failed:', error)
     }
   }
@@ -314,6 +334,7 @@ async function retryFabricSearchWithKeywordFallback({
     serviceHub,
     result: bestResult,
     query,
+    callMcpTool,
   })
   if (extracted) return extracted
 
@@ -358,6 +379,19 @@ export function useThreadTools({
   }, [threadId])
 
   const toolCallAbortController = useRef<AbortController | null>(null)
+  const activeCancellationRef = useRef<(() => void) | null>(null)
+
+  useEffect(() => {
+    return () => {
+      const cancel = activeCancellationRef.current
+      cancel?.()
+      if (cancel) {
+        useAppState.getState().clearToolCallCancellation(threadId, cancel)
+      }
+      activeCancellationRef.current = null
+      toolCallAbortController.current = null
+    }
+  }, [threadId])
 
   // Persists across multiple startToolExecution calls within one chat turn.
   // Prevents the model from calling fabric_search more than once per turn.
@@ -385,8 +419,43 @@ export function useThreadTools({
 
   const startToolExecution = useCallback(
     (addToolOutput: AddToolOutputFn) => {
-      toolCallAbortController.current = new AbortController()
-      const signal = toolCallAbortController.current.signal
+      const appState = useAppState.getState()
+      appState.cancelToolCall(threadId)
+
+      const controller = new AbortController()
+      toolCallAbortController.current = controller
+      const signal = controller.signal
+      let cancelActiveNativeCall: (() => Promise<void>) | undefined
+      const cancelExecution = () => {
+        controller.abort()
+        void cancelActiveNativeCall?.()
+      }
+      activeCancellationRef.current = cancelExecution
+      appState.setToolCallCancellation(threadId, cancelExecution)
+
+      const abortError = () => {
+        const error = new Error('Tool execution cancelled')
+        error.name = 'AbortError'
+        return error
+      }
+      const callMcpTool: McpToolCaller = async (args) => {
+        if (signal.aborted) throw abortError()
+        const cancellable = serviceHub.mcp().callToolWithCancellation(args)
+        cancelActiveNativeCall = cancellable.cancel
+        if (signal.aborted) {
+          await cancellable.cancel()
+          throw abortError()
+        }
+        try {
+          const result = await cancellable.promise
+          if (signal.aborted) throw abortError()
+          return result as ToolExecutionResult
+        } finally {
+          if (cancelActiveNativeCall === cancellable.cancel) {
+            cancelActiveNativeCall = undefined
+          }
+        }
+      }
 
       const mcpToolNames = useAppState.getState().mcpToolNames
       const mcpTools = useAppState.getState().tools
@@ -426,6 +495,8 @@ export function useThreadTools({
               .getState()
               .showApprovalModal(toolName, threadId, toolInput)
 
+            if (signal.aborted) break
+
             if (!approved) {
               addToolOutput({
                 state: 'output-error',
@@ -446,14 +517,15 @@ export function useThreadTools({
                 scope: projectId ? 'project' : 'thread',
               })
             } else if (mcpToolNames.has(toolName)) {
-              result = await serviceHub.mcp().callTool({ toolName, arguments: toolInput })
+              result = await callMcpTool({ toolName, arguments: toolInput })
             } else if (toolName === 'process_file_for_bi') {
               // Custom tool: read file as base64 and upload to AX BI
               try {
                 const { fs } = await import('@ax-studio/core')
                 const input = toolCall.input as { file_path: string; filename: string }
                 const fileContent = await fs.readFileBase64(input.file_path)
-                result = await serviceHub.mcp().callTool({
+                if (signal.aborted) throw abortError()
+                result = await callMcpTool({
                   serverName: 'ax-bi',
                   toolName: 'upload_file',
                   arguments: {
@@ -483,8 +555,11 @@ export function useThreadTools({
                 serviceHub,
                 result,
                 toolInput,
+                callMcpTool,
               })
             }
+
+            if (signal.aborted) break
 
             // Re-evaluate after fabric retry (may clear or set failure)
             const finalFailure = getMcpToolFailureMessage(result)
@@ -542,7 +617,7 @@ export function useThreadTools({
               addToolOutput({ tool: toolCall.toolName, toolCallId: toolCall.toolCallId, output })
             }
           } catch (error) {
-            const isAbort = error instanceof Error && error.name === 'AbortError'
+            const isAbort = isAbortError(error)
             if (!isAbort) {
               console.error('Tool call error:', error)
               addToolOutput({
@@ -558,12 +633,28 @@ export function useThreadTools({
         const processedIds = new Set(queuedTools.map((t: QueuedTool) => t.toolCallId))
         const currentTools = (useChatSessions.getState().ensureSessionData(threadId).tools ?? []) as QueuedTool[]
         setSessionTools(currentTools.filter((t) => !processedIds.has(t.toolCallId)))
-        toolCallAbortController.current = null
+        if (toolCallAbortController.current === controller) {
+          toolCallAbortController.current = null
+        }
+        if (activeCancellationRef.current === cancelExecution) {
+          activeCancellationRef.current = null
+        }
+        useAppState
+          .getState()
+          .clearToolCallCancellation(threadId, cancelExecution)
       })().catch((error) => {
-        const isAbort = error instanceof Error && error.name === 'AbortError'
+        const isAbort = isAbortError(error)
         if (!isAbort) console.error('Tool call error:', error)
         setSessionTools([])
-        toolCallAbortController.current = null
+        if (toolCallAbortController.current === controller) {
+          toolCallAbortController.current = null
+        }
+        if (activeCancellationRef.current === cancelExecution) {
+          activeCancellationRef.current = null
+        }
+        useAppState
+          .getState()
+          .clearToolCallCancellation(threadId, cancelExecution)
       })
     },
     [serviceHub, setSessionTools, threadId, projectId]

@@ -3215,25 +3215,16 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     expected: string
   ): Promise<boolean> {
     try {
-      // Use the core API if available (Tauri backend provides this)
-      const result = await (window as any).core?.api?.validateSha256?.(
-        filePath,
-        expected
-      )
-      if (result !== undefined) return Boolean(result)
+      const validateSha256 = window.core?.api?.validateSha256
+      if (validateSha256) {
+        return Boolean(await validateSha256({ path: filePath, expected }))
+      }
 
       const computed = await computeFileSha256Browser(filePath)
       return computed.toLowerCase() === expected.toLowerCase()
     } catch (error) {
-      // Skip validation rather than crash the model load. The Tauri API may
-      // be missing in web/dev contexts, and the browser fallback throws when
-      // `fetch` cannot read a local file path. Hard-throwing here would make
-      // every model load fail in those environments.
-      console.warn(
-        '[llamacpp] SHA256 validation unavailable — skipping integrity check:',
-        error
-      )
-      return true
+      console.error('[llamacpp] SHA256 validation failed:', error)
+      return false
     }
   }
 }

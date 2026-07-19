@@ -2,7 +2,7 @@
 import { create } from 'zustand'
 import type { Chat, UIMessage } from '@ai-sdk/react'
 import type { ChatStatus } from 'ai'
-import { CustomChatTransport } from '@/lib/custom-chat-transport'
+import type { CustomChatTransport } from '@/lib/custom-chat-transport'
 import {
   createSessionData,
   createSession,

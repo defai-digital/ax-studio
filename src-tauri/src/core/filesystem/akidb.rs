@@ -415,8 +415,9 @@ fn validate_mcp_cli_command(raw_command: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Resolve the fabric-ingest CLI command from the MCP config.
-/// Falls back to `npx -y @ax-fabric/fabric-ingest` if the config is missing.
+/// Resolve the fabric-ingest CLI command from an explicit MCP config or a
+/// local development checkout. There is intentionally no registry fallback:
+/// the formerly configured npm package is unpublished.
 fn resolve_fabric_cli_command<R: Runtime>(
     app: &tauri::AppHandle<R>,
 ) -> Result<FabricCliCommand, String> {
@@ -440,7 +441,10 @@ fn resolve_fabric_cli_command<R: Runtime>(
                     let raw_command = server
                         .get("command")
                         .and_then(|v| v.as_str())
-                        .unwrap_or("npx")
+                        .filter(|command| !command.trim().is_empty())
+                        .ok_or_else(|| {
+                            "Knowledge-base MCP config is missing an explicit command".to_string()
+                        })?
                         .to_string();
 
                     validate_mcp_cli_command(&raw_command)?;

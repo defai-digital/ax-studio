@@ -120,9 +120,9 @@ pub async fn stop_server(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut handle_guard = server_handle.lock().await;
 
-    if let Some(handle) = handle_guard.take() {
+    if let Some(mut handle) = handle_guard.take() {
         let _ = handle.shutdown_tx.send(true);
-        match tokio::time::timeout(std::time::Duration::from_secs(2), handle.task).await {
+        match tokio::time::timeout(std::time::Duration::from_secs(2), &mut handle.task).await {
             Ok(join_result) => {
                 if let Err(e) = join_result {
                     log::warn!("AX Studio API server join failed during shutdown: {e}");
@@ -130,6 +130,8 @@ pub async fn stop_server(
             }
             Err(_) => {
                 log::warn!("Graceful server shutdown timed out, aborting task");
+                handle.task.abort();
+                let _ = handle.task.await;
             }
         }
         log::info!("AX Studio API server stopped");

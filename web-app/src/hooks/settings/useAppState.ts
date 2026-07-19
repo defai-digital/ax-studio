@@ -29,7 +29,7 @@ type AppState = {
   errorMessage?: AppErrorMessage
   promptProgress?: PromptProgress
   activeModels: string[]
-  cancelToolCall?: () => void
+  toolCallCancellations: Record<string, () => void>
   setServerStatus: (value: 'running' | 'stopped' | 'pending') => void
   updateStreamingContent: (content: ThreadMessage | undefined) => void
   updateCurrentToolCall: (
@@ -49,7 +49,9 @@ type AppState = {
   resetTokenSpeed: () => void
   clearAppState: () => void
   setOutOfContextDialog: (show: boolean) => void
-  setCancelToolCall: (cancel: (() => void) | undefined) => void
+  setToolCallCancellation: (threadId: string, cancel: () => void) => void
+  clearToolCallCancellation: (threadId: string, cancel?: () => void) => void
+  cancelToolCall: (threadId: string) => void
   setErrorMessage: (error: AppErrorMessage | undefined) => void
   updatePromptProgress: (progress: PromptProgress | undefined) => void
   setActiveModels: (models: string[]) => void
@@ -70,6 +72,14 @@ const getOwnAbortController = (
     ? abortControllers[threadId]
     : undefined
 
+const getOwnToolCallCancellation = (
+  cancellations: Record<string, () => void>,
+  threadId: string
+): (() => void) | undefined =>
+  Object.prototype.hasOwnProperty.call(cancellations, threadId)
+    ? cancellations[threadId]
+    : undefined
+
 export const useAppState = create<AppState>()((set) => ({
   streamingContent: undefined,
   loadingModel: false,
@@ -80,7 +90,7 @@ export const useAppState = create<AppState>()((set) => ({
   tokenSpeed: undefined,
   currentToolCall: undefined,
   promptProgress: undefined,
-  cancelToolCall: undefined,
+  toolCallCancellations: {},
   activeModels: [],
   updateStreamingContent: (content: ThreadMessage | undefined) => {
     set(() => ({
@@ -187,12 +197,19 @@ export const useAppState = create<AppState>()((set) => ({
           /* ignore — controller may already be aborted */
         }
       })
+      Object.values(state.toolCallCancellations).forEach((cancel) => {
+        try {
+          cancel()
+        } catch {
+          /* ignore — cancellation is best-effort during global teardown */
+        }
+      })
       return {
         streamingContent: undefined,
         abortControllers: {},
         tokenSpeed: undefined,
         currentToolCall: undefined,
-        cancelToolCall: undefined,
+        toolCallCancellations: {},
         errorMessage: undefined,
         showOutOfContextDialog: false,
         loadingModel: false,
@@ -205,10 +222,31 @@ export const useAppState = create<AppState>()((set) => ({
       showOutOfContextDialog: show,
     }))
   },
-  setCancelToolCall: (cancel) => {
-    set(() => ({
-      cancelToolCall: cancel,
+  setToolCallCancellation: (threadId, cancel) => {
+    set((state) => ({
+      toolCallCancellations: {
+        ...state.toolCallCancellations,
+        [threadId]: cancel,
+      },
     }))
+  },
+  clearToolCallCancellation: (threadId, cancel) => {
+    set((state) => {
+      const current = getOwnToolCallCancellation(
+        state.toolCallCancellations,
+        threadId
+      )
+      if (!current || (cancel && current !== cancel)) return state
+      const { [threadId]: _removed, ...rest } = state.toolCallCancellations
+      return { toolCallCancellations: rest }
+    })
+  },
+  cancelToolCall: (threadId) => {
+    const cancel = getOwnToolCallCancellation(
+      useAppState.getState().toolCallCancellations,
+      threadId
+    )
+    cancel?.()
   },
   setErrorMessage: (error) => {
     set(() => ({

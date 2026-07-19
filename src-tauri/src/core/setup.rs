@@ -377,14 +377,6 @@ pub fn migrate_mcp_servers(
             log::error!("Failed to migrate Exa to HTTP: {e}");
         }
     }
-    if mcp_version < 4 {
-        log::info!("Migrating MCP schema version 4: Adding AX Studio MCP server");
-        let mcp_config = resolve_ax_fabric_mcp_config();
-        let result = add_server_config(app_handle.clone(), "ax-studio".to_string(), mcp_config);
-        if let Err(e) = result {
-            log::error!("Failed to add AX Studio MCP server config: {e}");
-        }
-    }
     if mcp_version < 5 {
         log::info!("Migrating MCP schema version 5: Renaming ax-fabric MCP server to ax-studio");
         if let Err(e) = rename_mcp_server_key(app_handle.clone(), "ax-fabric", "ax-studio") {
@@ -401,32 +393,23 @@ pub fn migrate_mcp_servers(
     }
     if mcp_version < 7 {
         log::info!("Migrating MCP schema version 7: Adding --experimental-sqlite flag to ax-studio MCP server");
-        if let Err(e) = patch_ax_studio_sqlite_flag(app_handle) {
+        if let Err(e) = patch_ax_studio_sqlite_flag(app_handle.clone()) {
             log::error!("Failed to patch ax-studio sqlite flag: {e}");
         }
     }
-    store.set("mcp_version", 7);
+    if mcp_version < 8 {
+        log::info!("Migrating MCP schema version 8: Removing unpublished AX Studio npm preset");
+        remove_unpublished_ax_studio_mcp_config(app_handle)
+            .map_err(|e| format!("Failed to remove unpublished AX Studio MCP preset: {e}"))?;
+    }
+    store.set("mcp_version", 8);
     store
         .save()
         .map_err(|e| format!("Failed to save store during MCP migration: {e}"))?;
     Ok(())
 }
 
-const AX_STUDIO_MCP_PACKAGE: &str = "@ax-fabric/fabric-ingest";
-
-/// Build the default MCP server config for ax-fabric.
-/// Uses npx as the default command which will work once the package is
-/// published to npm. Users can override the command and path via
-/// Settings → MCP Servers in the UI.
-fn resolve_ax_fabric_mcp_config() -> serde_json::Value {
-    serde_json::json!({
-        "command": "npx",
-        "args": ["-y", AX_STUDIO_MCP_PACKAGE, "mcp", "server"],
-        "env": {},
-        "active": false,
-        "official": true
-    })
-}
+const UNPUBLISHED_AX_STUDIO_MCP_PACKAGE: &str = "@ax-fabric/fabric-ingest";
 
 // Migration tests are colocated with the migration definitions; setup/runtime
 // wiring follows below and intentionally remains separate from migration logic.
@@ -436,36 +419,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_resolve_ax_fabric_mcp_config_structure() {
-        let config = resolve_ax_fabric_mcp_config();
-        assert_eq!(config["command"], "npx");
-        let args = config["args"]
-            .as_array()
-            .expect("'args' must be an array in test");
-        assert_eq!(args.len(), 4);
-        assert_eq!(args[0], "-y");
-        assert_eq!(args[1], AX_STUDIO_MCP_PACKAGE);
-        assert_eq!(args[2], "mcp");
-        assert_eq!(args[3], "server");
-    }
+    fn test_unpublished_ax_studio_preset_detection_is_selective() {
+        let unsafe_preset = serde_json::json!({
+            "command": "npx",
+            "args": ["-y", UNPUBLISHED_AX_STUDIO_MCP_PACKAGE, "mcp", "server"]
+        });
+        let local_source = serde_json::json!({
+            "command": "node",
+            "args": ["/opt/ax-fabric/cli.js", "mcp", "server"]
+        });
 
-    #[test]
-    fn test_resolve_ax_fabric_mcp_config_fields() {
-        let config = resolve_ax_fabric_mcp_config();
-        assert_eq!(config["command"], "npx");
-        assert_eq!(config["active"], false);
-        assert_eq!(config["official"], true);
-        assert!(config["env"].is_object());
-        let args = config["args"]
-            .as_array()
-            .expect("'args' must be an array in test");
-        assert!(args.contains(&serde_json::json!("-y")));
-        assert!(args.contains(&serde_json::json!(AX_STUDIO_MCP_PACKAGE)));
-    }
-
-    #[test]
-    fn test_ax_studio_mcp_package_constant() {
-        assert_eq!(AX_STUDIO_MCP_PACKAGE, "@ax-fabric/fabric-ingest");
+        assert!(is_unpublished_ax_studio_mcp_preset(&unsafe_preset));
+        assert!(!is_unpublished_ax_studio_mcp_preset(&local_source));
     }
 
     #[test]
@@ -614,6 +579,54 @@ fn remove_mcp_server_keys(app_handle: tauri::AppHandle, keys: &[&str]) -> Result
         )
         .map_err(|e| format!("Failed to write MCP config: {e}"))?;
     }
+
+    Ok(())
+}
+
+fn is_unpublished_ax_studio_mcp_preset(server: &serde_json::Value) -> bool {
+    server.get("command").and_then(|value| value.as_str()) == Some("npx")
+        && server
+            .get("args")
+            .and_then(|value| value.as_array())
+            .is_some_and(|args| {
+                args.iter()
+                    .any(|arg| arg.as_str() == Some(UNPUBLISHED_AX_STUDIO_MCP_PACKAGE))
+            })
+}
+
+/// Remove only the unsafe built-in npm preset. A user-supplied local/source
+/// configuration under the same server name is deliberately preserved.
+fn remove_unpublished_ax_studio_mcp_config(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let config_path = get_app_data_folder_path(app_handle).join("mcp_config.json");
+    if !config_path.exists() {
+        return Ok(());
+    }
+
+    let config_str =
+        fs::read_to_string(&config_path).map_err(|e| format!("Failed to read MCP config: {e}"))?;
+    let mut config: serde_json::Value = serde_json::from_str(&config_str)
+        .map_err(|e| format!("Failed to parse MCP config: {e}"))?;
+
+    let should_remove = config
+        .get("mcpServers")
+        .and_then(|servers| servers.get("ax-studio"))
+        .is_some_and(is_unpublished_ax_studio_mcp_preset);
+    if !should_remove {
+        return Ok(());
+    }
+
+    if let Some(servers) = config
+        .get_mut("mcpServers")
+        .and_then(|servers| servers.as_object_mut())
+    {
+        servers.remove("ax-studio");
+    }
+    fs::write(
+        &config_path,
+        serde_json::to_string_pretty(&config)
+            .map_err(|e| format!("Failed to serialize MCP config: {e}"))?,
+    )
+    .map_err(|e| format!("Failed to write MCP config: {e}"))?;
 
     Ok(())
 }
@@ -900,7 +913,11 @@ pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
 
     app.handle().plugin(
         tauri_plugin_log::Builder::default()
-            .level(log::LevelFilter::Debug)
+            .level(if cfg!(debug_assertions) {
+                log::LevelFilter::Debug
+            } else {
+                log::LevelFilter::Info
+            })
             .targets([
                 tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
                 tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),

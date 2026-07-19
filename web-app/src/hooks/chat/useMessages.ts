@@ -62,6 +62,7 @@ type MessageState = {
   addMessage: (message: ThreadMessage) => void
   updateMessage: (message: ThreadMessage) => void
   deleteMessage: (threadId: string, messageId: string) => void
+  removeThreadMessages: (threadId: string) => void
   clearAllMessages: () => void
 }
 
@@ -262,6 +263,16 @@ export const useMessages = create<MessageState>()((set, get) => ({
           }
         })
       })
+  },
+  removeThreadMessages: (threadId) => {
+    clearTrackedThreadMessages(threadId)
+    set((state) => {
+      if (!Object.prototype.hasOwnProperty.call(state.messages, threadId)) {
+        return state
+      }
+      const { [threadId]: _removed, ...remainingMessages } = state.messages
+      return { messages: remainingMessages }
+    })
   },
   clearAllMessages: () => {
     persistedMessages.clear()

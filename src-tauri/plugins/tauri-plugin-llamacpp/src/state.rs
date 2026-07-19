@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use tokio::process::Child;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OwnedMutexGuard};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionInfo {
@@ -24,12 +24,14 @@ pub struct LLamaBackendSession {
 /// LlamaCpp plugin state
 pub struct LlamacppState {
     pub llama_server_process: Arc<Mutex<HashMap<i32, LLamaBackendSession>>>,
+    startup_locks: Arc<Mutex<HashMap<String, Weak<Mutex<()>>>>>,
 }
 
 impl Default for LlamacppState {
     fn default() -> Self {
         Self {
             llama_server_process: Arc::new(Mutex::new(HashMap::new())),
+            startup_locks: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -37,5 +39,59 @@ impl Default for LlamacppState {
 impl LlamacppState {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Serialize startup for the same logical model/service without blocking
+    /// unrelated model loads or access to the active-session map.
+    pub async fn acquire_startup_lock(&self, key: &str) -> OwnedMutexGuard<()> {
+        let lock = {
+            let mut locks = self.startup_locks.lock().await;
+            locks.retain(|_, lock| lock.strong_count() > 0);
+            if let Some(lock) = locks.get(key).and_then(Weak::upgrade) {
+                lock
+            } else {
+                let lock = Arc::new(Mutex::new(()));
+                locks.insert(key.to_string(), Arc::downgrade(&lock));
+                lock
+            }
+        };
+        lock.lock_owned().await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn startup_locks_serialize_same_key_without_blocking_other_models() {
+        let state = LlamacppState::new();
+        let first = state.acquire_startup_lock("model-a").await;
+
+        assert!(tokio::time::timeout(
+            Duration::from_millis(10),
+            state.acquire_startup_lock("model-a")
+        )
+        .await
+        .is_err());
+        let other = tokio::time::timeout(
+            Duration::from_secs(1),
+            state.acquire_startup_lock("model-b"),
+        )
+        .await
+        .expect("unrelated model startup should not block");
+        drop(other);
+
+        drop(first);
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            state.acquire_startup_lock("model-a"),
+        )
+        .await
+        .expect("same model startup should resume after the prior load exits");
+
+        state.acquire_startup_lock("model-c").await;
+        assert_eq!(state.startup_locks.lock().await.len(), 1);
     }
 }

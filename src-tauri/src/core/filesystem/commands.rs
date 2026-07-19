@@ -15,6 +15,7 @@ use std::path::{Component, Path, PathBuf};
 #[cfg(desktop)]
 use tauri::{AppHandle, Manager};
 use tauri::{Runtime, State};
+use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(untagged)]
@@ -662,41 +663,7 @@ pub async fn read_file_base64<R: Runtime>(
             .ok_or_else(|| "read_file_base64: no path provided".to_string())?,
         SinglePathRequest::Typed { path } => path,
     };
-    if raw_path.is_empty() || raw_path.len() > 4 * 1024 || raw_path.chars().any(char::is_control) {
-        return Err("read_file_base64: invalid path".to_string());
-    }
-    let clean_path = if raw_path.starts_with("file:/") || raw_path.starts_with("file:\\") {
-        ax_studio_utils::normalize_file_path(&raw_path)
-    } else {
-        raw_path
-    };
-    let path = PathBuf::from(clean_path)
-        .canonicalize()
-        .map(|path| ax_studio_utils::normalize_path(&path))
-        .map_err(|error| format!("Cannot resolve read path: {error}"))?;
-    if !path.is_file() {
-        return Err("read_file_base64: path is not a file".to_string());
-    }
-
-    let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app_handle);
-    let app_data_folder = app_data_folder
-        .canonicalize()
-        .map(|path| ax_studio_utils::normalize_path(&path))
-        .unwrap_or_else(|_| ax_studio_utils::normalize_path(&app_data_folder));
-    let approved_files = state.approved_read_files.lock().await;
-    let approved_directories = state.approved_read_directories.lock().await;
-    if !is_read_path_approved(
-        &path,
-        &app_data_folder,
-        &approved_files,
-        &approved_directories,
-    ) {
-        return Err(
-            "read_file_base64: path was not approved by the native open dialog".to_string(),
-        );
-    }
-    drop(approved_directories);
-    drop(approved_files);
+    let path = resolve_approved_read_file(app_handle, &state, raw_path, "read_file_base64").await?;
 
     let metadata = fs::metadata(&path).map_err(|error| error.to_string())?;
     if metadata.len() > MAX_BASE64_READ_BYTES {
@@ -713,6 +680,80 @@ pub async fn read_file_base64<R: Runtime>(
     })
     .await
     .map_err(|error| format!("read_file_base64 task join error: {error}"))?
+}
+
+async fn resolve_approved_read_file<R: Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    state: &State<'_, AppState>,
+    raw_path: String,
+    command: &str,
+) -> Result<PathBuf, String> {
+    if raw_path.is_empty() || raw_path.len() > 4 * 1024 || raw_path.chars().any(char::is_control) {
+        return Err(format!("{command}: invalid path"));
+    }
+    let clean_path = if raw_path.starts_with("file:/") || raw_path.starts_with("file:\\") {
+        ax_studio_utils::normalize_file_path(&raw_path)
+    } else {
+        raw_path
+    };
+    let path = PathBuf::from(clean_path)
+        .canonicalize()
+        .map(|path| ax_studio_utils::normalize_path(&path))
+        .map_err(|error| format!("Cannot resolve read path: {error}"))?;
+    if !path.is_file() {
+        return Err(format!("{command}: path is not a file"));
+    }
+
+    let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app_handle);
+    let app_data_folder = app_data_folder
+        .canonicalize()
+        .map(|path| ax_studio_utils::normalize_path(&path))
+        .unwrap_or_else(|_| ax_studio_utils::normalize_path(&app_data_folder));
+    let approved_files = state.approved_read_files.lock().await;
+    let approved_directories = state.approved_read_directories.lock().await;
+    if !is_read_path_approved(
+        &path,
+        &app_data_folder,
+        &approved_files,
+        &approved_directories,
+    ) {
+        return Err(format!(
+            "{command}: path was not approved by the native open dialog"
+        ));
+    }
+    drop(approved_directories);
+    drop(approved_files);
+    Ok(path)
+}
+
+#[tauri::command]
+/// Stream an approved file through SHA-256 without buffering it in renderer memory.
+pub async fn validate_sha256<R: Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    state: State<'_, AppState>,
+    path: String,
+    expected: String,
+) -> Result<bool, String> {
+    let normalized_expected = expected
+        .strip_prefix("sha256:")
+        .unwrap_or(&expected)
+        .to_ascii_lowercase();
+    if normalized_expected.len() != 64
+        || !normalized_expected
+            .chars()
+            .all(|value| value.is_ascii_hexdigit())
+    {
+        return Err("validate_sha256: expected hash must be 64 hexadecimal characters".to_string());
+    }
+
+    let approved_path =
+        resolve_approved_read_file(app_handle, &state, path, "validate_sha256").await?;
+    let actual = ax_studio_utils::crypto::compute_file_sha256_with_cancellation(
+        &approved_path,
+        &CancellationToken::new(),
+    )
+    .await?;
+    Ok(actual.eq_ignore_ascii_case(&normalized_expected))
 }
 
 #[tauri::command]

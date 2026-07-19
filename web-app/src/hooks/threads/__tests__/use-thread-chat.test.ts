@@ -367,6 +367,31 @@ describe('useThreadChat', () => {
       expect(messages[0].role).toBe('assistant')
     })
 
+    it('preserves aborted metadata on a partial assistant message', () => {
+      const { result } = renderHook(() => useThreadChat(defaultParams()))
+
+      act(() => {
+        result.current.persistMessageOnFinish(
+          {
+            id: 'msg-aborted',
+            role: 'assistant',
+            parts: [{ type: 'text', text: 'Partial' }],
+            metadata: { aborted: true },
+          } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+          [
+            {
+              type: 'text',
+              text: { value: 'Partial', annotations: [] },
+            },
+          ] as any // eslint-disable-line @typescript-eslint/no-explicit-any
+        )
+      })
+
+      expect(useMessages.getState().getMessages(threadId)[0].metadata).toMatchObject({
+        aborted: true,
+      })
+    })
+
     it('updates existing message instead of adding duplicate', () => {
       // Pre-populate with existing message
       useMessages.setState({

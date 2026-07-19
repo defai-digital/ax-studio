@@ -334,7 +334,7 @@ const ChatInput = memo(function ChatInput({
           abortControllers[tid]?.abort()
         }
       }
-      cancelToolCall?.()
+      cancelToolCall(tid)
     },
     [cancelToolCall, onStop]
   )
