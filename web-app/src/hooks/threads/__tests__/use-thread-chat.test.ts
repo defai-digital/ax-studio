@@ -65,6 +65,17 @@ vi.mock('@/lib/messages', () => ({
       parts: [{ type: 'text', text: m.content?.[0]?.text?.value ?? '' }],
     }))
   ),
+  extractContentPartsFromUIMessage: vi.fn((message: {
+    parts?: Array<{ type?: string; text?: string }>
+  }) => {
+    const text = (message.parts ?? [])
+      .filter((part) => part.type === 'text')
+      .map((part) => part.text ?? '')
+      .join('')
+    return text
+      ? [{ type: 'text', text: { value: text, annotations: [] } }]
+      : []
+  }),
 }))
 
 // Mock chat session store
@@ -146,6 +157,11 @@ describe('useThreadChat', () => {
         } as unknown as Thread,
       },
     })
+    // Always start from a cold chat-session snapshot. Earlier tests may
+    // mockReturnValue a live session; clearAllMocks does not drop that.
+    vi.mocked(useChatSessions.getState).mockReturnValue({
+      sessions: {},
+    } as never)
     axBiWorkflowMocks.runAxBiAuthoringWorkflow.mockResolvedValue({ handled: false })
   })
 
@@ -226,8 +242,83 @@ describe('useThreadChat', () => {
         )
       ).toBe(true)
     })
-    // No persisted fetch needed; store key is present so hand-off gates can run.
-    expect(useMessages.getState().getMessages(threadId)).toEqual([])
+    // Live UI text is mirrored into the store for hand-off dedupe.
+    const stored = useMessages.getState().getMessages(threadId)
+    expect(stored).toHaveLength(1)
+    expect(stored[0].id).toBe('live-1')
+    expect(stored[0].content?.[0]?.text?.value).toBe('from session')
+    getStateSpy.mockReturnValue({ sessions: {} } as never)
+  })
+
+  it('does not wipe live chat messages when history fetch finishes after send', async () => {
+    const { useServiceHub } = await import('@/hooks/useServiceHub')
+    const hub = useServiceHub() as {
+      messages: (...args: unknown[]) => unknown
+    }
+    let resolveFetch!: (value: unknown[]) => void
+    const fetchPromise = new Promise<unknown[]>((resolve) => {
+      resolveFetch = resolve
+    })
+    const fetchMessages = vi.fn().mockReturnValue(fetchPromise)
+    const messagesSpy = vi.spyOn(hub, 'messages').mockReturnValue({
+      fetchMessages,
+    })
+    const getStateSpy = vi.mocked(useChatSessions.getState)
+    getStateSpy.mockReturnValue({ sessions: {} } as never)
+
+    const { result } = renderHook(() => useThreadChat(defaultParams()))
+
+    // History is still in flight — store not hydrated yet.
+    expect(result.current.messagesLoaded).toBe(false)
+    expect(mockSetChatMessages).not.toHaveBeenCalled()
+
+    // User starts chatting; live session now owns the thread.
+    getStateSpy.mockReturnValue({
+      sessions: {
+        [threadId]: {
+          chat: {
+            messages: [
+              {
+                id: 'live-user',
+                role: 'user',
+                parts: [{ type: 'text', text: 'hello live' }],
+              },
+              {
+                id: 'live-assistant',
+                role: 'assistant',
+                parts: [{ type: 'text', text: 'streaming…' }],
+              },
+            ],
+          },
+          isStreaming: true,
+        },
+      },
+    } as never)
+
+    // Late history arrives (stale snapshot).
+    resolveFetch([
+      {
+        id: 'disk-1',
+        thread_id: threadId,
+        role: 'user',
+        content: [{ type: 'text', text: { value: 'old history', annotations: [] } }],
+        created_at: 1,
+      },
+    ])
+
+    await vi.waitFor(() => {
+      expect(result.current.messagesLoaded).toBe(true)
+    })
+
+    // Live transcript must not be replaced with converted disk history.
+    expect(mockSetChatMessages).not.toHaveBeenCalled()
+    const stored = useMessages.getState().getMessages(threadId)
+    expect(stored.map((m) => m.id)).toEqual(
+      expect.arrayContaining(['live-user', 'live-assistant'])
+    )
+    expect(stored.some((m) => m.id === 'disk-1')).toBe(true)
+
+    messagesSpy.mockRestore()
     getStateSpy.mockReturnValue({ sessions: {} } as never)
   })
 

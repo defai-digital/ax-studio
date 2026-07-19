@@ -180,6 +180,29 @@ describe('useThreadEffects', () => {
     expect(defaultInput.processAndSendMessage).not.toHaveBeenCalled()
   })
 
+  it('does not re-send when the user turn only exists in live chatMessages', async () => {
+    sessionStorage.setItem(
+      `initial-message-${threadId}`,
+      JSON.stringify({ text: 'already sent' })
+    )
+    // Store may be empty after a live-session stamp race; UI already shows the turn.
+    defaultInput.persistedMessages = []
+    defaultInput.chatMessages = [
+      {
+        id: 'user-1',
+        role: 'user',
+        parts: [{ type: 'text', text: 'already sent' }],
+      },
+    ] as ThreadEffectsInput['chatMessages']
+
+    renderHook(() => useThreadEffects(defaultInput))
+
+    await vi.waitFor(() => {
+      expect(sessionStorage.getItem(`initial-message-${threadId}`)).toBeNull()
+    })
+    expect(defaultInput.processAndSendMessage).not.toHaveBeenCalled()
+  })
+
   it('consumes the initial message before asynchronous queuing finishes', async () => {
     const initialMsg = JSON.stringify({ text: 'retry me' })
     let finishQueuing: (() => void) | undefined

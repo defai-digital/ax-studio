@@ -23,7 +23,10 @@ import {
   newUserThreadContent,
 } from '@/lib/completion'
 import { getModelContextLength } from '@/lib/models'
-import { convertThreadMessagesToUIMessages } from '@/lib/messages'
+import {
+  convertThreadMessagesToUIMessages,
+  extractContentPartsFromUIMessage,
+} from '@/lib/messages'
 import { getVersionMeta, selectVisibleMessages } from '@/lib/messages/versions'
 import { runAxBiAuthoringWorkflow } from '@/lib/ax-bi/authoring-workflow'
 import {
@@ -32,6 +35,69 @@ import {
   ChatCompletionRole,
   ContentType,
 } from '@ax-studio/core'
+
+type ChatSessionSnapshot = {
+  chat?: { messages?: UIMessage[] }
+  isStreaming?: boolean
+}
+
+function sessionOwnsLiveChat(
+  session: ChatSessionSnapshot | undefined
+): boolean {
+  return (
+    (session?.chat?.messages?.length ?? 0) > 0 || Boolean(session?.isStreaming)
+  )
+}
+
+/** Map live AI SDK messages into the persisted-store shape for hand-off gates. */
+function threadMessagesFromUiMessages(
+  uiMessages: UIMessage[],
+  threadId: string
+): ThreadMessage[] {
+  return uiMessages.map((message) => {
+    const createdAt =
+      message.createdAt instanceof Date
+        ? message.createdAt.getTime()
+        : typeof message.createdAt === 'number'
+          ? message.createdAt
+          : Date.now()
+    return {
+      id: message.id,
+      object: 'thread.message',
+      thread_id: threadId,
+      type: 'text',
+      role:
+        message.role === 'assistant'
+          ? ChatCompletionRole.Assistant
+          : message.role === 'system'
+            ? ChatCompletionRole.System
+            : ChatCompletionRole.User,
+      content: extractContentPartsFromUIMessage(message),
+      status: MessageStatus.Ready,
+      created_at: createdAt,
+      metadata: (message.metadata ?? {}) as ThreadMessage['metadata'],
+    } as ThreadMessage
+  })
+}
+
+function mergeThreadMessagesById(
+  primary: ThreadMessage[],
+  secondary: ThreadMessage[]
+): ThreadMessage[] {
+  if (secondary.length === 0) return primary
+  if (primary.length === 0) return secondary
+  const seen = new Set(primary.map((message) => message.id))
+  const merged = [...primary]
+  for (const message of secondary) {
+    if (!seen.has(message.id)) {
+      seen.add(message.id)
+      merged.push(message)
+    }
+  }
+  return merged.sort(
+    (a, b) => (a.created_at || 0) - (b.created_at || 0)
+  )
+}
 
 // Message parts for chat messages (Vercel AI SDK format)
 type MessagePart =
@@ -133,21 +199,17 @@ export function useThreadChat({
       return
     }
 
-    const existingSession = useChatSessions.getState().sessions[threadId]
-    // Live chat already owns this thread (messages or in-flight stream). Still
-    // stamp the message-store key so `messagesLoaded` / launch hand-off gates
-    // do not wait forever on a fetch we intentionally skip.
-    if (
-      (existingSession?.chat?.messages?.length ?? 0) > 0 ||
-      existingSession?.isStreaming
-    ) {
-      const alreadyHydrated = Object.prototype.hasOwnProperty.call(
-        useMessages.getState().messages,
-        threadId
-      )
-      if (!alreadyHydrated) {
-        setMessages(threadId, useMessages.getState().getMessages(threadId))
-      }
+    const existingSession = useChatSessions.getState().sessions[
+      threadId
+    ] as ChatSessionSnapshot | undefined
+    // Live chat already owns this thread (messages or in-flight stream). Stamp
+    // the message store from the live UI transcript so hand-off dedupe sees
+    // the same user text the user already sees — never an empty placeholder.
+    if (sessionOwnsLiveChat(existingSession)) {
+      const liveUiMessages = existingSession?.chat?.messages ?? []
+      const fromLive = threadMessagesFromUiMessages(liveUiMessages, threadId)
+      const local = useMessages.getState().getMessages(threadId)
+      setMessages(threadId, mergeThreadMessagesById(fromLive, local))
       loadedThreadRef.current = threadId
       setMessagesLoaded(true)
       return
@@ -156,6 +218,23 @@ export function useThreadChat({
     const controller = new AbortController()
 
     const hydrateFrom = (messagesToSet: ThreadMessage[]) => {
+      // Re-check at completion time: the user may have started chatting while
+      // history was still loading. Never clobber a live AI SDK transcript.
+      const liveSession = useChatSessions.getState().sessions[
+        threadId
+      ] as ChatSessionSnapshot | undefined
+      if (sessionOwnsLiveChat(liveSession)) {
+        const liveUiMessages = liveSession?.chat?.messages ?? []
+        const fromLive = threadMessagesFromUiMessages(liveUiMessages, threadId)
+        setMessages(
+          threadId,
+          mergeThreadMessagesById(fromLive, messagesToSet)
+        )
+        loadedThreadRef.current = threadId
+        setMessagesLoaded(true)
+        return
+      }
+
       const uiMessages = convertThreadMessagesToUIMessages(
         selectVisibleMessages(messagesToSet)
       )

@@ -153,7 +153,18 @@ export function useThreadEffects({
         }
 
         const normalizedMessage = message.trim()
-        const messageAlreadyExists = persistedMessages.some((storedMessage) => {
+        // Prefer the live AI SDK transcript: after a live-session hydrate the
+        // store may still lag (or briefly hold []) while chatMessages already
+        // shows the user turn that must not be re-sent.
+        const existsInChat = chatMessages.some((chatMessage) => {
+          if (chatMessage.role !== 'user') return false
+          const text = chatMessage.parts
+            .map((part) => (part.type === 'text' ? part.text : ''))
+            .join('')
+            .trim()
+          return text === normalizedMessage
+        })
+        const existsInStore = persistedMessages.some((storedMessage) => {
           if (storedMessage.role !== 'user') return false
           const text = storedMessage.content
             .map((part) => part.text?.value ?? '')
@@ -161,6 +172,7 @@ export function useThreadEffects({
             .trim()
           return text === normalizedMessage
         })
+        const messageAlreadyExists = existsInChat || existsInStore
 
         // Consume the launch hand-off before beginning any asynchronous
         // preparation or generation. A Tauri reload can interrupt an active
@@ -182,6 +194,7 @@ export function useThreadEffects({
     threadId,
     thread?.metadata?.pendingInitialMessage,
     messagesLoaded,
+    chatMessages,
     persistedMessages,
   ])
 
