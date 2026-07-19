@@ -64,8 +64,8 @@ describe('ModelManager', () => {
       modelManager.register(mockModel)
       await Promise.resolve()
 
-      expect(modelManager.models.has('test-model-1')).toBe(true)
-      expect(modelManager.models.get('test-model-1')).toEqual(mockModel)
+      expect(modelManager.has('test-model-1')).toBe(true)
+      expect(modelManager.get('test-model-1')).toEqual(mockModel)
       expect(events.emit).toHaveBeenCalledWith(ModelEvent.OnModelsUpdate, {})
     })
 
@@ -86,7 +86,7 @@ describe('ModelManager', () => {
       modelManager.register(updatedModel)
       await Promise.resolve()
 
-      const registeredModel = modelManager.models.get('test-model-1')
+      const registeredModel = modelManager.get('test-model-1')
       expect(registeredModel).toEqual({
         id: 'test-model-1',
         name: 'Updated Model',
@@ -181,22 +181,28 @@ describe('ModelManager', () => {
     })
   })
 
-  describe('models property', () => {
-    it('should initialize with empty Map', () => {
-      expect(modelManager.models).toBeInstanceOf(Map)
-      expect(modelManager.models.size).toBe(0)
+  describe('registry accessors', () => {
+    it('should initialize empty', () => {
+      expect(modelManager.size).toBe(0)
+      expect(modelManager.getAll()).toEqual([])
     })
 
-    it('should maintain multiple models', () => {
+    it('should maintain multiple models without exposing a mutable Map', () => {
       const model1: Model = { id: 'model-1', name: 'Model 1' } as Model
       const model2: Model = { id: 'model-2', name: 'Model 2' } as Model
 
       modelManager.register(model1)
       modelManager.register(model2)
 
-      expect(modelManager.models.size).toBe(2)
-      expect(modelManager.models.get('model-1')).toEqual(model1)
-      expect(modelManager.models.get('model-2')).toEqual(model2)
+      expect(modelManager.size).toBe(2)
+      expect(modelManager.get('model-1')).toEqual(model1)
+      expect(modelManager.get('model-2')).toEqual(model2)
+      expect(modelManager.getAll()).toEqual([model1, model2])
+      // Public surface must not expose a mutable Map
+      expect(
+        Object.prototype.hasOwnProperty.call(modelManager, 'models') ||
+          'models' in modelManager
+      ).toBe(false)
     })
   })
 })

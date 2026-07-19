@@ -24,14 +24,14 @@ impl MlxState {
 
     /// Return the live worker, spawning it on first use or after a crash.
     pub fn worker(&self) -> Result<MlxWorker, String> {
-        let mut worker = self
-            .worker
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let mut join = self
-            .worker_join
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut worker = self.worker.lock().unwrap_or_else(|poisoned| {
+            log::warn!("[mlx] worker mutex was poisoned; recovering lock");
+            poisoned.into_inner()
+        });
+        let mut join = self.worker_join.lock().unwrap_or_else(|poisoned| {
+            log::warn!("[mlx] worker_join mutex was poisoned; recovering lock");
+            poisoned.into_inner()
+        });
 
         if join.as_ref().is_some_and(JoinHandle::is_finished) {
             let completed = join.take();

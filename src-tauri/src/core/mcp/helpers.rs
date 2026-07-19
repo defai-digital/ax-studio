@@ -172,9 +172,8 @@ pub async fn run_mcp_commands<R: Runtime>(
     servers_state: SharedMcpServers,
 ) -> Result<(), String> {
     let app_path = get_app_data_folder_path(app.clone());
-    let app_path_str = app_path.to_string_lossy().to_string();
-    let config_path = app_path_str.clone() + "/mcp_config.json";
-    log::trace!("Load MCP configs from {}", config_path);
+    let config_path = app_path.join("mcp_config.json");
+    log::trace!("Load MCP configs from {}", config_path.display());
     let config_content = tokio::task::spawn_blocking(move || std::fs::read_to_string(config_path))
         .await
         .map_err(|e| format!("Failed to read MCP config: {e}"))?
@@ -997,7 +996,11 @@ async fn kill_process_by_pid(process: TrackedMcpProcess) -> Result<(), String> {
     use nix::unistd::Pid;
 
     let pid = process.pid;
-    if !process.still_matches() {
+    // still_matches() refreshes sysinfo and is blocking — run off the async pool.
+    let matches = tokio::task::spawn_blocking(move || process.still_matches())
+        .await
+        .map_err(|e| format!("PID identity check join error: {e}"))?;
+    if !matches {
         return Err(format!(
             "Refusing to signal PID {pid}: the original MCP child has exited or its identity cannot be verified"
         ));
@@ -1015,7 +1018,10 @@ async fn kill_process_by_pid(process: TrackedMcpProcess) -> Result<(), String> {
     }
 
     log::warn!("Process {} unresponsive, sending SIGKILL", pid);
-    if !process.still_matches() {
+    let still_matches = tokio::task::spawn_blocking(move || process.still_matches())
+        .await
+        .map_err(|e| format!("PID identity check join error: {e}"))?;
+    if !still_matches {
         return Err(format!(
             "Refusing to force-kill PID {pid}: it no longer matches the original MCP child"
         ));
@@ -1034,27 +1040,33 @@ async fn kill_process_by_pid(process: TrackedMcpProcess) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
 
     let pid = process.pid;
-    if !process.still_matches() {
-        return Err(format!(
-            "Refusing to kill PID {pid}: it no longer matches the original MCP child"
-        ));
-    }
-    let mut cmd = Command::new("taskkill");
-    cmd.args(&["/F", "/PID", &pid.to_string()]);
+    // still_matches() and Command::output() are blocking; keep them off the
+    // async runtime worker threads.
+    tokio::task::spawn_blocking(move || {
+        if !process.still_matches() {
+            return Err(format!(
+                "Refusing to kill PID {pid}: it no longer matches the original MCP child"
+            ));
+        }
+        let mut cmd = Command::new("taskkill");
+        cmd.args(&["/F", "/PID", &pid.to_string()]);
 
-    #[cfg(windows)]
-    cmd.creation_flags(CREATE_NO_WINDOW);
+        #[cfg(windows)]
+        cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd
-        .output()
-        .map_err(|e| format!("Failed to run taskkill: {}", e))?;
+        let output = cmd
+            .output()
+            .map_err(|e| format!("Failed to run taskkill: {}", e))?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("taskkill failed: {}", stderr));
-    }
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("taskkill failed: {}", stderr));
+        }
 
-    Ok(())
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("taskkill join error: {e}"))?
 }
 
 pub async fn background_cleanup_mcp_servers<R: Runtime>(

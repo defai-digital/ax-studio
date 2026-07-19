@@ -29,11 +29,7 @@ declare global {
     core?: Core
   }
 
-  namespace NodeJS {
-    interface Global {
-      core: Core | undefined
-    }
-  }
-
+  // Augment globalThis directly (NodeJS.Global is deprecated).
+  // eslint-disable-next-line no-var
   var core: Core | undefined
 }

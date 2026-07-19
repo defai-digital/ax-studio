@@ -21,9 +21,10 @@ pub struct VoiceState {
 
 impl VoiceState {
     fn lock<'a, T>(mutex: &'a Mutex<T>) -> std::sync::MutexGuard<'a, T> {
-        mutex
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+        mutex.lock().unwrap_or_else(|poisoned| {
+            log::warn!("[voice] mutex was poisoned; recovering lock");
+            poisoned.into_inner()
+        })
     }
 
     /// Get the worker, spawning it on first use.

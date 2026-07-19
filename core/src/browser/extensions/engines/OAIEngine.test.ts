@@ -35,8 +35,8 @@ describe('OAIEngine', () => {
     consoleErrorSpy.mockRestore()
   })
 
-  it('should subscribe to events on load', () => {
-    engine.onLoad()
+  it('should subscribe to events on load', async () => {
+    await engine.onLoad()
     expect(events.on).toHaveBeenCalledWith(
       MessageEvent.OnMessageSent,
       expect.any(Function)
@@ -47,8 +47,8 @@ describe('OAIEngine', () => {
     )
   })
 
-  it('should remove event listeners on unload', () => {
-    engine.onLoad()
+  it('should remove event listeners on unload', async () => {
+    await engine.onLoad()
     engine.onUnload()
 
     expect(events.off).toHaveBeenCalledWith(
@@ -71,7 +71,7 @@ describe('OAIEngine', () => {
     const error = new Error('boom')
     vi.spyOn(engine, 'inference').mockRejectedValue(error)
 
-    engine.onLoad()
+    await engine.onLoad()
 
     const messageHandler = vi
       .mocked(events.on)
@@ -94,7 +94,7 @@ describe('OAIEngine', () => {
   it('should guard against concurrent inference requests', async () => {
     const inferenceSpy = vi.spyOn(engine, 'inference').mockImplementation(() => new Promise(() => {}))
 
-    engine.onLoad()
+    await engine.onLoad()
 
     const messageHandler = vi
       .mocked(events.on)

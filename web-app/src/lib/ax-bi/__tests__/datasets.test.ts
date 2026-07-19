@@ -18,7 +18,8 @@ vi.mock('../token-storage', () => ({
 describe('ax-bi datasets', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    tokenStorageMocks.read.mockReturnValue('stored-ax-bi-token')
+    tokenStorageMocks.read.mockResolvedValue('stored-ax-bi-token')
+    tokenStorageMocks.store.mockResolvedValue(undefined)
   })
 
   function makeDatasetServiceHub(result: unknown) {

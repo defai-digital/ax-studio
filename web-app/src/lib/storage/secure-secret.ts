@@ -2,6 +2,8 @@ import { invoke } from '@tauri-apps/api/core'
 import { isPlatformTauri } from '@/lib/platform/utils'
 
 export const PROXY_PASSWORD_SECRET = 'proxy-password'
+/** AX BI MCP bearer token (OS keychain). Must match Rust secrets allow-list. */
+export const AX_BI_MCP_TOKEN_SECRET = 'ax-bi-mcp-token'
 
 export async function getSecureSecret(key: string): Promise<string | null> {
   if (!isPlatformTauri()) return null

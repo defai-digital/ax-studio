@@ -35,13 +35,27 @@ describe('TauriOpenerService', () => {
   it('opens a URL in the system browser', async () => {
     mocks.openUrl.mockResolvedValue(undefined)
     await service.openUrl('https://example.com')
-    expect(mocks.openUrl).toHaveBeenCalledWith('https://example.com')
+    expect(mocks.openUrl).toHaveBeenCalledWith('https://example.com/')
   })
 
   it('swallows openUrl errors (fire-and-forget semantics)', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mocks.openUrl.mockRejectedValue(new Error('no browser'))
     await expect(service.openUrl('https://example.com')).resolves.toBeUndefined()
+    warnSpy.mockRestore()
+  })
+
+  it('refuses non-http schemes', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await service.openUrl('javascript:alert(1)')
+    expect(mocks.openUrl).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
+  it('refuses URLs with embedded credentials', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await service.openUrl('https://user:pass@evil.example/')
+    expect(mocks.openUrl).not.toHaveBeenCalled()
     warnSpy.mockRestore()
   })
 })

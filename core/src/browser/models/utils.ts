@@ -96,9 +96,14 @@ export function extractInferenceParams(
       if (validationRules[key](value)) {
         result[key] = value
       } else if (originParams && key in originParams) {
-        result[key] = originParams[key]
+        // Origin fallback must also pass validation; never trust unchecked values.
+        const originValue = normalizeValue(key, originParams[key])
+        if (validationRules[key](originValue)) {
+          result[key] = originValue
+        }
       }
     } else {
+      // Allow-listed keys without a rule (e.g. engine) pass through as-is.
       result[key] = value
     }
   }
@@ -126,9 +131,13 @@ export function extractModelLoadParams(
       if (validationRules[key](value)) {
         result[key] = value
       } else if (originParams && key in originParams) {
-        result[key] = originParams[key]
+        const originValue = normalizeValue(key, originParams[key])
+        if (validationRules[key](originValue)) {
+          result[key] = originValue
+        }
       }
     } else {
+      // Allow-listed keys without a rule (e.g. pre_prompt) pass through as-is.
       result[key] = value
     }
   }

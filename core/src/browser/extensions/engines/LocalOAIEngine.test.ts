@@ -53,10 +53,10 @@ describe('LocalOAIEngine', () => {
   })
 
   describe('onLoad', () => {
-    it('should call super.onLoad and subscribe to model events', () => {
+    it('should call super.onLoad and subscribe to model events', async () => {
       const superOnLoadSpy = vi.spyOn(Object.getPrototypeOf(Object.getPrototypeOf(engine)), 'onLoad')
       
-      engine.onLoad()
+      await engine.onLoad()
 
       expect(superOnLoadSpy).toHaveBeenCalled()
       expect(events.on).toHaveBeenCalledWith(
@@ -71,7 +71,7 @@ describe('LocalOAIEngine', () => {
 
     it('should load model when OnModelInit event is triggered', async () => {
       const loadModelSpy = vi.spyOn(engine, 'loadModel')
-      engine.onLoad()
+      await engine.onLoad()
 
       const onModelInitCall = (events.on as Mock).mock.calls.find(
         call => call[0] === ModelEvent.OnModelInit
@@ -87,7 +87,7 @@ describe('LocalOAIEngine', () => {
 
     it('should unload model when OnModelStop event is triggered', async () => {
       const unloadModelSpy = vi.spyOn(engine, 'unloadModel')
-      engine.onLoad()
+      await engine.onLoad()
 
       const onModelStopCall = (events.on as Mock).mock.calls.find(
         call => call[0] === ModelEvent.OnModelStop
@@ -103,7 +103,7 @@ describe('LocalOAIEngine', () => {
 
     it('should emit OnModelFail when loadModel throws', async () => {
       vi.spyOn(engine, 'loadModel').mockRejectedValue(new Error('load failed'))
-      engine.onLoad()
+      await engine.onLoad()
 
       const onModelInitCall = (events.on as Mock).mock.calls.find(
         call => call[0] === ModelEvent.OnModelInit
@@ -122,7 +122,7 @@ describe('LocalOAIEngine', () => {
 
     it('should emit OnModelFail when unloadModel throws', async () => {
       vi.spyOn(engine, 'unloadModel').mockRejectedValue(new Error('unload failed'))
-      engine.onLoad()
+      await engine.onLoad()
 
       const onModelStopCall = (events.on as Mock).mock.calls.find(
         call => call[0] === ModelEvent.OnModelStop
@@ -141,8 +141,8 @@ describe('LocalOAIEngine', () => {
   })
 
   describe('onUnload', () => {
-    it('should remove local model event listeners', () => {
-      engine.onLoad()
+    it('should remove local model event listeners', async () => {
+      await engine.onLoad()
       engine.onUnload()
 
       expect(events.off).toHaveBeenCalledWith(

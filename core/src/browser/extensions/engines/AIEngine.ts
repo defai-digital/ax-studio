@@ -268,26 +268,23 @@ export abstract class AIEngine extends BaseExtension {
   /**
    * On extension load, subscribe to events.
    */
-  override onLoad() {
-    this.registerEngine()
+  override async onLoad() {
+    await this.registerEngine()
   }
 
   /**
-   * Registers AI Engines
+   * Registers AI Engines.
+   * Awaits unload of any previous engine for the same provider so in-flight
+   * inference is drained before the replacement takes over.
    */
-  registerEngine() {
+  async registerEngine() {
     const manager = EngineManager.instance()
     const existingEngine = manager.get(this.provider)
 
     if (existingEngine && existingEngine !== this) {
       console.warn(`Overwriting registered engine for provider "${this.provider}"`)
       try {
-        void Promise.resolve(existingEngine.onUnload()).catch((error) => {
-          console.error(
-            `Failed to unload replaced engine for provider "${this.provider}":`,
-            error
-          )
-        })
+        await Promise.resolve(existingEngine.onUnload())
       } catch (error) {
         console.error(
           `Failed to unload replaced engine for provider "${this.provider}":`,

@@ -1,48 +1,124 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { localStorageKey } from '@/constants/localStorage'
+
+const secureSecretMocks = vi.hoisted(() => ({
+  getSecureSecret: vi.fn(),
+  setSecureSecret: vi.fn(),
+  deleteSecureSecret: vi.fn(),
+}))
+
+const platformMocks = vi.hoisted(() => ({
+  isPlatformTauri: vi.fn(() => false),
+}))
+
+vi.mock('@/lib/storage/secure-secret', () => ({
+  getSecureSecret: secureSecretMocks.getSecureSecret,
+  setSecureSecret: secureSecretMocks.setSecureSecret,
+  deleteSecureSecret: secureSecretMocks.deleteSecureSecret,
+  PROXY_PASSWORD_SECRET: 'proxy-password',
+  AX_BI_MCP_TOKEN_SECRET: 'ax-bi-mcp-token',
+}))
+
+vi.mock('@/lib/platform/utils', () => ({
+  isPlatformTauri: platformMocks.isPlatformTauri,
+}))
+
 import {
   clearStoredAxBiMcpToken,
   readStoredAxBiMcpToken,
   storeAxBiMcpToken,
 } from '../token-storage'
 
-describe('AX BI encrypted token storage', () => {
+describe('AX BI token storage', () => {
   beforeEach(() => {
     localStorage.clear()
+    vi.clearAllMocks()
+    platformMocks.isPlatformTauri.mockReturnValue(false)
   })
 
-  it('round-trips a token without storing its plaintext', () => {
-    storeAxBiMcpToken('sst_full-secret-token')
+  describe('non-Tauri (legacy localStorage)', () => {
+    it('round-trips a token without storing its plaintext', async () => {
+      await storeAxBiMcpToken('sst_full-secret-token')
 
-    const stored = localStorage.getItem(localStorageKey.axBiMcpToken)
-    expect(stored).toBeTruthy()
-    expect(stored).not.toContain('sst_full-secret-token')
-    expect(readStoredAxBiMcpToken()).toBe('sst_full-secret-token')
+      const stored = localStorage.getItem(localStorageKey.axBiMcpToken)
+      expect(stored).toBeTruthy()
+      expect(stored).not.toContain('sst_full-secret-token')
+      await expect(readStoredAxBiMcpToken()).resolves.toBe('sst_full-secret-token')
+    })
+
+    it('uses randomized ciphertext for repeated writes', async () => {
+      await storeAxBiMcpToken('sst_full-secret-token')
+      const first = localStorage.getItem(localStorageKey.axBiMcpToken)
+      await storeAxBiMcpToken('sst_full-secret-token')
+      const second = localStorage.getItem(localStorageKey.axBiMcpToken)
+
+      expect(first).not.toBe(second)
+    })
+
+    it('removes malformed encrypted values', async () => {
+      localStorage.setItem(
+        localStorageKey.axBiMcpToken,
+        '{"version":1,"ciphertext":"bad"}'
+      )
+
+      await expect(readStoredAxBiMcpToken()).resolves.toBeNull()
+      expect(localStorage.getItem(localStorageKey.axBiMcpToken)).toBeNull()
+    })
+
+    it('clears the stored token', async () => {
+      await storeAxBiMcpToken('sst_full-secret-token')
+      await clearStoredAxBiMcpToken()
+
+      await expect(readStoredAxBiMcpToken()).resolves.toBeNull()
+    })
   })
 
-  it('uses randomized ciphertext for repeated writes', () => {
-    storeAxBiMcpToken('sst_full-secret-token')
-    const first = localStorage.getItem(localStorageKey.axBiMcpToken)
-    storeAxBiMcpToken('sst_full-secret-token')
-    const second = localStorage.getItem(localStorageKey.axBiMcpToken)
+  describe('Tauri (OS keychain)', () => {
+    beforeEach(() => {
+      platformMocks.isPlatformTauri.mockReturnValue(true)
+      secureSecretMocks.getSecureSecret.mockResolvedValue(null)
+      secureSecretMocks.setSecureSecret.mockResolvedValue(undefined)
+      secureSecretMocks.deleteSecureSecret.mockResolvedValue(undefined)
+    })
 
-    expect(first).not.toBe(second)
-  })
+    it('stores tokens via the secure secret API', async () => {
+      await storeAxBiMcpToken('sst_keychain-token')
 
-  it('removes malformed encrypted values', () => {
-    localStorage.setItem(
-      localStorageKey.axBiMcpToken,
-      '{"version":1,"ciphertext":"bad"}'
-    )
+      expect(secureSecretMocks.setSecureSecret).toHaveBeenCalledWith(
+        'ax-bi-mcp-token',
+        'sst_keychain-token'
+      )
+      expect(localStorage.getItem(localStorageKey.axBiMcpToken)).toBeNull()
+    })
 
-    expect(readStoredAxBiMcpToken()).toBeNull()
-    expect(localStorage.getItem(localStorageKey.axBiMcpToken)).toBeNull()
-  })
+    it('reads from the keychain', async () => {
+      secureSecretMocks.getSecureSecret.mockResolvedValue('sst_from-keychain')
 
-  it('clears the stored token', () => {
-    storeAxBiMcpToken('sst_full-secret-token')
-    clearStoredAxBiMcpToken()
+      await expect(readStoredAxBiMcpToken()).resolves.toBe('sst_from-keychain')
+      expect(secureSecretMocks.getSecureSecret).toHaveBeenCalledWith(
+        'ax-bi-mcp-token'
+      )
+    })
 
-    expect(readStoredAxBiMcpToken()).toBeNull()
+    it('migrates legacy localStorage tokens into the keychain', async () => {
+      platformMocks.isPlatformTauri.mockReturnValue(false)
+      await storeAxBiMcpToken('sst_legacy-token')
+      platformMocks.isPlatformTauri.mockReturnValue(true)
+      secureSecretMocks.getSecureSecret.mockResolvedValue(null)
+
+      await expect(readStoredAxBiMcpToken()).resolves.toBe('sst_legacy-token')
+      expect(secureSecretMocks.setSecureSecret).toHaveBeenCalledWith(
+        'ax-bi-mcp-token',
+        'sst_legacy-token'
+      )
+      expect(localStorage.getItem(localStorageKey.axBiMcpToken)).toBeNull()
+    })
+
+    it('deletes from the keychain', async () => {
+      await clearStoredAxBiMcpToken()
+      expect(secureSecretMocks.deleteSecureSecret).toHaveBeenCalledWith(
+        'ax-bi-mcp-token'
+      )
+    })
   })
 })

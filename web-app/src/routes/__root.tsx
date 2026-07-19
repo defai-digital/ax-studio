@@ -22,6 +22,7 @@ import { AttachmentIngestionDialog } from '@/containers/dialogs/AttachmentIngest
 import { TranslationProvider } from '@/i18n/TranslationContext'
 import { OutOfContextPromiseModal } from '@/containers/dialogs/OutOfContextDialog'
 import { GlobalError } from '@/components/common/GlobalError'
+import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { GlobalEventHandler } from '@/providers/GlobalEventHandler'
 import { ServiceHubProvider } from '@/providers/ServiceHubProvider'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
@@ -199,21 +200,27 @@ function RootLayout() {
 
   return (
     <Fragment>
-      <ServiceHubProvider>
-        <ThemeProvider />
-        <InterfaceProvider />
-        <ToasterProvider />
-        <TranslationProvider>
-          <ExtensionProvider>
-            <DataProvider />
-            <GlobalEventHandler />
-            {isLogsRoute ? <LogsLayout /> : <AppLayout />}
-          </ExtensionProvider>
-          <ToolApproval />
-          <AttachmentIngestionDialog />
-          <OutOfContextPromiseModal />
-        </TranslationProvider>
-      </ServiceHubProvider>
+      <ErrorBoundary name="root">
+        <ServiceHubProvider>
+          <ThemeProvider />
+          <InterfaceProvider />
+          <ToasterProvider />
+          <TranslationProvider>
+            <ErrorBoundary name="extensions">
+              <ExtensionProvider>
+                <DataProvider />
+                <GlobalEventHandler />
+                <ErrorBoundary name="app-shell">
+                  {isLogsRoute ? <LogsLayout /> : <AppLayout />}
+                </ErrorBoundary>
+              </ExtensionProvider>
+            </ErrorBoundary>
+            <ToolApproval />
+            <AttachmentIngestionDialog />
+            <OutOfContextPromiseModal />
+          </TranslationProvider>
+        </ServiceHubProvider>
+      </ErrorBoundary>
     </Fragment>
   )
 }

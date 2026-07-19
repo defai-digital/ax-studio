@@ -4,7 +4,9 @@ use std::{
     fs::{self, File},
     io::Read,
     path::{Component, Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, Mutex, OnceLock},
+    thread::JoinHandle,
+    time::Duration,
 };
 use tar::Archive;
 use tauri::{App, Emitter, Manager, RunEvent, Runtime, WindowEvent, Wry};
@@ -48,6 +50,46 @@ fn bundled_extensions_ready(extensions_path: &Path) -> bool {
     installed_stamp == expected_stamp
 }
 
+/// JoinHandle for the background bundled-extension install thread.
+/// Tracked so shutdown can wait for an in-flight install instead of
+/// tearing down the process mid-write.
+static EXTENSION_INSTALL_HANDLE: OnceLock<Mutex<Option<JoinHandle<()>>>> = OnceLock::new();
+
+fn extension_install_slot() -> &'static Mutex<Option<JoinHandle<()>>> {
+    EXTENSION_INSTALL_HANDLE.get_or_init(|| Mutex::new(None))
+}
+
+/// Wait up to `timeout` for a background extension install to finish.
+pub fn join_extension_install(timeout: Duration) {
+    let handle = {
+        let mut guard = extension_install_slot()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        guard.take()
+    };
+    let Some(handle) = handle else {
+        return;
+    };
+    if handle.is_finished() {
+        let _ = handle.join();
+        return;
+    }
+    // Join on a helper so we can enforce a timeout without blocking forever.
+    let (tx, rx) = std::sync::mpsc::sync_channel(1);
+    std::thread::spawn(move || {
+        let result = handle.join();
+        let _ = tx.send(result);
+    });
+    match rx.recv_timeout(timeout) {
+        Ok(Ok(())) => log::info!("Bundled extension install joined cleanly on shutdown"),
+        Ok(Err(_)) => log::warn!("Bundled extension install thread panicked"),
+        Err(_) => log::warn!(
+            "Bundled extension install still running after {}s; continuing shutdown",
+            timeout.as_secs()
+        ),
+    }
+}
+
 pub fn schedule_extension_install_if_needed(
     extensions_path: PathBuf,
     pre_install_path: PathBuf,
@@ -58,7 +100,7 @@ pub fn schedule_extension_install_if_needed(
     }
 
     log::info!("Scheduling bundled extension install. Force: {force}");
-    std::thread::spawn(move || {
+    let handle = std::thread::spawn(move || {
         match install_extensions_from_paths(extensions_path, pre_install_path, force) {
             Ok(()) => {
                 log::info!("Bundled extension install finished");
@@ -68,6 +110,18 @@ pub fn schedule_extension_install_if_needed(
             }
         }
     });
+    let mut slot = extension_install_slot()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    // Join any previous install before overwriting the handle so we never
+    // abandon an in-flight install thread without tracking it.
+    if let Some(previous) = slot.take() {
+        if !previous.is_finished() {
+            log::info!("Waiting for previous bundled extension install to finish");
+        }
+        let _ = previous.join();
+    }
+    *slot = Some(handle);
 }
 
 fn expected_extension_archive_hash(path: &Path) -> Option<&'static str> {
@@ -1059,30 +1113,28 @@ pub fn app_run_handler(app: &tauri::AppHandle, event: RunEvent) {
                 let _ = window.emit("app-shutting-down", ());
                 let _ = window.hide();
             }
-            let state = app_handle.state::<super::state::AppState>();
-            let cleanup_already_running = tokio::task::block_in_place(|| {
-                tauri::async_runtime::block_on(async {
-                    let handle = state.background_cleanup_handle.lock().await;
-                    handle.is_some()
-                })
-            });
-            if cleanup_already_running {
-                return;
-            }
-            tokio::task::block_in_place(|| {
-                tauri::async_runtime::block_on(async {
-                    use crate::core::mcp::helpers::background_cleanup_mcp_servers;
-                    let state = app_handle.state::<super::state::AppState>();
+
+            // Prefer channel + async spawn over nested block_in_place/block_on,
+            // which can deadlock when Exit is observed from a runtime worker.
+            let (done_tx, done_rx) = std::sync::mpsc::sync_channel::<()>(1);
+            let cleanup_app = app_handle.clone();
+            tauri::async_runtime::spawn(async move {
+                use crate::core::mcp::helpers::background_cleanup_mcp_servers;
+                let state = cleanup_app.state::<super::state::AppState>();
+
+                {
                     let mut cleanup_guard = state.background_cleanup_handle.lock().await;
-                    if cleanup_guard.is_none() {
-                        let cleanup_app = app_handle.clone();
+                    if cleanup_guard.is_some() {
+                        // Another cleanup already started — wait on that handle below.
+                    } else {
+                        let task_app = cleanup_app.clone();
                         let cleanup_task = tauri::async_runtime::spawn(async move {
-                            let state = cleanup_app.state::<super::state::AppState>();
-                            background_cleanup_mcp_servers(&cleanup_app, &state).await;
+                            let state = task_app.state::<super::state::AppState>();
+                            background_cleanup_mcp_servers(&task_app, &state).await;
                             #[cfg(feature = "llamacpp")]
                             {
                                 let _ = tauri_plugin_llamacpp::cleanup_llama_processes(
-                                    cleanup_app.clone(),
+                                    task_app.clone(),
                                 )
                                 .await;
                                 log::info!("llama.cpp process cleanup completed");
@@ -1090,26 +1142,34 @@ pub fn app_run_handler(app: &tauri::AppHandle, event: RunEvent) {
                         });
                         *cleanup_guard = Some(cleanup_task);
                     }
-                    drop(cleanup_guard);
+                }
 
-                    let cleanup_handle = {
-                        let mut cleanup_guard = state.background_cleanup_handle.lock().await;
-                        cleanup_guard.take()
-                    };
+                let cleanup_handle = {
+                    let mut cleanup_guard = state.background_cleanup_handle.lock().await;
+                    cleanup_guard.take()
+                };
 
-                    match tokio::time::timeout(tokio::time::Duration::from_secs(10), async {
-                        if let Some(handle) = cleanup_handle {
-                            let _ = handle.await;
-                        }
-                    })
-                    .await
-                    {
-                        Ok(_) => log::info!("MCP cleanup completed successfully"),
-                        Err(_) => log::warn!("MCP cleanup timed out after 10 seconds"),
+                match tokio::time::timeout(tokio::time::Duration::from_secs(10), async {
+                    if let Some(handle) = cleanup_handle {
+                        let _ = handle.await;
                     }
-                    log::info!("App cleanup completed");
-                });
+                })
+                .await
+                {
+                    Ok(_) => log::info!("MCP cleanup completed successfully"),
+                    Err(_) => log::warn!("MCP cleanup timed out after 10 seconds"),
+                }
+
+                // Wait briefly for any in-flight extension install to finish.
+                join_extension_install(Duration::from_secs(5));
+                log::info!("App cleanup completed");
+                let _ = done_tx.send(());
             });
+
+            match done_rx.recv_timeout(Duration::from_secs(15)) {
+                Ok(()) => {}
+                Err(_) => log::warn!("App exit cleanup timed out after 15 seconds"),
+            }
         }
         _ => {}
     }

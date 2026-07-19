@@ -471,6 +471,10 @@ fn is_read_path_approved(
             .any(|directory| path.starts_with(directory))
 }
 
+// Note: Synchronous Tauri commands already execute on Tauri's blocking
+// thread pool (not the async runtime), so they do not starve tokio workers.
+// Prefer spawn_blocking inside *async* commands that touch the filesystem.
+
 #[tauri::command]
 /// Remove a file or directory inside the app data folder.
 pub fn rm<R: Runtime>(
@@ -479,11 +483,21 @@ pub fn rm<R: Runtime>(
 ) -> Result<(), String> {
     let path = resolve_path(app_handle, &request.into_path("rm")?)?;
     if path.is_file() {
-        fs::remove_file(&path).map_err(|e| e.to_string())?;
+        fs::remove_file(&path).map_err(|e| {
+            format!("rm error: failed to remove file {}: {e}", path.display())
+        })?;
     } else if path.is_dir() {
-        fs::remove_dir_all(&path).map_err(|e| e.to_string())?;
+        fs::remove_dir_all(&path).map_err(|e| {
+            format!(
+                "rm error: failed to remove directory {}: {e}",
+                path.display()
+            )
+        })?;
     } else {
-        return Err("rm error: Path does not exist".to_string());
+        return Err(format!(
+            "rm error: Path does not exist: {}",
+            path.display()
+        ));
     }
 
     Ok(())
@@ -496,7 +510,9 @@ pub fn mkdir<R: Runtime>(
     request: SinglePathRequest,
 ) -> Result<(), String> {
     let path = resolve_path(app_handle, &request.into_path("mkdir")?)?;
-    fs::create_dir_all(&path).map_err(|e| e.to_string())
+    fs::create_dir_all(&path).map_err(|e| {
+        format!("mkdir error: failed to create {}: {e}", path.display())
+    })
 }
 
 #[tauri::command]
@@ -637,16 +653,30 @@ pub fn read_file_sync<R: Runtime>(
     request: SinglePathRequest,
 ) -> Result<String, String> {
     let path = resolve_path(app_handle, &request.into_path("read_file_sync")?)?;
-    let metadata = fs::metadata(&path).map_err(|error| error.to_string())?;
+    let metadata = fs::metadata(&path).map_err(|error| {
+        format!(
+            "read_file_sync: failed to stat {}: {error}",
+            path.display()
+        )
+    })?;
     if !metadata.is_file() {
-        return Err("read_file_sync: path is not a file".to_string());
+        return Err(format!(
+            "read_file_sync: path is not a file: {}",
+            path.display()
+        ));
     }
     if metadata.len() > MAX_TEXT_FILE_BYTES {
         return Err(format!(
-            "read_file_sync: file exceeds the {MAX_TEXT_FILE_BYTES}-byte limit"
+            "read_file_sync: file {} exceeds the {MAX_TEXT_FILE_BYTES}-byte limit",
+            path.display()
         ));
     }
-    fs::read_to_string(&path).map_err(|e| e.to_string())
+    fs::read_to_string(&path).map_err(|e| {
+        format!(
+            "read_file_sync: failed to read {}: {e}",
+            path.display()
+        )
+    })
 }
 
 #[tauri::command]
@@ -665,13 +695,13 @@ pub async fn read_file_base64<R: Runtime>(
     };
     let path = resolve_approved_read_file(app_handle, &state, raw_path, "read_file_base64").await?;
 
-    let metadata = fs::metadata(&path).map_err(|error| error.to_string())?;
-    if metadata.len() > MAX_BASE64_READ_BYTES {
-        return Err(format!(
-            "read_file_base64: file exceeds the {MAX_BASE64_READ_BYTES}-byte limit"
-        ));
-    }
     tokio::task::spawn_blocking(move || {
+        let metadata = fs::metadata(&path).map_err(|error| error.to_string())?;
+        if metadata.len() > MAX_BASE64_READ_BYTES {
+            return Err(format!(
+                "read_file_base64: file exceeds the {MAX_BASE64_READ_BYTES}-byte limit"
+            ));
+        }
         let bytes = fs::read(&path).map_err(|error| format!("Failed to read file: {error}"))?;
         Ok(base64::Engine::encode(
             &base64::engine::general_purpose::STANDARD,

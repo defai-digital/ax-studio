@@ -103,12 +103,15 @@ describe('AIEngine', () => {
     expect(result).toEqual([])
   })
 
-  it('should warn when overwriting an existing engine registration', () => {
+  it('should warn when overwriting an existing engine registration', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    mockEngineManager.get.mockReturnValue({ provider: engine.provider })
+    mockEngineManager.get.mockReturnValue({
+      provider: engine.provider,
+      onUnload: vi.fn(),
+    })
 
-    engine.registerEngine()
+    await engine.registerEngine()
 
     expect(EngineManager.instance).toHaveBeenCalled()
     expect(mockEngineManager.get).toHaveBeenCalledWith(engine.provider)

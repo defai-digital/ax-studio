@@ -2,6 +2,7 @@ use std::sync::{Mutex, OnceLock};
 
 const CREDENTIAL_SERVICE: &str = "ai.axstudio.app";
 const PROXY_PASSWORD_KEY: &str = "proxy-password";
+const AX_BI_MCP_TOKEN_KEY: &str = "ax-bi-mcp-token";
 const MAX_SECRET_BYTES: usize = 16 * 1024;
 
 static CREDENTIAL_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -9,6 +10,7 @@ static CREDENTIAL_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 fn validate_key(key: &str) -> Result<&'static str, String> {
     match key {
         PROXY_PASSWORD_KEY => Ok(PROXY_PASSWORD_KEY),
+        AX_BI_MCP_TOKEN_KEY => Ok(AX_BI_MCP_TOKEN_KEY),
         _ => Err("Unsupported secure credential key".to_string()),
     }
 }
@@ -100,11 +102,12 @@ pub async fn delete_secret(key: String) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_key, MAX_SECRET_BYTES, PROXY_PASSWORD_KEY};
+    use super::{validate_key, AX_BI_MCP_TOKEN_KEY, MAX_SECRET_BYTES, PROXY_PASSWORD_KEY};
 
     #[test]
     fn only_known_secret_keys_are_accepted() {
         assert_eq!(validate_key(PROXY_PASSWORD_KEY), Ok(PROXY_PASSWORD_KEY));
+        assert_eq!(validate_key(AX_BI_MCP_TOKEN_KEY), Ok(AX_BI_MCP_TOKEN_KEY));
         assert!(validate_key("arbitrary-secret").is_err());
         assert!(validate_key("").is_err());
     }

@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils'
 import DOMPurify from 'dompurify'
-import { type HTMLAttributes, useEffect, useState } from 'react'
+import { type HTMLAttributes, useEffect, useMemo, useState } from 'react'
 import { highlightCode, type CodeBlockLanguage } from './code-block-highlight'
 
 type CodeBlockProps = HTMLAttributes<HTMLDivElement> & {
@@ -48,6 +48,12 @@ export const CodeBlock = ({
     }
   }, [code, language, showLineNumbers])
 
+  const sanitizedHtml = useMemo(() => DOMPurify.sanitize(html), [html])
+  const sanitizedDarkHtml = useMemo(
+    () => DOMPurify.sanitize(darkHtml),
+    [darkHtml]
+  )
+
   return (
     <div
       className={cn(
@@ -60,12 +66,12 @@ export const CodeBlock = ({
         <div
           className="overflow-auto dark:hidden [&>pre]:m-0 [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
           // biome-ignore lint/security/noDangerouslySetInnerHtml: "sanitized via DOMPurify"
-          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }}
+          dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
         />
         <div
           className="hidden overflow-auto dark:block [&>pre]:m-0 [&>pre]:bg-transparent! [&>pre]:p-4 [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
           // biome-ignore lint/security/noDangerouslySetInnerHtml: "sanitized via DOMPurify"
-          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(darkHtml) }}
+          dangerouslySetInnerHTML={{ __html: sanitizedDarkHtml }}
         />
         {children && (
           <div className="absolute top-2 right-2 flex items-center gap-2">

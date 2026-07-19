@@ -32,6 +32,23 @@ describe('events module', () => {
 
       expect(handler).not.toHaveBeenCalled()
     })
+
+    it('continues delivering to remaining handlers when one throws', () => {
+      const first = vi.fn(() => {
+        throw new Error('handler boom')
+      })
+      const second = vi.fn()
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      events.on('test-event', first)
+      events.on('test-event', second)
+      expect(() => events.emit('test-event', { value: 1 })).not.toThrow()
+
+      expect(first).toHaveBeenCalledOnce()
+      expect(second).toHaveBeenCalledWith({ value: 1 })
+      expect(consoleSpy).toHaveBeenCalled()
+      consoleSpy.mockRestore()
+    })
   })
 
   describe('bridge available', () => {

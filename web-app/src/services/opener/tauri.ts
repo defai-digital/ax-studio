@@ -4,6 +4,7 @@
 
 import { revealItemInDir, openUrl } from '@tauri-apps/plugin-opener'
 import type { OpenerService } from './types'
+import { assertSafeExternalUrl } from '@/lib/utils/safe-url'
 
 export class TauriOpenerService implements OpenerService {
   async revealItemInDir(path: string): Promise<void> {
@@ -16,6 +17,13 @@ export class TauriOpenerService implements OpenerService {
   }
 
   async openUrl(url: string): Promise<void> {
-    await openUrl(url).catch(console.warn)
+    let safeUrl: string
+    try {
+      safeUrl = assertSafeExternalUrl(url)
+    } catch (error) {
+      console.warn('[opener] Refusing to open unsafe URL:', url, error)
+      return
+    }
+    await openUrl(safeUrl).catch(console.warn)
   }
 }

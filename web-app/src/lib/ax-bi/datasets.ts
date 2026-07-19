@@ -47,7 +47,7 @@ function normalizeAxBiToken(token: string): string {
 }
 
 export async function hasConfiguredAxBiMcpToken(): Promise<boolean> {
-  const token = readStoredAxBiMcpToken()
+  const token = await readStoredAxBiMcpToken()
   return typeof token === 'string' && token.trim().length > 0
 }
 
@@ -86,9 +86,9 @@ export async function connectAxBiMcpServer({
   let authToken: string | null
   if (token !== undefined && token.trim().length > 0) {
     authToken = normalizeAxBiToken(token)
-    storeAxBiMcpToken(authToken)
+    await storeAxBiMcpToken(authToken)
   } else {
-    authToken = readStoredAxBiMcpToken()
+    authToken = await readStoredAxBiMcpToken()
   }
   if (!authToken) {
     throw new Error('AX BI API key or JWT is required.')

@@ -82,7 +82,11 @@ export default defineConfig(() => {
       watch: {
         // 3. tell vite to ignore watching `src-tauri`
         ignored: ['**/src-tauri/**'],
-        usePolling: true
+        // Polling drains battery on macOS; enable only when forced (CI/Docker/WSL).
+        usePolling:
+          process.env.VITE_USE_POLLING === '1' ||
+          process.env.CHOKIDAR_USEPOLLING === 'true' ||
+          process.env.CI === 'true',
       },
     },
   }

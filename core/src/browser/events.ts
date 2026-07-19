@@ -22,7 +22,19 @@ const createFallbackEventsBridge = (): CoreEventsBridge => {
       handlers.get(eventName)?.delete(handler as EventHandler)
     },
     emit: (eventName, object) => {
-      handlers.get(eventName)?.forEach((handler) => handler(object))
+      const registered = handlers.get(eventName)
+      if (!registered) return
+      // Isolate handler failures so one throwing subscriber cannot drop the rest.
+      for (const handler of [...registered]) {
+        try {
+          handler(object)
+        } catch (error) {
+          console.error(
+            `[events] Handler for "${eventName}" threw; continuing with remaining handlers:`,
+            error
+          )
+        }
+      }
     },
   }
 }

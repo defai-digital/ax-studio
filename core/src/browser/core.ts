@@ -196,7 +196,9 @@ const getUserHomePath = (): Promise<string> => getCoreApi().getUserHomePath() as
  */
 const log: (message: string, fileName?: string) => void = (message, fileName) => {
   const payload = fileName ? { message, fileName } : { message }
-  void getCoreApi().log(payload)
+  void Promise.resolve(getCoreApi().log(payload)).catch((error) => {
+    console.error('[core] Failed to write log entry:', error)
+  })
 }
 
 /**

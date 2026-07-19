@@ -48,9 +48,9 @@ export abstract class LocalOAIEngine extends OAIEngine {
    * The loadModel function subscribes to the ModelEvent.OnModelInit event, loading models when initiated.
    * The unloadModel function subscribes to the ModelEvent.OnModelStop event, unloading models when stopped.
    */
-  override onLoad() {
+  override async onLoad() {
     // Always call super — OAIEngine has its own idempotency guard.
-    super.onLoad()
+    await super.onLoad()
     if (this.localLoaded) return
     this.localLoaded = true
     // These events are applicable to local inference providers

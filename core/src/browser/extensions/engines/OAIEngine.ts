@@ -87,10 +87,10 @@ export abstract class OAIEngine extends AIEngine {
   /**
    * On extension load, subscribe to events.
    */
-  override onLoad() {
+  override async onLoad() {
     if (this.loaded) return
     this.loaded = true
-    super.onLoad()
+    await super.onLoad()
     events.on(MessageEvent.OnMessageSent, this.handleMessageSent)
     events.on(InferenceEvent.OnInferenceStopped, this.handleInferenceStopped)
   }

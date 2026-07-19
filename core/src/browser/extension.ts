@@ -154,14 +154,14 @@ export abstract class BaseExtension implements ExtensionType {
   /** @type {string} The URL of the extension to load. */
   url: string
 
-  /** @type {boolean} Whether the extension is activated or not. */
-  active
+  /** Whether the extension is activated or not. */
+  active?: boolean
 
-  /** @type {string} Extension's description. */
-  description
+  /** Extension's description. */
+  description?: string
 
-  /** @type {string} Extension's version. */
-  version
+  /** Extension's version. */
+  version?: string
 
   private readStorageItem(key: string): string | null {
     try {
@@ -244,7 +244,7 @@ export abstract class BaseExtension implements ExtensionType {
    * Called when the extension is unloaded.
    * Any cleanup logic for the extension should be put here.
    */
-  abstract onUnload(): void
+  abstract onUnload(): void | Promise<void>
 
   /**
    * The compatibility of the extension.
@@ -259,7 +259,7 @@ export abstract class BaseExtension implements ExtensionType {
    * Registers models - it persists in-memory shared ModelManager instance's data map.
    * @param models
    */
-  async registerModels(models: Model[]): Promise<void> {
+  registerModels(models: Model[]): void {
     for (const model of models) {
       ModelManager.instance().register(model)
     }
@@ -308,9 +308,7 @@ export abstract class BaseExtension implements ExtensionType {
           setting.controllerProps.value =
             setting.controllerProps.options?.[0]?.value ?? setting.controllerProps.value
         }
-      }
 
-      if (isDropdownControllerProps(setting.controllerProps)) {
         const oldRecommended = isDropdownControllerProps(oldSetting.controllerProps)
           ? oldSetting.controllerProps.recommended
           : undefined
@@ -377,9 +375,17 @@ export abstract class BaseExtension implements ExtensionType {
    */
   async getSettings(): Promise<SettingComponentProps[]> {
     if (!this.name) return []
-    if (this.settingsCache) return this.settingsCache
-    this.settingsCache = this.parseStoredSettings(this.readStorageItem(this.name), this.name)
-    return this.settingsCache
+    if (!this.settingsCache) {
+      this.settingsCache = this.parseStoredSettings(
+        this.readStorageItem(this.name),
+        this.name
+      )
+    }
+    // Defensive copy so callers cannot mutate the internal cache.
+    return this.settingsCache.map((setting) => ({
+      ...setting,
+      controllerProps: { ...setting.controllerProps },
+    }))
   }
 
   /**

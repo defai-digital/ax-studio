@@ -12,6 +12,38 @@ const BUN_VERSION = '1.3.14'
 const UV_VERSION = '0.11.26'
 const MAX_REDIRECTS = 5
 
+/** Hosts allowed as download/redirect targets for release assets. */
+const ALLOWED_DOWNLOAD_HOSTS = new Set([
+  'github.com',
+  'www.github.com',
+  'objects.githubusercontent.com',
+  'release-assets.githubusercontent.com',
+  'github-releases.githubusercontent.com',
+  'codeload.github.com',
+])
+
+export function assertAllowedDownloadUrl(urlString, context = 'download') {
+  let parsed
+  try {
+    parsed = new URL(urlString)
+  } catch {
+    throw new Error(`${context}: invalid URL '${urlString}'`)
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new Error(`${context}: only https URLs are allowed (got ${parsed.protocol})`)
+  }
+  const host = parsed.hostname.toLowerCase()
+  const allowed =
+    ALLOWED_DOWNLOAD_HOSTS.has(host) ||
+    host.endsWith('.githubusercontent.com')
+  if (!allowed) {
+    throw new Error(
+      `${context}: redirect/download host '${host}' is not on the allow-list`
+    )
+  }
+  return parsed.toString()
+}
+
 // Digests published by GitHub for the pinned upstream release assets.
 const BUN_SHA256 = {
   'darwin-aarch64': 'd8b96221828ad6f97ac7ac0ab7e95872341af763001e8803e8267652c2652620',
@@ -47,13 +79,31 @@ function download(url, dest, redirectCount = 0) {
       return
     }
 
-    console.log(`Downloading ${displayUrl(url)} to ${dest}`)
-    const request = https.get(url, (response) => {
+    let safeUrl
+    try {
+      safeUrl = assertAllowedDownloadUrl(url, 'download')
+    } catch (error) {
+      reject(error)
+      return
+    }
+
+    console.log(`Downloading ${displayUrl(safeUrl)} to ${dest}`)
+    const request = https.get(safeUrl, (response) => {
       const statusCode = response.statusCode ?? 0
       console.log(`Response status code: ${statusCode}`)
 
       if (statusCode >= 300 && statusCode < 400 && response.headers.location) {
-        const redirectUrl = new URL(response.headers.location, url).toString()
+        let redirectUrl
+        try {
+          redirectUrl = assertAllowedDownloadUrl(
+            new URL(response.headers.location, safeUrl).toString(),
+            'redirect'
+          )
+        } catch (error) {
+          response.resume()
+          reject(error)
+          return
+        }
         response.resume()
         console.log(`Redirecting to ${displayUrl(redirectUrl)}`)
         resolve(download(redirectUrl, dest, redirectCount + 1))

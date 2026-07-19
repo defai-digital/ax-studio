@@ -5,7 +5,7 @@ import {
   PropsWithChildren,
   useCallback,
   useEffect,
-  useMemo,
+  useRef,
   useState,
 } from 'react'
 import { withTimeout } from '@/lib/utils/async'
@@ -54,13 +54,16 @@ function notifyProvidersChanged(source: string) {
 export function ExtensionProvider({ children }: PropsWithChildren) {
   const [initError, setInitError] = useState<string | null>(null)
   const serviceHub = useServiceHub()
-
-  useMemo(() => {
+  // Lazy one-time manager bootstrap via ref — useMemo must not be used for
+  // side effects (React may discard and re-run memoized values).
+  const managersReady = useRef(false)
+  if (!managersReady.current) {
     const core = ensureCoreBridge({ withApi: true, withEvents: true })
     core.extensionManager ??= new ExtensionManager()
     core.engineManager ??= new EngineManager()
     core.modelManager ??= new ModelManager()
-  }, [])
+    managersReady.current = true
+  }
 
   const setupExtensions = useCallback(async () => {
     // iPad and Windows ARM64 are API/URL-only product targets. Do not load
