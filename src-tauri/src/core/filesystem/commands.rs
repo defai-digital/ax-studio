@@ -483,8 +483,9 @@ pub fn rm<R: Runtime>(
 ) -> Result<(), String> {
     let path = resolve_path(app_handle, &request.into_path("rm")?)?;
     if path.is_file() {
-        fs::remove_file(&path)
-            .map_err(|e| format!("rm error: failed to remove file {}: {e}", path.display()))?;
+        fs::remove_file(&path).map_err(|e| {
+            format!("rm error: failed to remove file {}: {e}", path.display())
+        })?;
     } else if path.is_dir() {
         fs::remove_dir_all(&path).map_err(|e| {
             format!(
@@ -493,7 +494,10 @@ pub fn rm<R: Runtime>(
             )
         })?;
     } else {
-        return Err(format!("rm error: Path does not exist: {}", path.display()));
+        return Err(format!(
+            "rm error: Path does not exist: {}",
+            path.display()
+        ));
     }
 
     Ok(())
@@ -506,8 +510,9 @@ pub fn mkdir<R: Runtime>(
     request: SinglePathRequest,
 ) -> Result<(), String> {
     let path = resolve_path(app_handle, &request.into_path("mkdir")?)?;
-    fs::create_dir_all(&path)
-        .map_err(|e| format!("mkdir error: failed to create {}: {e}", path.display()))
+    fs::create_dir_all(&path).map_err(|e| {
+        format!("mkdir error: failed to create {}: {e}", path.display())
+    })
 }
 
 #[tauri::command]
@@ -648,8 +653,12 @@ pub fn read_file_sync<R: Runtime>(
     request: SinglePathRequest,
 ) -> Result<String, String> {
     let path = resolve_path(app_handle, &request.into_path("read_file_sync")?)?;
-    let metadata = fs::metadata(&path)
-        .map_err(|error| format!("read_file_sync: failed to stat {}: {error}", path.display()))?;
+    let metadata = fs::metadata(&path).map_err(|error| {
+        format!(
+            "read_file_sync: failed to stat {}: {error}",
+            path.display()
+        )
+    })?;
     if !metadata.is_file() {
         return Err(format!(
             "read_file_sync: path is not a file: {}",
@@ -662,8 +671,12 @@ pub fn read_file_sync<R: Runtime>(
             path.display()
         ));
     }
-    fs::read_to_string(&path)
-        .map_err(|e| format!("read_file_sync: failed to read {}: {e}", path.display()))
+    fs::read_to_string(&path).map_err(|e| {
+        format!(
+            "read_file_sync: failed to read {}: {e}",
+            path.display()
+        )
+    })
 }
 
 #[tauri::command]

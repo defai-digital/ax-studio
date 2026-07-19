@@ -17,8 +17,6 @@ interface LlamacppDevicesStore {
 
 let fetchDevicesRequestId = 0
 let toggleDeviceQueue: Promise<void> = Promise.resolve()
-let nextToggleOperationId = 0
-const latestToggleOperationByDevice = new Map<string, number>()
 
 export const useLlamacppDevices = create<LlamacppDevicesStore>((set, get) => ({
   devices: [],
@@ -72,56 +70,42 @@ export const useLlamacppDevices = create<LlamacppDevicesStore>((set, get) => ({
   setDevices: (devices) => set({ devices }),
 
   toggleDevice: (deviceId: string) => {
-    const target = get().devices.find((device) => device.id === deviceId)
-    if (!target) return Promise.resolve()
-
-    const previousActivated = target.activated
-    const nextActivated = !previousActivated
-    set((state) => ({
-      devices: state.devices.map((device) =>
-        device.id === deviceId
-          ? { ...device, activated: nextActivated }
-          : device
-      ),
-    }))
-
-    // Preserve the optimistic UI update even when no provider is configured.
-    if (!useModelProvider.getState().getProviderByName('llamacpp')) {
-      return Promise.resolve()
-    }
-
-    const operationId = ++nextToggleOperationId
-    latestToggleOperationByDevice.set(deviceId, operationId)
-
     const operation = toggleDeviceQueue.then(async () => {
+      const { getProviderByName, updateProvider } = useModelProvider.getState()
+      const llamacppProvider = getProviderByName('llamacpp')
+      const target = get().devices.find((device) => device.id === deviceId)
+      if (!llamacppProvider || !target) return
+
+      const previousActivated = target.activated
+      set((state) => ({
+        devices: state.devices.map((device) =>
+          device.id === deviceId
+            ? { ...device, activated: !previousActivated }
+            : device
+        ),
+      }))
+
+      const currentDevices = get().devices
+      const activatedDeviceIds = currentDevices
+        .filter((device) => device.activated)
+        .map((device) => device.id)
+      const deviceString =
+        activatedDeviceIds.length === currentDevices.length
+          ? ''
+          : activatedDeviceIds.join(',')
+      const updatedSettings = llamacppProvider.settings.map((setting) =>
+        setting.key === 'device'
+          ? {
+              ...setting,
+              controller_props: {
+                ...setting.controller_props,
+                value: deviceString,
+              },
+            }
+          : setting
+      )
+
       try {
-        const { getProviderByName, updateProvider } =
-          useModelProvider.getState()
-        const llamacppProvider = getProviderByName('llamacpp')
-        if (!llamacppProvider) return
-
-        // Read the latest optimistic state when this queued write starts so a
-        // preceding rollback cannot leave the backend with stale device IDs.
-        const currentDevices = get().devices
-        const activatedDeviceIds = currentDevices
-          .filter((device) => device.activated)
-          .map((device) => device.id)
-        const deviceString =
-          activatedDeviceIds.length === currentDevices.length
-            ? ''
-            : activatedDeviceIds.join(',')
-        const updatedSettings = llamacppProvider.settings.map((setting) =>
-          setting.key === 'device'
-            ? {
-                ...setting,
-                controller_props: {
-                  ...setting.controller_props,
-                  value: deviceString,
-                },
-              }
-            : setting
-        )
-
         await getServiceHub()
           .providers()
           .updateSettings('llamacpp', updatedSettings)
@@ -131,23 +115,17 @@ export const useLlamacppDevices = create<LlamacppDevicesStore>((set, get) => ({
           '[useLlamacppDevices] Failed to persist device setting:',
           error
         )
-        if (latestToggleOperationByDevice.get(deviceId) === operationId) {
-          set((state) => ({
-            devices: state.devices.map((device) =>
-              device.id === deviceId && device.activated === nextActivated
-                ? { ...device, activated: previousActivated }
-                : device
-            ),
-            error:
-              error instanceof Error
-                ? error.message
-                : 'Failed to update device setting',
-          }))
-        }
-      } finally {
-        if (latestToggleOperationByDevice.get(deviceId) === operationId) {
-          latestToggleOperationByDevice.delete(deviceId)
-        }
+        set((state) => ({
+          devices: state.devices.map((device) =>
+            device.id === deviceId
+              ? { ...device, activated: previousActivated }
+              : device
+          ),
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Failed to update device setting',
+        }))
       }
     })
     toggleDeviceQueue = operation.catch(() => {})

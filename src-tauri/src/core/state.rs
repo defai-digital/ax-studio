@@ -33,7 +33,9 @@ impl TrackedMcpProcess {
         let sys_pid = sysinfo::Pid::from_u32(pid);
         let mut system = sysinfo::System::new();
         system.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[sys_pid]), true);
-        let start_time = system.process(sys_pid).map(sysinfo::Process::start_time);
+        let start_time = system
+            .process(sys_pid)
+            .map(sysinfo::Process::start_time);
         Self { pid, start_time }
     }
 
@@ -71,7 +73,10 @@ impl std::fmt::Debug for ProviderConfig {
         formatter
             .debug_struct("ProviderConfig")
             .field("provider", &self.provider)
-            .field("api_key", &self.api_key.as_ref().map(|_| "[REDACTED]"))
+            .field(
+                "api_key",
+                &self.api_key.as_ref().map(|_| "[REDACTED]"),
+            )
             .field("base_url", &self.base_url)
             .field("custom_header_names", &custom_header_names)
             .field("models", &self.models)

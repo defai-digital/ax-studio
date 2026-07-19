@@ -5,10 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
+use std::sync::{atomic::{AtomicBool, Ordering}, Arc};
 use tauri::{test::mock_app, Manager};
 use tokio::sync::Mutex;
 

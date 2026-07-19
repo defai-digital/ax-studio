@@ -3,13 +3,6 @@
  * Blocks non-http(s) schemes, credentials in the authority, and other
  * patterns that are commonly abused for phishing via XSS.
  */
-function containsAsciiControlCharacter(value: string): boolean {
-  return [...value].some((character) => {
-    const codePoint = character.codePointAt(0)
-    return codePoint !== undefined && (codePoint <= 0x1f || codePoint === 0x7f)
-  })
-}
-
 export function assertSafeExternalUrl(raw: string): string {
   const trimmed = raw.trim()
   if (!trimmed) {
@@ -18,7 +11,7 @@ export function assertSafeExternalUrl(raw: string): string {
   if (trimmed.length > 2048) {
     throw new Error('URL exceeds the maximum allowed length')
   }
-  if (containsAsciiControlCharacter(trimmed)) {
+  if (/[\u0000-\u001F\u007F]/.test(trimmed)) {
     throw new Error('URL contains control characters')
   }
 

@@ -305,9 +305,8 @@ const ChatInput = memo(function ChatInput({
   })
 
   const submitCurrentPrompt = useCallback(() => {
-    const currentPrompt = textareaRef.current?.value ?? prompt
-    if (!currentPrompt.trim() || ingestingDocs) return
-    void handleSendMessage(currentPrompt)
+    if (!prompt.trim() || ingestingDocs) return
+    void handleSendMessage(prompt)
   }, [handleSendMessage, ingestingDocs, prompt])
 
   // Voice input (on-device whisper.cpp STT) — mic button in the toolbar,

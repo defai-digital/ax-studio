@@ -11,9 +11,9 @@ const windowsWorkflowPaths = [
   '.github/workflows/template-tauri-build-windows-arm64.yml',
 ]
 const requiredDocuments = [
-  'privacy.md',
-  'terms.md',
-  'scripts/release/microsoft-store.md',
+  'docs/privacy.md',
+  'docs/terms.md',
+  'docs/microsoft-store.md',
   '.github/ISSUE_TEMPLATE/ai-content-report.yml',
 ]
 

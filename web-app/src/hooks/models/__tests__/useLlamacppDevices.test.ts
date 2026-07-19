@@ -535,9 +535,7 @@ describe('useLlamacppDevices', () => {
   })
 
   it('should not throw when updateSettings rejects', async () => {
-    mockUpdateSettings.mockImplementationOnce(() =>
-      Promise.reject(new Error('persist failed'))
-    )
+    mockUpdateSettings.mockRejectedValueOnce(new Error('persist failed'))
 
     act(() => {
       useModelProvider.setState({
@@ -569,15 +567,11 @@ describe('useLlamacppDevices', () => {
       })
     })
 
-    await act(async () => {
-      await useLlamacppDevices.getState().toggleDevice('gpu-0')
-    })
-
-    expect(mockUpdateSettings).toHaveBeenCalledTimes(1)
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      '[useLlamacppDevices] Failed to persist device setting:',
-      expect.objectContaining({ message: 'persist failed' })
-    )
+    await expect(
+      act(async () => {
+        await useLlamacppDevices.getState().toggleDevice('gpu-0')
+      })
+    ).resolves.not.toThrow()
 
     // Failed persistence rolls back the optimistic update.
     expect(useLlamacppDevices.getState().devices[0].activated).toBe(true)

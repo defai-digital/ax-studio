@@ -2,10 +2,11 @@
 
 | 欄位 | 內容 |
 |---|---|
-| 狀態 | Accepted（Phase 1 implemented） |
+| 狀態 | Accepted |
 | 日期 | 2026-07-14 |
 | 決策 Owner | AX Studio／AX BI |
-| Implementation | `web-app/src/lib/ax-bi/authoring-workflow.ts` 與 MCP high-level tools |
+| PRD | ../prd/PRD-AX-STUDIO-AX-BI-DELEGATION.md |
+| 技術規格 | ../specs/TECH-SPEC-AX-STUDIO-AX-BI-DELEGATION.md |
 
 ## Context
 

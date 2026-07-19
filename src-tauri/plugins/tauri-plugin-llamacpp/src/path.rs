@@ -320,8 +320,11 @@ mod tests {
     #[test]
     fn test_validate_binary_path_nonexistent() {
         let nonexistent_path = "/tmp/definitely_does_not_exist_123456789";
-        let result =
-            validate_binary_path(nonexistent_path, &[std::env::temp_dir()], &["llama-server"]);
+        let result = validate_binary_path(
+            nonexistent_path,
+            &[std::env::temp_dir()],
+            &["llama-server"],
+        );
         assert!(result.is_err());
     }
 
@@ -346,9 +349,7 @@ mod tests {
         assert!(is_dangerous_process_env_key("dyld_insert_libraries"));
         assert!(is_dangerous_process_env_key("Path"));
         assert!(is_dangerous_process_env_key("AX_ENGINE_BIN"));
-        assert!(!is_dangerous_process_env_key(
-            "GGML_CUDA_ENABLE_UNIFIED_MEMORY"
-        ));
+        assert!(!is_dangerous_process_env_key("GGML_CUDA_ENABLE_UNIFIED_MEMORY"));
     }
 
     #[test]

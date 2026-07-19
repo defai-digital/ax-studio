@@ -616,7 +616,8 @@ pub fn extract_command_args(config: &Value) -> Option<McpServerConfig> {
     // Filter out dangerous environment variables
     envs.retain(|key, _| {
         let normalized = key.to_ascii_uppercase();
-        !DANGEROUS_ENV_KEYS.contains(&normalized.as_str()) && !normalized.starts_with("DYLD_")
+        !DANGEROUS_ENV_KEYS.contains(&normalized.as_str())
+            && !normalized.starts_with("DYLD_")
     });
 
     // Block env overrides for security-sensitive variables.  PATH is
@@ -1091,7 +1092,8 @@ struct ShutdownGuard {
 
 impl Drop for ShutdownGuard {
     fn drop(&mut self) {
-        self.flag.store(false, std::sync::atomic::Ordering::Release);
+        self.flag
+            .store(false, std::sync::atomic::Ordering::Release);
     }
 }
 
