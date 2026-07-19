@@ -53,6 +53,7 @@ vi.mock('./backend', () => ({
   installBackendFromFile: vi.fn(async () => {}),
   getBackendExePath: vi.fn(async () => '/backend/llama-server'),
   getAxServingBinaryPath: vi.fn(async () => '/backend/ax-serving'),
+  getRuntimeOsType: vi.fn(() => 'linux'),
   formatError: vi.fn((error: unknown) =>
     error instanceof Error ? error.message : String(error)
   ),

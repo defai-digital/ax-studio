@@ -122,7 +122,6 @@ export type ThreadChatParams = {
   // From useChat
   sendMessage: SendMessageFn
   regenerate: RegenerateFn
-  chatMessages: UIMessage[]
   setChatMessages: (msgs: UIMessage[]) => void
   resetTurnState?: () => void
 
@@ -156,7 +155,6 @@ export function useThreadChat({
   threadModel,
   sendMessage,
   regenerate,
-  chatMessages,
   setChatMessages,
   resetTurnState,
   prepareLocalKnowledge,

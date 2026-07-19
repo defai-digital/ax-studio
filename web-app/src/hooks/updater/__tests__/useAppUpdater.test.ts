@@ -31,6 +31,7 @@ const mockStopAllModels = vi.fn()
 const mockUpdaterCheck = vi.fn()
 const mockUpdaterDownloadAndInstall = vi.fn()
 const mockUpdaterDownloadAndInstallWithProgress = vi.fn()
+const mockGetInstallChannel = vi.fn()
 const mockEventsEmit = vi.fn()
 const mockServiceHub = {
   models: () => ({
@@ -40,6 +41,7 @@ const mockServiceHub = {
     check: mockUpdaterCheck,
     downloadAndInstall: mockUpdaterDownloadAndInstall,
     downloadAndInstallWithProgress: mockUpdaterDownloadAndInstallWithProgress,
+    getInstallChannel: mockGetInstallChannel,
   }),
   events: () => ({
     emit: mockEventsEmit,
@@ -77,6 +79,7 @@ describe('useAppUpdater', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockIsDev.mockReturnValue(false)
+    mockGetInstallChannel.mockResolvedValue('standalone')
   })
 
   afterEach(() => {
@@ -94,6 +97,7 @@ describe('useAppUpdater', () => {
       downloadedBytes: 0,
       totalBytes: 0,
       remindMeLater: false,
+      installChannel: 'standalone',
     })
   })
 

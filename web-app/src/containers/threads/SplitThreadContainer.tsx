@@ -182,7 +182,6 @@ export function SplitThreadContainer({
     threadId,
     sendMessage,
     regenerate,
-    chatMessages,
     setChatMessages,
   })
 

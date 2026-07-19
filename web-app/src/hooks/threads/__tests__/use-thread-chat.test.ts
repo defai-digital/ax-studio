@@ -134,7 +134,6 @@ describe('useThreadChat', () => {
     threadId,
     sendMessage: mockSendMessage,
     regenerate: mockRegenerate,
-    chatMessages: [],
     setChatMessages: mockSetChatMessages,
   })
 
@@ -930,12 +929,7 @@ describe('useThreadChat', () => {
         },
       })
 
-      const params = defaultParams()
-      params.chatMessages = [
-        { id: 'msg-1', role: 'user', parts: [{ type: 'text' as const, text: 'old text' }] },
-      ] as any[] // eslint-disable-line @typescript-eslint/no-explicit-any
-
-      const { result } = renderHook(() => useThreadChat(params))
+      const { result } = renderHook(() => useThreadChat(defaultParams()))
 
       act(() => {
         result.current.handleEditMessage('msg-1', 'new text')
@@ -970,12 +964,7 @@ describe('useThreadChat', () => {
         },
       })
 
-      const params = defaultParams()
-      params.chatMessages = [
-        { id: 'msg-1', role: 'assistant', parts: [{ type: 'text' as const, text: 'old' }] },
-      ] as any[] // eslint-disable-line @typescript-eslint/no-explicit-any
-
-      const { result } = renderHook(() => useThreadChat(params))
+      const { result } = renderHook(() => useThreadChat(defaultParams()))
 
       act(() => {
         result.current.handleEditMessage('msg-1', 'corrected')
@@ -1004,13 +993,7 @@ describe('useThreadChat', () => {
         },
       })
 
-      const params = defaultParams()
-      params.chatMessages = [
-        { id: 'msg-1', role: 'user', parts: [{ type: 'text' as const, text: 'old' }] },
-        { id: 'msg-2', role: 'assistant', parts: [{ type: 'text' as const, text: 'response' }] },
-      ] as any[] // eslint-disable-line @typescript-eslint/no-explicit-any
-
-      const { result } = renderHook(() => useThreadChat(params))
+      const { result } = renderHook(() => useThreadChat(defaultParams()))
 
       act(() => {
         result.current.handleEditMessage('msg-1', 'updated question')
