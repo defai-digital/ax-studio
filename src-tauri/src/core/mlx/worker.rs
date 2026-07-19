@@ -520,9 +520,14 @@ fn run_worker(rx: Receiver<MlxCommand>) {
                 let _ = reply.send(result);
             }
             MlxCommand::Unload { model_id, reply } => {
-                let removed = models.remove(&model_id).is_some();
-                let result = if removed {
+                let result = if models.remove(&model_id).is_some() {
                     log::info!("[mlx-worker] unloaded model {model_id}");
+                    // Only clear process-global compile caches once no model
+                    // remains. Clearing while another model is still resident
+                    // would drop that model's live decode closures.
+                    if models.is_empty() {
+                        clear_native_caches_after_model_drain("explicit unload");
+                    }
                     Ok(())
                 } else {
                     Err(format!("model not loaded: {model_id}"))
@@ -572,6 +577,32 @@ fn run_worker(rx: Receiver<MlxCommand>) {
     log::info!("[mlx-worker] command channel closed; thread exiting");
 }
 
+/// Drop every resident model, then clear process-global MLX compile caches.
+///
+/// This mirrors `ax-engine-server`'s `NativeGenerationService::spawn_replacement`
+/// contract: `EngineSession` drop frees request-local weights and KV state, but
+/// **process-global** compiled per-layer decode closures (MoE, dense FFN, Gemma4
+/// dual-path) and the MLX allocator cache survive. After a large Qwen MTP run
+/// those graphs still reference the old model's buffers; loading Gemma 4 without
+/// clearing them hangs Metal eval or SIGSEGVs in sampling
+/// (`sample_categorical_with_topp_gpu`).
+fn drain_loaded_models(models: &mut HashMap<String, LoadedModel>, reason: &str) {
+    if models.is_empty() {
+        return;
+    }
+    let previous_models: Vec<String> = models.keys().cloned().collect();
+    for previous_model in &previous_models {
+        log::info!("[mlx-worker] unloading previous model ({reason}): {previous_model}");
+    }
+    models.clear();
+    clear_native_caches_after_model_drain(reason);
+}
+
+fn clear_native_caches_after_model_drain(reason: &str) {
+    log::info!("[mlx-worker] clearing native MLX compile caches after {reason}");
+    EngineSession::clear_native_model_compile_caches();
+}
+
 fn handle_load(
     models: &mut HashMap<String, LoadedModel>,
     model_id: &str,
@@ -582,13 +613,9 @@ fn handle_load(
         return Ok(());
     }
 
-    if !models.is_empty() {
-        let previous_models: Vec<String> = models.keys().cloned().collect();
-        for previous_model in &previous_models {
-            log::info!("[mlx-worker] unloading previous model before switch: {previous_model}");
-        }
-        models.clear();
-    }
+    // Single-resident design: any previous model must be fully drained
+    // (sessions + process-global compile caches) before constructing the next.
+    drain_loaded_models(models, "model switch");
 
     if !model_dir.is_dir() {
         return Err(format!(
@@ -1640,5 +1667,19 @@ mod tests {
 
         registry.unregister("stream-1", &cancellation);
         assert_eq!(registry.cancel("stream-1"), Ok(false));
+    }
+
+    #[test]
+    fn drain_loaded_models_is_a_no_op_when_empty() {
+        let mut models: HashMap<String, LoadedModel> = HashMap::new();
+        drain_loaded_models(&mut models, "unit-test empty");
+        assert!(models.is_empty());
+    }
+
+    #[test]
+    fn clear_native_caches_after_model_drain_does_not_panic() {
+        // Mirrors ax-engine-server hot-swap: clearing process-global compile
+        // caches must be safe even when no model was ever loaded.
+        clear_native_caches_after_model_drain("unit-test");
     }
 }
