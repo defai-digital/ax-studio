@@ -130,7 +130,7 @@ build: install-and-build install-rust-targets
 
 clean:
 ifeq ($(OS),Windows_NT)
-	-powershell -Command "Get-ChildItem -Path . -Include node_modules, .next, dist, build, out, .turbo, .yarn -Recurse -Directory | Remove-Item -Recurse -Force"
+	-powershell -Command "Get-ChildItem -Path . -Include node_modules, .next, dist, build, out, .turbo, .yarn, coverage, report -Recurse -Directory | Remove-Item -Recurse -Force"
 	-powershell -Command "Get-ChildItem -Path . -Include package-lock.json, tsconfig.tsbuildinfo -Recurse -File | Remove-Item -Recurse -Force"
 	-powershell -Command "Remove-Item -Recurse -Force ./pre-install/*.tgz"
 	-powershell -Command "Remove-Item -Recurse -Force ./extensions/*/*.tgz"
@@ -146,6 +146,8 @@ else
 	find . -name ".turbo" -type d -exec rm -rf '{}' +
 	find . -name ".yarn" -type d -exec rm -rf '{}' +
 	find . -name "package-lock.json" -type f -exec rm -rf '{}' +
+	# Generated test/quality artifacts and workspace caches at repo root
+	rm -rf ./coverage ./report
 	rm -rf ./pre-install/*.tgz
 	rm -rf ./extensions/*/*.tgz
 	rm -rf ./src-tauri/resources

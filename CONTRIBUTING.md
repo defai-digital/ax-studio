@@ -30,9 +30,13 @@ Use this file as the contributor entry point, then follow the package-specific g
 | `core/` | Shared TypeScript SDK used by the app and extensions |
 | `extensions/` | Packaged feature extensions |
 | `src-tauri/` | Rust host app, IPC commands, capabilities, plugins |
-| `autoqa/` | Automated quality assurance and end-to-end runners |
-| `docs/` | Public documentation (legal, release, architecture, ADRs, product) |
-| `scripts/` | Build, test, and quality-gate utilities |
+| `scripts/` | Build, release, test, and quality-gate utilities |
+| `docs/` | Public docs (legal, release, architecture) |
+| `pre-install/` | Generated extension `.tgz` bundles for Tauri resources (gitignored) |
+| `mlx.version` | Pinned MLX runtime version (read by prepare/release scripts) |
+| `package.json` / `yarn.lock` / `vitest.config.ts` / `Makefile` | Workspace orchestration at repo root |
+
+**Do not reorganize** package paths (`core/`, `web-app/`, `src-tauri/`, `pre-install/`, `mlx.version`) without updating CI and scripts. Generated roots such as `coverage/`, `report/`, `node_modules/`, and `src-tauri/target/` stay gitignored and are removed by `make clean`.
 
 ## Prerequisites
 

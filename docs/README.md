@@ -46,3 +46,12 @@ Neither is published in the public `docs/` tree (local design space, gitignored)
 4. Use relative links that stay valid inside `docs/`.
 5. If content is speculative, label status clearly (`Draft`, `Accepted`, `Superseded`).
 6. New PRDs go to `.internal/prd/`; new ADRs go to `.internal/adr/` — never under `docs/`.
+
+## Repository root (do not reorganize lightly)
+
+The monorepo root intentionally stays flat for Yarn workspaces + Tauri:
+
+- **Committed:** `package.json`, `yarn.lock`, `vitest.config.ts`, `Makefile`, `mlx.version`, `README.md`, `LICENSE`, `NOTICE`, package dirs (`core/`, `web-app/`, `extensions/`, `src-tauri/`, `scripts/`, `docs/`).
+- **Generated / local (gitignored):** `node_modules/`, `coverage/`, `report/`, `pre-install/`, `src-tauri/target/`, `.internal/`.
+
+Moving packages under `apps/` or `packages/` would break CI, Makefile, and Tauri resource paths. Prefer documenting over reshaping.

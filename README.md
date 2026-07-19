@@ -569,8 +569,13 @@ Production desktop builds do not open the Vite ports.
 | `extensions/` | Bundled assistant, conversation, download, and local-inference extensions |
 | `src-tauri/` | Rust Tauri host, IPC commands, MCP, downloads, local API, native capabilities |
 | `src-tauri/plugins/` | Native Rust plugins for hardware telemetry and local inference |
-| `docs/` | Public docs: legal, release, architecture, ADRs, product |
 | `scripts/` | Build, release, test, and quality-gate utilities |
+| `docs/` | Public docs: legal, release, architecture |
+| `pre-install/` | Generated extension bundles consumed by Tauri packaging (local/generated) |
+| `mlx.version` | Pinned MLX runtime version for prepare/release scripts |
+| `coverage/` / `report/` | Generated test coverage and module-audit output (gitignored; `make clean`) |
+
+Root keeps workspace entry points only (`package.json`, `yarn.lock`, `vitest.config.ts`, `Makefile`, `README.md`, license files). Package code stays under named top-level packages — not nested under `apps/` or `packages/` — so Tauri, Yarn workspaces, and CI paths stay stable.
 
 For contribution rules, start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
