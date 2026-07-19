@@ -45,7 +45,7 @@ describe('Windows signing and packaging practice', () => {
   })
 
   it('derives winget package directory from packageIdentifier', () => {
-    // First letter of publisher segment (DEFAI → d), not a hardcoded "m".
+    // First letter of publisher segment (DEFAI -> d), not a hardcoded "m".
     expect(wingetPackageRelativeDir('DEFAI.AXStudio')).toBe(
       path.join('d', 'DEFAI', 'AXStudio'),
     )

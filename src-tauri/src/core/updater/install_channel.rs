@@ -87,8 +87,7 @@ pub fn path_looks_like_homebrew_cask(path: &Path) -> bool {
         .filter_map(|c| c.as_os_str().to_str())
         .collect();
     for window in components.windows(2) {
-        if window[0].eq_ignore_ascii_case("Caskroom")
-            && window[1].eq_ignore_ascii_case("ax-studio")
+        if window[0].eq_ignore_ascii_case("Caskroom") && window[1].eq_ignore_ascii_case("ax-studio")
         {
             return true;
         }
@@ -136,8 +135,7 @@ mod tests {
 
     #[test]
     fn applications_standalone_is_not_homebrew() {
-        let path =
-            PathBuf::from("/Applications/AX Studio.app/Contents/MacOS/ax-studio");
+        let path = PathBuf::from("/Applications/AX Studio.app/Contents/MacOS/ax-studio");
         assert!(!path_looks_like_homebrew_cask(&path));
         #[cfg(target_os = "macos")]
         assert_eq!(
@@ -148,9 +146,8 @@ mod tests {
 
     #[test]
     fn unrelated_caskroom_package_is_not_ax_studio() {
-        let path = PathBuf::from(
-            "/opt/homebrew/Caskroom/other-app/1.0.0/Other.app/Contents/MacOS/other",
-        );
+        let path =
+            PathBuf::from("/opt/homebrew/Caskroom/other-app/1.0.0/Other.app/Contents/MacOS/other");
         assert!(!path_looks_like_homebrew_cask(&path));
     }
 

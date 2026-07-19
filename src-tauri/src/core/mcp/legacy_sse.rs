@@ -165,7 +165,10 @@ async fn get_stream(
 }
 
 fn same_origin(a: &Uri, b: &Uri) -> bool {
-    let scheme_eq = a.scheme_str().unwrap_or("").eq_ignore_ascii_case(b.scheme_str().unwrap_or(""));
+    let scheme_eq = a
+        .scheme_str()
+        .unwrap_or("")
+        .eq_ignore_ascii_case(b.scheme_str().unwrap_or(""));
     let host_eq = a
         .host()
         .unwrap_or("")

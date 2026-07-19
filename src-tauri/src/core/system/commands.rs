@@ -240,9 +240,8 @@ pub async fn factory_reset<R: Runtime>(
         let data_folder_for_delete = data_folder.clone();
         tauri::async_runtime::spawn_blocking(move || {
             if data_folder_for_delete.exists() {
-                fs::remove_dir_all(&data_folder_for_delete).map_err(|e| {
-                    format!("Failed to remove data folder: {e}")
-                })?;
+                fs::remove_dir_all(&data_folder_for_delete)
+                    .map_err(|e| format!("Failed to remove data folder: {e}"))?;
             }
             fs::create_dir_all(&data_folder_for_delete)
                 .map_err(|e| format!("Failed to recreate data folder: {e}"))?;

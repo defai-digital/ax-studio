@@ -96,10 +96,7 @@ where
                 match value {
                     serde_json::Value::String(s) => texts.push(s),
                     serde_json::Value::Object(map) => {
-                        let part_type = map
-                            .get("type")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("text");
+                        let part_type = map.get("type").and_then(|v| v.as_str()).unwrap_or("text");
                         if part_type == "text" {
                             if let Some(t) = map.get("text").and_then(|v| v.as_str()) {
                                 texts.push(t.to_string());

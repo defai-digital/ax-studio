@@ -718,11 +718,7 @@ pub async fn remove_old_backend_versions(
     let backends_canon = match fs::canonicalize(&backends_path) {
         Ok(p) => p,
         Err(_) if !backends_path.exists() => return Ok(removed_paths),
-        Err(e) => {
-            return Err(format!(
-                "Failed to canonicalize backends directory: {e}"
-            ))
-        }
+        Err(e) => return Err(format!("Failed to canonicalize backends directory: {e}")),
     };
 
     let version_dirs = fs::read_dir(&backends_canon)

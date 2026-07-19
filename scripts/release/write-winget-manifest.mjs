@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 /**
  * Generate winget multi-file manifests for AX Studio NSIS installers.
  *
@@ -11,6 +9,9 @@
  *     --out-dir packaging/winget/manifests
  *
  * Does not publish to microsoft/winget-pkgs. See packaging/winget/README.md.
+ *
+ * Note: no shebang — this module is imported by Vitest on Windows, and a
+ * leading #! line becomes a SyntaxError under Vitest's thread pool loader.
  */
 
 import fs from 'node:fs'
@@ -20,8 +21,8 @@ import { pathToFileURL } from 'node:url'
 const repoRoot = path.resolve(import.meta.dirname, '..', '..')
 
 /**
- * winget-pkgs multi-file layout: manifests/m/<Publisher>/<Package>/<version>/
- * PackageIdentifier "DEFAI.AXStudio" → m/DEFAI/AXStudio
+ * winget-pkgs multi-file layout: manifests/<first>/<Publisher>/<Package>/<version>/
+ * PackageIdentifier "DEFAI.AXStudio" -> d/DEFAI/AXStudio
  */
 export function wingetPackageRelativeDir(identifier) {
   const parts = String(identifier || '').split('.').filter(Boolean)
