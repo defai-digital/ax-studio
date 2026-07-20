@@ -123,7 +123,7 @@ export function LeftSidebar() {
           <div className="px-1 pb-1 space-y-0.5 group-data-[collapsible=icon]:hidden">
             <DownloadManagement />
             <a
-              href="https://discord.gg/cd5AD5zY6U"
+              href="https://discord.gg/pFc3z3uf4M"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all"

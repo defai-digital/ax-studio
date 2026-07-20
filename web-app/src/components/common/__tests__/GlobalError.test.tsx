@@ -80,7 +80,7 @@ describe('GlobalError Component', () => {
     const contactLink = screen.getByText('contact us')
     expect(contactLink).toHaveAttribute(
       'href',
-      'https://discord.gg/cd5AD5zY6U'
+      'https://discord.gg/pFc3z3uf4M'
     )
     expect(contactLink).toHaveAttribute('target', '_blank')
     expect(contactLink).toHaveAttribute('rel', 'noopener noreferrer')

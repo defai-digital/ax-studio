@@ -6,7 +6,7 @@ interface GlobalErrorProps {
   error: Error | unknown
 }
 
-const FEEDBACK_URL = 'https://discord.gg/cd5AD5zY6U'
+const FEEDBACK_URL = 'https://discord.gg/pFc3z3uf4M'
 
 export function GlobalError({ error }: GlobalErrorProps) {
   console.error('Error in root route:', error)

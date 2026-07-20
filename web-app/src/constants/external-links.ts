@@ -8,5 +8,5 @@ export const AX_STUDIO_EXTERNAL_LINKS = Object.freeze({
   privacy: `${REPOSITORY_URL}/blob/main/docs/legal/privacy.md`,
   terms: `${REPOSITORY_URL}/blob/main/docs/legal/terms.md`,
   aiContentReport: `${REPOSITORY_URL}/issues/new?template=ai-content-report.yml`,
-  discord: 'https://discord.gg/cd5AD5zY6U',
+  discord: 'https://discord.gg/pFc3z3uf4M',
 })
