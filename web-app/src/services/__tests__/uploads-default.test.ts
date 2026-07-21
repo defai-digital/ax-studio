@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { DefaultUploadsService } from '../uploads/default'
+import { fabricDocumentId } from '@/lib/file-registry'
 import { useFileRegistry } from '@/lib/file-registry'
 import type { Attachment } from '@/types/attachment'
 import type { ServiceHub } from '@/services'
@@ -112,7 +113,7 @@ describe('DefaultUploadsService', () => {
         makeDocAttachment()
       )
 
-      expect(result.id).toMatch(/^ULID_/)
+      expect(result.id).toBe(fabricDocumentId('/tmp/report.pdf'))
       expect(result.chunkCount).toBe(12)
     })
 

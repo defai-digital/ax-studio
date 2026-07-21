@@ -105,7 +105,16 @@ export function GlobalEventHandler() {
     const onPaths = (paths: string[]) => {
       if (!paths.length) return
       navigate({ to: route.home })
-      void handleDockFilePaths(paths)
+      void handleDockFilePaths(paths).catch((error) => {
+        console.error(
+          '[GlobalEventHandler] Failed to attach files opened by the OS:',
+          error
+        )
+        toast.error('Failed to attach opened files', {
+          description:
+            error instanceof Error ? error.message : 'Unknown attachment error',
+        })
+      })
     }
 
     serviceHub
@@ -132,6 +141,14 @@ export function GlobalEventHandler() {
               error
             )
           })
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error(
+            '[GlobalEventHandler] Failed to listen for files opened by the OS:',
+            error
+          )
+        }
       })
 
     return () => {
@@ -431,6 +448,12 @@ export function GlobalEventHandler() {
               onClick: () => navigate({ to: route.home }),
             },
           })
+        },
+        (error) => {
+          console.error(
+            '[GlobalEventHandler] Failed to auto-select downloaded model:',
+            error
+          )
         }
       )
     }

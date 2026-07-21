@@ -1,5 +1,5 @@
 import { isDev } from '@/lib/utils'
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { events, AppEvent } from '@ax-studio/core'
 import type { InstallChannel, UpdateInfo } from '@/services/updater/types'
 import { SystemEvent } from '@/types/events'
@@ -21,10 +21,10 @@ export interface UpdateState {
 // same cancellation generation as well. Otherwise a stale failure in one
 // instance can clear a newer successful result from another instance.
 let activeUpdateCheck: AbortController | null = null
+let activeUpdateDownload: Promise<void> | null = null
 
 export const useAppUpdater = () => {
   const serviceHub = useServiceHub()
-  const downloadAbortRef = useRef<AbortController | null>(null)
   const [updateState, setUpdateState] = useState<UpdateState>({
     isUpdateAvailable: false,
     updateInfo: null,
@@ -180,126 +180,122 @@ export const useAppUpdater = () => {
     [syncStateToOtherInstances]
   )
 
-  const downloadAndInstallUpdate = useCallback(async () => {
+  const downloadAndInstallUpdate = useCallback(() => {
     if (AUTO_UPDATER_DISABLED) {
-      return
+      return Promise.resolve()
     }
 
-    if (!updateState.updateInfo) return
+    if (!updateState.updateInfo) return Promise.resolve()
+    if (activeUpdateDownload) return activeUpdateDownload
 
-    // Homebrew-managed installs must use `brew upgrade --cask ax-studio`.
-    // Replacing the app in place desyncs the cask from Caskroom.
-    let channel = updateState.installChannel
-    try {
-      channel = await serviceHub.updater().getInstallChannel()
-    } catch {
-      // keep state value
-    }
-    if (channel === 'homebrew') {
-      console.info(
-        'Skipping in-app install: Homebrew cask install detected. Use brew upgrade --cask ax-studio.'
-      )
-      return
-    }
-
-    activeUpdateCheck?.abort()
-    downloadAbortRef.current?.abort()
-    const controller = new AbortController()
-    downloadAbortRef.current = controller
-
-    try {
-      setUpdateState((prev) => ({
-        ...prev,
-        isDownloading: true,
-      }))
-
-      let downloaded = 0
-      let contentLength = 0
-      await serviceHub.models().stopAllModels()
-      if (controller.signal.aborted) {
-        setUpdateState((prev) => ({ ...prev, isDownloading: false }))
-        return
-      }
-      serviceHub.events()?.emit(SystemEvent.KILL_SIDECAR)
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      if (controller.signal.aborted) {
-        setUpdateState((prev) => ({ ...prev, isDownloading: false }))
-        return
-      }
-
-      await serviceHub.updater().downloadAndInstallWithProgress((event) => {
-        if (controller.signal.aborted) return
-        switch (event.event) {
-          case 'Started':
-            contentLength = event.data?.contentLength || 0
-            setUpdateState((prev) => ({
-              ...prev,
-              totalBytes: contentLength,
-            }))
-            // Emit app update download started event
-            events.emit(AppEvent.onAppUpdateDownloadUpdate, {
-              progress: 0,
-              downloadedBytes: 0,
-              totalBytes: contentLength,
-            })
-            break
-          case 'Progress': {
-            downloaded += event.data?.chunkLength || 0
-            const progress = contentLength > 0 ? downloaded / contentLength : 0
-            setUpdateState((prev) => ({
-              ...prev,
-              downloadProgress: progress,
-              downloadedBytes: downloaded,
-            }))
-
-            // Emit app update download progress event
-            events.emit(AppEvent.onAppUpdateDownloadUpdate, {
-              progress: progress,
-              downloadedBytes: downloaded,
-              totalBytes: contentLength,
-            })
-            break
-          }
-          case 'Finished':
-            setUpdateState((prev) => ({
-              ...prev,
-              downloadProgress: 1,
-            }))
-            break
-        }
-      })
-
-      setUpdateState((prev) => ({
-        ...prev,
-        isDownloading: false,
-        downloadProgress: 1,
-        isUpdateAvailable: false,
-        updateInfo: null,
-      }))
-      // Install already succeeded; relaunch is best-effort and must not
-      // reclassify a successful install as a download/install failure.
-      events.emit(AppEvent.onAppUpdateDownloadSuccess, {})
+    const operation = (async () => {
+      // Homebrew-managed installs must use `brew upgrade --cask ax-studio`.
+      // Replacing the app in place desyncs the cask from Caskroom.
+      let channel = updateState.installChannel
       try {
-        await window.core?.api?.relaunch()
-      } catch (relaunchError) {
-        console.error('Error relaunching after update install:', relaunchError)
+        channel = await serviceHub.updater().getInstallChannel()
+      } catch {
+        // keep state value
       }
-    } catch (error) {
-      console.error('Error downloading update:', error)
-      setUpdateState((prev) => ({
-        ...prev,
-        isDownloading: false,
-      }))
+      if (channel === 'homebrew') {
+        console.info(
+          'Skipping in-app install: Homebrew cask install detected. Use brew upgrade --cask ax-studio.'
+        )
+        return
+      }
 
-      // Emit app update download error event
-      events.emit(AppEvent.onAppUpdateDownloadError, {
-        message: error instanceof Error ? error.message : 'Unknown error',
-      })
-    } finally {
-      if (downloadAbortRef.current === controller) {
-        downloadAbortRef.current = null
+      activeUpdateCheck?.abort()
+
+      try {
+        setUpdateState((prev) => ({
+          ...prev,
+          isDownloading: true,
+        }))
+
+        let downloaded = 0
+        let contentLength = 0
+        await serviceHub.models().stopAllModels()
+        serviceHub.events()?.emit(SystemEvent.KILL_SIDECAR)
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+
+        await serviceHub.updater().downloadAndInstallWithProgress((event) => {
+          switch (event.event) {
+            case 'Started':
+              contentLength = event.data?.contentLength || 0
+              setUpdateState((prev) => ({
+                ...prev,
+                totalBytes: contentLength,
+              }))
+              // Emit app update download started event
+              events.emit(AppEvent.onAppUpdateDownloadUpdate, {
+                progress: 0,
+                downloadedBytes: 0,
+                totalBytes: contentLength,
+              })
+              break
+            case 'Progress': {
+              downloaded += event.data?.chunkLength || 0
+              const progress = contentLength > 0 ? downloaded / contentLength : 0
+              setUpdateState((prev) => ({
+                ...prev,
+                downloadProgress: progress,
+                downloadedBytes: downloaded,
+              }))
+
+              // Emit app update download progress event
+              events.emit(AppEvent.onAppUpdateDownloadUpdate, {
+                progress: progress,
+                downloadedBytes: downloaded,
+                totalBytes: contentLength,
+              })
+              break
+            }
+            case 'Finished':
+              setUpdateState((prev) => ({
+                ...prev,
+                downloadProgress: 1,
+              }))
+              break
+          }
+        })
+
+        setUpdateState((prev) => ({
+          ...prev,
+          isDownloading: false,
+          downloadProgress: 1,
+          isUpdateAvailable: false,
+          updateInfo: null,
+        }))
+        // Install already succeeded; relaunch is best-effort and must not
+        // reclassify a successful install as a download/install failure.
+        events.emit(AppEvent.onAppUpdateDownloadSuccess, {})
+        try {
+          await window.core?.api?.relaunch()
+        } catch (relaunchError) {
+          console.error('Error relaunching after update install:', relaunchError)
+        }
+      } catch (error) {
+        console.error('Error downloading update:', error)
+        setUpdateState((prev) => ({
+          ...prev,
+          isDownloading: false,
+        }))
+
+        // Emit app update download error event
+        events.emit(AppEvent.onAppUpdateDownloadError, {
+          message: error instanceof Error ? error.message : 'Unknown error',
+        })
+      }
+    })()
+
+    activeUpdateDownload = operation
+    const clearOperation = () => {
+      if (activeUpdateDownload === operation) {
+        activeUpdateDownload = null
       }
     }
+    void operation.then(clearOperation, clearOperation)
+    return operation
   }, [serviceHub, updateState.updateInfo, updateState.installChannel])
 
   return {

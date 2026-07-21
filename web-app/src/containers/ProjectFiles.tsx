@@ -18,6 +18,7 @@ import { normalizeFileSize } from '@/lib/attachments/size'
 import { useFileRegistry, projectCollectionId } from '@/lib/file-registry'
 import { partitionDuplicateAttachments } from '@/lib/attachments/dedupe'
 import { extractErrorMessage } from '@/lib/utils/error'
+import { deleteIndexedFileChunks } from '@/lib/attachments/delete-indexed-file'
 
 type ProjectFilesProps = {
   projectId: string
@@ -392,7 +393,15 @@ export function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
   const handleDeleteFile = async (fileId: string) => {
     try {
       const colId = projectCollectionId(projectId)
-      useFileRegistry.getState().removeFile(colId, fileId)
+      const registry = useFileRegistry.getState()
+      const file = registry.getFile(colId, fileId)
+      if (!file) return
+      await deleteIndexedFileChunks(serviceHub.mcp(), {
+        collectionId: colId,
+        documentId: file.file_id,
+        expectedChunkCount: file.chunk_count,
+      })
+      registry.removeFile(colId, fileId)
       toast.success(
         t('common:toast.fileDeleted.title') ?? 'File deleted successfully'
       )
@@ -484,8 +493,8 @@ export function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
               <button
                 type="button"
                 className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label={t('common:delete')}
-                title={t('common:delete')}
+                aria-label={t('common:delete') ?? 'Delete'}
+                title={t('common:delete') ?? 'Delete'}
                 onClick={() => handleDeleteFile(file.id)}
               >
                 <X className="size-3" />

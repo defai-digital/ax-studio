@@ -557,6 +557,20 @@ describe('useDocumentAttachmentHandler', () => {
   // ── Deletion: file registry cleanup ────────────────────────────────────
 
   it('removes file from registry when document attachment is removed', async () => {
+    mockMcpCallTool
+      .mockResolvedValueOnce({
+        error: '',
+        content: [
+          {
+            text: JSON.stringify({
+              results: Array.from({ length: 5 }, (_, index) => ({
+                chunkId: `chunk-${index}`,
+              })),
+            }),
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ error: '', content: [{ text: 'deleted' }] })
     // Seed file registry
     act(() => {
       useFileRegistry.getState().addFile('thread_thread-1', {
@@ -603,6 +617,20 @@ describe('useDocumentAttachmentHandler', () => {
   })
 
   it('clears hasDocuments flag when last file is removed', async () => {
+    mockMcpCallTool
+      .mockResolvedValueOnce({
+        error: '',
+        content: [
+          {
+            text: JSON.stringify({
+              results: Array.from({ length: 3 }, (_, index) => ({
+                chunkId: `chunk-${index}`,
+              })),
+            }),
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ error: '', content: [{ text: 'deleted' }] })
     act(() => {
       useFileRegistry.getState().addFile('thread_thread-1', {
         file_id: 'only-file',
@@ -703,7 +731,7 @@ describe('useDocumentAttachmentHandler', () => {
     )
   })
 
-  it('still removes from registry even if AkiDB call fails', async () => {
+  it('keeps the attachment tracked when AkiDB deletion fails', async () => {
     mockMcpCallTool.mockRejectedValueOnce(new Error('MCP unavailable'))
 
     act(() => {
@@ -733,11 +761,14 @@ describe('useDocumentAttachmentHandler', () => {
       await result.current.handleRemoveAttachment(0)
     })
 
-    // Registry should still be cleaned up despite MCP failure
-    expect(useFileRegistry.getState().hasFiles('thread_thread-1')).toBe(false)
+    expect(useFileRegistry.getState().hasFiles('thread_thread-1')).toBe(true)
     expect(
       useChatAttachments.getState().getAttachments(ATTACHMENTS_KEY)
-    ).toHaveLength(0)
+    ).toHaveLength(1)
+    expect(toast.error).toHaveBeenCalledWith(
+      'Failed to remove indexed attachment',
+      expect.any(Object)
+    )
   })
 
   it('does not call akidb_delete_chunks when fabric_search returns isError with parseable results', async () => {
@@ -785,10 +816,10 @@ describe('useDocumentAttachmentHandler', () => {
     expect(mockMcpCallTool).not.toHaveBeenCalledWith(
       expect.objectContaining({ toolName: 'akidb_delete_chunks' })
     )
-    // Local registry/attachment cleanup still proceeds
-    expect(useFileRegistry.getState().hasFiles('thread_thread-1')).toBe(false)
+    // Failed search leaves local tracking intact so deletion can be retried.
+    expect(useFileRegistry.getState().hasFiles('thread_thread-1')).toBe(true)
     expect(
       useChatAttachments.getState().getAttachments(ATTACHMENTS_KEY)
-    ).toHaveLength(0)
+    ).toHaveLength(1)
   })
 })

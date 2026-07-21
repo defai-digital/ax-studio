@@ -385,4 +385,28 @@ describe('GlobalEventHandler', () => {
       )
     })
   })
+
+  it('contains auto-selection failures after a model download completes', async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {})
+    mockAutoSelectDownloadedModel.mockRejectedValueOnce(
+      new Error('provider refresh failed')
+    )
+    render(<GlobalEventHandler />)
+
+    emit('onFileDownloadSuccess', {
+      downloadId: 'model-a',
+      modelId: 'model-a',
+    })
+
+    await waitFor(() => {
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[GlobalEventHandler] Failed to auto-select downloaded model:',
+        expect.any(Error)
+      )
+    })
+    expect(mockRemoveDownload).toHaveBeenCalledWith('model-a')
+    consoleErrorSpy.mockRestore()
+  })
 })

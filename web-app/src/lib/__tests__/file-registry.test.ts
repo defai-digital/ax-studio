@@ -3,6 +3,7 @@ import {
   useFileRegistry,
   threadCollectionId,
   projectCollectionId,
+  fabricDocumentId,
 } from '../file-registry'
 import type { FileRegistryEntry } from '../file-registry'
 
@@ -81,7 +82,7 @@ describe('file-registry', () => {
       expect(useFileRegistry.getState().listFiles('col')).toHaveLength(1)
     })
 
-    it('updates metadata on re-add of the same path while keeping the original file_id', () => {
+    it('updates metadata and the document id on re-add of the same path', () => {
       useFileRegistry.getState().addFile(
         'col',
         makeEntry({
@@ -102,7 +103,7 @@ describe('file-registry', () => {
 
       const files = useFileRegistry.getState().listFiles('col')
       expect(files).toHaveLength(1)
-      expect(files[0].file_id).toBe('stable-id')
+      expect(files[0].file_id).toBe('orphan-new-id')
       expect(files[0].chunk_count).toBe(9)
       expect(files[0].file_name).toBe('a-renamed.pdf')
     })
@@ -136,6 +137,30 @@ describe('file-registry', () => {
 
       expect(useFileRegistry.getState().files).toEqual({})
     })
+  })
+
+  it('migrates persisted file ids to the fabric document-id contract', () => {
+    const migrate = (useFileRegistry as any).persist.getOptions().migrate as (
+      persisted: unknown,
+      version: number
+    ) => any
+    const migrated = migrate(
+      {
+        files: {
+          thread_abc: [
+            {
+              ...makeEntry({ file_id: 'legacy-local-id' }),
+              file_path: '/docs/report.pdf',
+            },
+          ],
+        },
+      },
+      0
+    )
+
+    expect(migrated.files.thread_abc[0].file_id).toBe(
+      fabricDocumentId('/docs/report.pdf')
+    )
   })
 
   describe('removeFile', () => {

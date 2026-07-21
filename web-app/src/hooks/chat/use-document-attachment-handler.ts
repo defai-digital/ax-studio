@@ -32,7 +32,7 @@ import { normalizeFileSize } from '@/lib/attachments/size'
 import { extractErrorMessage } from '@/lib/utils/error'
 import { basename, fileExtension } from '@/lib/utils'
 import { withTimeout } from '@/lib/utils/async'
-import { getMcpToolFailureMessage } from '@/lib/ax-bi/mcp-result'
+import { deleteIndexedFileChunks } from '@/lib/attachments/delete-indexed-file'
 
 const ATTACHMENT_AUTO_INLINE_FALLBACK_BYTES = 512 * 1024
 const ATTACHMENT_MODEL_READY_TIMEOUT_MS = 5_000
@@ -490,59 +490,35 @@ export function useDocumentAttachmentHandler({
         attachmentToRemove.type === 'document'
       ) {
         const colId = threadCollectionId(effectiveThreadId)
-
-        // Best-effort: delete indexed chunks from AkiDB via MCP
+        const registry = useFileRegistry.getState()
+        const registryEntry =
+          registry.getFile(colId, attachmentToRemove.id) ??
+          registry
+            .listFiles(colId)
+            .find((file) => file.file_path === attachmentToRemove.path)
         try {
-          // Search for all chunks belonging to this file
-          const searchResult = await serviceHub.mcp().callTool({
-            toolName: 'fabric_search',
-            arguments: {
-              query: '',
-              collection_id: colId,
-              top_k: 10000,
-              mode: 'keyword',
-              filters: { doc_id: attachmentToRemove.id },
-            },
+          await deleteIndexedFileChunks(serviceHub.mcp(), {
+            collectionId: colId,
+            documentId: registryEntry?.file_id ?? attachmentToRemove.id,
+            expectedChunkCount:
+              registryEntry?.chunk_count ?? attachmentToRemove.chunkCount,
           })
-
-          // Honor MCP isError/is_error as well as top-level error strings.
-          if (!getMcpToolFailureMessage(searchResult)) {
-            const text = searchResult.content?.[0]?.text
-            if (text) {
-              try {
-                const parsed = JSON.parse(text)
-                const results = Array.isArray(parsed.results)
-                  ? parsed.results
-                  : []
-                const chunkIds = results
-                  .map((r: Record<string, unknown>) => r.chunkId ?? r.chunk_id)
-                  .filter(Boolean) as string[]
-
-                if (chunkIds.length > 0) {
-                  await serviceHub.mcp().callTool({
-                    toolName: 'akidb_delete_chunks',
-                    arguments: {
-                      collection_id: colId,
-                      chunk_ids: chunkIds,
-                      reason: 'file_deleted',
-                    },
-                  })
-                }
-              } catch {
-                // JSON parse failure — skip chunk deletion silently
-              }
-            }
-          }
         } catch (error) {
-          // AkiDB may not be running; deletion from registry still proceeds
           console.warn('Failed to delete chunks from AkiDB:', error)
+          toast.error('Failed to remove indexed attachment', {
+            description: extractErrorMessage(error, String(error)),
+          })
+          return
         }
 
         // Remove from the file registry (local tracking)
-        useFileRegistry.getState().removeFile(colId, attachmentToRemove.id)
+        registry.removeFile(
+          colId,
+          registryEntry?.file_id ?? attachmentToRemove.id
+        )
 
         // If no files left, clear the hasDocuments flag on the thread
-        if (!useFileRegistry.getState().hasFiles(colId)) {
+        if (!registry.hasFiles(colId)) {
           const threadsState = useThreads.getState()
           const current = threadsState.threads?.[effectiveThreadId]
           threadsState.updateThread(effectiveThreadId, {

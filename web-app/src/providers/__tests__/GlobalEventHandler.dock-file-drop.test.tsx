@@ -297,4 +297,31 @@ describe('GlobalEventHandler — dock file drop', () => {
     expect(mockProcessImageFiles).not.toHaveBeenCalled()
     expect(mockProcessNewDocumentAttachments).not.toHaveBeenCalled()
   })
+
+  it('reports failures from the OS-open attachment pipeline', async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {})
+    mockProcessNewDocumentAttachments.mockRejectedValueOnce(
+      new Error('ingestion unavailable')
+    )
+    render(<GlobalEventHandler />)
+
+    await waitFor(() => {
+      expect(tauriEventHandlers.has('dock-file-drop')).toBe(true)
+    })
+    emitDockFileDrop(['/tmp/notes.pdf'])
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(
+        'Failed to attach opened files',
+        { description: 'ingestion unavailable' }
+      )
+    })
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      '[GlobalEventHandler] Failed to attach files opened by the OS:',
+      expect.any(Error)
+    )
+    consoleErrorSpy.mockRestore()
+  })
 })

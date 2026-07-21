@@ -296,6 +296,45 @@ describe('useAppUpdater', () => {
 
 
   describe('downloadAndInstallUpdate', () => {
+    it('coalesces rapid install requests before channel detection completes', async () => {
+      const mockUpdate = {
+        version: '1.2.0',
+        downloadAndInstall: vi.fn(),
+      }
+      mockUpdaterCheck.mockResolvedValue(mockUpdate)
+      const { result } = renderHook(() => useAppUpdater())
+
+      await act(async () => {
+        await result.current.checkForUpdate()
+      })
+
+      let resolveChannel!: (channel: 'homebrew') => void
+      mockGetInstallChannel.mockClear()
+      mockGetInstallChannel.mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveChannel = resolve
+        })
+      )
+
+      let firstRequest!: Promise<void>
+      let secondRequest!: Promise<void>
+      act(() => {
+        firstRequest = result.current.downloadAndInstallUpdate()
+        secondRequest = result.current.downloadAndInstallUpdate()
+      })
+
+      expect(firstRequest).toBe(secondRequest)
+      expect(mockGetInstallChannel).toHaveBeenCalledTimes(1)
+
+      await act(async () => {
+        resolveChannel('homebrew')
+        await Promise.all([firstRequest, secondRequest])
+      })
+
+      expect(mockStopAllModels).not.toHaveBeenCalled()
+      expect(mockUpdaterDownloadAndInstallWithProgress).not.toHaveBeenCalled()
+    })
+
     it('should download and install update successfully', async () => {
       const mockDownloadAndInstall = vi.fn()
       const mockUpdate = {

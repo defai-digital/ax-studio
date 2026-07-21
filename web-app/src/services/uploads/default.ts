@@ -17,6 +17,7 @@ import {
   useFileRegistry,
   threadCollectionId,
   projectCollectionId,
+  fabricDocumentId,
 } from '@/lib/file-registry'
 
 /** Cached result of the MCP availability probe (reset on each service construction). */
@@ -243,14 +244,14 @@ export class DefaultUploadsService implements UploadsService {
       throw new Error(`Document indexing failed: ${errorMsg}`)
     }
 
-    // Re-use the registry file_id when the same path is re-ingested so callers
-    // do not keep orphan attachment ids that no longer match the registry.
     const path = attachment.path!
     const existing = useFileRegistry
       .getState()
       .listFiles(collectionId)
       .find((file) => file.file_path === path)
-    const fileId = existing?.file_id ?? ulid()
+    // ax-fabric uses SHA-256(sourcePath) as doc_id. Returning that same value is
+    // required for file-scoped search, get_chunks, and chunk deletion filters.
+    const fileId = fabricDocumentId(path)
 
     useFileRegistry.getState().addFile(collectionId, {
       file_id: fileId,

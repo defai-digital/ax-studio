@@ -9,6 +9,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
 import { createSafeJSONStorage } from '@/lib/storage/storage'
+import { SHA256, enc } from 'crypto-js'
 
 export type FileRegistryEntry = {
   file_id: string
@@ -23,6 +24,11 @@ export type FileRegistryEntry = {
 
 const MAX_COLLECTIONS = 200
 const MAX_FILES_PER_COLLECTION = 500
+
+/** Keep in sync with ax-fabric RecordBuilder.computeDocId(sourcePath). */
+export function fabricDocumentId(sourcePath: string): string {
+  return SHA256(sourcePath).toString(enc.Hex)
+}
 
 type FileRegistryState = {
   /** collection_id → entries */
@@ -156,6 +162,30 @@ function sanitizePersistedFileRegistry(
   }
 }
 
+function migratePersistedFileRegistry(persisted: unknown): unknown {
+  if (!isPlainRecord(persisted) || !isPlainRecord(persisted.files)) {
+    return persisted
+  }
+
+  return {
+    ...persisted,
+    files: Object.fromEntries(
+      Object.entries(persisted.files).map(([collectionId, entries]) => [
+        collectionId,
+        Array.isArray(entries)
+          ? entries.map((entry) => {
+              if (!isPlainRecord(entry) || !isNonEmptyString(entry.file_path)) {
+                return entry
+              }
+              const filePath = entry.file_path.trim()
+              return { ...entry, file_id: fabricDocumentId(filePath) }
+            })
+          : entries,
+      ])
+    ),
+  }
+}
+
 export const useFileRegistry = create<FileRegistryState>()(
   persist(
     (set, get) => ({
@@ -174,9 +204,8 @@ export const useFileRegistry = create<FileRegistryState>()(
 
           const existing =
             getOwnCollection(state.files, normalizedCollectionId) ?? []
-          // Same path: update metadata in place and keep the original file_id so
-          // re-ingest does not mint orphan IDs for callers that always generate
-          // a new ULID before calling addFile.
+          // Same path: update metadata in place. The file_id is deterministic
+          // from the source path and must match AkiDB's doc_id.
           const existingIndex = existing.findIndex(
             (f) => f.file_path === normalizedEntry.file_path
           )
@@ -186,8 +215,6 @@ export const useFileRegistry = create<FileRegistryState>()(
             updated[existingIndex] = {
               ...previous,
               ...normalizedEntry,
-              // Preserve stable identity for list/remove/get_chunks consumers.
-              file_id: previous.file_id,
               collection_id: normalizedCollectionId,
             }
             return {
@@ -244,6 +271,9 @@ export const useFileRegistry = create<FileRegistryState>()(
       merge: (persisted, current) =>
         sanitizePersistedFileRegistry(persisted, current),
       partialize: (state) => ({ files: normalizeFileRegistryFiles(state.files) }),
+      migrate: (persistedState: unknown) =>
+        migratePersistedFileRegistry(persistedState),
+      version: 1,
     }
   )
 )

@@ -6,11 +6,13 @@ const {
   mockDialogOpen,
   mockFileStat,
   mockIngestProjectFile,
+  mockMcpCallTool,
   mockToastError,
 } = vi.hoisted(() => ({
   mockDialogOpen: vi.fn(),
   mockFileStat: vi.fn(),
   mockIngestProjectFile: vi.fn(),
+  mockMcpCallTool: vi.fn(),
   mockToastError: vi.fn(),
 }))
 
@@ -29,6 +31,7 @@ vi.mock('@/hooks/useServiceHub', () => ({
     uploads: () => ({
       ingestFileAttachmentForProject: mockIngestProjectFile,
     }),
+    mcp: () => ({ callTool: mockMcpCallTool }),
   }),
 }))
 
@@ -107,5 +110,34 @@ describe('ProjectFiles', () => {
     expect(mockToastError).toHaveBeenCalled()
     expect(screen.queryByText('second.pdf')).not.toBeInTheDocument()
     consoleErrorSpy.mockRestore()
+  })
+
+  it('deletes indexed chunks before removing a project file', async () => {
+    const collectionId = projectCollectionId('project-1')
+    useFileRegistry.getState().addFile(collectionId, {
+      file_id: 'doc-id',
+      file_name: 'report.pdf',
+      file_path: '/docs/report.pdf',
+      chunk_count: 1,
+      collection_id: collectionId,
+      created_at: '2026-01-01T00:00:00Z',
+    })
+    mockMcpCallTool
+      .mockResolvedValueOnce({
+        content: [
+          { text: JSON.stringify({ results: [{ chunkId: 'chunk-1' }] }) },
+        ],
+      })
+      .mockResolvedValueOnce({ content: [{ text: 'Deleted 1 chunks' }] })
+    render(<ProjectFiles projectId="project-1" lng="en" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+
+    await waitFor(() =>
+      expect(useFileRegistry.getState().hasFiles(collectionId)).toBe(false)
+    )
+    expect(mockMcpCallTool).toHaveBeenLastCalledWith(
+      expect.objectContaining({ toolName: 'akidb_delete_chunks' })
+    )
   })
 })
