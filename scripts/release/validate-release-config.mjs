@@ -176,6 +176,26 @@ for (const workflowPath of releaseWorkflowPaths.filter((workflowPath) => workflo
   }
 }
 
+const windowsArm64WorkflowPath = '.github/workflows/template-tauri-build-windows-arm64.yml'
+const windowsArm64Workflow = fs.readFileSync(
+  path.join(repoRoot, windowsArm64WorkflowPath),
+  'utf8',
+)
+for (const requiredToolchainSetting of [
+  'TARGET_CMAKE_GENERATOR: Ninja',
+  'CC_aarch64_pc_windows_msvc: clang-cl',
+  'CXX_aarch64_pc_windows_msvc: clang-cl',
+  'CMAKE_C_COMPILER_TARGET: aarch64-pc-windows-msvc',
+  'CMAKE_CXX_COMPILER_TARGET: aarch64-pc-windows-msvc',
+  'Validate Windows ARM64 native toolchain',
+]) {
+  if (!windowsArm64Workflow.includes(requiredToolchainSetting)) {
+    fail(
+      `${windowsArm64WorkflowPath} must configure ${requiredToolchainSetting} for whisper.cpp ARM64 support`,
+    )
+  }
+}
+
 const setVersionScript = fs.readFileSync(path.join(repoRoot, 'scripts/release/set-version.mjs'), 'utf8')
 const cargoManifest = fs.readFileSync(path.join(repoRoot, 'src-tauri/Cargo.toml'), 'utf8')
 if (/['"]devtools['"]/.test(cargoManifest) || /['"]devtools['"]/.test(setVersionScript)) {

@@ -88,6 +88,22 @@ describe('GitHub Actions dependency boundaries', () => {
     expect(certMetadata.thumbprintSha1).toMatch(/^[0-9A-Fa-f]{40}$/)
   })
 
+  it('uses clang-cl and Ninja for Windows ARM64 native dependencies', () => {
+    const arm64Workflow = fs.readFileSync(
+      path.join(workflowsDirectory, 'template-tauri-build-windows-arm64.yml'),
+      'utf8',
+    )
+
+    expect(arm64Workflow).toContain('TARGET_CMAKE_GENERATOR: Ninja')
+    expect(arm64Workflow).toContain('CC_aarch64_pc_windows_msvc: clang-cl')
+    expect(arm64Workflow).toContain('CXX_aarch64_pc_windows_msvc: clang-cl')
+    expect(arm64Workflow).toContain('CMAKE_C_COMPILER_TARGET: aarch64-pc-windows-msvc')
+    expect(arm64Workflow).toContain('CMAKE_CXX_COMPILER_TARGET: aarch64-pc-windows-msvc')
+    expect(arm64Workflow).toContain('Validate Windows ARM64 native toolchain')
+    expect(arm64Workflow.indexOf('Validate Windows ARM64 native toolchain'))
+      .toBeLessThan(arm64Workflow.indexOf('- name: Build app'))
+  })
+
   it('independently verifies uploaded Apple, Authenticode, and Minisign signatures', () => {
     const releaseWorkflow = fs.readFileSync(
       path.join(workflowsDirectory, 'ax-studio-tauri-build.yaml'),
@@ -103,6 +119,12 @@ describe('GitHub Actions dependency boundaries', () => {
     expect(releaseWorkflow).toContain('Authority=Developer ID Application: DEFAI PRIVATE LIMITED')
     expect(releaseWorkflow).toContain('Contents/Frameworks/libmlx.dylib')
     expect(releaseWorkflow).toContain('Contents/Frameworks/libjaccl.dylib')
+    expect(releaseWorkflow).toContain(
+      'otool -D "$APP/Contents/Frameworks/libjaccl.dylib"',
+    )
+    expect(releaseWorkflow).not.toContain(
+      'otool -L "$APP/Contents/Frameworks/libmlx.dylib"',
+    )
     expect(releaseWorkflow).toContain('Contents/Resources/mlx.metallib')
     expect(releaseWorkflow).toContain('Contents/MacOS/ax-studio')
     expect(releaseWorkflow).not.toContain('Contents/MacOS/AX Studio')

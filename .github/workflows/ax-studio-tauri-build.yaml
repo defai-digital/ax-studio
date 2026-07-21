@@ -190,7 +190,10 @@ jobs:
           test -f "$APP/Contents/Frameworks/libjaccl.dylib"
           test -f "$APP/Contents/Resources/mlx.metallib"
           otool -L "$APP/Contents/MacOS/ax-studio" | grep -F '@rpath/libmlx.dylib'
-          otool -L "$APP/Contents/Frameworks/libmlx.dylib" | grep -F '@rpath/libjaccl.dylib'
+          # MLX 0.32 loads the JACCL backend dynamically rather than declaring
+          # it as an LC_LOAD_DYLIB dependency. Verify the bundled library's
+          # install name; the loop below separately verifies its signature.
+          otool -D "$APP/Contents/Frameworks/libjaccl.dylib" | grep -F '@rpath/libjaccl.dylib'
           otool -l "$APP/Contents/MacOS/ax-studio" | grep -F '@executable_path/../Frameworks'
           test "$(plutil -extract LSMinimumSystemVersion raw "$APP/Contents/Info.plist")" = "15.0"
           for MLX_LIBRARY in \
@@ -690,7 +693,10 @@ jobs:
           test -f "$APP/Contents/Frameworks/libjaccl.dylib"
           test -f "$APP/Contents/Resources/mlx.metallib"
           otool -L "$APP/Contents/MacOS/ax-studio" | grep -F '@rpath/libmlx.dylib'
-          otool -L "$APP/Contents/Frameworks/libmlx.dylib" | grep -F '@rpath/libjaccl.dylib'
+          # MLX 0.32 loads the JACCL backend dynamically rather than declaring
+          # it as an LC_LOAD_DYLIB dependency. Verify the bundled library's
+          # install name; the loop below separately verifies its signature.
+          otool -D "$APP/Contents/Frameworks/libjaccl.dylib" | grep -F '@rpath/libjaccl.dylib'
           otool -l "$APP/Contents/MacOS/ax-studio" | grep -F '@executable_path/../Frameworks'
           test "$(plutil -extract LSMinimumSystemVersion raw "$APP/Contents/Info.plist")" = "15.0"
           for MLX_LIBRARY in \

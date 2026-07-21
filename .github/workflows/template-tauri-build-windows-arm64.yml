@@ -77,6 +77,14 @@ jobs:
     timeout-minutes: 45
     env:
       CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+      # whisper.cpp's ARM backend rejects MSVC. Force cmake-rs to use the
+      # supported clang-cl + Ninja path for ARM64 native dependencies while
+      # keeping Rust and the final application on the MSVC ABI target.
+      TARGET_CMAKE_GENERATOR: Ninja
+      CC_aarch64_pc_windows_msvc: clang-cl
+      CXX_aarch64_pc_windows_msvc: clang-cl
+      CMAKE_C_COMPILER_TARGET: aarch64-pc-windows-msvc
+      CMAKE_CXX_COMPILER_TARGET: aarch64-pc-windows-msvc
     outputs:
       WIN_ARM64_SIG: ${{ steps.metadata.outputs.WIN_ARM64_SIG }}
       FILE_NAME: ${{ steps.metadata.outputs.FILE_NAME }}
@@ -108,6 +116,20 @@ jobs:
 
       - name: Add Windows ARM64 Rust target
         run: rustup target add aarch64-pc-windows-msvc
+
+      - name: Validate Windows ARM64 native toolchain
+        shell: pwsh
+        run: |
+          Get-Command clang-cl.exe -ErrorAction Stop | Format-List Source
+          Get-Command ninja.exe -ErrorAction Stop | Format-List Source
+          clang-cl --version
+          if ($LASTEXITCODE -ne 0) {
+            throw "clang-cl is required for Windows ARM64 native dependencies."
+          }
+          ninja --version
+          if ($LASTEXITCODE -ne 0) {
+            throw "Ninja is required for Windows ARM64 native dependencies."
+          }
 
       - name: Install AzureSignTool
         run: |
