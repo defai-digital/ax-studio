@@ -343,8 +343,8 @@ dependencies = [
 
 [[package]]
 name = "ax-engine-core"
-version = "6.9.0"
-source = "git+https://github.com/defai-digital/ax-engine?rev=83a6b34715665e6ec2f0bd83395afd6a2f8ec083#83a6b34715665e6ec2f0bd83395afd6a2f8ec083"
+version = "6.10.0"
+source = "git+https://github.com/defai-digital/ax-engine?rev=480d93b8997e9ed9d78fd80d656b13715879eb71#480d93b8997e9ed9d78fd80d656b13715879eb71"
 dependencies = [
  "metal",
  "objc",
@@ -357,8 +357,8 @@ dependencies = [
 
 [[package]]
 name = "ax-engine-mlx"
-version = "6.9.0"
-source = "git+https://github.com/defai-digital/ax-engine?rev=83a6b34715665e6ec2f0bd83395afd6a2f8ec083#83a6b34715665e6ec2f0bd83395afd6a2f8ec083"
+version = "6.10.0"
+source = "git+https://github.com/defai-digital/ax-engine?rev=480d93b8997e9ed9d78fd80d656b13715879eb71#480d93b8997e9ed9d78fd80d656b13715879eb71"
 dependencies = [
  "ax-engine-core",
  "fs2",
@@ -373,8 +373,8 @@ dependencies = [
 
 [[package]]
 name = "ax-engine-sdk"
-version = "6.9.0"
-source = "git+https://github.com/defai-digital/ax-engine?rev=83a6b34715665e6ec2f0bd83395afd6a2f8ec083#83a6b34715665e6ec2f0bd83395afd6a2f8ec083"
+version = "6.10.0"
+source = "git+https://github.com/defai-digital/ax-engine?rev=480d93b8997e9ed9d78fd80d656b13715879eb71#480d93b8997e9ed9d78fd80d656b13715879eb71"
 dependencies = [
  "ax-engine-core",
  "ax-engine-mlx",
@@ -1528,7 +1528,7 @@ version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab8ecd87370524b461f8557c119c405552c396ed91fc0a8eec68679eab26f94a"
 dependencies = [
- "libloading 0.8.9",
+ "libloading 0.7.4",
 ]
 
 [[package]]
@@ -3418,8 +3418,8 @@ dependencies = [
 
 [[package]]
 name = "mlx-sys"
-version = "6.9.0"
-source = "git+https://github.com/defai-digital/ax-engine?rev=83a6b34715665e6ec2f0bd83395afd6a2f8ec083#83a6b34715665e6ec2f0bd83395afd6a2f8ec083"
+version = "6.10.0"
+source = "git+https://github.com/defai-digital/ax-engine?rev=480d93b8997e9ed9d78fd80d656b13715879eb71#480d93b8997e9ed9d78fd80d656b13715879eb71"
 dependencies = [
  "bindgen",
  "cc",
