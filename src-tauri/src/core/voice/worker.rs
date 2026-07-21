@@ -31,7 +31,7 @@ impl VoiceWorker {
     pub fn spawn(
         app: tauri::AppHandle,
         status: Arc<Mutex<StatusShared>>,
-    ) -> (Self, JoinHandle<()>) {
+    ) -> Result<(Self, JoinHandle<()>), VoiceError> {
         let (tx, rx) = channel::<VoiceCommand>();
         let session_tx = tx.clone();
         let join = thread::Builder::new()
@@ -48,8 +48,10 @@ impl VoiceWorker {
                     session.handle(command, &session_tx);
                 }
             })
-            .unwrap_or_else(|e| panic!("failed to spawn voice worker thread: {e}"));
-        (Self { tx }, join)
+            .map_err(|error| {
+                VoiceError::Internal(format!("failed to spawn voice worker thread: {error}"))
+            })?;
+        Ok((Self { tx }, join))
     }
 
     async fn dispatch<T>(

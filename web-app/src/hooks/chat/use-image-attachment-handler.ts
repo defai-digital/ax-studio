@@ -5,7 +5,7 @@
  * Manages `isDragOver` state internally; delegates all store mutations through
  * `setAttachmentsForThread` and calls `setMessage` to surface validation errors.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useChatAttachments } from '@/hooks/chat/useChatAttachments'
@@ -67,19 +67,6 @@ export function useImageAttachmentHandler({
   )
 
   const [isDragOver, setIsDragOver] = useState(false)
-
-  // Track mount state so the background image-ingest IIFE can bail out
-  // after navigation / unmount instead of updating attachments on a
-  // thread the user is no longer viewing.
-  const mountedRef = useRef(true)
-  const ingestionAbortRef = useRef<AbortController | null>(null)
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-      ingestionAbortRef.current?.abort()
-    }
-  }, [])
 
   // ─── Image file processing ──────────────────────────────────────────────────
 
@@ -167,12 +154,8 @@ export function useImageAttachmentHandler({
       })
 
       if (effectiveThreadId && newFiles.length > 0) {
-        ingestionAbortRef.current?.abort()
-        const controller = new AbortController()
-        ingestionAbortRef.current = controller
         void (async () => {
           for (const img of newFiles) {
-            if (!mountedRef.current || controller.signal.aborted) return
             try {
               setAttachmentsForThread(attachmentsKey, (prev) =>
                 prev.map((a) =>
@@ -184,7 +167,6 @@ export function useImageAttachmentHandler({
               const result = await serviceHub
                 .uploads()
                 .ingestImage(effectiveThreadId, img)
-              if (!mountedRef.current || controller.signal.aborted) return
               if (result?.id) {
                 setAttachmentsForThread(attachmentsKey, (prev) =>
                   prev.map((a) =>
@@ -203,7 +185,6 @@ export function useImageAttachmentHandler({
               }
             } catch (error) {
               console.error('Failed to ingest image:', error)
-              if (!mountedRef.current || controller.signal.aborted) return
               setAttachmentsForThread(attachmentsKey, (prev) =>
                 prev.filter((a) => !(a.name === img.name && a.type === 'image'))
               )

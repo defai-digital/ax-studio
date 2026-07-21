@@ -215,6 +215,24 @@ describe('useChatAttachments', () => {
       expect(result[1].name).toBe('new-file')
     })
 
+    it('preserves same-name documents from different paths', () => {
+      const first = {
+        ...makeAttachment('report.pdf'),
+        path: '/first/report.pdf',
+      }
+      const second = {
+        ...makeAttachment('report.pdf'),
+        path: '/second/report.pdf',
+      }
+      act(() => {
+        getState().setAttachments('from', [second])
+        getState().setAttachments('to', [first])
+        getState().transferAttachments('from', 'to')
+      })
+
+      expect(getState().getAttachments('to')).toEqual([first, second])
+    })
+
     it('transfers when destination exists but is empty', () => {
       act(() => {
         getState().setAttachments('from', [makeAttachment('file')])

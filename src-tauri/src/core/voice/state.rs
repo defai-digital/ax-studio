@@ -8,7 +8,7 @@
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
-use super::models::{StatusShared, VoiceStatus};
+use super::models::{StatusShared, VoiceError, VoiceStatus};
 use super::worker::VoiceWorker;
 
 #[derive(Default)]
@@ -28,15 +28,15 @@ impl VoiceState {
     }
 
     /// Get the worker, spawning it on first use.
-    pub fn worker(&self, app: &tauri::AppHandle) -> VoiceWorker {
+    pub fn worker(&self, app: &tauri::AppHandle) -> Result<VoiceWorker, VoiceError> {
         let mut guard = Self::lock(&self.worker);
         if let Some(worker) = guard.as_ref() {
-            return worker.clone();
+            return Ok(worker.clone());
         }
-        let (worker, join) = VoiceWorker::spawn(app.clone(), self.status.clone());
+        let (worker, join) = VoiceWorker::spawn(app.clone(), self.status.clone())?;
         *Self::lock(&self._worker_join) = Some(join);
         *guard = Some(worker.clone());
-        worker
+        Ok(worker)
     }
 
     /// The worker only if it has already been spawned — stop/cancel must not

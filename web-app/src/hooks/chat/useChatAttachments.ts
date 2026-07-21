@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 
 import { Attachment } from '@/types/attachment'
+import { getAttachmentIdentity } from '@/lib/attachments/dedupe'
 
 export const NEW_THREAD_ATTACHMENT_KEY = '__new-thread__'
 
@@ -70,14 +71,18 @@ export const useChatAttachments = create<AttachmentStore>()((set, get) => ({
       delete attachmentsByThread[fromKey]
 
       // Merge rather than pick one side — picking discarded the source
-      // whenever the destination already had files. Dedupe by name+size so the
-      // same file isn't listed twice when both sides happen to have it.
+      // whenever the destination already had files. Only dedupe when a stable
+      // identity is available; two documents can legitimately share a basename
+      // and byte size while referring to different paths.
+      const seen = new Set<string>()
       const merged = [...existingDestination, ...fromAttachments].filter(
-        (attachment, index, arr) =>
-          arr.findIndex(
-            (other) =>
-              other.name === attachment.name && other.size === attachment.size
-          ) === index
+        (attachment) => {
+          const identity = getAttachmentIdentity(attachment)
+          if (!identity) return true
+          if (seen.has(identity)) return false
+          seen.add(identity)
+          return true
+        }
       )
 
       return {

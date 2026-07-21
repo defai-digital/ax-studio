@@ -17,9 +17,14 @@ export interface UpdateState {
   installChannel: InstallChannel
 }
 
+// Update state is synchronized across hook instances, so checks must share the
+// same cancellation generation as well. Otherwise a stale failure in one
+// instance can clear a newer successful result from another instance.
+let activeUpdateCheck: AbortController | null = null
+
 export const useAppUpdater = () => {
   const serviceHub = useServiceHub()
-  const abortRef = useRef<AbortController | null>(null)
+  const downloadAbortRef = useRef<AbortController | null>(null)
   const [updateState, setUpdateState] = useState<UpdateState>({
     isUpdateAvailable: false,
     updateInfo: null,
@@ -57,9 +62,9 @@ export const useAppUpdater = () => {
 
   const checkForUpdate = useCallback(
     async (resetRemindMeLater = false) => {
-      abortRef.current?.abort()
+      activeUpdateCheck?.abort()
       const controller = new AbortController()
-      abortRef.current = controller
+      activeUpdateCheck = controller
 
       try {
         if (resetRemindMeLater) {
@@ -86,9 +91,12 @@ export const useAppUpdater = () => {
               syncStateToOtherInstances(channelState)
             }
           } catch (channelError) {
-            console.warn('Failed to resolve install channel:', channelError)
+            if (!controller.signal.aborted) {
+              console.warn('Failed to resolve install channel:', channelError)
+            }
           }
 
+          if (controller.signal.aborted) return null
           const update = await serviceHub.updater().check()
           if (controller.signal.aborted) return null
 
@@ -134,6 +142,7 @@ export const useAppUpdater = () => {
           return null
         }
       } catch (error) {
+        if (controller.signal.aborted) return null
         console.error('Error checking for updates:', error)
         // Reset state on error
         const newState = {
@@ -147,6 +156,10 @@ export const useAppUpdater = () => {
         // Sync to other instances
         syncStateToOtherInstances(newState)
         return null
+      } finally {
+        if (activeUpdateCheck === controller) {
+          activeUpdateCheck = null
+        }
       }
     },
     [serviceHub, syncStateToOtherInstances]
@@ -189,9 +202,10 @@ export const useAppUpdater = () => {
       return
     }
 
-    abortRef.current?.abort()
+    activeUpdateCheck?.abort()
+    downloadAbortRef.current?.abort()
     const controller = new AbortController()
-    abortRef.current = controller
+    downloadAbortRef.current = controller
 
     try {
       setUpdateState((prev) => ({
@@ -262,8 +276,14 @@ export const useAppUpdater = () => {
         isUpdateAvailable: false,
         updateInfo: null,
       }))
+      // Install already succeeded; relaunch is best-effort and must not
+      // reclassify a successful install as a download/install failure.
       events.emit(AppEvent.onAppUpdateDownloadSuccess, {})
-      await window.core?.api?.relaunch()
+      try {
+        await window.core?.api?.relaunch()
+      } catch (relaunchError) {
+        console.error('Error relaunching after update install:', relaunchError)
+      }
     } catch (error) {
       console.error('Error downloading update:', error)
       setUpdateState((prev) => ({
@@ -275,6 +295,10 @@ export const useAppUpdater = () => {
       events.emit(AppEvent.onAppUpdateDownloadError, {
         message: error instanceof Error ? error.message : 'Unknown error',
       })
+    } finally {
+      if (downloadAbortRef.current === controller) {
+        downloadAbortRef.current = null
+      }
     }
   }, [serviceHub, updateState.updateInfo, updateState.installChannel])
 

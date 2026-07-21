@@ -32,7 +32,7 @@ pub async fn voice_start_recording(
     if !model_path.is_file() {
         return Err(VoiceError::ModelNotDownloaded(model.id().to_string()));
     }
-    state.worker(&app).start_recording(model_path).await
+    state.worker(&app)?.start_recording(model_path).await
 }
 
 /// Stop recording, transcribe on-device, and return the transcript. The

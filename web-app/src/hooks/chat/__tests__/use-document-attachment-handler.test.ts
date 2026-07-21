@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useChatAttachments } from '@/hooks/chat/useChatAttachments'
+import type { Attachment } from '@/types/attachment'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -441,6 +442,116 @@ describe('useDocumentAttachmentHandler', () => {
         perFileChoices: expect.any(Map),
       })
     )
+  })
+
+  it('updates only the matching path when documents share a filename', async () => {
+    const first = {
+      name: 'report.pdf',
+      type: 'document' as const,
+      path: '/first/report.pdf',
+      injectionMode: 'embeddings' as const,
+    }
+    const second = {
+      name: 'report.pdf',
+      type: 'document' as const,
+      path: '/second/report.pdf',
+      injectionMode: 'embeddings' as const,
+    }
+    useChatAttachments
+      .getState()
+      .setAttachments(ATTACHMENTS_KEY, [first, second])
+
+    const { processAttachmentsForSend } = await import(
+      '@/lib/attachmentProcessing'
+    )
+    vi.mocked(processAttachmentsForSend).mockImplementationOnce(
+      async (options) => {
+        options.updateAttachmentProcessing?.(first, 'done', {
+          id: 'first-id',
+        })
+        return { processedAttachments: [], hasEmbeddedDocuments: false }
+      }
+    )
+    const { result } = renderHook(() =>
+      useDocumentAttachmentHandler({
+        attachmentsKey: ATTACHMENTS_KEY,
+        effectiveThreadId: 'thread-1',
+      })
+    )
+
+    await act(async () => {
+      await result.current.processNewDocumentAttachments([first])
+    })
+
+    const stored = useChatAttachments
+      .getState()
+      .getAttachments(ATTACHMENTS_KEY)
+    expect(stored[0]).toEqual(expect.objectContaining({ id: 'first-id' }))
+    expect(stored[1].id).toBeUndefined()
+  })
+
+  it('serializes document batches so a new prompt cannot cancel an older one', async () => {
+    const { processAttachmentsForSend } = await import(
+      '@/lib/attachmentProcessing'
+    )
+    let resolveFirst!: (value: {
+      processedAttachments: Attachment[]
+      hasEmbeddedDocuments: boolean
+    }) => void
+    let resolveSecond!: typeof resolveFirst
+    vi.mocked(processAttachmentsForSend)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSecond = resolve
+          })
+      )
+    const { result } = renderHook(() =>
+      useDocumentAttachmentHandler({
+        attachmentsKey: ATTACHMENTS_KEY,
+        effectiveThreadId: 'thread-1',
+      })
+    )
+    const first = {
+      name: 'first.pdf',
+      type: 'document' as const,
+      path: '/first.pdf',
+      injectionMode: 'embeddings' as const,
+    }
+    const second = {
+      name: 'second.pdf',
+      type: 'document' as const,
+      path: '/second.pdf',
+      injectionMode: 'embeddings' as const,
+    }
+    let firstRun!: Promise<void>
+    let secondRun!: Promise<void>
+
+    act(() => {
+      firstRun = result.current.processNewDocumentAttachments([first])
+      secondRun = result.current.processNewDocumentAttachments([second])
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(processAttachmentsForSend).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      resolveFirst({ processedAttachments: [], hasEmbeddedDocuments: false })
+      await firstRun
+    })
+    expect(processAttachmentsForSend).toHaveBeenCalledTimes(2)
+
+    await act(async () => {
+      resolveSecond({ processedAttachments: [], hasEmbeddedDocuments: false })
+      await secondRun
+    })
   })
 
   // ── Deletion: file registry cleanup ────────────────────────────────────

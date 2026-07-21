@@ -148,6 +148,32 @@ describe('useModelProvider - displayName functionality', () => {
     unsubscribe()
   })
 
+  it('publishes provider and model metadata changes when identities are unchanged', () => {
+    const initial = {
+      provider: 'test-provider',
+      active: true,
+      persist: true,
+      explore_models_url: 'https://old.example/models',
+      models: [{ id: 'test-model', version: 1, capabilities: ['completion'] }],
+      settings: [],
+    } as any
+    useModelProvider.getState().setProviders([initial])
+
+    useModelProvider.getState().setProviders([
+      {
+        ...initial,
+        explore_models_url: 'https://new.example/models',
+        models: [
+          { id: 'test-model', version: 2, capabilities: ['completion'] },
+        ],
+      },
+    ])
+
+    const provider = useModelProvider.getState().providers[0]
+    expect(provider.explore_models_url).toBe('https://new.example/models')
+    expect(provider.models[0].version).toBe(2)
+  })
+
   it('refreshes selectedModel when setProviders replaces model metadata', () => {
     const { result } = renderHook(() => useModelProvider())
 
@@ -443,6 +469,10 @@ describe('useModelProvider migrations', () => {
                 controller_type: 'input',
                 controller_props: {
                   value: 'https://api.openai.com/v1',
+                  min: 0,
+                  max: 10,
+                  step: 0.5,
+                  rows: 4,
                   options: [{ value: 'a', name: 'A' }, { bad: true }],
                 },
               },
@@ -473,6 +503,10 @@ describe('useModelProvider migrations', () => {
             controller_type: 'input',
             controller_props: {
               value: 'https://api.openai.com/v1',
+              min: 0,
+              max: 10,
+              step: 0.5,
+              rows: 4,
               options: [{ value: 'a', name: 'A' }],
             },
           },

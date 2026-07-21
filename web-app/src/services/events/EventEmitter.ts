@@ -58,9 +58,12 @@ export class EventEmitter {
       return
     }
 
-    const handlers = this.handlers.get(eventName)
+    // Iterate a snapshot so a handler can unsubscribe itself (or another
+    // listener) without shifting the live array and skipping callbacks that
+    // were registered for this emission.
+    const handlers = [...(this.handlers.get(eventName) ?? [])]
 
-    handlers?.forEach((handler) => {
+    handlers.forEach((handler) => {
       try {
         handler(args)
       } catch (error) {

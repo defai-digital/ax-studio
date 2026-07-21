@@ -106,9 +106,9 @@ describe('processAttachmentsForSend', () => {
     expect(result.processedAttachments[0].processing).toBe(false)
 
     // Should have been called with 'processing' then 'done'
-    expect(updateFn).toHaveBeenCalledWith('new.png', 'processing')
+    expect(updateFn).toHaveBeenCalledWith(img, 'processing')
     expect(updateFn).toHaveBeenCalledWith(
-      'new.png',
+      img,
       'done',
       expect.objectContaining({
         id: 'img-1',
@@ -140,7 +140,7 @@ describe('processAttachmentsForSend', () => {
       })
     ).rejects.toThrow('upload failed')
 
-    expect(updateFn).toHaveBeenCalledWith('fail.png', 'error')
+    expect(updateFn).toHaveBeenCalledWith(img, 'error')
   })
 
   it('skips already-processed documents with inline injection mode', async () => {
@@ -394,7 +394,7 @@ describe('processAttachmentsForSend', () => {
       })
     ).rejects.toThrow('ingest failed')
 
-    expect(updateFn).toHaveBeenCalledWith('fail-doc.txt', 'error')
+    expect(updateFn).toHaveBeenCalledWith(doc, 'error')
   })
 
   it('processes mixed images and documents together', async () => {

@@ -20,7 +20,7 @@ type AttachmentProcessingOptions = {
   autoFallbackMode?: 'inline' | 'embeddings'
   perFileChoices?: Map<string, 'inline' | 'embeddings'>
   updateAttachmentProcessing?: (
-    name: string,
+    attachment: Attachment,
     status: AttachmentProcessingStatus,
     updatedAttachment?: Partial<Attachment>
   ) => void
@@ -81,7 +81,7 @@ export const processAttachmentsForSend = async (
           continue
         }
 
-        notifyUpdate(img.name, 'processing')
+        notifyUpdate(img, 'processing')
 
         const res = await serviceHub.uploads().ingestImage(threadId, img)
         processedAttachments.push({
@@ -90,14 +90,14 @@ export const processAttachmentsForSend = async (
           processed: true,
           processing: false,
         })
-        notifyUpdate(img.name, 'done', {
+        notifyUpdate(img, 'done', {
           id: res.id,
           processed: true,
           processing: false,
         })
       } catch (err) {
         console.error(`Failed to ingest image ${img.name}:`, err)
-        notifyUpdate(img.name, 'error')
+        notifyUpdate(img, 'error')
         const desc = extractErrorMessage(err, 'Unknown error')
         toast.error('Failed to ingest image attachment', { description: desc })
         throw toError(err, desc)
@@ -115,7 +115,7 @@ export const processAttachmentsForSend = async (
         continue
       }
 
-      notifyUpdate(doc.name, 'processing')
+      notifyUpdate(doc, 'processing')
 
       const targetPreference = doc.parseMode ?? parsePreference
       let targetMode: DocumentInjectionMode =
@@ -199,7 +199,7 @@ export const processAttachmentsForSend = async (
           injectionMode: 'inline',
         })
 
-        notifyUpdate(doc.name, 'done', {
+        notifyUpdate(doc, 'done', {
           processing: false,
           processed: true,
           inlineContent: parsedContent,
@@ -209,7 +209,7 @@ export const processAttachmentsForSend = async (
       }
 
       // Default: ingest as embeddings
-      notifyUpdate(doc.name, 'processing')
+      notifyUpdate(doc, 'processing')
 
       const res = projectId
         ? await serviceHub
@@ -228,7 +228,7 @@ export const processAttachmentsForSend = async (
       })
       hasEmbeddedDocuments = true
 
-      notifyUpdate(doc.name, 'done', {
+      notifyUpdate(doc, 'done', {
         id: res.id,
         size: res.size ?? doc.size,
         chunkCount: res.chunkCount ?? doc.chunkCount,
@@ -238,7 +238,7 @@ export const processAttachmentsForSend = async (
       })
     } catch (err) {
       console.error(`Failed to ingest ${doc.name}:`, err)
-      notifyUpdate(doc.name, 'error')
+      notifyUpdate(doc, 'error')
       const desc = extractErrorMessage(err, 'Unknown error')
       toast.error('Failed to index attachments', { description: desc })
       throw toError(err, desc)

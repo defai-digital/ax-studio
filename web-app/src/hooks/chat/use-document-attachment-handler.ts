@@ -4,7 +4,7 @@
  *
  * Returns callbacks and derived state; no JSX.
  */
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useRef } from 'react'
 import {
   ContentType,
   MessageStatus,
@@ -24,7 +24,10 @@ import { processAttachmentsForSend } from '@/lib/attachmentProcessing'
 import { useFileRegistry, threadCollectionId } from '@/lib/file-registry'
 import { createDocumentAttachment, type Attachment } from '@/types/attachment'
 import { getModelContextLength } from '@/lib/models'
-import { partitionDuplicateAttachments } from '@/lib/attachments/dedupe'
+import {
+  isSameAttachment,
+  partitionDuplicateAttachments,
+} from '@/lib/attachments/dedupe'
 import { normalizeFileSize } from '@/lib/attachments/size'
 import { extractErrorMessage } from '@/lib/utils/error'
 import { basename, fileExtension } from '@/lib/utils'
@@ -83,16 +86,9 @@ export function useDocumentAttachmentHandler({
   const attachmentsKeyRef = useRef(attachmentsKey)
   attachmentsKeyRef.current = attachmentsKey
 
-  const docAbortRef = useRef<AbortController | null>(null)
-  useEffect(() => {
-    return () => {
-      docAbortRef.current?.abort()
-    }
-  }, [])
-
   const updateAttachmentProcessing = useCallback(
     (
-      fileName: string,
+      targetAttachment: Attachment,
       status: 'processing' | 'done' | 'error' | 'clear_all',
       updatedAttachment?: Partial<Attachment>
     ) => {
@@ -100,7 +96,9 @@ export function useDocumentAttachmentHandler({
       const storeState = useChatAttachments.getState()
 
       const allMatchingKeys = Object.entries(storeState.attachmentsByThread)
-        .filter(([, list]) => list?.some((att) => att.name === fileName))
+        .filter(([, list]) =>
+          list?.some((att) => isSameAttachment(att, targetAttachment))
+        )
         .map(([key]) => key)
 
       const keysToUpdate = new Set([targetKey, ...allMatchingKeys])
@@ -112,7 +110,7 @@ export function useDocumentAttachmentHandler({
         }
         setAttachmentsForThread(key, (prev) =>
           prev.map((att) =>
-            att.name === fileName
+            isSameAttachment(att, targetAttachment)
               ? {
                   ...att,
                   ...updatedAttachment,
@@ -133,13 +131,9 @@ export function useDocumentAttachmentHandler({
   )
 
   // ─── processNewDocumentAttachments ───────────────────────────────────────
-  const processNewDocumentAttachments = useCallback(
+  const processDocumentBatch = useCallback(
     async (docs: Attachment[]) => {
       if (!docs.length) return
-
-      docAbortRef.current?.abort()
-      const controller = new AbortController()
-      docAbortRef.current = controller
 
       setAttachmentsForThread(attachmentsKey, (prev) =>
         prev.map((att) => {
@@ -166,7 +160,6 @@ export function useDocumentAttachmentHandler({
               ATTACHMENT_MODEL_READY_TIMEOUT_MS,
               'Timed out while preparing model for attachment token estimation'
             )
-            if (controller.signal.aborted) return false
             const active = await withTimeout(
               serviceHub.models().getActiveModels(),
               ATTACHMENT_MODEL_READY_TIMEOUT_MS,
@@ -218,7 +211,6 @@ export function useDocumentAttachmentHandler({
 
       if (docsNeedingPrompt.length > 0) {
         for (let i = 0; i < docsNeedingPrompt.length; i++) {
-          if (controller.signal.aborted) return
           const doc = docsNeedingPrompt[i]
           const choice = await useAttachmentIngestionPrompt
             .getState()
@@ -250,7 +242,7 @@ export function useDocumentAttachmentHandler({
         try {
           if (!selectedModel?.id) return undefined
           const modelReady = await getModelReady()
-          if (!modelReady || controller.signal.aborted) return undefined
+          if (!modelReady) return undefined
           const tokenCount = await serviceHub
             .models()
             .getTokensCount(selectedModel.id, [
@@ -298,8 +290,6 @@ export function useDocumentAttachmentHandler({
             updateAttachmentProcessing,
           })
 
-        if (controller.signal.aborted) return
-
         if (processedAttachments.length > 0) {
           setAttachmentsForThread(attachmentsKey, (prev) =>
             prev.map((att) => {
@@ -346,6 +336,23 @@ export function useDocumentAttachmentHandler({
       updateAttachmentProcessing,
       updateLoadingModel,
     ]
+  )
+
+  // The ingestion prompt is singleton UI. Serialize batches so a second file
+  // selection cannot replace the first prompt and strand the first batch in a
+  // permanent processing state.
+  const documentQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const processNewDocumentAttachments = useCallback(
+    (docs: Attachment[]): Promise<void> => {
+      if (!docs.length) return Promise.resolve()
+
+      const queued = documentQueueRef.current
+        .catch(() => undefined)
+        .then(() => processDocumentBatch(docs))
+      documentQueueRef.current = queued.catch(() => undefined)
+      return queued
+    },
+    [processDocumentBatch]
   )
 
   // ─── handleAttachDocsIngest ────────────────────────────────────────────────

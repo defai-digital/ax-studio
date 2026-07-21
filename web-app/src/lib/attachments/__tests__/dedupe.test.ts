@@ -1,5 +1,86 @@
 import { describe, expect, it } from 'vitest'
-import { partitionDuplicateAttachments } from '../dedupe'
+import {
+  getAttachmentIdentity,
+  isSameAttachment,
+  partitionDuplicateAttachments,
+} from '../dedupe'
+import type { Attachment } from '@/types/attachment'
+
+describe('getAttachmentIdentity', () => {
+  it('prefers document path over shared basenames', () => {
+    expect(
+      getAttachmentIdentity({
+        type: 'document',
+        name: 'report.pdf',
+        path: '/docs/report.pdf',
+      } as Attachment)
+    ).toBe('document:path:/docs/report.pdf')
+  })
+
+  it('uses stable ids when present', () => {
+    expect(
+      getAttachmentIdentity({
+        type: 'image',
+        id: 'img-1',
+        name: 'photo.png',
+      } as Attachment)
+    ).toBe('image:id:img-1')
+  })
+
+  it('falls back to image name when no id exists', () => {
+    expect(
+      getAttachmentIdentity({
+        type: 'image',
+        name: 'photo.png',
+      } as Attachment)
+    ).toBe('image:name:photo.png')
+  })
+})
+
+describe('isSameAttachment', () => {
+  it('matches documents by path even when names differ', () => {
+    expect(
+      isSameAttachment(
+        {
+          type: 'document',
+          name: 'a.pdf',
+          path: '/docs/a.pdf',
+        } as Attachment,
+        {
+          type: 'document',
+          name: 'a-copy.pdf',
+          path: '/docs/a.pdf',
+        } as Attachment
+      )
+    ).toBe(true)
+  })
+
+  it('does not match documents that only share a basename', () => {
+    expect(
+      isSameAttachment(
+        {
+          type: 'document',
+          name: 'a.pdf',
+          path: '/docs/a.pdf',
+        } as Attachment,
+        {
+          type: 'document',
+          name: 'a.pdf',
+          path: '/other/a.pdf',
+        } as Attachment
+      )
+    ).toBe(false)
+  })
+
+  it('matches images by id when available', () => {
+    expect(
+      isSameAttachment(
+        { type: 'image', id: '1', name: 'a.png' } as Attachment,
+        { type: 'image', id: '1', name: 'b.png' } as Attachment
+      )
+    ).toBe(true)
+  })
+})
 
 describe('partitionDuplicateAttachments', () => {
   it('partitions incoming image attachments by existing name', () => {

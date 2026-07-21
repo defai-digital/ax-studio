@@ -41,6 +41,8 @@ import { toast } from 'sonner'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+const nativeFileReader = globalThis.FileReader
+
 function createFileInputRef() {
   return {
     current: { value: '', click: vi.fn() } as unknown as HTMLInputElement,
@@ -86,6 +88,7 @@ describe('useImageAttachmentHandler', () => {
   })
 
   afterEach(() => {
+    globalThis.FileReader = nativeFileReader
     consoleWarnSpy.mockRestore()
     consoleErrorSpy.mockRestore()
   })
@@ -196,6 +199,83 @@ describe('useImageAttachmentHandler', () => {
     expect(params.setMessage).toHaveBeenCalledWith('')
 
     globalThis.FileReader = originalFileReader
+  })
+
+  it('finishes earlier ingestion when another image batch starts', async () => {
+    const mockReader = () => ({
+      onload: null as (() => void) | null,
+      onerror: null as (() => void) | null,
+      result: 'data:image/png;base64,abc123',
+      readAsDataURL: vi.fn(function (this: { onload: (() => void) | null }) {
+        this.onload?.()
+      }),
+    })
+    globalThis.FileReader = vi.fn(mockReader) as unknown as typeof FileReader
+
+    let stored: Array<{
+      name: string
+      type: 'image' | 'document'
+      processing?: boolean
+      processed?: boolean
+      id?: string
+    }> = []
+    mockSetAttachments.mockImplementation((_key: string, updater: unknown) => {
+      stored =
+        typeof updater === 'function'
+          ? updater(stored)
+          : (updater as typeof stored)
+    })
+    let resolveFirst!: (value: { id: string }) => void
+    let resolveSecond!: (value: { id: string }) => void
+    mockIngestImage
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSecond = resolve
+          })
+      )
+    const { result } = renderHook(() =>
+      useImageAttachmentHandler(defaultParams())
+    )
+
+    await act(async () => {
+      await result.current.processImageFiles([
+        createMockFile('first.png', 100, 'image/png'),
+      ])
+      await result.current.processImageFiles([
+        createMockFile('second.png', 100, 'image/png'),
+      ])
+    })
+    expect(stored).toEqual([
+      expect.objectContaining({ name: 'first.png', processing: true }),
+      expect.objectContaining({ name: 'second.png', processing: true }),
+    ])
+
+    await act(async () => {
+      resolveFirst({ id: 'first-id' })
+      resolveSecond({ id: 'second-id' })
+      await Promise.resolve()
+    })
+    expect(stored).toEqual([
+      expect.objectContaining({
+        name: 'first.png',
+        processing: false,
+        processed: true,
+        id: 'first-id',
+      }),
+      expect.objectContaining({
+        name: 'second.png',
+        processing: false,
+        processed: true,
+        id: 'second-id',
+      }),
+    ])
   })
 
   // ── Phase 4: handleDragEnter/handleDragLeave ─────────────────────────────

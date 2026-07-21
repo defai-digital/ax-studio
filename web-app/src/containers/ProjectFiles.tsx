@@ -1,4 +1,4 @@
-import { type DragEvent, useCallback, useEffect, useState } from 'react'
+import { type DragEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { FileText, Loader2, Paperclip, UploadIcon, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -41,6 +41,13 @@ type UploadDropZoneProps = {
   onDragOver: (event: DragEvent) => void
   onDragLeave: (event: DragEvent) => void
   onDrop: (event: DragEvent) => void
+}
+
+const MAX_DIRECTORY_DEPTH = 32
+const MAX_DROPPED_FILES = 10_000
+
+type DirectoryTraversalState = {
+  fileCount: number
 }
 
 function UploadDropZone({
@@ -102,17 +109,20 @@ function collectDroppedFilePaths(dataTransfer: DataTransfer): string[] {
 async function getFilesFromPaths(paths: string[]): Promise<string[]> {
   const files: string[] = []
   const { fs } = await import('@ax-studio/core')
+  const traversal = { fileCount: 0 }
 
   for (const path of paths) {
     try {
       const stat: FileStat | undefined = await fs.fileStat(path)
       if (stat?.isDirectory) {
         // Recursively get files from directory
-        const dirFiles = await getFilesFromDirectory(path, fs)
+        const dirFiles = await getFilesFromDirectory(path, fs, 0, traversal)
         files.push(...dirFiles)
       } else {
         files.push(path)
+        traversal.fileCount += 1
       }
+      if (traversal.fileCount >= MAX_DROPPED_FILES) break
     } catch (e) {
       console.warn(`Failed to get stat for ${path}:`, e)
       files.push(path)
@@ -123,20 +133,33 @@ async function getFilesFromPaths(paths: string[]): Promise<string[]> {
 
 async function getFilesFromDirectory(
   dirPath: string,
-  fs: typeof import('@ax-studio/core').fs
+  fs: typeof import('@ax-studio/core').fs,
+  depth: number,
+  traversal: DirectoryTraversalState
 ): Promise<string[]> {
   const files: string[] = []
+  if (depth >= MAX_DIRECTORY_DEPTH) {
+    console.warn(`Directory traversal depth limit reached at ${dirPath}`)
+    return files
+  }
   try {
     const entries = await fs.readdirSync(dirPath)
     for (const entry of entries) {
+      if (traversal.fileCount >= MAX_DROPPED_FILES) break
       const stat = await fs.fileStat(entry)
       if (stat?.isDirectory) {
-        const nestedFiles = await getFilesFromDirectory(entry, fs)
+        const nestedFiles = await getFilesFromDirectory(
+          entry,
+          fs,
+          depth + 1,
+          traversal
+        )
         files.push(...nestedFiles)
       } else if (!stat?.isDirectory) {
         const ext = fileExtension(entry)
         if (ext && SUPPORTED_DOCUMENT_EXTENSIONS.includes(ext)) {
           files.push(entry)
+          traversal.fileCount += 1
         }
       }
     }
@@ -156,6 +179,8 @@ export function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const uploadLockRef = useRef(false)
+  const pickerLockRef = useRef(false)
 
   const showAttachmentsDisabledToast = useCallback(() => {
     toast.info(
@@ -192,89 +217,78 @@ export function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
 
   const processFilePaths = useCallback(
     async (paths: string[]) => {
-      if (!paths.length) return
-
-      // Get files from paths (recursively for directories)
-      const filePaths = await getFilesFromPaths(paths)
-
-      const maxFileSizeBytes =
-        typeof maxFileSizeMB === 'number' && maxFileSizeMB > 0
-          ? maxFileSizeMB * 1024 * 1024
-          : undefined
-
-      const preparedAttachments: Attachment[] = []
-      for (const p of filePaths) {
-        const name = basename(p) || p
-        const fileType = fileExtension(name)
-
-        // Filter unsupported file types
-        if (!fileType || !SUPPORTED_DOCUMENT_EXTENSIONS.includes(fileType)) {
-          toast.warning(
-            t('common:toast.unsupportedFileType.title') ??
-              'Unsupported file type',
-            {
-              description: name,
-            }
-          )
-          continue
-        }
-
-        let size: number | undefined = undefined
-        try {
-          const stat = await import('@ax-studio/core').then((m) =>
-            m.fs.fileStat(p)
-          )
-          size = normalizeFileSize(stat?.size)
-        } catch (e) {
-          console.warn('Failed to read file size for', p, e)
-        }
-
-        if (
-          maxFileSizeBytes !== undefined &&
-          typeof size === 'number' &&
-          size > maxFileSizeBytes
-        ) {
-          toast.error(t('common:errors.fileTooLarge') ?? 'File too large', {
-            description: t('common:errors.fileTooLargeDescription', {
-              fileName: name,
-              maxFileSizeMB,
-            }),
-          })
-          continue
-        }
-
-        preparedAttachments.push(
-          createDocumentAttachment({
-            name,
-            path: p,
-            fileType,
-            size,
-          })
-        )
-      }
-
-      const { newItems: newAttachments, duplicateLabels: duplicates } =
-        partitionDuplicateAttachments({
-          existingItems: files,
-          incomingItems: preparedAttachments,
-          getExistingIdentity: (file) => file.path,
-          getIncomingIdentity: (attachment) => attachment.path,
-          getDuplicateLabel: (attachment) => attachment.name,
-        })
-
-      if (duplicates.length > 0) {
-        toast.warning(
-          t('common:toast.fileAlreadyExists.title') ?? 'File already attached',
-          {
-            description: duplicates.join(', '),
-          }
-        )
-      }
-
-      if (newAttachments.length === 0) return
-
+      if (!paths.length || uploadLockRef.current) return
+      uploadLockRef.current = true
       setUploading(true)
+      let uploadedCount = 0
       try {
+        // Get files from paths (recursively for directories)
+        const filePaths = await getFilesFromPaths(paths)
+        const maxFileSizeBytes =
+          typeof maxFileSizeMB === 'number' && maxFileSizeMB > 0
+            ? maxFileSizeMB * 1024 * 1024
+            : undefined
+        const preparedAttachments: Attachment[] = []
+
+        for (const p of filePaths) {
+          const name = basename(p) || p
+          const fileType = fileExtension(name)
+          if (!fileType || !SUPPORTED_DOCUMENT_EXTENSIONS.includes(fileType)) {
+            toast.warning(
+              t('common:toast.unsupportedFileType.title') ??
+                'Unsupported file type',
+              { description: name }
+            )
+            continue
+          }
+
+          let size: number | undefined
+          try {
+            const stat = await import('@ax-studio/core').then((module) =>
+              module.fs.fileStat(p)
+            )
+            size = normalizeFileSize(stat?.size)
+          } catch (error) {
+            console.warn('Failed to read file size for', p, error)
+          }
+
+          if (
+            maxFileSizeBytes !== undefined &&
+            typeof size === 'number' &&
+            size > maxFileSizeBytes
+          ) {
+            toast.error(t('common:errors.fileTooLarge') ?? 'File too large', {
+              description: t('common:errors.fileTooLargeDescription', {
+                fileName: name,
+                maxFileSizeMB,
+              }),
+            })
+            continue
+          }
+
+          preparedAttachments.push(
+            createDocumentAttachment({ name, path: p, fileType, size })
+          )
+        }
+
+        const { newItems: newAttachments, duplicateLabels: duplicates } =
+          partitionDuplicateAttachments({
+            existingItems: files,
+            incomingItems: preparedAttachments,
+            getExistingIdentity: (file) => file.path,
+            getIncomingIdentity: (attachment) => attachment.path,
+            getDuplicateLabel: (attachment) => attachment.name,
+          })
+
+        if (duplicates.length > 0) {
+          toast.warning(
+            t('common:toast.fileAlreadyExists.title') ??
+              'File already attached',
+            { description: duplicates.join(', ') }
+          )
+        }
+        if (newAttachments.length === 0) return
+
         for (const att of newAttachments) {
           const result = await serviceHub
             .uploads()
@@ -282,11 +296,11 @@ export function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
           if (!result.id) {
             throw new Error('Failed to ingest file')
           }
+          uploadedCount += 1
         }
         toast.success(
           t('common:toast.fileUploaded.title') ?? 'File uploaded successfully'
         )
-        await loadProjectFiles()
       } catch (error) {
         console.error('Failed to upload file:', error)
         toast.error(
@@ -296,6 +310,10 @@ export function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
           }
         )
       } finally {
+        if (uploadedCount > 0) {
+          await loadProjectFiles()
+        }
+        uploadLockRef.current = false
         setUploading(false)
       }
     },
@@ -303,11 +321,13 @@ export function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
   )
 
   const handleUpload = async () => {
+    if (pickerLockRef.current || uploadLockRef.current) return
     if (!attachmentsEnabled) {
       showAttachmentsDisabledToast()
       return
     }
 
+    pickerLockRef.current = true
     try {
       const selection = await serviceHub.dialog().open({
         multiple: true,
@@ -331,6 +351,8 @@ export function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
           description: desc,
         }
       )
+    } finally {
+      pickerLockRef.current = false
     }
   }
 
@@ -353,7 +375,7 @@ export function ProjectFiles({ projectId, lng }: ProjectFilesProps) {
 
     // Mirror the Upload button's guard — drag-and-drop must not bypass it
     // and race concurrent uploads against loadProjectFiles().
-    if (uploading) return
+    if (pickerLockRef.current || uploadLockRef.current) return
 
     if (!attachmentsEnabled) {
       showAttachmentsDisabledToast()

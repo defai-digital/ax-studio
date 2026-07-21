@@ -197,6 +197,14 @@ export function GlobalEventHandler() {
     // resolutions by sequence number keeps the active-models indicator
     // consistent with the true event order.
     let eventSeq = 0
+    let proxyMutationQueue: Promise<void> = Promise.resolve()
+    const enqueueProxyMutation = (mutation: () => Promise<unknown>) => {
+      const queued = proxyMutationQueue.then(async () => {
+        await mutation()
+      })
+      proxyMutationQueue = queued.catch(() => undefined)
+      return queued
+    }
 
     /**
      * OnModelReady — the llamacpp extension emits this after a model is loaded.
@@ -218,15 +226,17 @@ export function GlobalEventHandler() {
       if (payload?.port) {
         const providerName = payload.provider ?? 'llamacpp'
         try {
-          await serviceHub.core().invoke('register_provider_config', {
-            request: {
-              provider: providerName,
-              api_key: payload.api_key ?? null,
-              base_url: `http://127.0.0.1:${payload.port}/v1`,
-              custom_headers: [],
-              models: payload.modelId ? [payload.modelId] : [],
-            },
-          })
+          await enqueueProxyMutation(() =>
+            serviceHub.core().invoke('register_provider_config', {
+              request: {
+                provider: providerName,
+                api_key: payload.api_key ?? null,
+                base_url: `http://127.0.0.1:${payload.port}/v1`,
+                custom_headers: [],
+                models: payload.modelId ? [payload.modelId] : [],
+              },
+            })
+          )
         } catch (err) {
           console.error(`[GlobalEventHandler] Failed to register local provider '${providerName}' with proxy:`, err)
         }
@@ -251,7 +261,11 @@ export function GlobalEventHandler() {
 
       const providerName = payload?.provider ?? 'llamacpp'
       try {
-        await serviceHub.core().invoke('unregister_provider_config', { provider: providerName })
+        await enqueueProxyMutation(() =>
+          serviceHub
+            .core()
+            .invoke('unregister_provider_config', { provider: providerName })
+        )
       } catch (err) {
         console.error(`[GlobalEventHandler] Failed to unregister local provider '${providerName}' from proxy:`, err)
       }

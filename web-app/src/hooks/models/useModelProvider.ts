@@ -72,27 +72,6 @@ const isUnsafeObjectKey = (value: string): boolean => {
   return value === '__proto__' || value === 'prototype' || value === 'constructor'
 }
 
-/**
- * Compute a lightweight fingerprint of a providers array for fast equality
- * checks. Avoids the O(n) JSON.stringify cost on every provider refresh.
- * The fingerprint is a concatenation of provider names, model counts, and
- * model IDs with capabilities — collisions are practically impossible for
- * real-world data.
- */
-const providersFingerprint = (providers: ModelProvider[]): string => {
-  const parts: string[] = []
-  for (const provider of providers) {
-    const modelParts = provider.models.map((m) => {
-      const caps = m.capabilities?.join(',') ?? ''
-      return `${m.id}[${caps}]`
-    })
-    parts.push(
-      `${provider.provider}:${provider.active}:${provider.base_url ?? ''}:${modelParts.join(',')}`
-    )
-  }
-  return parts.join('|')
-}
-
 const normalizeStringList = (value: unknown, maxItems: number): string[] => {
   if (!Array.isArray(value)) return []
 
@@ -147,6 +126,12 @@ const normalizeControllerProps = (value: unknown): ControllerProps => {
   }
   if (typeof value.recommended === 'string') {
     props.recommended = value.recommended
+  }
+  for (const key of ['min', 'max', 'step', 'rows'] as const) {
+    const numericValue = value[key]
+    if (typeof numericValue === 'number' && Number.isFinite(numericValue)) {
+      props[key] = numericValue
+    }
   }
 
   return props
@@ -462,8 +447,7 @@ export const useModelProvider = create<ModelProviderState>()(
           // Provider refreshes run several times during startup. Keep the
           // Zustand state object stable when normalized data did not change.
           if (
-            providersFingerprint(mergedProviders) ===
-            providersFingerprint(state.providers)
+            JSON.stringify(mergedProviders) === JSON.stringify(state.providers)
           ) {
             return state
           }

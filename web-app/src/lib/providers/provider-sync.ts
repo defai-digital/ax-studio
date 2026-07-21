@@ -18,6 +18,13 @@ type RegisteredProviderConfigView = {
   provider: string
 }
 
+export type ProviderSyncOptions = {
+  /** Treat the supplied provider list as the complete frontend registry. */
+  authoritative?: boolean
+}
+
+let providerSyncQueue: Promise<void> = Promise.resolve()
+
 function normalizeProviderApiKey(apiKey?: string): string | undefined {
   const trimmed = apiKey?.trim()
   if (!trimmed) return undefined
@@ -65,8 +72,9 @@ async function listRegisteredProviderIds(): Promise<string[]> {
   return configs.map((config) => config.provider)
 }
 
-export async function syncRemoteProviders(
-  providers: ModelProvider[]
+async function runRemoteProviderSync(
+  providers: ModelProvider[],
+  { authoritative = false }: ProviderSyncOptions
 ): Promise<void> {
   const registeredProviderIds = await listRegisteredProviderIds()
   const activeRemoteProviderIds = new Set(
@@ -80,7 +88,7 @@ export async function syncRemoteProviders(
   const staleRemoteProviderIds = registeredProviderIds.filter((provider) => {
     if (LOCAL_PROVIDER_IDS.has(provider)) return false
     return (
-      knownRemoteProviderIds.has(provider) &&
+      (authoritative || knownRemoteProviderIds.has(provider)) &&
       !activeRemoteProviderIds.has(provider)
     )
   })
@@ -116,4 +124,15 @@ export async function syncRemoteProviders(
   ).catch((error) => {
     console.error('Failed to batch-register providers:', error)
   })
+}
+
+export function syncRemoteProviders(
+  providers: ModelProvider[],
+  options: ProviderSyncOptions = {}
+): Promise<void> {
+  const queued = providerSyncQueue
+    .catch(() => undefined)
+    .then(() => runRemoteProviderSync(providers, options))
+  providerSyncQueue = queued.catch(() => undefined)
+  return queued
 }

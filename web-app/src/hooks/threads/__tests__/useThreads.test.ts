@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { useThreads } from '../useThreads'
 import { useChatSessions } from '@/stores/chat-session-store'
 import { useMessages } from '@/hooks/chat/useMessages'
@@ -203,6 +203,49 @@ describe('useThreads', () => {
     })
 
     expect(result.current.threads['thread1'].title).toBe('New Title')
+  })
+
+  it('persists rapid edits to one thread in invocation order', async () => {
+    const { getServiceHub } = await import('@/hooks/useServiceHub')
+    let resolveFirst!: () => void
+    const updateThread = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveFirst = resolve
+          })
+      )
+      .mockResolvedValue(undefined)
+    const hub = getServiceHub() as {
+      threads: (...args: unknown[]) => Record<string, unknown>
+    }
+    const originalThreads = hub.threads
+    hub.threads = () => ({
+      createThread: vi.fn(),
+      deleteThread: vi.fn(),
+      updateThread,
+    })
+
+    try {
+      const { result } = renderHook(() => useThreads())
+      act(() => {
+        result.current.setThreads([
+          { id: 'thread1', title: 'Original', messages: [] },
+        ])
+        result.current.renameThread('thread1', 'First')
+        result.current.renameThread('thread1', 'Second')
+      })
+
+      expect(updateThread).toHaveBeenCalledTimes(1)
+      resolveFirst()
+      await waitFor(() => expect(updateThread).toHaveBeenCalledTimes(2))
+      expect(updateThread.mock.calls[1][0]).toEqual(
+        expect.objectContaining({ title: 'Second' })
+      )
+    } finally {
+      hub.threads = originalThreads
+    }
   })
 
   it('should toggle favorite', () => {

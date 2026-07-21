@@ -203,6 +203,20 @@ describe('EventEmitter', () => {
       expect(callOrder).toEqual([1, 2, 3])
     })
 
+    it('does not skip remaining handlers when one unsubscribes during emit', () => {
+      const secondHandler = vi.fn()
+      let unsubscribeFirst = () => {}
+      const firstHandler = vi.fn(() => unsubscribeFirst())
+
+      unsubscribeFirst = eventEmitter.on('mutable', firstHandler)
+      eventEmitter.on('mutable', secondHandler)
+
+      eventEmitter.emit('mutable', null)
+
+      expect(firstHandler).toHaveBeenCalledOnce()
+      expect(secondHandler).toHaveBeenCalledOnce()
+    })
+
     it('should pass null args correctly', () => {
       const handler = vi.fn()
       eventEmitter.on('test', handler)

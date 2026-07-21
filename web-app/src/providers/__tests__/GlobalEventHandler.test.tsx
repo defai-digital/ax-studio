@@ -231,6 +231,45 @@ describe('GlobalEventHandler', () => {
     })
   })
 
+  it('applies proxy mutations in model event order', async () => {
+    let resolveRegistration!: () => void
+    mockCoreInvoke.mockImplementation((command: string) => {
+      if (command === 'register_provider_config') {
+        return new Promise<void>((resolve) => {
+          resolveRegistration = resolve
+        })
+      }
+      return Promise.resolve(undefined)
+    })
+    render(<GlobalEventHandler />)
+
+    emit('OnModelReady', {
+      modelId: 'model-a',
+      port: 11434,
+      provider: 'llamacpp',
+    })
+    await waitFor(() => {
+      expect(mockCoreInvoke).toHaveBeenCalledWith(
+        'register_provider_config',
+        expect.any(Object)
+      )
+    })
+    emit('OnModelStopped', { provider: 'llamacpp' })
+    await Promise.resolve()
+
+    expect(mockCoreInvoke).not.toHaveBeenCalledWith(
+      'unregister_provider_config',
+      expect.any(Object)
+    )
+
+    resolveRegistration()
+    await waitFor(() => {
+      expect(mockCoreInvoke).toHaveBeenCalledWith('unregister_provider_config', {
+        provider: 'llamacpp',
+      })
+    })
+  })
+
   it('shows translated error toast on model failure', async () => {
     render(<GlobalEventHandler />)
 

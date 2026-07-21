@@ -35,6 +35,33 @@ const reportPersistenceError = (operation: string) => (error: unknown) => {
   })
 }
 
+const threadPersistenceQueues = new Map<string, Promise<void>>()
+
+function persistThreadUpdate(
+  thread: Thread,
+  onError: (error: unknown) => void
+) {
+  const previous = threadPersistenceQueues.get(thread.id)
+  const run = () => getServiceHub().threads().updateThread(thread)
+  let pending: Promise<void>
+  try {
+    pending = previous
+      ? previous.catch(() => undefined).then(run)
+      : Promise.resolve(run())
+  } catch (error) {
+    pending = Promise.reject(error)
+  }
+
+  threadPersistenceQueues.set(thread.id, pending)
+  void pending
+    .catch(onError)
+    .finally(() => {
+      if (threadPersistenceQueues.get(thread.id) === pending) {
+        threadPersistenceQueues.delete(thread.id)
+      }
+    })
+}
+
 function cleanupThreadResources(threadId: string) {
   useAppState.getState().cancelToolCall(threadId)
   useAppState.getState().clearToolCallCancellation(threadId)
@@ -104,15 +131,8 @@ type ThreadState = {
 
 function deleteThreadsFromState(
   state: Pick<ThreadState, 'threads' | 'currentThreadId'>,
-  shouldDelete: (thread: Thread) => boolean
+  threadsToDelete: Set<string>
 ) {
-  const threadsToDeleteIds = Object.keys(state.threads).filter((threadId) =>
-    shouldDelete(state.threads[threadId])
-  )
-  const threadsToDelete = new Set(threadsToDeleteIds)
-
-  threadsToDeleteIds.forEach(cleanupThreadResources)
-
   const remainingThreads = Object.fromEntries(
     Object.entries(state.threads).filter(
       ([threadId]) => !threadsToDelete.has(threadId)
@@ -205,10 +225,10 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       },
     }))
     // Persist outside of set() to avoid side-effects in the updater
-    getServiceHub()
-      .threads()
-      .updateThread(updatedThread)
-      .catch(reportPersistenceError('toggle favorite'))
+    persistThreadUpdate(
+      updatedThread,
+      reportPersistenceError('toggle favorite')
+    )
   },
   deleteThread: (threadId) => {
     cleanupThreadResources(threadId)
@@ -225,23 +245,26 @@ export const useThreads = create<ThreadState>()((set, get) => ({
     })
   },
   deleteAllThreads: () => {
-    set((state) =>
-      deleteThreadsFromState(
-        state,
-        (thread) => !thread.isFavorite && !thread.metadata?.project
-      )
-    )
+    const threadIds = Object.values(get().threads)
+      .filter((thread) => !thread.isFavorite && !thread.metadata?.project)
+      .map((thread) => thread.id)
+    threadIds.forEach(cleanupThreadResources)
+    const threadsToDelete = new Set(threadIds)
+    set((state) => deleteThreadsFromState(state, threadsToDelete))
   },
   clearAllThreads: () => {
-    set((state) => deleteThreadsFromState(state, () => true))
+    const threadIds = Object.keys(get().threads)
+    threadIds.forEach(cleanupThreadResources)
+    const threadsToDelete = new Set(threadIds)
+    set((state) => deleteThreadsFromState(state, threadsToDelete))
   },
   deleteAllThreadsByProject: (projectId) => {
-    set((state) =>
-      deleteThreadsFromState(
-        state,
-        (thread) => thread.metadata?.project?.id === projectId
-      )
-    )
+    const threadIds = Object.values(get().threads)
+      .filter((thread) => thread.metadata?.project?.id === projectId)
+      .map((thread) => thread.id)
+    threadIds.forEach(cleanupThreadResources)
+    const threadsToDelete = new Set(threadIds)
+    set((state) => deleteThreadsFromState(state, threadsToDelete))
   },
   unstarAllThreads: () => {
     const currentThreads = get().threads
@@ -257,10 +280,10 @@ export const useThreads = create<ThreadState>()((set, get) => ({
     set({ threads: updatedThreads })
     // Persist outside of set() to avoid side-effects in the updater
     Object.values(updatedThreads).forEach((thread) => {
-      getServiceHub()
-        .threads()
-        .updateThread({ ...thread, isFavorite: false })
-        .catch(reportPersistenceError('unstar thread'))
+      persistThreadUpdate(
+        { ...thread, isFavorite: false },
+        reportPersistenceError('unstar thread')
+      )
     })
   },
   getFavoriteThreads: () => {
@@ -372,30 +395,30 @@ export const useThreads = create<ThreadState>()((set, get) => ({
     return pendingCreate
   },
   updateCurrentThreadAssistant: (assistant) => {
-    set((state) => {
-      if (!state.currentThreadId) return state
-      const currentThread = state.getCurrentThread()
-      if (!currentThread) return state
-      getServiceHub()
-        .threads()
-        .updateThread({
-          ...currentThread,
-          assistants: assistant
-            ? [{ ...assistant, model: currentThread.model }]
-            : [],
-        })
-        .catch(reportPersistenceError('update thread assistant'))
-      return {
-        threads: {
-          ...state.threads,
-          [state.currentThreadId as string]: {
-            ...currentThread,
-            assistants: assistant ? [assistant] : [],
-            updated: Math.floor(Date.now() / 1000),
-          },
-        },
-      }
-    })
+    const { currentThreadId, getCurrentThread } = get()
+    if (!currentThreadId) return
+    const currentThread = getCurrentThread()
+    if (!currentThread) return
+    const updatedThread = {
+      ...currentThread,
+      assistants: assistant ? [assistant] : [],
+      updated: Math.floor(Date.now() / 1000),
+    }
+    set((state) => ({
+      threads: {
+        ...state.threads,
+        [currentThreadId]: updatedThread,
+      },
+    }))
+    persistThreadUpdate(
+      {
+        ...updatedThread,
+        assistants: assistant
+          ? [{ ...assistant, model: currentThread.model }]
+          : [],
+      },
+      reportPersistenceError('update thread assistant')
+    )
   },
   updateCurrentThreadModel: (model) => {
     const { currentThreadId, getCurrentThread } = get()
@@ -410,10 +433,10 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       },
     }))
     // Persist outside of set() to avoid side-effects in the updater
-    getServiceHub()
-      .threads()
-      .updateThread(updatedThread)
-      .catch(reportPersistenceError('update thread model'))
+    persistThreadUpdate(
+      updatedThread,
+      reportPersistenceError('update thread model')
+    )
   },
   renameThread: (threadId, newTitle) => {
     const thread = getOwnThread(get().threads, threadId)
@@ -431,10 +454,7 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       }
     })
     // Persist outside of set() to avoid side-effects in the updater
-    getServiceHub()
-      .threads()
-      .updateThread(updatedThread)
-      .catch(reportPersistenceError('rename thread'))
+    persistThreadUpdate(updatedThread, reportPersistenceError('rename thread'))
   },
   getCurrentThread: () => {
     const { currentThreadId, threads } = get()
@@ -443,63 +463,38 @@ export const useThreads = create<ThreadState>()((set, get) => ({
       : undefined
   },
   updateThreadTimestamp: (threadId) => {
-    set((state) => {
-      const thread = getOwnThread(state.threads, threadId)
-      if (!thread) return state
-
-      // Update the thread with new timestamp and set it to order 1 (top)
-      const updatedThread = {
-        ...thread,
-        updated: Math.floor(Date.now() / 1000),
-      }
-
-      // Update all other threads to increment their order by 1
-      const updatedThreads = { ...state.threads }
-      updatedThreads[threadId] = updatedThread
-
-      // Background timestamp refresh — log but don't toast; the user
-      // didn't explicitly initiate this, so a failed background save
-      // shouldn't nag them.
-      getServiceHub()
-        .threads()
-        .updateThread(updatedThread)
-        .catch((error) => {
-          console.error('[threads] timestamp persist failed:', error)
-        })
-
-      // The Fuse index is keyed on `title`, not `updated`, so a bare
-      // timestamp refresh doesn't need the O(n) rebuild — reuse the
-      // existing index.
-      return {
-        threads: updatedThreads,
-      }
+    const thread = getOwnThread(get().threads, threadId)
+    if (!thread) return
+    const updatedThread = {
+      ...thread,
+      updated: Math.floor(Date.now() / 1000),
+    }
+    set((state) => ({
+      threads: { ...state.threads, [threadId]: updatedThread },
+    }))
+    // Background timestamp refresh — log but don't toast; the user didn't
+    // explicitly initiate this, so a failed background save shouldn't nag.
+    persistThreadUpdate(updatedThread, (error) => {
+      console.error('[threads] timestamp persist failed:', error)
     })
   },
   updateThread: (threadId, updates) => {
+    const thread = getOwnThread(get().threads, threadId)
+    if (!thread) return
+    const updatedThread = {
+      ...thread,
+      ...updates,
+      updated: Math.floor(Date.now() / 1000),
+    }
+    const titleChanged =
+      updates.title !== undefined && updates.title !== thread.title
     set((state) => {
-      const thread = getOwnThread(state.threads, threadId)
-      if (!thread) return state
-
-      const updatedThread = {
-        ...thread,
-        ...updates,
-        updated: Math.floor(Date.now() / 1000),
-      }
-
-      getServiceHub()
-        .threads()
-        .updateThread(updatedThread)
-        .catch(reportPersistenceError('update thread'))
-
       const newThreads = { ...state.threads, [threadId]: updatedThread }
-      // The Fuse index is keyed on `title` only. Skip the O(n) rebuild when
-      // the update does not change the title (e.g. model switch, metadata).
-      const titleChanged =
-        updates.title !== undefined && updates.title !== thread.title
       return {
         threads: newThreads,
         ...(titleChanged && { searchIndex: buildSearchIndex(newThreads) }),
       }
     })
+    persistThreadUpdate(updatedThread, reportPersistenceError('update thread'))
   },
 }))

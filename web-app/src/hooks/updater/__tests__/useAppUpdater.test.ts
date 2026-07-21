@@ -194,6 +194,41 @@ describe('useAppUpdater', () => {
       consoleErrorSpy.mockRestore()
     })
 
+    it('ignores an older failed check after a newer check succeeds', async () => {
+      const consoleErrorSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {})
+      let rejectFirst!: (reason: Error) => void
+      const firstCheck = new Promise<never>((_resolve, reject) => {
+        rejectFirst = reject
+      })
+      const update = { version: '2.0.0', downloadAndInstall: vi.fn() }
+      mockUpdaterCheck
+        .mockImplementationOnce(() => firstCheck)
+        .mockResolvedValueOnce(update)
+      const { result } = renderHook(() => useAppUpdater())
+      let staleRun!: Promise<unknown>
+
+      act(() => {
+        staleRun = result.current.checkForUpdate()
+      })
+      await act(async () => {
+        await Promise.resolve()
+      })
+      await act(async () => {
+        await result.current.checkForUpdate()
+      })
+      await act(async () => {
+        rejectFirst(new Error('stale network failure'))
+        await staleRun
+      })
+
+      expect(result.current.updateState.isUpdateAvailable).toBe(true)
+      expect(result.current.updateState.updateInfo).toBe(update)
+      expect(consoleErrorSpy).not.toHaveBeenCalled()
+      consoleErrorSpy.mockRestore()
+    })
+
     it('should reset remindMeLater when requested', async () => {
       mockUpdaterCheck.mockResolvedValue(null)
 
@@ -448,6 +483,46 @@ describe('useAppUpdater', () => {
         totalBytes: 2000,
       })
       expect(mockEvents.emit).toHaveBeenCalledWith('onAppUpdateDownloadSuccess', {})
+    })
+
+    it('still reports install success when relaunch fails', async () => {
+      const consoleErrorSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {})
+      const mockUpdate = {
+        version: '1.2.0',
+        downloadAndInstall: vi.fn(),
+      }
+
+      mockUpdaterCheck.mockResolvedValue(mockUpdate)
+
+      const { result } = renderHook(() => useAppUpdater())
+
+      await act(async () => {
+        await result.current.checkForUpdate()
+      })
+
+      mockUpdaterDownloadAndInstallWithProgress.mockResolvedValue(undefined)
+      mockRelaunch.mockRejectedValueOnce(new Error('relaunch blocked'))
+
+      await act(async () => {
+        await result.current.downloadAndInstallUpdate()
+      })
+
+      expect(mockEvents.emit).toHaveBeenCalledWith(
+        'onAppUpdateDownloadSuccess',
+        {}
+      )
+      expect(mockEvents.emit).not.toHaveBeenCalledWith(
+        'onAppUpdateDownloadError',
+        expect.anything()
+      )
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Error relaunching after update install:',
+        expect.any(Error)
+      )
+
+      consoleErrorSpy.mockRestore()
     })
   })
 })

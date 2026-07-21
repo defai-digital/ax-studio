@@ -231,7 +231,7 @@ export function DataProvider() {
   // every provider (especially costly for providers with many models).
   useEffect(() => {
     if (!bootstrapSyncDone.current) return
-    void syncRemoteProviders(providers)
+    void syncRemoteProviders(providers, { authoritative: true })
   }, [providers])
 
   return null
@@ -239,9 +239,12 @@ export function DataProvider() {
 
 // ─── Standalone helpers ───────────────────────────────────────────────────────
 
-async function syncRemoteProviders(providers: ModelProvider[]) {
+async function syncRemoteProviders(
+  providers: ModelProvider[],
+  options: { authoritative?: boolean } = {}
+) {
   try {
-    await syncRemoteProviderConfigs(providers)
+    await syncRemoteProviderConfigs(providers, options)
   } catch (error) {
     console.error('Failed to sync remote providers:', error)
   }

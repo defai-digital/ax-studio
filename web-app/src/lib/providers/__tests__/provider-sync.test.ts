@@ -213,6 +213,56 @@ describe('provider-sync', () => {
     expect(invokeMock).toHaveBeenCalledTimes(2)
   })
 
+  it('unregisters missing remote providers for an authoritative list', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'list_provider_configs') {
+        return [{ provider: 'anthropic' }, { provider: 'llamacpp' }]
+      }
+      return undefined
+    })
+
+    await syncRemoteProviders([], { authoritative: true })
+
+    expect(invokeMock).toHaveBeenNthCalledWith(2, 'unregister_provider_config', {
+      provider: 'anthropic',
+    })
+    expect(invokeMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('serializes overlapping snapshots in invocation order', async () => {
+    let resolveFirstList!: (value: unknown[]) => void
+    let listCalls = 0
+    invokeMock.mockImplementation((command: string) => {
+      if (command === 'list_provider_configs') {
+        listCalls += 1
+        if (listCalls === 1) {
+          return new Promise((resolve) => {
+            resolveFirstList = resolve
+          })
+        }
+        return Promise.resolve([])
+      }
+      return Promise.resolve(undefined)
+    })
+
+    const first = syncRemoteProviders([makeProvider('openai')])
+    await Promise.resolve()
+    const second = syncRemoteProviders([makeProvider('anthropic')])
+    await Promise.resolve()
+
+    expect(listCalls).toBe(1)
+    resolveFirstList([])
+    await first
+    await second
+
+    const registrations = invokeMock.mock.calls.filter(
+      ([command]) => command === 'register_provider_configs_batch'
+    )
+    expect(registrations).toHaveLength(2)
+    expect(registrations[0][1].requests[0].provider).toBe('openai')
+    expect(registrations[1][1].requests[0].provider).toBe('anthropic')
+  })
+
   it('skips invoke when there are no remote providers at all', async () => {
     await syncRemoteProviders([makeProvider('llamacpp')])
     expect(invokeMock).toHaveBeenCalledTimes(1)
