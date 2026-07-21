@@ -27,7 +27,7 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 [![macOS Apple Silicon](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?logo=apple&logoColor=white)](https://github.com/defai-digital/ax-studio/releases)
 [![Windows x64](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows&logoColor=white)](https://github.com/defai-digital/ax-studio/releases)
 [![Windows ARM64](https://img.shields.io/badge/Windows-ARM64-0078D4?logo=windows&logoColor=white)](https://github.com/defai-digital/ax-studio/releases)
-[![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/cTavsMgu)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/pFc3z3uf4M)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
 
 ---
@@ -638,7 +638,7 @@ For contribution rules, start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Report bugs, feature requests, and product feedback through
 [GitHub Issues](https://github.com/defai-digital/ax-studio/issues). Join the
-community on [Discord](https://discord.gg/cTavsMgu).
+community on [Discord](https://discord.gg/pFc3z3uf4M).
 
 ## Provenance
 
