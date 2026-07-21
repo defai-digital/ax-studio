@@ -6,6 +6,7 @@ import {
   EyeOff,
   FileSpreadsheet,
   LineChart,
+  PanelLeft,
   Plus,
   Play,
   Trash2,
@@ -42,6 +43,7 @@ export function AxBiWorkspace() {
   const [mcpUrl, setMcpUrl] = useState(DEFAULT_AX_BI_MCP_URL)
   const [mcpToken, setMcpToken] = useState('')
   const [showMcpToken, setShowMcpToken] = useState(false)
+  const [isSessionPanelCollapsed, setIsSessionPanelCollapsed] = useState(false)
   const [mcpTokenStatus, setMcpTokenStatus] = useState<
     'loading' | 'missing' | 'stored'
   >('loading')
@@ -206,27 +208,75 @@ export function AxBiWorkspace() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background text-foreground lg:flex-row">
-      <aside className="flex h-56 w-full shrink-0 flex-col border-b border-border bg-muted/20 lg:h-full lg:w-72 lg:border-b-0 lg:border-r">
-        <div className="flex h-14 items-center justify-between border-b border-border px-4">
-          <div className="flex min-w-0 items-center gap-2">
+    <div
+      className={cn(
+        'flex h-full min-h-0 flex-col bg-background text-foreground lg:flex-row',
+        IS_MACOS && 'pt-15'
+      )}
+    >
+      <aside
+        className={cn(
+          'flex h-56 w-full shrink-0 flex-col border-b border-border bg-muted/20 lg:h-full lg:border-b-0 lg:border-r',
+          isSessionPanelCollapsed ? 'lg:w-14' : 'lg:w-72'
+        )}
+      >
+        <div
+          className={cn(
+            'flex h-14 items-center justify-between border-b border-border px-4',
+            isSessionPanelCollapsed && 'lg:justify-center lg:px-2'
+          )}
+        >
+          <div
+            className={cn(
+              'flex min-w-0 items-center gap-2',
+              isSessionPanelCollapsed && 'lg:hidden'
+            )}
+          >
             <BarChart3 className="size-4 text-primary" />
             <h1 className="truncate text-sm font-semibold">AX BI</h1>
             <Badge variant="amber" className="px-1.5 py-0 text-[10px]">
               Beta
             </Badge>
           </div>
-          <Button
-            aria-label="New AX BI session"
-            size="icon-sm"
-            variant="ghost"
-            onClick={() => createSession({ title: 'Untitled analysis' })}
-          >
-            <Plus className="size-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              aria-label="New AX BI session"
+              size="icon-sm"
+              variant="ghost"
+              className={cn(isSessionPanelCollapsed && 'lg:hidden')}
+              onClick={() => createSession({ title: 'Untitled analysis' })}
+            >
+              <Plus className="size-4" />
+            </Button>
+            <Button
+              aria-label={
+                isSessionPanelCollapsed
+                  ? 'Expand AX BI sessions'
+                  : 'Collapse AX BI sessions'
+              }
+              size={isSessionPanelCollapsed ? 'icon-sm' : 'sm'}
+              variant={isSessionPanelCollapsed ? 'ghost' : 'outline'}
+              onClick={() =>
+                setIsSessionPanelCollapsed((collapsed) => !collapsed)
+              }
+            >
+              <PanelLeft
+                className={cn(
+                  'size-4 text-muted-foreground transition-transform',
+                  isSessionPanelCollapsed && 'rotate-180'
+                )}
+              />
+              {!isSessionPanelCollapsed ? <span>Collapse</span> : null}
+            </Button>
+          </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-2">
+        <div
+          className={cn(
+            'min-h-0 flex-1 overflow-y-auto p-2',
+            isSessionPanelCollapsed && 'lg:p-1'
+          )}
+        >
           {sessionList.map((session) => (
             <button
               key={session.id}
@@ -234,12 +284,19 @@ export function AxBiWorkspace() {
               onClick={() => setActiveSession(session.id)}
               className={cn(
                 'mb-1 grid w-full grid-cols-[1fr_auto] gap-2 rounded-md px-3 py-2 text-left transition-colors',
+                isSessionPanelCollapsed &&
+                  'lg:flex lg:h-10 lg:items-center lg:justify-center lg:px-0 lg:py-0',
                 session.id === activeSession.id
                   ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                   : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground'
               )}
             >
-              <span className="min-w-0">
+              <span
+                className={cn(
+                  'min-w-0',
+                  isSessionPanelCollapsed && 'lg:sr-only'
+                )}
+              >
                 <span className="block truncate text-sm font-medium">
                   {session.title.trim() || 'Untitled analysis'}
                 </span>
@@ -251,7 +308,21 @@ export function AxBiWorkspace() {
                       : `${session.runs.length} run${session.runs.length === 1 ? '' : 's'}`}
                 </span>
               </span>
-              <span className="text-[11px] opacity-60">
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'hidden text-xs font-semibold',
+                  isSessionPanelCollapsed && 'lg:block'
+                )}
+              >
+                {(session.title.trim() || 'A').slice(0, 1).toUpperCase()}
+              </span>
+              <span
+                className={cn(
+                  'text-[11px] opacity-60',
+                  isSessionPanelCollapsed && 'lg:hidden'
+                )}
+              >
                 {formatTime(session.updatedAt)}
               </span>
             </button>
@@ -283,7 +354,14 @@ export function AxBiWorkspace() {
           </Button>
         </header>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden xl:grid-cols-[minmax(320px,420px)_1fr]">
+        <div
+          className={cn(
+            'grid min-h-0 flex-1 grid-cols-1 overflow-hidden',
+            isSessionPanelCollapsed
+              ? 'lg:grid-cols-[minmax(300px,360px)_1fr]'
+              : 'xl:grid-cols-[minmax(300px,360px)_1fr]'
+          )}
+        >
           <section className="flex min-h-0 flex-col gap-4 overflow-y-auto border-r border-border p-5">
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-xs font-medium uppercase text-muted-foreground">
@@ -437,7 +515,7 @@ export function AxBiWorkspace() {
               ) : null}
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col space-y-2">
+            <div className="flex min-h-[14rem] flex-1 flex-col space-y-2">
               <label className="flex items-center gap-2 text-xs font-medium uppercase text-muted-foreground">
                 <FileSpreadsheet className="size-3.5" />
                 Prompt
@@ -451,12 +529,12 @@ export function AxBiWorkspace() {
                     status: 'draft',
                   })
                 }
-                className="min-h-48 resize-none"
+                className="min-h-48 flex-1 resize-none"
               />
             </div>
 
             <Button
-              className="w-full"
+              className="w-full shrink-0"
               disabled={
                 activeSession.prompt.trim().length === 0 ||
                 activeSession.status === 'running'
@@ -468,7 +546,12 @@ export function AxBiWorkspace() {
             </Button>
           </section>
 
-          <section className="min-h-0 overflow-y-auto p-5">
+          <section
+            className={cn(
+              'hidden min-h-0 overflow-y-auto p-5',
+              isSessionPanelCollapsed ? 'lg:block' : 'xl:block'
+            )}
+          >
             <div className="grid gap-4 lg:grid-cols-3">
               <div className="rounded-md border border-border p-4">
                 <div className="text-xs uppercase text-muted-foreground">

@@ -27,7 +27,7 @@ import { Link } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { PlatformMetaKey } from '@/components/common/PlatformMetaKey'
-import { Kbd, KbdGroup } from '@/components/ui/kbd'
+import { Kbd } from '@/components/ui/kbd'
 
 export function LeftSidebar() {
   const { t } = useTranslation()
@@ -107,14 +107,9 @@ export function LeftSidebar() {
                   <span className="group-data-[collapsible=icon]:hidden">
                     {t('common:settings')}
                   </span>
-                  <KbdGroup className="ml-auto group-data-[collapsible=icon]:hidden">
-                    <Kbd className="bg-transparent text-sidebar-foreground/40">
-                      <PlatformMetaKey />
-                    </Kbd>
-                    <Kbd className="bg-transparent text-sidebar-foreground/40">
-                      ,
-                    </Kbd>
-                  </KbdGroup>
+                  <Kbd className="ml-auto bg-transparent text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden">
+                    <PlatformMetaKey />,
+                  </Kbd>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
