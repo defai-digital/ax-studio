@@ -156,6 +156,7 @@ vi.mock('@/lib/bootstrap/app-startup', () => ({
 
 vi.mock('@/lib/window-drag', () => ({
   startWindowDragFromMouseEvent: vi.fn(),
+  toggleWindowMaximizeFromMouseEvent: vi.fn(),
 }))
 
 vi.mock('@/hooks/threads/useThreadManagement', () => ({

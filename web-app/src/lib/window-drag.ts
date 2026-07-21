@@ -29,21 +29,35 @@ type StartWindowDragOptions = {
   logContext?: string
 }
 
+type ToggleWindowMaximizeOptions = StartWindowDragOptions
+
 function canStartWindowDrag(target: EventTarget | null) {
   if (!(target instanceof Element)) return false
 
   return !target.closest(WINDOW_DRAG_IGNORE_SELECTOR)
 }
 
+function isWithinWindowChrome(
+  event: MouseEvent<HTMLElement>,
+  topInset: number | undefined
+) {
+  return topInset === undefined || event.clientY <= topInset
+}
+
 export function startWindowDragFromMouseEvent(
   event: MouseEvent<HTMLElement>,
   { topInset, logContext = 'window-drag' }: StartWindowDragOptions = {}
 ) {
-  if (!IS_TAURI || event.button !== 0 || !canStartWindowDrag(event.target)) {
+  if (
+    !IS_TAURI ||
+    event.button !== 0 ||
+    event.detail > 1 ||
+    !canStartWindowDrag(event.target)
+  ) {
     return
   }
 
-  if (topInset !== undefined && event.clientY > topInset) {
+  if (!isWithinWindowChrome(event, topInset)) {
     return
   }
 
@@ -51,5 +65,26 @@ export function startWindowDragFromMouseEvent(
     void getCurrentWebviewWindow().startDragging()
   } catch (error) {
     console.error(`[${logContext}] Failed to start window drag:`, error)
+  }
+}
+
+export function toggleWindowMaximizeFromMouseEvent(
+  event: MouseEvent<HTMLElement>,
+  { topInset, logContext = 'window-drag' }: ToggleWindowMaximizeOptions = {}
+) {
+  if (!IS_TAURI || event.button !== 0 || !canStartWindowDrag(event.target)) {
+    return
+  }
+
+  if (!isWithinWindowChrome(event, topInset)) {
+    return
+  }
+
+  event.preventDefault()
+
+  try {
+    void getCurrentWebviewWindow().toggleMaximize()
+  } catch (error) {
+    console.error(`[${logContext}] Failed to toggle window maximize:`, error)
   }
 }

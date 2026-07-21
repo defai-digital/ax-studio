@@ -35,7 +35,10 @@ import {
   reducedMotionVariants,
 } from '@/lib/utils/animations'
 import { hideInitialLoader } from '@/lib/bootstrap/app-startup'
-import { startWindowDragFromMouseEvent } from '@/lib/window-drag'
+import {
+  startWindowDragFromMouseEvent,
+  toggleWindowMaximizeFromMouseEvent,
+} from '@/lib/window-drag'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
 
@@ -82,11 +85,21 @@ const MacWindowChrome = ({ children }: { children: ReactNode }) => {
     },
     []
   )
+  const handleWindowChromeDoubleClick = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      toggleWindowMaximizeFromMouseEvent(event, {
+        topInset: MACOS_WINDOW_CHROME_HEIGHT,
+        logContext: 'MacWindowChrome',
+      })
+    },
+    []
+  )
 
   return (
     <div
       className="bg-background size-full relative overflow-hidden"
       onMouseDownCapture={handleWindowChromeDrag}
+      onDoubleClickCapture={handleWindowChromeDoubleClick}
     >
       {IS_MACOS && (
         <div
