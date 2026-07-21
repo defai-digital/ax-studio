@@ -106,4 +106,29 @@ describe('AxBiWorkspace Open result', () => {
       'Token encrypted locally — leave blank to reuse'
     )
   })
+
+  it('deletes an AX BI session from its session card', async () => {
+    useAxBiSessions.getState().createSession({
+      title: 'Monthly revenue',
+      prompt: 'Create a monthly revenue dashboard',
+    })
+
+    render(<AxBiWorkspace />)
+
+    const deleteButton = screen.getByRole('button', {
+      name: 'Delete AX BI session Smoke analysis',
+    })
+    expect(deleteButton).toBeEnabled()
+
+    fireEvent.click(deleteButton)
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', {
+          name: 'Delete AX BI session Smoke analysis',
+        })
+      ).not.toBeInTheDocument()
+    )
+    expect(screen.getByDisplayValue('Monthly revenue')).toBeInTheDocument()
+  })
 })

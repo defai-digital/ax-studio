@@ -277,61 +277,94 @@ export function AxBiWorkspace() {
             isSessionPanelCollapsed && 'lg:p-1'
           )}
         >
-          {sessionList.map((session) => (
-            <button
-              key={session.id}
-              type="button"
-              onClick={() => setActiveSession(session.id)}
-              className={cn(
-                'mb-1 grid w-full grid-cols-[1fr_auto] gap-2 rounded-md px-3 py-2 text-left transition-colors',
-                isSessionPanelCollapsed &&
-                  'lg:flex lg:h-10 lg:items-center lg:justify-center lg:px-0 lg:py-0',
-                session.id === activeSession.id
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                  : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground'
-              )}
-            >
-              <span
+          {sessionList.map((session) => {
+            const sessionTitle = session.title.trim() || 'Untitled analysis'
+
+            return (
+              <div
+                key={session.id}
                 className={cn(
-                  'min-w-0',
-                  isSessionPanelCollapsed && 'lg:sr-only'
+                  'mb-1 grid w-full grid-cols-[1fr_auto] items-stretch rounded-md transition-colors',
+                  isSessionPanelCollapsed &&
+                    'lg:flex lg:h-10 lg:items-center lg:justify-center',
+                  session.id === activeSession.id
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                    : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground'
                 )}
               >
-                <span className="block truncate text-sm font-medium">
-                  {session.title.trim() || 'Untitled analysis'}
-                </span>
-                <span className="mt-0.5 block truncate text-xs opacity-70">
-                  {session.status === 'running'
-                    ? 'Running'
-                    : session.runs.length === 0
-                      ? 'Draft'
-                      : `${session.runs.length} run${session.runs.length === 1 ? '' : 's'}`}
-                </span>
-              </span>
-              <span
-                aria-hidden="true"
-                className={cn(
-                  'hidden text-xs font-semibold',
-                  isSessionPanelCollapsed && 'lg:block'
-                )}
-              >
-                {(session.title.trim() || 'A').slice(0, 1).toUpperCase()}
-              </span>
-              <span
-                className={cn(
-                  'text-[11px] opacity-60',
-                  isSessionPanelCollapsed && 'lg:hidden'
-                )}
-              >
-                {formatTime(session.updatedAt)}
-              </span>
-            </button>
-          ))}
+                <button
+                  type="button"
+                  onClick={() => setActiveSession(session.id)}
+                  className={cn(
+                    'grid min-w-0 flex-1 grid-cols-[1fr_auto] gap-2 px-3 py-2 text-left',
+                    isSessionPanelCollapsed &&
+                      'lg:flex lg:h-full lg:items-center lg:justify-center lg:px-0 lg:py-0'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'min-w-0',
+                      isSessionPanelCollapsed && 'lg:sr-only'
+                    )}
+                  >
+                    <span className="block truncate text-sm font-medium">
+                      {sessionTitle}
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs opacity-70">
+                      {session.status === 'running'
+                        ? 'Running'
+                        : session.runs.length === 0
+                          ? 'Draft'
+                          : `${session.runs.length} run${session.runs.length === 1 ? '' : 's'}`}
+                    </span>
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'hidden text-xs font-semibold',
+                      isSessionPanelCollapsed && 'lg:block'
+                    )}
+                  >
+                    {sessionTitle.slice(0, 1).toUpperCase()}
+                  </span>
+                  <span
+                    className={cn(
+                      'text-[11px] opacity-60',
+                      isSessionPanelCollapsed && 'lg:hidden'
+                    )}
+                  >
+                    {formatTime(session.updatedAt)}
+                  </span>
+                </button>
+                <Button
+                  aria-label={`Delete AX BI session ${sessionTitle}`}
+                  size="icon-xs"
+                  variant="ghost"
+                  disabled={sessionList.length <= 1}
+                  className={cn(
+                    'm-1 self-center text-muted-foreground hover:text-destructive',
+                    isSessionPanelCollapsed && 'lg:hidden'
+                  )}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    deleteSession(session.id)
+                  }}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+            )
+          })}
         </div>
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-5">
+        <header
+          className={cn(
+            'flex h-14 shrink-0 items-center border-b border-border px-5',
+            !IS_MACOS && 'pr-30'
+          )}
+        >
           <div className="flex min-w-0 items-center gap-2">
             <LineChart className="size-4 text-primary" />
             <Input
@@ -343,15 +376,6 @@ export function AxBiWorkspace() {
               className="h-8 w-[min(420px,45vw)] border-transparent bg-transparent px-1 text-sm font-semibold shadow-none focus-visible:border-input"
             />
           </div>
-          <Button
-            aria-label="Delete AX BI session"
-            size="icon-sm"
-            variant="ghost"
-            disabled={sessionList.length <= 1}
-            onClick={() => deleteSession(activeSession.id)}
-          >
-            <Trash2 className="size-4" />
-          </Button>
         </header>
 
         <div
