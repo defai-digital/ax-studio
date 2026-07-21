@@ -99,7 +99,7 @@ describe('GitHub Actions dependency boundaries', () => {
     expect(arm64Workflow).toContain('CXX_aarch64_pc_windows_msvc: clang-cl')
     expect(arm64Workflow).toContain('CMAKE_C_COMPILER_TARGET: aarch64-pc-windows-msvc')
     expect(arm64Workflow).toContain('CMAKE_CXX_COMPILER_TARGET: aarch64-pc-windows-msvc')
-    expect(arm64Workflow).toContain('CXXFLAGS_aarch64_pc_windows_msvc: /EHsc')
+    expect(arm64Workflow).toContain('CXXFLAGS_aarch64_pc_windows_msvc: -fexceptions')
     expect(arm64Workflow).toContain('Validate Windows ARM64 native toolchain')
     expect(arm64Workflow.indexOf('Validate Windows ARM64 native toolchain'))
       .toBeLessThan(arm64Workflow.indexOf('- name: Build app'))

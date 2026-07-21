@@ -80,14 +80,15 @@ jobs:
       # whisper.cpp's ARM backend rejects MSVC. Force cmake-rs to use the
       # supported clang-cl + Ninja path for ARM64 native dependencies while
       # keeping Rust and the final application on the MSVC ABI target.
-      # gguf.cpp uses try/catch; clang-cl defaults to exceptions-off, so enable
-      # MSVC-compatible C++ exceptions for the native build.
+      # gguf.cpp uses try/catch; clang-cl defaults to exceptions-off. Use the
+      # Clang-style flag (not /EHsc) so Git Bash does not MSYS-path-convert it
+      # into C:/Program Files/Git/EHsc when the build step runs under bash.
       TARGET_CMAKE_GENERATOR: Ninja
       CC_aarch64_pc_windows_msvc: clang-cl
       CXX_aarch64_pc_windows_msvc: clang-cl
       CMAKE_C_COMPILER_TARGET: aarch64-pc-windows-msvc
       CMAKE_CXX_COMPILER_TARGET: aarch64-pc-windows-msvc
-      CXXFLAGS_aarch64_pc_windows_msvc: /EHsc
+      CXXFLAGS_aarch64_pc_windows_msvc: -fexceptions
     outputs:
       WIN_ARM64_SIG: ${{ steps.metadata.outputs.WIN_ARM64_SIG }}
       FILE_NAME: ${{ steps.metadata.outputs.FILE_NAME }}

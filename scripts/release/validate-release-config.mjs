@@ -187,7 +187,7 @@ for (const requiredToolchainSetting of [
   'CXX_aarch64_pc_windows_msvc: clang-cl',
   'CMAKE_C_COMPILER_TARGET: aarch64-pc-windows-msvc',
   'CMAKE_CXX_COMPILER_TARGET: aarch64-pc-windows-msvc',
-  'CXXFLAGS_aarch64_pc_windows_msvc: /EHsc',
+  'CXXFLAGS_aarch64_pc_windows_msvc: -fexceptions',
   'Validate Windows ARM64 native toolchain',
 ]) {
   if (!windowsArm64Workflow.includes(requiredToolchainSetting)) {
