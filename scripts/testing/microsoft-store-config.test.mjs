@@ -2,7 +2,8 @@ import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const read = (path) => readFileSync(path, 'utf8')
+// Normalize CRLF so multi-line assertions stay portable on Windows checkouts.
+const read = (path) => readFileSync(path, 'utf8').replace(/\r\n/g, '\n')
 
 describe('Microsoft Store release boundary', () => {
   it('passes the Store configuration validator', () => {
