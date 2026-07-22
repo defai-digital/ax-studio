@@ -52,6 +52,20 @@ describe('Microsoft Store release boundary', () => {
     expect(workflow).toContain('AX.Studio_${VERSION}_arm64-store-setup.exe')
   })
 
+  it('grants reusable Windows build jobs their requested token permission', () => {
+    const workflow = read('.github/workflows/ax-studio-microsoft-store-build.yml')
+
+    for (const job of ['build-store-x64', 'build-store-arm64']) {
+      expect(workflow).toContain(
+        `  ${job}:\n` +
+          '    needs: preflight\n' +
+          '    permissions:\n' +
+          '      contents: write\n' +
+          '    uses:',
+      )
+    }
+  })
+
   it('reuses the shared Authenticode verifier for Store installers', () => {
     const workflow = read('.github/workflows/ax-studio-microsoft-store-build.yml')
     expect(workflow).toContain('verify-windows-authenticode.ps1')

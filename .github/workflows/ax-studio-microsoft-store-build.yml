@@ -52,6 +52,8 @@ jobs:
 
   build-store-x64:
     needs: preflight
+    permissions:
+      contents: write
     uses: ./.github/workflows/template-tauri-build-windows-x64.yml
     with:
       ref: refs/tags/v${{ needs.preflight.outputs.version }}
@@ -63,6 +65,8 @@ jobs:
 
   build-store-arm64:
     needs: preflight
+    permissions:
+      contents: write
     uses: ./.github/workflows/template-tauri-build-windows-arm64.yml
     with:
       ref: refs/tags/v${{ needs.preflight.outputs.version }}
