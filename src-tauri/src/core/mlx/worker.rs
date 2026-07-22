@@ -1434,6 +1434,7 @@ fn effective_sampling(model_id: &str, params: &GenerateParams) -> GenerateSampli
                 .unwrap_or_else(|| NEXT_DIFFUSION_REQUEST_SEED.fetch_add(1, Ordering::Relaxed)),
             deterministic: None,
             ignore_eos: false,
+            ..Default::default()
         };
     }
 
@@ -1447,6 +1448,7 @@ fn effective_sampling(model_id: &str, params: &GenerateParams) -> GenerateSampli
         seed: params.seed.unwrap_or(0),
         deterministic: None,
         ignore_eos: false,
+        ..Default::default()
     }
 }
 
