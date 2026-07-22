@@ -389,8 +389,6 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
   override async onLoad(): Promise<void> {
-    super.onLoad()
-
     const rawSettings = SETTINGS
     // Runtime platform (not build-machine IS_MACOS): shipped packages are built
     // on macOS, so compile-time defines are permanently wrong on Windows/Linux.
@@ -427,7 +425,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       )
     })
 
-    this.registerEngine()
+    await super.onLoad()
 
     // Auto-start the local embedding model if one is configured in Knowledge Base settings.
     // Runs in the background so it doesn't block app startup.

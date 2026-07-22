@@ -27,8 +27,10 @@ export function McpCatalogInstallDialog({
 }: McpCatalogInstallDialogProps) {
   const { t } = useTranslation()
   const addServer = useMCPServers((state) => state.addServer)
+  const deleteServer = useMCPServers((state) => state.deleteServer)
   const syncServers = useMCPServers((state) => state.syncServers)
   const [envValues, setEnvValues] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
 
   const isStdio = entry?.transport === 'stdio'
   const fields = useMemo(
@@ -52,7 +54,7 @@ export function McpCatalogInstallDialog({
     (field) => field.required && !envValues[field.key]?.trim()
   )
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!entry || missingRequired) return
 
     const envRecord = Object.fromEntries(
@@ -96,11 +98,21 @@ export function McpCatalogInstallDialog({
         }
 
     addServer(entry.name, config)
-    void syncServers()
-    toast.success(
-      t('mcp-servers:catalog.installSuccess', { serverName: entry.name })
-    )
-    onOpenChange(false)
+    setSaving(true)
+    try {
+      await syncServers()
+      toast.success(
+        t('mcp-servers:catalog.installSuccess', { serverName: entry.name })
+      )
+      onOpenChange(false)
+    } catch (error) {
+      // Persistence failed, so restore the in-memory list to match disk.
+      deleteServer(entry.name)
+      console.error('Failed to install MCP catalog server:', error)
+      toast.error(t('mcp-servers:catalog.installFailed'))
+    } finally {
+      setSaving(false)
+    }
   }
 
   if (!entry) return null
@@ -212,11 +224,16 @@ export function McpCatalogInstallDialog({
           <Button
             variant="outline"
             size="sm"
+            disabled={saving}
             onClick={() => onOpenChange(false)}
           >
             {t('common:cancel')}
           </Button>
-          <Button size="sm" onClick={handleConfirm} disabled={missingRequired}>
+          <Button
+            size="sm"
+            onClick={handleConfirm}
+            disabled={missingRequired || saving}
+          >
             {t('mcp-servers:catalog.confirmInstall')}
           </Button>
         </DialogFooter>

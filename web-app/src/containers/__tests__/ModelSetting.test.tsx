@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { act, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 
 // --- Mocks ---
 
@@ -62,14 +62,16 @@ vi.mock('@/containers/DynamicControllerSetting', () => ({
   DynamicControllerSetting: ({
     title,
     description,
+    onChange,
   }: {
     title: string
     description: string
+    onChange: (value: number) => void
   }) => (
-    <div data-testid={`setting-${title}`}>
+    <button data-testid={`setting-${title}`} onClick={() => onChange(4096)}>
       <span>{title}</span>
       <span>{description}</span>
-    </div>
+    </button>
   ),
 }))
 
@@ -111,6 +113,13 @@ describe('ModelSetting', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockGetActiveModels.mockResolvedValue([])
+    mockStopModel.mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it('renders the settings trigger button', () => {
@@ -169,4 +178,65 @@ describe('ModelSetting', () => {
     expect(screen.getByTestId('sheet')).toBeInTheDocument()
   })
 
+  it('stops a running model through its actual provider after a load setting changes', async () => {
+    vi.useFakeTimers()
+    mockGetActiveModels.mockResolvedValue(['model-1'])
+    const mlxProvider = {
+      ...provider,
+      provider: 'ax-engine',
+    } as unknown as ProviderObject
+    render(<ModelSetting model={model} provider={mlxProvider} />)
+
+    fireEvent.click(screen.getByTestId('setting-Context Length'))
+    await act(async () => {
+      await Promise.resolve()
+      vi.advanceTimersByTime(500)
+      await Promise.resolve()
+    })
+
+    expect(mockStopModel).toHaveBeenCalledWith('model-1', 'ax-engine')
+  })
+
+  it('does not treat an unsuccessful unload result as a stopped model', async () => {
+    vi.useFakeTimers()
+    mockGetActiveModels.mockResolvedValue(['model-1'])
+    mockStopModel.mockResolvedValue({ success: false, error: 'model is busy' })
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    render(<ModelSetting model={model} provider={provider} />)
+
+    fireEvent.click(screen.getByTestId('setting-Context Length'))
+    await act(async () => {
+      await Promise.resolve()
+      vi.advanceTimersByTime(500)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(mockGetActiveModels).toHaveBeenCalledOnce()
+    expect(consoleError).toHaveBeenCalledWith(
+      'Failed to stop model:',
+      expect.objectContaining({ message: 'model is busy' })
+    )
+  })
+
+  it('does not schedule a model stop when the active-model check resolves after unmount', async () => {
+    vi.useFakeTimers()
+    let resolveActiveModels!: (models: string[]) => void
+    mockGetActiveModels.mockReturnValueOnce(
+      new Promise<string[]>((resolve) => {
+        resolveActiveModels = resolve
+      })
+    )
+    const view = render(<ModelSetting model={model} provider={provider} />)
+
+    fireEvent.click(screen.getByTestId('setting-Context Length'))
+    view.unmount()
+    await act(async () => {
+      resolveActiveModels(['model-1'])
+      await Promise.resolve()
+      vi.advanceTimersByTime(500)
+    })
+
+    expect(mockStopModel).not.toHaveBeenCalled()
+  })
 })

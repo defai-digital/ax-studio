@@ -28,6 +28,7 @@ import {
   bootstrapProviders,
   type BootstrapProvidersInput,
 } from '../bootstrap-providers'
+import { syncRemoteProviders } from '@/lib/providers/provider-sync'
 
 function makeServiceHub(overrides: Record<string, unknown> = {}) {
   return {
@@ -116,6 +117,15 @@ describe('bootstrapProviders', () => {
       [{ id: 'p1', provider: 'openai', name: 'OpenAI' }],
       '/'
     )
+  })
+
+  it('does not sync a provider snapshot rejected by the caller', async () => {
+    const setProviders = vi.fn().mockReturnValue(false)
+
+    await bootstrapProviders(makeInput({ setProviders }))
+
+    expect(setProviders).toHaveBeenCalledOnce()
+    expect(vi.mocked(syncRemoteProviders)).not.toHaveBeenCalled()
   })
 
   it('calls setServers with MCP config servers', async () => {
@@ -269,7 +279,7 @@ describe('bootstrapProviders', () => {
     // getCurrent is called async, onDeepLink is registered
     // The onOpenUrl is called immediately during bootstrap
     const deeplinkService = hub.deeplink()
-    expect(deeplinkService.onOpenUrl).toHaveBeenCalledWith(onDeepLink)
+    expect(deeplinkService.onOpenUrl).toHaveBeenCalledWith(expect.any(Function))
   })
 
   it('returns an unsubscribeDeepLink function', async () => {
@@ -279,6 +289,108 @@ describe('bootstrapProviders', () => {
     expect(typeof unsubscribeDeepLink).toBe('function')
     // Should not throw when called
     expect(() => unsubscribeDeepLink()).not.toThrow()
+  })
+
+  it('disposes deep-link listeners that finish registering after cleanup', async () => {
+    let resolveOpenUrl!: (unsubscribe: () => void) => void
+    let resolveEvent!: (unsubscribe: () => void) => void
+    const openUrlCleanup = vi.fn()
+    const eventCleanup = vi.fn()
+    const hub = makeServiceHub({
+      deeplink: {
+        onOpenUrl: vi.fn(
+          () =>
+            new Promise<() => void>((resolve) => {
+              resolveOpenUrl = resolve
+            })
+        ),
+      },
+      events: {
+        listen: vi.fn(
+          () =>
+            new Promise<() => void>((resolve) => {
+              resolveEvent = resolve
+            })
+        ),
+      },
+    })
+    const input = makeInput({
+      serviceHub: hub as unknown as BootstrapProvidersInput['serviceHub'],
+    })
+
+    const { unsubscribeDeepLink } = await bootstrapProviders(input)
+    unsubscribeDeepLink()
+    resolveOpenUrl(openUrlCleanup)
+    resolveEvent(eventCleanup)
+
+    await vi.waitFor(() => {
+      expect(openUrlCleanup).toHaveBeenCalledOnce()
+      expect(eventCleanup).toHaveBeenCalledOnce()
+    })
+  })
+
+  it('disposes pending listeners when setup throws synchronously', async () => {
+    let resolveOpenUrl!: (unsubscribe: () => void) => void
+    const openUrlCleanup = vi.fn()
+    const hub = makeServiceHub({
+      deeplink: {
+        onOpenUrl: vi.fn(
+          () =>
+            new Promise<() => void>((resolve) => {
+              resolveOpenUrl = resolve
+            })
+        ),
+      },
+    })
+    hub.events = () => {
+      throw new Error('event bridge unavailable')
+    }
+
+    const { result } = await bootstrapProviders(
+      makeInput({
+        serviceHub: hub as unknown as BootstrapProvidersInput['serviceHub'],
+      })
+    )
+    expect(result.ok).toBe(false)
+
+    resolveOpenUrl(openUrlCleanup)
+    await vi.waitFor(() => {
+      expect(openUrlCleanup).toHaveBeenCalledOnce()
+    })
+  })
+
+  it('does not apply bootstrap data or register listeners after cancellation', async () => {
+    let resolveProviders!: (providers: ModelProvider[]) => void
+    const getProviders = vi.fn(
+      () =>
+        new Promise<ModelProvider[]>((resolve) => {
+          resolveProviders = resolve
+        })
+    )
+    const onOpenUrl = vi.fn().mockResolvedValue(() => {})
+    const listen = vi.fn().mockResolvedValue(() => {})
+    const hub = makeServiceHub({ providers: { getProviders } })
+    const originalDeepLink = hub.deeplink
+    const originalEvents = hub.events
+    hub.deeplink = () => ({ ...originalDeepLink(), onOpenUrl })
+    hub.events = () => ({ ...originalEvents(), listen })
+    const setProviders = vi.fn()
+    let cancelled = false
+    const work = bootstrapProviders(
+      makeInput({
+        serviceHub: hub as unknown as BootstrapProvidersInput['serviceHub'],
+        setProviders,
+        isCancelled: () => cancelled,
+      })
+    )
+
+    cancelled = true
+    resolveProviders([])
+    await work
+
+    expect(setProviders).not.toHaveBeenCalled()
+    expect(onOpenUrl).not.toHaveBeenCalled()
+    expect(listen).not.toHaveBeenCalled()
   })
 
   it('returns fail result when outer try/catch catches', async () => {

@@ -77,6 +77,7 @@
     "optional": "Optional",
     "secret": "Secret",
     "confirmInstall": "Install Server",
-    "installSuccess": "{{serverName}} installed. It is turned off — enable it in the server list below when you are ready to use it."
+    "installSuccess": "{{serverName}} installed. It is turned off — enable it in the server list below when you are ready to use it.",
+    "installFailed": "Couldn't save the MCP server. Please try again."
   }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { EditJsonMCPserver } from '../EditJsonMCPserver'
 
 const translate = (key: string) => key
@@ -56,7 +56,7 @@ describe('EditJsonMCPserver', () => {
     vi.clearAllMocks()
   })
 
-  it('saves valid JSON object content', () => {
+  it('saves valid JSON object content', async () => {
     render(
       <EditJsonMCPserver
         open={true}
@@ -84,7 +84,9 @@ describe('EditJsonMCPserver', () => {
         },
       },
     })
-    expect(mockOnOpenChange).toHaveBeenCalledWith(false)
+    await waitFor(() => {
+      expect(mockOnOpenChange).toHaveBeenCalledWith(false)
+    })
   })
 
   it('rejects malformed JSON', () => {
@@ -131,5 +133,24 @@ describe('EditJsonMCPserver', () => {
     expect(
       screen.getByText('mcp-servers:editJson.errorFormat')
     ).toBeInTheDocument()
+  })
+
+  it('keeps the editor open when the async save is rejected', async () => {
+    mockOnSave.mockResolvedValueOnce(false)
+    render(
+      <EditJsonMCPserver
+        open={true}
+        onOpenChange={mockOnOpenChange}
+        serverName={null}
+        initialData={{ mcpServers: {} }}
+        onSave={mockOnSave}
+      />
+    )
+
+    fireEvent.click(screen.getByText('mcp-servers:editJson.save'))
+    await waitFor(() => {
+      expect(screen.getByText('mcp-servers:editJson.save')).not.toBeDisabled()
+    })
+    expect(mockOnOpenChange).not.toHaveBeenCalled()
   })
 })

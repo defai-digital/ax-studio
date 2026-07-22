@@ -1,10 +1,8 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
-import {
-  ExtensionProvider,
-  resetExtensionFailureToastState,
-} from '../ExtensionProvider'
+import { ExtensionProvider } from '../ExtensionProvider'
+import { resetExtensionFailureToastState } from '../extension-provider-state'
 
 const mocks = vi.hoisted(() => {
   const extensionManager = {
@@ -79,6 +77,7 @@ describe('ExtensionProvider', () => {
     }
     mocks.extensionManager.registerActive.mockResolvedValue(undefined)
     mocks.extensionManager.load.mockResolvedValue(undefined)
+    mocks.extensionManager.unload.mockResolvedValue(undefined)
     mocks.extensionManager.getFailedExtensionNames.mockReturnValue([])
     mocks.listen.mockResolvedValue(vi.fn())
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})

@@ -55,4 +55,29 @@ describe('bootstrapThreads', () => {
     })
     expect(setThreads).toHaveBeenCalledWith([])
   })
+
+  it('does not apply threads after cancellation', async () => {
+    let resolveThreads!: (threads: Thread[]) => void
+    let cancelled = false
+    const serviceHub = {
+      threads: () => ({
+        fetchThreads: () =>
+          new Promise<Thread[]>((resolve) => {
+            resolveThreads = resolve
+          }),
+      }),
+    } as Pick<ServiceHub, 'threads'> as ServiceHub
+    const setThreads = vi.fn()
+    const work = bootstrapThreads({
+      serviceHub,
+      setThreads,
+      isCancelled: () => cancelled,
+    })
+
+    cancelled = true
+    resolveThreads([makeThread('late')])
+    await work
+
+    expect(setThreads).not.toHaveBeenCalled()
+  })
 })

@@ -12,26 +12,21 @@ import { withTimeout } from '@/lib/utils/async'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { isApiOnlyPlatform } from '@/lib/platform/utils'
 import { toast } from 'sonner'
+import {
+  resetExtensionFailureToastState,
+  takeExtensionFailureToast,
+} from './extension-provider-state'
 
 const EXTENSION_START_TIMEOUT_MS = 8000
 const EXTENSIONS_UPDATED_EVENT = 'extensions-updated'
 const EXTENSION_START_RETRY_DELAYS_MS = [1500, 5000] as const
 let extensionSetupWork: Promise<void> | null = null
 
-// Extensions that already triggered a load-failure toast (fires once per extension)
-const extensionFailureToastShown = new Set<string>()
-
-/** Clears toast de-dupe state — used after a successful load and in tests. */
-export function resetExtensionFailureToastState() {
-  extensionFailureToastShown.clear()
-}
-
 function notifyExtensionLoadFailures() {
   const failedNames = ExtensionManager.getInstance().getFailedExtensionNames()
   if (failedNames.length === 0) {
     // Setup failed without an identifiable extension (e.g. startup timeout)
-    if (!extensionFailureToastShown.has('*')) {
-      extensionFailureToastShown.add('*')
+    if (takeExtensionFailureToast('*')) {
       toast.error(
         'Some extensions failed to load; related features may be unavailable'
       )
@@ -39,8 +34,7 @@ function notifyExtensionLoadFailures() {
     return
   }
   for (const name of failedNames) {
-    if (extensionFailureToastShown.has(name)) continue
-    extensionFailureToastShown.add(name)
+    if (!takeExtensionFailureToast(name)) continue
     toast.error(`${name} failed to load; related features may be unavailable`)
   }
 }
@@ -186,8 +180,19 @@ export function ExtensionProvider({ children }: PropsWithChildren) {
       for (const retryTimer of retryTimers) {
         clearTimeout(retryTimer)
       }
-      cleanupExtensionsUpdated()
-      void ExtensionManager.getInstance().unload()
+      try {
+        cleanupExtensionsUpdated()
+      } catch (error) {
+        console.error(
+          '[ExtensionProvider] Failed to remove extension update listener:',
+          error
+        )
+      }
+      void ExtensionManager.getInstance()
+        .unload()
+        .catch((error) => {
+          console.error('[ExtensionProvider] Failed to unload extensions:', error)
+        })
     }
   }, [serviceHub, runSetup])
 

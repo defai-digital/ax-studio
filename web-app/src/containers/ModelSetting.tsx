@@ -32,6 +32,7 @@ export function ModelSetting({
 
   const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const stopModelIdRef = useRef<string | null>(null)
+  const isMountedRef = useRef(true)
 
   const debouncedStopModel = useCallback(
     (modelId: string) => {
@@ -40,24 +41,39 @@ export function ModelSetting({
       stopTimerRef.current = setTimeout(() => {
         stopTimerRef.current = null
         const targetId = stopModelIdRef.current
-        if (!targetId) return
+        stopModelIdRef.current = null
+        if (!targetId || !isMountedRef.current) return
         serviceHub
           .models()
-          .stopModel(targetId)
-          .then(() =>
-            serviceHub.models().getActiveModels()
-              .then((models) => setActiveModels(models || []))
-              .catch((err) => console.error('Failed to refresh active models:', err))
-          )
+          .stopModel(targetId, provider.provider)
+          .then((result) => {
+            if (!isMountedRef.current) return
+            if (result && !result.success) {
+              throw new Error(result.error || `Failed to stop model ${targetId}`)
+            }
+            return serviceHub
+              .models()
+              .getActiveModels()
+              .then((models) => {
+                if (isMountedRef.current) setActiveModels(models || [])
+              })
+              .catch((err) =>
+                console.error('Failed to refresh active models:', err)
+              )
+          })
           .catch((err) => console.error('Failed to stop model:', err))
       }, 500)
     },
-    [serviceHub, setActiveModels]
+    [provider.provider, serviceHub, setActiveModels]
   )
 
   useEffect(() => {
+    isMountedRef.current = true
     return () => {
+      isMountedRef.current = false
       if (stopTimerRef.current) clearTimeout(stopTimerRef.current)
+      stopTimerRef.current = null
+      stopModelIdRef.current = null
     }
   }, [])
 
@@ -113,6 +129,7 @@ export function ModelSetting({
           .models()
           .getActiveModels()
           .then((activeModels) => {
+            if (!isMountedRef.current) return
             if (activeModels.includes(model.id)) {
               debouncedStopModel(model.id)
             }

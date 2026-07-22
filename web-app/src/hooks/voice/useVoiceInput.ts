@@ -172,13 +172,21 @@ export function useVoiceInput({
     if (!eventsService) return
     let unmounted = false
     const unlistens: Array<() => void> = []
+    const safelyUnlisten = (unlisten: () => void) => {
+      try {
+        unlisten()
+      } catch (error) {
+        console.error('Failed to remove a voice event listener:', error)
+      }
+    }
 
     const subscribe = async () => {
       try {
-        const handles = await Promise.all([
+        const registrations = await Promise.allSettled([
           eventsService.listen<{ level: number }>(
             VOICE_LEVEL_EVENT,
             (event) => {
+              if (unmounted) return
               if (typeof event.payload?.level === 'number') {
                 setLevel(event.payload.level)
               }
@@ -187,6 +195,7 @@ export function useVoiceInput({
           eventsService.listen<{ state: VoiceRecordingState }>(
             VOICE_STATE_EVENT,
             (event) => {
+              if (unmounted) return
               const next = event.payload?.state
               if (
                 next === 'idle' ||
@@ -202,14 +211,26 @@ export function useVoiceInput({
           eventsService.listen<{ text: string }>(
             VOICE_TRANSCRIPT_EVENT,
             (event) => {
+              if (unmounted) return
               insertTranscript(event.payload?.text ?? '')
               setState('idle')
               setLevel(0)
             }
           ),
         ])
+        const handles = registrations.flatMap((registration) =>
+          registration.status === 'fulfilled' ? [registration.value] : []
+        )
+        for (const registration of registrations) {
+          if (registration.status === 'rejected' && !unmounted) {
+            console.error(
+              'Failed to subscribe to a voice event:',
+              registration.reason
+            )
+          }
+        }
         if (unmounted) {
-          handles.forEach((unlisten) => unlisten())
+          handles.forEach(safelyUnlisten)
           return
         }
         unlistens.push(...handles)
@@ -223,7 +244,7 @@ export function useVoiceInput({
 
     return () => {
       unmounted = true
-      unlistens.forEach((unlisten) => unlisten())
+      unlistens.forEach(safelyUnlisten)
     }
   }, [visible, serviceHub, insertTranscript])
 

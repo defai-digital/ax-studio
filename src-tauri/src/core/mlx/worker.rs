@@ -823,11 +823,27 @@ fn drain_loaded_models(models: &mut HashMap<String, LoadedModel>, reason: &str) 
 fn clear_native_caches_after_model_drain(reason: &str) {
     let started = std::time::Instant::now();
     log::info!("[mlx-worker] clearing native MLX compile caches after {reason}");
-    EngineSession::clear_native_model_compile_caches();
-    // Second pass: after large MTP packages the allocator can still hold
-    // peak-watermark slabs; one more clear after the first free helps the
-    // subsequent model load fit in unified memory without thrashing.
-    EngineSession::clear_native_model_compile_caches();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        EngineSession::clear_native_model_compile_caches();
+        // Second pass: after large MTP packages the allocator can still hold
+        // peak-watermark slabs; one more clear after the first free helps the
+        // subsequent model load fit in unified memory without thrashing.
+        EngineSession::clear_native_model_compile_caches();
+    }));
+    if let Err(panic_info) = result {
+        let detail = if let Some(message) = panic_info.downcast_ref::<String>() {
+            message.as_str()
+        } else if let Some(message) = panic_info.downcast_ref::<&str>() {
+            message
+        } else {
+            "unknown panic"
+        };
+        // Cache eviction is best-effort cleanup. A missing Metal device or
+        // another native cleanup failure must not kill the long-lived worker
+        // after the model itself has already been unloaded.
+        log::warn!("[mlx-worker] native MLX cache cleanup after {reason} panicked: {detail}");
+        return;
+    }
     log::info!(
         "[mlx-worker] native MLX compile caches cleared in {}ms",
         started.elapsed().as_millis()

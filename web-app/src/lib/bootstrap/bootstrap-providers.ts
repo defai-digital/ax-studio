@@ -56,12 +56,16 @@ function getAssistantsOnce(serviceHub: ServiceHub): Promise<unknown> {
 
 export type BootstrapProvidersInput = {
   serviceHub: ServiceHub
-  setProviders: (providers: ModelProvider[], pathSep: string) => void
+  setProviders: (
+    providers: ModelProvider[],
+    pathSep: string
+  ) => boolean | void
   setServers: (servers: Record<string, MCPServerConfig>) => void
   setSettings: (settings: MCPSettings | null) => void
   setAssistants: (assistants: Assistant[]) => void
   initializeWithLastUsed: () => void
   onDeepLink: (urls: string[] | null) => void
+  isCancelled?: () => boolean
 }
 
 /**
@@ -84,16 +88,54 @@ export async function bootstrapProviders(
     setAssistants,
     initializeWithLastUsed,
     onDeepLink,
+    isCancelled: isExternallyCancelled = () => false,
   } = input
 
+  let disposed = false
+  let cleanedUp = false
   let unsubscribeDeepLink: () => void = () => {}
+  let unsubscribeOnOpenUrl: (() => void) | undefined
+  const isCancelled = () => disposed || isExternallyCancelled()
+  const handleDeepLink = (urls: string[] | null) => {
+    if (!isCancelled()) onDeepLink(urls)
+  }
+
+  const keepOrDispose = (
+    unsubscribe: () => void,
+    keep: (unsubscribe: () => void) => void
+  ) => {
+    if (isCancelled()) {
+      unsubscribe()
+    } else {
+      keep(unsubscribe)
+    }
+  }
+  const unsubscribeAll = () => {
+    if (cleanedUp) return
+    cleanedUp = true
+    disposed = true
+    const cleanups = [unsubscribeDeepLink, unsubscribeOnOpenUrl].filter(
+      (cleanup): cleanup is () => void => cleanup != null
+    )
+    unsubscribeDeepLink = () => {}
+    unsubscribeOnOpenUrl = undefined
+    for (const cleanup of cleanups) {
+      try {
+        cleanup()
+      } catch (error) {
+        console.error('Failed to remove deep link listener:', error)
+      }
+    }
+  }
 
   try {
     // Load providers, MCP config, and assistants concurrently with bounded waits.
     await Promise.all([
       withTimeout(
         getProvidersOnce(serviceHub).then((providers) => {
-          setProviders(providers, serviceHub.path().sep())
+          if (isCancelled()) return
+          const applied = setProviders(providers, serviceHub.path().sep())
+          if (applied === false) return
           return syncRemoteProviders(providers).catch((err) =>
             console.error('Failed to batch-register providers:', err)
           )
@@ -106,6 +148,7 @@ export async function bootstrapProviders(
 
       withTimeout(
         getMCPConfigOnce(serviceHub).then((data) => {
+          if (isCancelled()) return
           setServers(data.mcpServers ?? {})
           setSettings(data.mcpSettings ?? null)
         }),
@@ -117,6 +160,7 @@ export async function bootstrapProviders(
 
       withTimeout(
         getAssistantsOnce(serviceHub).then((data) => {
+          if (isCancelled()) return
           if (data == null) {
             setAssistants([])
             return
@@ -142,20 +186,26 @@ export async function bootstrapProviders(
       }),
     ])
 
+    if (isCancelled()) {
+      disposed = true
+      return { result: ok(), unsubscribeDeepLink: () => {} }
+    }
+
     // Deep link: fetch current and register listener
     serviceHub
       .deeplink()
       .getCurrent()
-      .then(onDeepLink)
+      .then(handleDeepLink)
       .catch((error) => {
         console.error('Failed to get current deep link:', error)
       })
-    let unsubscribeOnOpenUrl: (() => void) | undefined
     serviceHub
       .deeplink()
-      .onOpenUrl(onDeepLink)
+      .onOpenUrl(handleDeepLink)
       .then((unsub) => {
-        unsubscribeOnOpenUrl = unsub
+        keepOrDispose(unsub, (cleanup) => {
+          unsubscribeOnOpenUrl = cleanup
+        })
       })
       .catch((error) => {
         console.error('Failed to register deep link listener:', error)
@@ -164,6 +214,7 @@ export async function bootstrapProviders(
     serviceHub
       .events()
       ?.listen(SystemEvent.DEEP_LINK, (event) => {
+        if (isCancelled()) return
         const parsed = deepLinkPayloadSchema.safeParse(event.payload)
         if (!parsed.success) {
           console.error('Invalid deep link payload:', event.payload)
@@ -172,16 +223,18 @@ export async function bootstrapProviders(
         onDeepLink([parsed.data])
       })
       .then((unsub) => {
-        unsubscribeDeepLink = unsub
+        keepOrDispose(unsub, (cleanup) => {
+          unsubscribeDeepLink = cleanup
+        })
+      })
+      .catch((error) => {
+        console.error('Failed to register deep link event listener:', error)
       })
 
-    const unsubscribeAll = () => {
-      unsubscribeDeepLink()
-      unsubscribeOnOpenUrl?.()
-    }
     return { result: ok(), unsubscribeDeepLink: unsubscribeAll }
   } catch (error) {
     console.error('bootstrapProviders failed:', error)
-    return { result: fail(error), unsubscribeDeepLink }
+    unsubscribeAll()
+    return { result: fail(error), unsubscribeDeepLink: unsubscribeAll }
   }
 }

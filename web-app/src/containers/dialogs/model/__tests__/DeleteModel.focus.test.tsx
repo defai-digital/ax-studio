@@ -1,6 +1,16 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { DialogDeleteModel } from '../DeleteModel'
+
+const mocks = vi.hoisted(() => ({
+  deleteModel: vi.fn(),
+  deleteModelCache: vi.fn(),
+  getProviders: vi.fn(),
+  removeFavorite: vi.fn(),
+  setProviders: vi.fn(),
+  toastError: vi.fn(),
+  toastSuccess: vi.fn(),
+}))
 
 vi.mock('@/i18n/react-i18next-compat', () => ({
   useTranslation: () => ({
@@ -11,22 +21,27 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
 
 vi.mock('@/hooks/models/useModelProvider', () => ({
   useModelProvider: () => ({
-    updateProvider: vi.fn(),
+    deleteModel: mocks.deleteModelCache,
+    setProviders: mocks.setProviders,
   }),
 }))
 
 vi.mock('@/hooks/useServiceHub', () => ({
   useServiceHub: () => ({
-    models(): { stopModel: () => Promise<void> } {
-      return { stopModel: vi.fn().mockResolvedValue(undefined) }
-    },
+    models: () => ({ deleteModel: mocks.deleteModel }),
+    providers: () => ({ getProviders: mocks.getProviders }),
   }),
 }))
 
-vi.mock('@/hooks/settings/useAppState', () => ({
-  useAppState: (
-    selector: (s: { setActiveModels: () => void }) => unknown
-  ) => selector({ setActiveModels: vi.fn() }),
+vi.mock('@/hooks/models/useFavoriteModel', () => ({
+  useFavoriteModel: () => ({ removeFavorite: mocks.removeFavorite }),
+}))
+
+vi.mock('sonner', () => ({
+  toast: {
+    error: mocks.toastError,
+    success: mocks.toastSuccess,
+  },
 }))
 
 vi.mock('@/components/ui/dialog', () => ({
@@ -79,6 +94,16 @@ describe('DialogDeleteModel focus defaults', () => {
     models: [{ id: 'gpt-4', name: 'GPT-4' }],
   } as ModelProvider
 
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.deleteModel.mockResolvedValue(undefined)
+    mocks.getProviders.mockResolvedValue([provider])
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('labels the icon-only delete trigger', () => {
     render(<DialogDeleteModel provider={provider} modelId="gpt-4" />)
     expect(
@@ -94,5 +119,43 @@ describe('DialogDeleteModel focus defaults', () => {
     const del = screen.getByText('providers:deleteModel.delete')
     expect(cancel).toHaveAttribute('data-autofocus', 'true')
     expect(del).toHaveAttribute('data-autofocus', 'false')
+  })
+
+  it('keeps local model state intact when backend deletion fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.deleteModel.mockRejectedValueOnce(new Error('file is locked'))
+    render(<DialogDeleteModel provider={provider} modelId="gpt-4" />)
+
+    fireEvent.click(screen.getByText('providers:deleteModel.delete'))
+
+    await waitFor(() => {
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        'Failed to delete model. Please try again.'
+      )
+    })
+    expect(mocks.removeFavorite).not.toHaveBeenCalled()
+    expect(mocks.deleteModelCache).not.toHaveBeenCalled()
+  })
+
+  it('removes local model state only after backend deletion succeeds', async () => {
+    let resolveDelete!: () => void
+    mocks.deleteModel.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveDelete = resolve
+        })
+    )
+    render(<DialogDeleteModel provider={provider} modelId="gpt-4" />)
+
+    fireEvent.click(screen.getByText('providers:deleteModel.delete'))
+    expect(mocks.removeFavorite).not.toHaveBeenCalled()
+    expect(mocks.deleteModelCache).not.toHaveBeenCalled()
+
+    resolveDelete()
+
+    await waitFor(() => {
+      expect(mocks.removeFavorite).toHaveBeenCalledWith('gpt-4')
+      expect(mocks.deleteModelCache).toHaveBeenCalledWith('gpt-4')
+    })
   })
 })

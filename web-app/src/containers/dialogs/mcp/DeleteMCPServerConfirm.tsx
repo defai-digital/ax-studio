@@ -8,12 +8,13 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useTranslation } from '@/i18n/react-i18next-compat'
+import { useState } from 'react'
 
 interface DeleteMCPServerConfirmProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   serverName: string
-  onConfirm: () => void
+  onConfirm: () => boolean | void | Promise<boolean | void>
 }
 
 export function DeleteMCPServerConfirm({
@@ -23,6 +24,20 @@ export function DeleteMCPServerConfirm({
   onConfirm,
 }: DeleteMCPServerConfirmProps) {
   const { t } = useTranslation()
+  const [deleting, setDeleting] = useState(false)
+
+  const handleConfirm = async () => {
+    setDeleting(true)
+    try {
+      const deleted = await onConfirm()
+      if (deleted !== false) onOpenChange(false)
+    } catch (error) {
+      console.error('Failed to delete MCP server:', error)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -38,6 +53,7 @@ export function DeleteMCPServerConfirm({
             size="sm"
             variant="outline"
             autoFocus
+            disabled={deleting}
             onClick={() => onOpenChange(false)}
           >
             {t('common:cancel')}
@@ -45,10 +61,8 @@ export function DeleteMCPServerConfirm({
           <Button
             size="sm"
             variant="destructive"
-            onClick={() => {
-              onConfirm()
-              onOpenChange(false)
-            }}
+            disabled={deleting}
+            onClick={handleConfirm}
           >
             {t('mcp-servers:deleteServer.delete')}
           </Button>

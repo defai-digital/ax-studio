@@ -461,13 +461,29 @@ export class DefaultModelsService implements ModelsService {
         this.stopModel(model, 'ax-engine')
       ),
     ])
+    const failures: unknown[] = []
     for (const result of results) {
       if (result.status === 'rejected') {
+        failures.push(result.reason)
         console.warn(
           '[ModelsService] stopAllModels unload failed:',
           result.reason
         )
+      } else if (result.value && !result.value.success) {
+        const error = new Error(
+          result.value.error || 'Model unload reported an unknown failure'
+        )
+        failures.push(error)
+        console.warn('[ModelsService] stopAllModels unload failed:', error)
       }
+    }
+    if (failures.length > 0) {
+      const error = new Error(
+        `Failed to stop ${failures.length} model${failures.length === 1 ? '' : 's'}`
+      )
+      const errorWithCause = error as Error & { cause?: unknown }
+      errorWithCause.cause = failures[0]
+      throw errorWithCause
     }
   }
 

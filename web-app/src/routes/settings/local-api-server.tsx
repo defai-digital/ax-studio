@@ -30,7 +30,7 @@ import {
 import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
 import { cn } from '@/lib/utils'
 import { ApiKeyInput } from '@/containers/ApiKeyInput'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { getModelToStart } from '@/lib/utils/getModelToStart'
 import { LogViewer } from '@/components/LogViewer'
@@ -222,17 +222,28 @@ function LocalAPIServerContent() {
     useModelProvider()
   const [showApiKeyError, setShowApiKeyError] = useState(false)
   const setActiveModels = useAppState((state) => state.setActiveModels)
+  const serverStatusRef = useRef(serverStatus)
+  const statusCheckSequenceRef = useRef(0)
+  const serverOperationGenerationRef = useRef(0)
+  serverStatusRef.current = serverStatus
 
   useEffect(() => {
     let mounted = true
 
     const checkServerStatus = async () => {
+      const sequence = ++statusCheckSequenceRef.current
+      const operationGeneration = serverOperationGenerationRef.current
       try {
         const running = await serviceHub.app().getServerStatus()
-        if (!mounted) return
-        if (running) {
-          setServerStatus('running')
+        if (
+          !mounted ||
+          sequence !== statusCheckSequenceRef.current ||
+          operationGeneration !== serverOperationGenerationRef.current ||
+          serverStatusRef.current === 'pending'
+        ) {
+          return
         }
+        setServerStatus(running ? 'running' : 'stopped')
       } catch (error) {
         if (!mounted) return
         console.error('Failed to check server status:', error)
@@ -245,6 +256,7 @@ function LocalAPIServerContent() {
     window.addEventListener('focus', handleFocus)
     return () => {
       mounted = false
+      statusCheckSequenceRef.current += 1
       window.removeEventListener('focus', handleFocus)
     }
   }, [serviceHub, setServerStatus])
@@ -253,6 +265,7 @@ function LocalAPIServerContent() {
   const requiresApiKey = corsEnabled || serverHost !== '127.0.0.1'
 
   const toggleAPIServer = async () => {
+    const operationGeneration = ++serverOperationGenerationRef.current
     // Validate API key before starting server
     if (serverStatus === 'stopped') {
       toast.info('Starting server...', {
@@ -343,6 +356,8 @@ function LocalAPIServerContent() {
           })
         })
         .then((rawPort: unknown) => {
+          if (operationGeneration !== serverOperationGenerationRef.current) return
+          serverOperationGenerationRef.current += 1
           const actualPort = parseServerPortResult(rawPort)
           if (actualPort && actualPort !== serverPort) {
             setServerPort(actualPort)
@@ -354,6 +369,8 @@ function LocalAPIServerContent() {
           })
         })
         .catch((error: unknown) => {
+          if (operationGeneration !== serverOperationGenerationRef.current) return
+          serverOperationGenerationRef.current += 1
           console.error('Error starting server or model:', error)
           setServerStatus('stopped')
           setIsModelLoading(false) // Reset loading state on error
@@ -392,7 +409,10 @@ function LocalAPIServerContent() {
       setServerStatus('pending')
       const api = window.core?.api
       if (!api) {
-        setServerStatus('stopped')
+        serverOperationGenerationRef.current += 1
+        // The server was running when the stop was requested. If the bridge is
+        // unavailable, no stop occurred, so keep the truthful running state.
+        setServerStatus('running')
         toast.error('Failed to stop server', {
           description: 'Core API not available',
         })
@@ -402,11 +422,19 @@ function LocalAPIServerContent() {
       const stopServerPromise = api.stopServer() as Promise<void>
       stopServerPromise
         .then(() => {
+          if (operationGeneration !== serverOperationGenerationRef.current) return
+          serverOperationGenerationRef.current += 1
           setServerStatus('stopped')
         })
         .catch((error: unknown) => {
+          if (operationGeneration !== serverOperationGenerationRef.current) return
+          serverOperationGenerationRef.current += 1
           console.error('Error stopping server:', error)
-          setServerStatus('stopped')
+          setServerStatus('running')
+          toast.error('Failed to stop server', {
+            description:
+              error instanceof Error ? error.message : String(error),
+          })
         })
     }
   }

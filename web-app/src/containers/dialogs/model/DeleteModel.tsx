@@ -35,41 +35,39 @@ export const DialogDeleteModel = ({
   const serviceHub = useServiceHub()
 
   const removeModel = async () => {
-    // Remove model from favorites if it exists
-    removeFavorite(selectedModelId)
+    const deletedModelId = selectedModelId
+    try {
+      await serviceHub.models().deleteModel(deletedModelId, provider.provider)
 
-    deleteModelCache(selectedModelId)
-    serviceHub
-      .models()
-      .deleteModel(selectedModelId, provider.provider)
-      .then(() => {
-        serviceHub
-          .providers()
-          .getProviders()
-          .then((providers) => {
-            // Filter out the deleted model from all providers
-            const filteredProviders = providers.map((provider) => ({
-              ...provider,
-              models: provider.models.filter(
-                (model) => model.id !== selectedModelId
-              ),
-            }))
-            setProviders(filteredProviders)
-          })
-        toast.success(
-          t('providers:deleteModel.title', { modelId: selectedModel?.id }),
-          {
-            id: `delete-model-${selectedModel?.id}`,
-            description: t('providers:deleteModel.success', {
-              modelId: selectedModel?.id,
-            }),
-          }
-        )
-      })
-      .catch((error) => {
-        console.error('Failed to delete model:', error)
-        toast.error('Failed to delete model. Please try again.')
-      })
+      // Only mutate local state after the backend confirms deletion. Otherwise
+      // a failed filesystem delete makes an existing model disappear from UI.
+      removeFavorite(deletedModelId)
+      deleteModelCache(deletedModelId)
+
+      try {
+        const providers = await serviceHub.providers().getProviders()
+        const filteredProviders = providers.map((provider) => ({
+          ...provider,
+          models: provider.models.filter((model) => model.id !== deletedModelId),
+        }))
+        setProviders(filteredProviders)
+      } catch (error) {
+        console.error('Failed to refresh providers after deleting model:', error)
+      }
+
+      toast.success(
+        t('providers:deleteModel.title', { modelId: deletedModelId }),
+        {
+          id: `delete-model-${deletedModelId}`,
+          description: t('providers:deleteModel.success', {
+            modelId: deletedModelId,
+          }),
+        }
+      )
+    } catch (error) {
+      console.error('Failed to delete model:', error)
+      toast.error('Failed to delete model. Please try again.')
+    }
   }
 
   // Initialize with the provided model ID or the first model if available

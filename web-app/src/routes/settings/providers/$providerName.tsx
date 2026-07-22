@@ -134,6 +134,12 @@ function ProviderDetail() {
   const { providerName } = useParams({ from: Route.id })
   const { getProviderByName, updateProvider } = useModelProvider()
   const provider = getProviderByName(providerName)
+  const canTestConnection = Boolean(
+    provider &&
+      (provider.provider === 'ax-engine' ||
+        provider.provider === 'mlx' ||
+        provider.base_url)
+  )
   const providerColor = getProviderColor(providerName)
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
@@ -144,13 +150,46 @@ function ProviderDetail() {
   const [connectionMessage, setConnectionMessage] = useState('')
   const lastValidValues = useRef<Record<string, string>>({})
   const isMountedRef = useRef(true)
+  const providerRequestGenerationRef = useRef(0)
+  const providerSettingsSaveQueueRef = useRef<Promise<void>>(Promise.resolve())
+
+  const invalidateProviderRequests = useCallback(() => {
+    providerRequestGenerationRef.current += 1
+    setConnectionStatus('idle')
+    setConnectionMessage('')
+    setRefreshingModels(false)
+  }, [])
+
+  const persistProviderSettings = useCallback(
+    (settings: ProviderSetting[]) => {
+      const save = providerSettingsSaveQueueRef.current
+        .catch(() => undefined)
+        .then(() =>
+          serviceHub.providers().updateSettings(providerName, settings)
+        )
+      providerSettingsSaveQueueRef.current = save
+      void save.catch((error) => {
+        if (!isMountedRef.current) return
+        console.error('Failed to save provider settings:', error)
+        toast.error('Failed to save provider settings')
+      })
+    },
+    [providerName, serviceHub]
+  )
 
   useEffect(() => {
     isMountedRef.current = true
     return () => {
       isMountedRef.current = false
+      providerRequestGenerationRef.current += 1
     }
   }, [])
+
+  useEffect(() => {
+    invalidateProviderRequests()
+    setPendingGroups(null)
+    lastValidValues.current = {}
+  }, [invalidateProviderRequests, providerName])
 
   useEffect(() => {
     if (provider?.settings) {
@@ -203,12 +242,17 @@ function ProviderDetail() {
           (s) => s.key === settingKey
         )
         if (settingIndex >= 0) {
-          const newSettings = [...provider.settings]
-          ;(
-            newSettings[settingIndex].controller_props as {
-              value: string | boolean | number
-            }
-          ).value = lastGood
+          const newSettings = provider.settings.map((setting, index) =>
+            index === settingIndex
+              ? {
+                  ...setting,
+                  controller_props: {
+                    ...setting.controller_props,
+                    value: lastGood,
+                  },
+                }
+              : setting
+          )
 
           const updateObj: Partial<ModelProvider> = { settings: newSettings }
           if (settingKey === 'api-key') {
@@ -217,10 +261,9 @@ function ProviderDetail() {
             updateObj.base_url = lastGood
           }
 
-          serviceHub
-            .providers()
-            .updateSettings(providerName, updateObj.settings ?? [])
-          updateProvider(providerName, { ...provider, ...updateObj })
+          invalidateProviderRequests()
+          persistProviderSettings(newSettings)
+          updateProvider(providerName, updateObj)
         }
       }
     } else {
@@ -243,12 +286,18 @@ function ProviderDetail() {
     }
     // AX Engine is in-process (Tauri IPC) — no HTTP base URL is required.
     // Remote/OpenAI-compatible providers still need a base URL.
-    if (provider.provider !== 'ax-engine' && provider.provider !== 'mlx' && !provider.base_url) {
+    if (
+      provider.provider !== 'ax-engine' &&
+      provider.provider !== 'mlx' &&
+      !provider.base_url
+    ) {
       setConnectionStatus('error')
       setConnectionMessage('Base URL is required to test connection.')
       return
     }
 
+    const requestGeneration = ++providerRequestGenerationRef.current
+    setRefreshingModels(false)
     setConnectionStatus('testing')
     setConnectionMessage('')
 
@@ -256,12 +305,18 @@ function ProviderDetail() {
       const modelIds = await serviceHub
         .providers()
         .fetchModelsFromProvider(provider)
-      if (!isMountedRef.current) return
+      if (
+        !isMountedRef.current ||
+        requestGeneration !== providerRequestGenerationRef.current
+      ) {
+        return
+      }
 
-      const { models, added } = mergeProviderModelIds(provider, modelIds)
+      const latestProvider = getProviderByName(providerName)
+      if (!latestProvider) return
+      const { models, added } = mergeProviderModelIds(latestProvider, modelIds)
 
       updateProvider(providerName, {
-        ...provider,
         active: true,
         models,
       })
@@ -274,7 +329,12 @@ function ProviderDetail() {
         })
       )
     } catch (error) {
-      if (!isMountedRef.current) return
+      if (
+        !isMountedRef.current ||
+        requestGeneration !== providerRequestGenerationRef.current
+      ) {
+        return
+      }
 
       updateProvider(providerName, { active: false })
       setConnectionStatus('error')
@@ -320,7 +380,7 @@ function ProviderDetail() {
         (m) => !selectedSet.has(m.id)
       ).length
 
-      updateProvider(providerName, { ...provider, models: updatedModels })
+      updateProvider(providerName, { models: updatedModels })
 
       const parts: string[] = []
       if (added > 0) parts.push(`${added} added`)
@@ -339,19 +399,27 @@ function ProviderDetail() {
   )
 
   const handleRefreshModels = async () => {
-    if (!provider || !provider.base_url) {
+    if (!provider || !canTestConnection) {
       toast.error(t('providers:models'), {
         description: t('providers:refreshModelsError'),
       })
       return
     }
 
+    const requestGeneration = ++providerRequestGenerationRef.current
+    setConnectionStatus('idle')
+    setConnectionMessage('')
     setRefreshingModels(true)
     try {
       const modelIds = await serviceHub
         .providers()
         .fetchModelsFromProvider(provider)
-      if (!isMountedRef.current) return
+      if (
+        !isMountedRef.current ||
+        requestGeneration !== providerRequestGenerationRef.current
+      ) {
+        return
+      }
 
       // Detect multi-upstream gateway: if models have 2+ distinct prefixes,
       // show a selection dialog so the user can pick which upstreams to import.
@@ -362,11 +430,12 @@ function ProviderDetail() {
       }
 
       // Single-prefix provider: import directly (existing behavior)
-      const { models, added } = mergeProviderModelIds(provider, modelIds)
+      const latestProvider = getProviderByName(providerName)
+      if (!latestProvider) return
+      const { models, added } = mergeProviderModelIds(latestProvider, modelIds)
 
       if (added > 0) {
         updateProvider(providerName, {
-          ...provider,
           active: true,
           models,
         })
@@ -383,7 +452,12 @@ function ProviderDetail() {
         })
       }
     } catch (error) {
-      if (!isMountedRef.current) return
+      if (
+        !isMountedRef.current ||
+        requestGeneration !== providerRequestGenerationRef.current
+      ) {
+        return
+      }
 
       console.error(
         t('providers:refreshModelsFailed', { provider: provider.provider }),
@@ -396,7 +470,10 @@ function ProviderDetail() {
       })
       updateProvider(providerName, { active: false })
     } finally {
-      if (isMountedRef.current) {
+      if (
+        isMountedRef.current &&
+        requestGeneration === providerRequestGenerationRef.current
+      ) {
         setRefreshingModels(false)
       }
     }
@@ -507,12 +584,18 @@ function ProviderDetail() {
 
                               if (error) return
 
-                              const newSettings = [...provider.settings]
-                              ;(
-                                newSettings[settingIndex].controller_props as {
-                                  value: string | boolean | number
-                                }
-                              ).value = newValue
+                              const newSettings = provider.settings.map(
+                                (providerSetting, index) =>
+                                  index === settingIndex
+                                    ? {
+                                        ...providerSetting,
+                                        controller_props: {
+                                          ...providerSetting.controller_props,
+                                          value: newValue,
+                                        },
+                                      }
+                                    : providerSetting
+                              )
 
                               const updateObj: Partial<ModelProvider> = {
                                 settings: newSettings,
@@ -531,21 +614,9 @@ function ProviderDetail() {
                                 lastValidValues.current[settingKey] = newValue
                               }
 
-                              serviceHub
-                                .providers()
-                                .updateSettings(
-                                  providerName,
-                                  updateObj.settings ?? []
-                                )
-                              updateProvider(providerName, {
-                                ...provider,
-                                ...updateObj,
-                              })
-
-                              if (connectionStatus !== 'idle') {
-                                setConnectionStatus('idle')
-                                setConnectionMessage('')
-                              }
+                              invalidateProviderRequests()
+                              persistProviderSettings(newSettings)
+                              updateProvider(providerName, updateObj)
                             }
                           }}
                         />
@@ -620,7 +691,9 @@ function ProviderDetail() {
                         className="rounded-lg h-8 text-[12px]"
                         onClick={handleTestConnection}
                         disabled={
-                          connectionStatus === 'testing' || !provider?.base_url
+                          connectionStatus === 'testing' ||
+                          refreshingModels ||
+                          !canTestConnection
                         }
                       >
                         {connectionStatus === 'testing' ? (
@@ -677,7 +750,9 @@ function ProviderDetail() {
                           size="sm"
                           className="rounded-lg h-8 text-[12px]"
                           onClick={handleRefreshModels}
-                          disabled={refreshingModels}
+                          disabled={
+                            refreshingModels || connectionStatus === 'testing'
+                          }
                         >
                           {refreshingModels ? (
                             <Loader

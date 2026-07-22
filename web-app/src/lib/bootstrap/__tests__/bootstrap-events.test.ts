@@ -38,6 +38,14 @@ const makeProvider = (provider: string): ModelProvider => ({
   models: [],
 })
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
+
 const makeServiceHub = (providers: ModelProvider[] = []): ServiceHub =>
   ({
     providers: () => ({
@@ -92,16 +100,53 @@ describe('bootstrapEvents', () => {
   })
 
   it('does not call setProviders after cleanup', async () => {
-    const serviceHub = makeServiceHub([makeProvider('openai')])
+    const pending = deferred<ModelProvider[]>()
+    const getProviders = vi.fn().mockReturnValue(pending.promise)
+    const serviceHub = {
+      providers: () => ({ getProviders }),
+      path: () => ({ sep: () => '/' }),
+    } as Pick<ServiceHub, 'providers' | 'path'> as ServiceHub
     const setProviders = vi.fn()
 
     const cleanup = bootstrapEvents({
       serviceHub,
       setProviders,
     })
-    cleanup()
     mockEvents._emit(AppEvent.onModelImported)
-    await new Promise((r) => setTimeout(r, 10))
+    cleanup()
+    pending.resolve([makeProvider('openai')])
+    await pending.promise
+    await Promise.resolve()
     expect(setProviders).not.toHaveBeenCalled()
+  })
+
+  it('ignores an older provider refresh that resolves after a newer one', async () => {
+    const first = deferred<ModelProvider[]>()
+    const second = deferred<ModelProvider[]>()
+    const getProviders = vi
+      .fn()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+    const serviceHub = {
+      providers: () => ({ getProviders }),
+      path: () => ({ sep: () => '/' }),
+    } as Pick<ServiceHub, 'providers' | 'path'> as ServiceHub
+    const setProviders = vi.fn()
+
+    bootstrapEvents({ serviceHub, setProviders })
+    mockEvents._emit(AppEvent.onModelImported)
+    mockEvents._emit(AppEvent.onModelImported)
+    second.resolve([makeProvider('anthropic')])
+    await second.promise
+    await vi.waitFor(() => expect(setProviders).toHaveBeenCalledOnce())
+    first.resolve([makeProvider('openai')])
+    await first.promise
+    await Promise.resolve()
+
+    expect(setProviders).toHaveBeenCalledOnce()
+    expect(setProviders).toHaveBeenCalledWith(
+      [makeProvider('anthropic')],
+      '/'
+    )
   })
 })

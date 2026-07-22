@@ -10,6 +10,10 @@ import { runAxBiAuthoringWorkflow } from '@/lib/ax-bi/authoring-workflow'
 const axBiWorkflowMocks = vi.hoisted(() => ({
   runAxBiAuthoringWorkflow: vi.fn(),
 }))
+const modelProviderMocks = vi.hoisted(() => ({
+  getProviderByName: vi.fn(),
+  updateProvider: vi.fn(),
+}))
 
 // Mock AI SDK
 vi.mock('ai', () => ({
@@ -107,14 +111,14 @@ vi.mock('@/hooks/models/useModelProvider', () => {
       selector({
         selectedProvider: 'openai',
         selectedModel: { id: 'gpt-4o' },
-        getProviderByName: vi.fn(),
+        getProviderByName: modelProviderMocks.getProviderByName,
       }),
     {
       getState: vi.fn(() => ({
         selectedProvider: 'openai',
         selectedModel: { id: 'gpt-4o' },
-        getProviderByName: vi.fn(),
-        updateProvider: vi.fn(),
+        getProviderByName: modelProviderMocks.getProviderByName,
+        updateProvider: modelProviderMocks.updateProvider,
       })),
       setState: vi.fn(),
       subscribe: vi.fn(),
@@ -162,6 +166,7 @@ describe('useThreadChat', () => {
       sessions: {},
     } as never)
     axBiWorkflowMocks.runAxBiAuthoringWorkflow.mockResolvedValue({ handled: false })
+    modelProviderMocks.getProviderByName.mockReturnValue(undefined)
   })
 
   it('marks an empty persisted history as loaded', async () => {
@@ -1007,6 +1012,51 @@ describe('useThreadChat', () => {
     it('is a function', () => {
       const { result } = renderHook(() => useThreadChat(defaultParams()))
       expect(typeof result.current.handleContextSizeIncrease).toBe('function')
+    })
+
+    it('does not regenerate when the running model fails to unload', async () => {
+      vi.useFakeTimers()
+      const stopModel = vi
+        .fn()
+        .mockResolvedValue({ success: false, error: 'model is busy' })
+      const { useServiceHub } = await import('@/hooks/useServiceHub')
+      const hub = useServiceHub()
+      const modelsSpy = vi.spyOn(hub, 'models').mockReturnValue({
+        stopModel,
+      } as ReturnType<typeof hub.models>)
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+      modelProviderMocks.getProviderByName.mockReturnValue({
+        provider: 'openai',
+        models: [
+          {
+            id: 'gpt-4o',
+            settings: {
+              ctx_len: { controller_props: { value: 8192 } },
+            },
+          },
+        ],
+      })
+
+      try {
+        const { result } = renderHook(() => useThreadChat(defaultParams()))
+        await act(async () => {
+          await result.current.handleContextSizeIncrease()
+        })
+        act(() => {
+          vi.advanceTimersByTime(1000)
+        })
+
+        expect(stopModel).toHaveBeenCalledWith('gpt-4o', 'openai')
+        expect(mockRegenerate).not.toHaveBeenCalled()
+        expect(consoleError).toHaveBeenCalledWith(
+          'Failed to stop model before increasing context size:',
+          'model is busy'
+        )
+      } finally {
+        modelsSpy.mockRestore()
+        consoleError.mockRestore()
+        vi.useRealTimers()
+      }
     })
   })
 })

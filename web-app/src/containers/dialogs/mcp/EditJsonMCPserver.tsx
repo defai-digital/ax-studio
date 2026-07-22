@@ -29,7 +29,7 @@ interface EditJsonMCPserverProps {
   onOpenChange: (open: boolean) => void
   serverName: string | null // null means editing all servers
   initialData: MCPConfigJson
-  onSave: (data: MCPConfigJson) => void
+  onSave: (data: MCPConfigJson) => boolean | void | Promise<boolean | void>
 }
 
 export function EditJsonMCPserver({
@@ -42,6 +42,7 @@ export function EditJsonMCPserver({
   const { t } = useTranslation()
   const [jsonContent, setJsonContent] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   // Initialize the editor with the provided data
   useEffect(() => {
@@ -60,9 +61,10 @@ export function EditJsonMCPserver({
     setError(null)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    let parsedData: MCPConfigJson
     try {
-      const parsedData = JSON.parse(jsonContent) as MCPConfigJson
+      parsedData = JSON.parse(jsonContent) as MCPConfigJson
       if (
         !parsedData ||
         typeof parsedData !== 'object' ||
@@ -71,11 +73,25 @@ export function EditJsonMCPserver({
         setError(t('mcp-servers:editJson.errorFormat'))
         return
       }
-      onSave(parsedData)
-      onOpenChange(false)
-      setError(null)
     } catch {
       setError(t('mcp-servers:editJson.errorFormat'))
+      return
+    }
+
+    setSaving(true)
+    try {
+      const saved = await onSave(parsedData)
+      if (saved === false) return
+      onOpenChange(false)
+      setError(null)
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : t('mcp-servers:checkParams')
+      )
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -125,7 +141,7 @@ export function EditJsonMCPserver({
         </div>
 
         <DialogFooter>
-          <Button size="sm" onClick={handleSave}>
+          <Button size="sm" onClick={handleSave} disabled={saving}>
             {t('mcp-servers:editJson.save')}
           </Button>
         </DialogFooter>

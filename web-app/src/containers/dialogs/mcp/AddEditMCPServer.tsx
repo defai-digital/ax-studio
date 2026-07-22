@@ -101,7 +101,10 @@ interface AddEditMCPServerProps {
   onOpenChange: (open: boolean) => void
   editingKey: string | null
   initialData?: MCPServerConfig
-  onSave: (name: string, config: MCPServerConfig) => void
+  onSave: (
+    name: string,
+    config: MCPServerConfig
+  ) => boolean | void | Promise<boolean | void>
 }
 
 type ArgEntry = { id: string; value: string }
@@ -149,6 +152,7 @@ export function AddEditMCPServer({
   const [jsonContent, setJsonContent] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [timeoutError, setTimeoutError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   const resetForm = useCallback(() => {
     setServerName('')
@@ -297,13 +301,18 @@ export function AddEditMCPServer({
     setHeaderValues(newValues)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // Handle JSON mode
     if (isToggled) {
+      let parsedServers: Array<[string, MCPServerConfig]>
       try {
         const parsedData = JSON.parse(jsonContent)
         // Validate that it's an object with server configurations
-        if (typeof parsedData !== 'object' || parsedData === null) {
+        if (
+          typeof parsedData !== 'object' ||
+          parsedData === null ||
+          Array.isArray(parsedData)
+        ) {
           setError(t('mcp-servers:editJson.errorFormat'))
           return
         }
@@ -313,16 +322,16 @@ export function AddEditMCPServer({
           return
         }
 
+        parsedServers = Object.entries(parsedData) as Array<
+          [string, MCPServerConfig]
+        >
         // For each server in the JSON, validate serverName and config
-        for (const [serverName, config] of Object.entries(parsedData)) {
+        for (const [serverName, serverConfig] of parsedServers) {
           const trimmedServerName = serverName.trim()
           if (!trimmedServerName) {
             setError(t('mcp-servers:editJson.errorServerName'))
             return
           }
-
-          // Validate the config object
-          const serverConfig = config as MCPServerConfig
 
           // Validate type field if present
           if (
@@ -338,16 +347,31 @@ export function AddEditMCPServer({
             return
           }
 
-          onSave(trimmedServerName, serverConfig as MCPServerConfig)
         }
-        onOpenChange(false)
-        resetForm()
-        setError(null)
-        return
       } catch {
         setError(t('mcp-servers:editJson.errorFormat'))
         return
       }
+
+      setSaving(true)
+      try {
+        for (const [name, config] of parsedServers) {
+          const saved = await onSave(name.trim(), config)
+          if (saved === false) return
+        }
+        onOpenChange(false)
+        resetForm()
+        setError(null)
+      } catch (saveError) {
+        setError(
+          saveError instanceof Error
+            ? saveError.message
+            : t('mcp-servers:checkParams')
+        )
+      } finally {
+        setSaving(false)
+      }
+      return
     }
 
     // Handle form mode
@@ -398,9 +422,21 @@ export function AddEditMCPServer({
     }
 
     if (serverName.trim() !== '') {
-      onSave(serverName.trim(), config)
-      onOpenChange(false)
-      resetForm()
+      setSaving(true)
+      try {
+        const saved = await onSave(serverName.trim(), config)
+        if (saved === false) return
+        onOpenChange(false)
+        resetForm()
+      } catch (saveError) {
+        setError(
+          saveError instanceof Error
+            ? saveError.message
+            : t('mcp-servers:checkParams')
+        )
+      } finally {
+        setSaving(false)
+      }
     }
   }
 
@@ -725,6 +761,7 @@ export function AddEditMCPServer({
           <Button
             variant="outline"
             size="sm"
+            disabled={saving}
             onClick={() => onOpenChange(false)}
           >
             {t('common:cancel')}
@@ -732,7 +769,7 @@ export function AddEditMCPServer({
           <Button
             onClick={handleSave}
             size="sm"
-            disabled={!isToggled && serverName.trim() === ''}
+            disabled={saving || (!isToggled && serverName.trim() === '')}
           >
             {t('mcp-servers:save')}
           </Button>

@@ -1,6 +1,6 @@
 import { Code, GripVertical } from 'lucide-react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { AddEditMCPServer } from '../AddEditMCPServer'
 
 vi.mock('@/i18n/react-i18next-compat', () => ({
@@ -213,7 +213,7 @@ describe('AddEditMCPServer', () => {
     expect(saveButton).not.toBeDisabled()
   })
 
-  it('calls onSave with config when form is submitted', () => {
+  it('calls onSave with config when form is submitted', async () => {
     render(
       <AddEditMCPServer
         open={true}
@@ -236,6 +236,9 @@ describe('AddEditMCPServer', () => {
         type: 'stdio',
       })
     )
+    await waitFor(() => {
+      expect(mockOnOpenChange).toHaveBeenCalledWith(false)
+    })
   })
 
   it('closes dialog on cancel', () => {
@@ -265,7 +268,7 @@ describe('AddEditMCPServer', () => {
     expect(screen.getByTestId('radio-sse')).toBeInTheDocument()
   })
 
-  it('saves HTTP timeout as a positive whole number', () => {
+  it('saves HTTP timeout as a positive whole number', async () => {
     render(
       <AddEditMCPServer
         open={true}
@@ -295,6 +298,9 @@ describe('AddEditMCPServer', () => {
         timeout: 30,
       })
     )
+    await waitFor(() => {
+      expect(mockOnOpenChange).toHaveBeenCalledWith(false)
+    })
   })
 
   it('rejects fractional HTTP timeout instead of truncating it', () => {
@@ -320,5 +326,26 @@ describe('AddEditMCPServer', () => {
     expect(
       screen.getByText('Timeout must be a positive whole number of seconds.')
     ).toBeInTheDocument()
+  })
+
+  it('keeps the form open when the async save is rejected', async () => {
+    mockOnSave.mockResolvedValueOnce(false)
+    render(
+      <AddEditMCPServer
+        open={true}
+        onOpenChange={mockOnOpenChange}
+        editingKey={null}
+        onSave={mockOnSave}
+      />
+    )
+    fireEvent.change(screen.getByPlaceholderText('mcp-servers:enterServerName'), {
+      target: { value: 'test-server' },
+    })
+
+    fireEvent.click(screen.getByText('mcp-servers:save'))
+    await waitFor(() => {
+      expect(screen.getByText('mcp-servers:save')).not.toBeDisabled()
+    })
+    expect(mockOnOpenChange).not.toHaveBeenCalled()
   })
 })

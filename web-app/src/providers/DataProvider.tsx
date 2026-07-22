@@ -135,21 +135,41 @@ export function DataProvider() {
     let cleanupEvents: () => void = () => {}
     let cleanupUpdater: () => void = () => {}
     const providerStartupRefreshTimers: ReturnType<typeof setTimeout>[] = []
+    let providerRequestSequence = 0
+    let latestAppliedProviderRequest = 0
 
+    const applyProviderSnapshot = (
+      requestSequence: number,
+      providers: ModelProvider[],
+      pathSep: string
+    ) => {
+      if (unmounted || requestSequence < latestAppliedProviderRequest) {
+        return false
+      }
+      latestAppliedProviderRequest = requestSequence
+      // Any applied startup snapshot has completed the initial registration.
+      // This lets the reactive sync effect handle subsequent settings edits.
+      bootstrapSyncDone.current = true
+      setProviders(providers, pathSep)
+      return true
+    }
+
+    const bootstrapProviderRequest = ++providerRequestSequence
     bootstrapProviders({
       serviceHub,
       setProviders: (providers, pathSep) => {
-        setProviders(providers, pathSep)
-        // Mark that bootstrap has synced providers — Effect 2 should skip
-        // its first fire (which is caused by this setProviders call) to
-        // avoid registering all providers twice on startup.
-        bootstrapSyncDone.current = true
+        return applyProviderSnapshot(
+          bootstrapProviderRequest,
+          providers,
+          pathSep
+        )
       },
       setServers,
       setSettings: (s) => setSettings(s ?? DEFAULT_MCP_SETTINGS),
       setAssistants,
       initializeWithLastUsed,
       onDeepLink: handleDeepLink,
+      isCancelled: () => unmounted,
     })
       .then(({ unsubscribeDeepLink }) => {
         if (unmounted) {
@@ -163,7 +183,11 @@ export function DataProvider() {
         console.error('[DataProvider] bootstrapProviders failed:', error)
       })
 
-    bootstrapThreads({ serviceHub, setThreads }).catch((error) => {
+    bootstrapThreads({
+      serviceHub,
+      setThreads,
+      isCancelled: () => unmounted,
+    }).catch((error) => {
       console.error('[DataProvider] bootstrapThreads failed:', error)
     })
 
@@ -172,12 +196,20 @@ export function DataProvider() {
     cleanupEvents = bootstrapEvents({ serviceHub, setProviders })
 
     const refreshStartupProviders = () => {
+      const requestSequence = ++providerRequestSequence
       serviceHub
         .providers()
         .getProviders()
         .then((providers) => {
-          if (unmounted) return
-          setProviders(providers, serviceHub.path().sep())
+          if (
+            !applyProviderSnapshot(
+              requestSequence,
+              providers,
+              serviceHub.path().sep()
+            )
+          ) {
+            return
+          }
           // Also push the latest provider list to the Rust proxy's registry so
           // it knows base_url + api_key + model_id mapping for every active
           // remote provider. Without this, providers added after the initial
@@ -231,7 +263,11 @@ export function DataProvider() {
   // every provider (especially costly for providers with many models).
   useEffect(() => {
     if (!bootstrapSyncDone.current) return
-    void syncRemoteProviders(providers, { authoritative: true })
+    void syncRemoteProviders(providers, { authoritative: true }).catch(
+      (error) => {
+        console.error('[DataProvider] remote provider sync failed:', error)
+      }
+    )
   }, [providers])
 
   return null

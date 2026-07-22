@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { SettingsMenu } from '@/components/common/SettingsMenu'
@@ -49,6 +49,12 @@ function VoiceSettings() {
       MODEL_IDS.map((id) => [id, { status: 'not-downloaded' }])
     ) as Record<VoiceModelId, ModelState>
   )
+  const modelGenerationRef = useRef<Record<VoiceModelId, number>>(
+    Object.fromEntries(MODEL_IDS.map((id) => [id, 0])) as Record<
+      VoiceModelId,
+      number
+    >
+  )
 
   const setModelState = useCallback(
     (id: VoiceModelId, value: ModelState) =>
@@ -58,10 +64,10 @@ function VoiceSettings() {
 
   const refreshModel = useCallback(
     async (id: VoiceModelId) => {
-      // Don't clobber an in-flight download with a stale status read.
-      if (models[id].status === 'downloading') return
+      const generation = modelGenerationRef.current[id]
       try {
         const status = await serviceHub.voice().getStatus(id)
+        if (generation !== modelGenerationRef.current[id]) return
         setModelState(
           id,
           status.modelDownloaded
@@ -69,18 +75,24 @@ function VoiceSettings() {
             : { status: 'not-downloaded' }
         )
       } catch (error) {
+        if (generation !== modelGenerationRef.current[id]) return
         console.error('Failed to query voice model status:', error)
       }
     },
-    [serviceHub, models, setModelState]
+    [serviceHub, setModelState]
   )
 
   useEffect(() => {
+    const generations = modelGenerationRef.current
     MODEL_IDS.forEach((id) => {
       void refreshModel(id)
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    return () => {
+      MODEL_IDS.forEach((id) => {
+        generations[id] += 1
+      })
+    }
+  }, [refreshModel])
 
   // Download progress arrives on `download-voice-model-{id-with-dashes}`
   // with the shared DownloadEvent payload (transferred/total bytes).
@@ -89,12 +101,23 @@ function VoiceSettings() {
     if (!eventsService) return
     let unmounted = false
     const unlistens: Array<() => void> = []
+    const safelyUnlisten = (unlisten: () => void) => {
+      try {
+        unlisten()
+      } catch (error) {
+        console.error(
+          'Failed to remove a voice download event listener:',
+          error
+        )
+      }
+    }
 
-    Promise.all(
+    Promise.allSettled(
       MODEL_IDS.map((id) =>
         eventsService.listen<VoiceModelDownloadProgress>(
           voiceModelDownloadEvent(id),
           (event) => {
+            if (unmounted) return
             const { transferred, total } = event.payload ?? {}
             const progress =
               total > 0
@@ -109,26 +132,37 @@ function VoiceSettings() {
         )
       )
     )
-      .then((handles) => {
-        if (unmounted) handles.forEach((unlisten) => unlisten())
+      .then((registrations) => {
+        const handles = registrations.flatMap((registration) =>
+          registration.status === 'fulfilled' ? [registration.value] : []
+        )
+        if (unmounted) handles.forEach(safelyUnlisten)
         else unlistens.push(...handles)
-      })
-      .catch((error) => {
-        console.error('Failed to subscribe to voice download events:', error)
+        for (const registration of registrations) {
+          if (registration.status === 'rejected' && !unmounted) {
+            console.error(
+              'Failed to subscribe to a voice download event:',
+              registration.reason
+            )
+          }
+        }
       })
 
     return () => {
       unmounted = true
-      unlistens.forEach((unlisten) => unlisten())
+      unlistens.forEach(safelyUnlisten)
     }
   }, [serviceHub])
 
   const handleDownload = async (id: VoiceModelId) => {
+    const generation = ++modelGenerationRef.current[id]
     setModelState(id, { status: 'downloading', progress: 0 })
     try {
       await serviceHub.voice().downloadModel(id)
+      if (generation !== modelGenerationRef.current[id]) return
       setModelState(id, { status: 'downloaded' })
     } catch (error) {
+      if (generation !== modelGenerationRef.current[id]) return
       console.error('Voice model download failed:', error)
       setModelState(id, { status: 'not-downloaded' })
       toast.error(t('settings:voice.downloadFailed'))
@@ -136,15 +170,30 @@ function VoiceSettings() {
   }
 
   const handleCancelDownload = async (id: VoiceModelId) => {
-    await serviceHub.voice().cancelModelDownload(id)
-    setModelState(id, { status: 'not-downloaded' })
+    // Invalidate the in-flight download only after cancellation succeeds. If
+    // cancellation fails, its original completion must still be able to move
+    // the UI out of the downloading state.
+    const generation = modelGenerationRef.current[id]
+    try {
+      await serviceHub.voice().cancelModelDownload(id)
+      if (generation !== modelGenerationRef.current[id]) return
+      modelGenerationRef.current[id] = generation + 1
+      setModelState(id, { status: 'not-downloaded' })
+    } catch (error) {
+      if (generation !== modelGenerationRef.current[id]) return
+      console.error('Voice model download cancellation failed:', error)
+      toast.error(t('settings:voice.cancelFailed'))
+    }
   }
 
   const handleDelete = async (id: VoiceModelId) => {
+    const generation = ++modelGenerationRef.current[id]
     try {
       await serviceHub.voice().deleteModel(id)
+      if (generation !== modelGenerationRef.current[id]) return
       setModelState(id, { status: 'not-downloaded' })
     } catch (error) {
+      if (generation !== modelGenerationRef.current[id]) return
       console.error('Voice model delete failed:', error)
       toast.error(t('settings:voice.deleteFailed'))
     }

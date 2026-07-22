@@ -259,7 +259,7 @@ describe('AxStudioLlamacppExtension', () => {
       'llama.cpp backend setup failed',
       'Backend configuration failed: network down'
     )
-    expect(mocks.registerEngine).toHaveBeenCalled()
+    expect(mocks.registerEngine).toHaveBeenCalledOnce()
   })
 
   it('updates local fields and config in one setting pass', () => {

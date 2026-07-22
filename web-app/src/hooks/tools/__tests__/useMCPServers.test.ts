@@ -534,6 +534,21 @@ describe('useMCPServers', () => {
       )
       expect(mockRestartMCPServers).toHaveBeenCalled()
     })
+
+    it('rejects when the configuration cannot be persisted', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      mockUpdateMCPConfig.mockRejectedValueOnce(new Error('disk full'))
+      const { result } = renderHook(() => useMCPServers())
+
+      await act(async () => {
+        await expect(result.current.syncServersAndRestart()).rejects.toThrow(
+          'disk full'
+        )
+      })
+
+      expect(mockRestartMCPServers).not.toHaveBeenCalled()
+      errorSpy.mockRestore()
+    })
   })
 
   describe('state management', () => {

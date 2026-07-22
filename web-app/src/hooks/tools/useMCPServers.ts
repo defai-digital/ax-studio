@@ -166,6 +166,7 @@ export const useMCPServers = create<MCPServerStoreState>()((set, get) => ({
       await getServiceHub().mcp().restartMCPServers()
     } catch (error) {
       console.error('Failed to sync and restart MCP servers:', error)
+      throw error
     }
   },
 }))

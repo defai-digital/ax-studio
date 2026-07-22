@@ -186,6 +186,7 @@ vi.mock('lucide-react', () => ({
   CheckCircle2: () => <span data-testid="check-icon" />,
   XCircle: () => <span data-testid="x-icon" />,
   Loader: () => <span data-testid="icon-loader" />,
+  Star: () => <span data-testid="star-icon" />,
 }))
 
 const mockProvider = {
@@ -232,6 +233,7 @@ describe('ProviderDetail', () => {
       })),
     })
     mockFetchModelsFromProvider.mockResolvedValue(['model-1', 'model-2'])
+    mockUpdateSettings.mockResolvedValue(undefined)
   })
 
   it('renders configuration section with settings', () => {
@@ -277,6 +279,53 @@ describe('ProviderDetail', () => {
     fireEvent.change(apiKeyInput, { target: { value: 'sk-valid-key-12345' } })
 
     expect(mockUpdateProvider).toHaveBeenCalled()
+    expect(mockUpdateProvider.mock.calls.at(-1)?.[1]).not.toHaveProperty(
+      'models'
+    )
+  })
+
+  it('serializes provider setting saves so an older request cannot finish last', async () => {
+    const firstSave = deferred<void>()
+    mockUpdateSettings
+      .mockReturnValueOnce(firstSave.promise)
+      .mockResolvedValueOnce(undefined)
+    let currentProvider = {
+      ...mockProvider,
+      settings: mockProvider.settings.map((setting) => ({
+        ...setting,
+        controller_props: { ...setting.controller_props },
+      })),
+    }
+    mockGetProviderByName.mockImplementation(() => currentProvider)
+    mockUpdateProvider.mockImplementation(
+      (_providerName: string, update: Partial<typeof currentProvider>) => {
+        currentProvider = { ...currentProvider, ...update }
+      }
+    )
+    const ProviderDetail = ProviderDetailRoute.component
+    render(<ProviderDetail />)
+
+    fireEvent.change(screen.getAllByTestId('dynamic-input')[0], {
+      target: { value: 'sk-first' },
+    })
+    await waitFor(() => {
+      expect(mockUpdateSettings).toHaveBeenCalledTimes(1)
+    })
+    fireEvent.change(screen.getAllByTestId('dynamic-input')[0], {
+      target: { value: 'sk-second' },
+    })
+
+    expect(mockUpdateSettings).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      firstSave.resolve(undefined)
+      await firstSave.promise
+    })
+    await waitFor(() => {
+      expect(mockUpdateSettings).toHaveBeenCalledTimes(2)
+    })
+    expect(mockUpdateSettings.mock.calls[1][1][0].controller_props.value).toBe(
+      'sk-second'
+    )
   })
 
   it('validates base URL - rejects invalid URL', () => {
@@ -319,6 +368,48 @@ describe('ProviderDetail', () => {
     expect(testButton).toBeDefined()
   })
 
+  it('allows an in-process AX Engine connection test without a base URL', async () => {
+    const ProviderDetail = ProviderDetailRoute.component
+    mockGetProviderByName.mockReturnValue({
+      ...mockProvider,
+      provider: 'ax-engine',
+      base_url: '',
+      settings: [],
+    })
+    render(<ProviderDetail />)
+
+    const testButton = screen
+      .getAllByTestId('button')
+      .find((button) => button.textContent?.includes('testConnection'))
+    expect(testButton).toBeEnabled()
+    fireEvent.click(testButton!)
+
+    await waitFor(() => {
+      expect(mockFetchModelsFromProvider).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: 'ax-engine', base_url: '' })
+      )
+    })
+  })
+
+  it('refreshes in-process AX Engine models without a base URL', async () => {
+    const ProviderDetail = ProviderDetailRoute.component
+    mockGetProviderByName.mockReturnValue({
+      ...mockProvider,
+      provider: 'ax-engine',
+      base_url: '',
+      settings: [],
+    })
+    render(<ProviderDetail />)
+
+    fireEvent.click(screen.getByText('Refresh'))
+
+    await waitFor(() => {
+      expect(mockFetchModelsFromProvider).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: 'ax-engine', base_url: '' })
+      )
+    })
+  })
+
   it('shows connection success after test', async () => {
     const ProviderDetail = ProviderDetailRoute.component
     mockFetchModelsFromProvider.mockResolvedValue(['model-1', 'model-2'])
@@ -348,6 +439,67 @@ describe('ProviderDetail', () => {
         ]),
       })
     )
+    expect(mockUpdateProvider.mock.calls.at(-1)?.[1]).not.toHaveProperty(
+      'base_url'
+    )
+  })
+
+  it('preserves models added while a connection test is in flight', async () => {
+    const request = deferred<string[]>()
+    mockFetchModelsFromProvider.mockReturnValueOnce(request.promise)
+    const ProviderDetail = ProviderDetailRoute.component
+    render(<ProviderDetail />)
+
+    const testButton = screen
+      .getAllByTestId('button')
+      .find((button) => button.textContent?.includes('testConnection'))
+    fireEvent.click(testButton!)
+    expect(screen.getByText('Refresh')).toBeDisabled()
+
+    mockGetProviderByName.mockReturnValue({
+      ...mockProvider,
+      models: [
+        ...mockProvider.models,
+        { id: 'manually-added', name: 'Manually Added' },
+      ],
+    })
+    await act(async () => {
+      request.resolve(['remote-model'])
+      await request.promise
+    })
+
+    expect(mockUpdateProvider).toHaveBeenCalledWith(
+      'test-provider',
+      expect.objectContaining({
+        models: expect.arrayContaining([
+          expect.objectContaining({ id: 'manually-added' }),
+          expect.objectContaining({ id: 'remote-model' }),
+        ]),
+      })
+    )
+  })
+
+  it('ignores a connection result after provider settings change', async () => {
+    const request = deferred<string[]>()
+    mockFetchModelsFromProvider.mockReturnValueOnce(request.promise)
+    const ProviderDetail = ProviderDetailRoute.component
+    render(<ProviderDetail />)
+
+    const testButton = screen
+      .getAllByTestId('button')
+      .find((button) => button.textContent?.includes('testConnection'))
+    fireEvent.click(testButton!)
+    fireEvent.change(screen.getAllByTestId('dynamic-input')[0], {
+      target: { value: 'sk-new-key' },
+    })
+    mockUpdateProvider.mockClear()
+
+    await act(async () => {
+      request.resolve(['stale-model'])
+      await request.promise
+    })
+
+    expect(mockUpdateProvider).not.toHaveBeenCalled()
   })
 
   it('ignores delayed connection test results after unmount', async () => {
@@ -435,15 +587,30 @@ describe('ProviderDetail', () => {
 
   it('accepts clearing API key after setting a valid one', () => {
     const ProviderDetail = ProviderDetailRoute.component
+    let currentProvider = {
+      ...mockProvider,
+      settings: mockProvider.settings.map((setting) => ({
+        ...setting,
+        controller_props: { ...setting.controller_props },
+      })),
+    }
+    mockGetProviderByName.mockImplementation(() => currentProvider)
+    mockUpdateProvider.mockImplementation(
+      (_providerName: string, update: Partial<typeof currentProvider>) => {
+        currentProvider = { ...currentProvider, ...update }
+      }
+    )
 
     render(<ProviderDetail />)
-    const inputs = screen.getAllByTestId('dynamic-input')
-    const apiKeyInput = inputs[0]
 
-    fireEvent.change(apiKeyInput, { target: { value: 'sk-valid-key' } })
+    fireEvent.change(screen.getAllByTestId('dynamic-input')[0], {
+      target: { value: 'sk-valid-key' },
+    })
     expect(mockUpdateProvider).toHaveBeenCalledTimes(1)
 
-    fireEvent.change(apiKeyInput, { target: { value: '' } })
+    fireEvent.change(screen.getAllByTestId('dynamic-input')[0], {
+      target: { value: '' },
+    })
     expect(mockUpdateProvider).toHaveBeenCalledTimes(2)
   })
 })

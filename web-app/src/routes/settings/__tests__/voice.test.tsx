@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { afterEach, describe, it, expect, beforeEach, vi } from 'vitest'
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { Route as VoiceRoute } from '../voice'
 
-const mocks = vi.hoisted(() => ({
-  voice: {
+const mocks = vi.hoisted(() => {
+  const voice = {
     isAvailable: vi.fn().mockReturnValue(true),
     startRecording: vi.fn().mockResolvedValue(undefined),
     stopRecording: vi.fn().mockResolvedValue(''),
@@ -16,9 +16,21 @@ const mocks = vi.hoisted(() => ({
     downloadModel: vi.fn().mockResolvedValue(undefined),
     cancelModelDownload: vi.fn().mockResolvedValue(undefined),
     deleteModel: vi.fn().mockResolvedValue(undefined),
-  },
-  toast: Object.assign(vi.fn(), { error: vi.fn() }),
-}))
+  }
+  const events = {
+    listen: vi.fn().mockResolvedValue(() => {}),
+    emit: vi.fn().mockResolvedValue(undefined),
+  }
+  return {
+    voice,
+    events,
+    serviceHub: {
+      voice: () => voice,
+      events: () => events,
+    },
+    toast: Object.assign(vi.fn(), { error: vi.fn() }),
+  }
+})
 
 // Mock dependencies
 vi.mock('@/components/common/SettingsMenu', () => ({
@@ -83,13 +95,7 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
 }))
 
 vi.mock('@/hooks/useServiceHub', () => ({
-  useServiceHub: () => ({
-    voice: () => mocks.voice,
-    events: () => ({
-      listen: vi.fn().mockResolvedValue(() => {}),
-      emit: vi.fn().mockResolvedValue(undefined),
-    }),
-  }),
+  useServiceHub: () => mocks.serviceHub,
 }))
 
 vi.mock('@/constants/routes', () => ({
@@ -123,6 +129,11 @@ describe('Voice Settings Route', () => {
       modelDownloaded: false,
       audioLevel: 0,
     })
+    mocks.events.listen.mockResolvedValue(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   const renderPage = () => {
@@ -202,8 +213,106 @@ describe('Voice Settings Route', () => {
     })
   })
 
+  it('does not let a stale status request overwrite a completed download', async () => {
+    let resolveBaseStatus!: (value: {
+      state: string
+      modelDownloaded: boolean
+      audioLevel: number
+    }) => void
+    mocks.voice.getStatus.mockImplementation((model: string) =>
+      model === 'base.en'
+        ? new Promise((resolve) => {
+            resolveBaseStatus = resolve
+          })
+        : Promise.resolve({
+            state: 'idle',
+            modelDownloaded: false,
+            audioLevel: 0,
+          })
+    )
+    renderPage()
+
+    fireEvent.click(screen.getByTestId('voice-model-download-base.en'))
+    await waitFor(() => {
+      expect(screen.getByTestId('voice-model-delete-base.en')).toBeInTheDocument()
+    })
+
+    await act(async () => {
+      resolveBaseStatus({
+        state: 'idle',
+        modelDownloaded: false,
+        audioLevel: 0,
+      })
+    })
+
+    expect(screen.getByTestId('voice-model-delete-base.en')).toBeInTheDocument()
+  })
+
+  it('does not let a late download completion undo cancellation', async () => {
+    let resolveDownload!: () => void
+    mocks.voice.downloadModel.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveDownload = resolve
+        })
+    )
+    renderPage()
+
+    fireEvent.click(screen.getByTestId('voice-model-download-base.en'))
+    await waitFor(() => {
+      expect(screen.getByTestId('voice-model-cancel-base.en')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByTestId('voice-model-cancel-base.en'))
+    await waitFor(() => {
+      expect(screen.getByTestId('voice-model-download-base.en')).toBeInTheDocument()
+    })
+
+    await act(async () => {
+      resolveDownload()
+    })
+
+    expect(screen.getByTestId('voice-model-download-base.en')).toBeInTheDocument()
+  })
+
+  it('allows a download to finish when cancellation fails', async () => {
+    let resolveDownload!: () => void
+    mocks.voice.downloadModel.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveDownload = resolve
+        })
+    )
+    mocks.voice.cancelModelDownload.mockRejectedValueOnce(
+      new Error('cancel unavailable')
+    )
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    renderPage()
+
+    fireEvent.click(screen.getByTestId('voice-model-download-base.en'))
+    await waitFor(() => {
+      expect(screen.getByTestId('voice-model-cancel-base.en')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByTestId('voice-model-cancel-base.en'))
+
+    await waitFor(() => {
+      expect(mocks.toast.error).toHaveBeenCalledWith(
+        'settings:voice.cancelFailed'
+      )
+    })
+    expect(screen.getByTestId('voice-model-cancel-base.en')).toBeInTheDocument()
+
+    await act(async () => {
+      resolveDownload()
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('voice-model-delete-base.en')).toBeInTheDocument()
+    })
+  })
+
   it('shows an error toast when the download fails', async () => {
     mocks.voice.downloadModel.mockRejectedValueOnce(new Error('network down'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     renderPage()
 
     await waitFor(() => {
@@ -239,5 +348,28 @@ describe('Voice Settings Route', () => {
         screen.getByTestId('voice-model-download-small.en')
       ).toBeInTheDocument()
     })
+  })
+
+  it('cleans up successful download listeners when another registration fails', async () => {
+    const cleanupBase = vi.fn()
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.events.listen
+      .mockResolvedValueOnce(cleanupBase)
+      .mockRejectedValueOnce(new Error('listener unavailable'))
+
+    const { unmount } = renderPage()
+
+    await waitFor(() => {
+      expect(mocks.events.listen).toHaveBeenCalledTimes(2)
+      expect(consoleError).toHaveBeenCalledWith(
+        'Failed to subscribe to a voice download event:',
+        expect.any(Error)
+      )
+    })
+
+    unmount()
+
+    expect(cleanupBase).toHaveBeenCalledOnce()
+    consoleError.mockRestore()
   })
 })

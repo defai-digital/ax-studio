@@ -173,6 +173,60 @@ describe('GlobalEventHandler', () => {
     })
   })
 
+  it('ignores an older settings provider refresh that resolves last', async () => {
+    let resolveFirst!: (providers: Array<{ provider: string }>) => void
+    let resolveSecond!: (providers: Array<{ provider: string }>) => void
+    mockGetProviders
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSecond = resolve
+          })
+      )
+    render(<GlobalEventHandler />)
+
+    emit('settingsChanged', { key: 'version_backend', value: 'first' })
+    emit('settingsChanged', { key: 'version_backend', value: 'second' })
+    resolveSecond([{ provider: 'newer' }])
+    await waitFor(() => {
+      expect(mockSetProviders).toHaveBeenCalledWith(
+        [{ provider: 'newer' }],
+        '/'
+      )
+    })
+    resolveFirst([{ provider: 'older' }])
+    await Promise.resolve()
+
+    expect(mockSetProviders).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not update active models after unmount', async () => {
+    let resolveActiveModels!: (models: string[]) => void
+    mockGetActiveModels.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveActiveModels = resolve
+        })
+    )
+    const view = render(<GlobalEventHandler />)
+
+    emit('OnModelReady')
+    await waitFor(() => {
+      expect(mockGetActiveModels).toHaveBeenCalledOnce()
+    })
+    view.unmount()
+    resolveActiveModels(['late-model'])
+    await Promise.resolve()
+
+    expect(mockSetActiveModels).not.toHaveBeenCalled()
+  })
+
   it('shows bridge toast events from extensions', () => {
     render(<GlobalEventHandler />)
 

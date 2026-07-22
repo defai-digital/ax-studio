@@ -181,16 +181,21 @@ export function GlobalEventHandler() {
   }, [])
 
   useEffect(() => {
+    let disposed = false
+    let refreshGeneration = 0
     const handleSettingsChanged = async (event: {
       key: string
       value: string
     } | null) => {
       // Refresh providers when version_backend changes so the UI shows the new value
       if (event?.key === 'version_backend') {
+        const generation = ++refreshGeneration
         try {
           const updatedProviders = await serviceHub.providers().getProviders()
+          if (disposed || generation !== refreshGeneration) return
           setProviders(updatedProviders, serviceHub.path().sep())
         } catch (error) {
+          if (disposed || generation !== refreshGeneration) return
           console.error('Failed to refresh providers after settingsChanged:', error)
         }
       }
@@ -198,6 +203,8 @@ export function GlobalEventHandler() {
 
     events.on('settingsChanged', handleSettingsChanged)
     return () => {
+      disposed = true
+      refreshGeneration += 1
       events.off('settingsChanged', handleSettingsChanged)
     }
   }, [setProviders, serviceHub])
@@ -300,6 +307,7 @@ export function GlobalEventHandler() {
     events.on(ModelEvent.OnModelReady, handleModelReady)
     events.on(ModelEvent.OnModelStopped, handleModelStopped)
     return () => {
+      eventSeq += 1
       events.off(ModelEvent.OnModelReady, handleModelReady)
       events.off(ModelEvent.OnModelStopped, handleModelStopped)
     }

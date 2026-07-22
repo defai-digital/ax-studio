@@ -163,6 +163,7 @@ function MCPServersDesktop() {
   const [loadingServers, setLoadingServers] = useState<{
     [key: string]: boolean
   }>({})
+  const isAnyServerLoading = Object.values(loadingServers).some(Boolean)
   const isMountedRef = useRef(true)
   const setErrorMessage = useAppState((state) => state.setErrorMessage)
 
@@ -217,27 +218,51 @@ function MCPServersDesktop() {
     setOpen(true)
   }
 
-  const handleSaveServer = async (name: string, config: MCPServerConfig) => {
+  const handleSaveServer = async (
+    name: string,
+    config: MCPServerConfig
+  ): Promise<boolean> => {
     if (editingKey) {
       // If server name changed, rename it while preserving position
       if (editingKey !== name) {
-        toggleServer(editingKey, false)
-        renameServer(editingKey, name, config)
-        toggleServer(name, true)
+        if (getServerConfig(name)) {
+          toast.error(`An MCP server named "${name}" already exists`)
+          return false
+        }
+        const originalConfig = getServerConfig(editingKey)
+        if (!originalConfig) return false
+        const shouldBeActive = config.active ?? originalConfig.active ?? false
+        if (!(await toggleServer(editingKey, false))) return false
+        renameServer(editingKey, name, {
+          ...config,
+          active: false,
+        })
+        if (shouldBeActive && !(await toggleServer(name, true))) {
+          // Keep the original key usable when the renamed server cannot start.
+          renameServer(name, editingKey, {
+            ...originalConfig,
+            active: false,
+          })
+          if (originalConfig.active) await toggleServer(editingKey, true)
+          return false
+        }
         // Restart servers to update tool references with new server name
-        syncServersAndRestart()
+        return syncEditedServersAndRestart()
       } else {
-        toggleServer(editingKey, false)
-        editServer(editingKey, config)
-        toggleServer(editingKey, true)
-        syncServers()
+        const originalConfig = getServerConfig(editingKey)
+        if (!originalConfig) return false
+        const shouldBeActive = config.active ?? originalConfig.active ?? false
+        if (!(await toggleServer(editingKey, false))) return false
+        editServer(editingKey, { ...config, active: false })
+        return shouldBeActive
+          ? toggleServer(editingKey, true)
+          : syncEditedServers()
       }
     } else {
       // Add new server
-      toggleServer(name, false)
-      addServer(name, config)
-      toggleServer(name, true)
-      syncServers()
+      const shouldBeActive = config.active ?? true
+      addServer(name, { ...config, active: false })
+      return shouldBeActive ? toggleServer(name, true) : syncEditedServers()
     }
   }
 
@@ -250,22 +275,18 @@ function MCPServersDesktop() {
     setDeleteDialogOpen(true)
   }
 
-  const handleConfirmDelete = async () => {
-    if (serverToDelete) {
-      // Stop the server before deletion
-      try {
-        await serviceHub.mcp().deactivateMCPServer(serverToDelete)
-      } catch (error) {
-        console.error('Error stopping server before deletion:', error)
-      }
+  const handleConfirmDelete = async (): Promise<boolean> => {
+    if (!serverToDelete) return false
+    // Stop the server before deletion
+    if (!(await toggleServer(serverToDelete, false))) return false
 
-      deleteServer(serverToDelete)
-      toast.success(
-        t('mcp-servers:deleteServer.success', { serverName: serverToDelete })
-      )
-      setServerToDelete(null)
-      syncServersAndRestart()
-    }
+    deleteServer(serverToDelete)
+    toast.success(
+      t('mcp-servers:deleteServer.success', { serverName: serverToDelete })
+    )
+    const synced = await syncEditedServersAndRestart()
+    if (synced) setServerToDelete(null)
+    return synced
   }
 
   const handleOpenJsonEditor = async (serverKey?: string) => {
@@ -284,6 +305,44 @@ function MCPServersDesktop() {
     setJsonEditorOpen(true)
   }
 
+  const syncEditedServers = async (): Promise<boolean> => {
+    try {
+      await syncServers()
+      return true
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error('Failed to save MCP server configuration:', error)
+      setErrorMessage({
+        message,
+        subtitle: t('mcp-servers:checkParams'),
+      })
+      toast.error('Failed to save MCP server configuration', {
+        description:
+          message.length > 300 ? `${message.slice(0, 300)}...` : message,
+      })
+      return false
+    }
+  }
+
+  const syncEditedServersAndRestart = async (): Promise<boolean> => {
+    try {
+      await syncServersAndRestart()
+      return true
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error('Failed to save and restart MCP servers:', error)
+      setErrorMessage({
+        message,
+        subtitle: t('mcp-servers:checkParams'),
+      })
+      toast.error('Failed to restart MCP servers', {
+        description:
+          message.length > 300 ? `${message.slice(0, 300)}...` : message,
+      })
+      return false
+    }
+  }
+
   const handleSaveJson = async (
     data:
       | MCPServerConfig
@@ -292,16 +351,15 @@ function MCPServersDesktop() {
           mcpServers?: Record<string, MCPServerConfig>
           mcpSettings?: MCPSettings
         }
-  ) => {
+  ): Promise<boolean> => {
     if (jsonServerName) {
-      try {
-        toggleServer(jsonServerName, false)
-      } catch (error) {
-        console.error('Error deactivating server:', error)
-      }
+      if (!(await toggleServer(jsonServerName, false))) return false
       // Save single server
-      editServer(jsonServerName, data as MCPServerConfig)
-      toggleServer(jsonServerName, (data as MCPServerConfig).active || false)
+      const config = data as MCPServerConfig
+      const shouldBeActive = config.active ?? false
+      editServer(jsonServerName, { ...config, active: shouldBeActive })
+      if (shouldBeActive) return toggleServer(jsonServerName, true)
+      return syncEditedServers()
     } else {
       // Save all servers
       let nextServers: Record<string, MCPServerConfig> = {}
@@ -320,13 +378,6 @@ function MCPServersDesktop() {
         }
       }
 
-      if (nextSettings) {
-        setSettings({
-          ...DEFAULT_MCP_SETTINGS,
-          ...nextSettings,
-        })
-      }
-
       // Capture original active states before clearing
       const originalActiveStates = Object.fromEntries(
         Object.entries(mcpServers).map(([key, config]) => [
@@ -335,15 +386,37 @@ function MCPServersDesktop() {
         ])
       )
 
-      // Clear existing servers first
-      Object.keys(mcpServers).forEach((serverKey) => {
-        toggleServer(serverKey, false)
+      // Stop every existing server before replacing any configuration. If one
+      // stop fails, restore servers already stopped and leave the JSON edit
+      // unapplied rather than overwriting a backend process that is still live.
+      const stoppedActiveServerKeys: string[] = []
+      for (const [serverKey, config] of Object.entries(mcpServers)) {
+        if (!(await toggleServer(serverKey, false))) {
+          for (const stoppedKey of stoppedActiveServerKeys.reverse()) {
+            await toggleServer(stoppedKey, true)
+          }
+          return false
+        }
+        if (config.active) stoppedActiveServerKeys.push(serverKey)
+      }
+
+      // All old processes are stopped, so their configurations can now be
+      // removed without leaving an unreachable live server behind.
+      for (const serverKey of Object.keys(mcpServers)) {
         deleteServer(serverKey)
-      })
+      }
+
+      if (nextSettings) {
+        setSettings({
+          ...DEFAULT_MCP_SETTINGS,
+          ...nextSettings,
+        })
+      }
 
       // Add all servers from the JSON, preserving original active state
       // unless the user explicitly changed it in the JSON editor
-      Object.entries(nextServers).forEach(([key, config]) => {
+      let allServersStarted = true
+      for (const [key, config] of Object.entries(nextServers)) {
         const wasActive = Object.prototype.hasOwnProperty.call(
           originalActiveStates,
           key
@@ -352,79 +425,102 @@ function MCPServersDesktop() {
           : false
         const userSetActive = config.active ?? wasActive
         addServer(key, { ...config, active: userSetActive })
-        toggleServer(key, userSetActive)
-      })
+        if (userSetActive && !(await toggleServer(key, true))) {
+          allServersStarted = false
+        }
+      }
 
-      await syncServers()
+      const synced = await syncEditedServers()
+      return allServersStarted && synced
     }
   }
 
-  const toggleServer = (serverKey: string, active: boolean) => {
-    if (serverKey) {
-      setLoadingServers((prev) => ({ ...prev, [serverKey]: true }))
-      const config = getServerConfig(serverKey)
-      if (active && config) {
-        serviceHub
-          .mcp()
-          .activateMCPServer(serverKey, {
-            ...(config ?? (mcpServers[serverKey] as MCPServerConfig)),
-            active,
-          })
-          .then(() => {
-            // Save single server
-            editServer(serverKey, {
-              ...(config ?? (mcpServers[serverKey] as MCPServerConfig)),
-              active,
-            })
-            syncServers()
-            toast.success(
-              active
-                ? t('mcp-servers:serverStatusActive', { serverKey })
-                : t('mcp-servers:serverStatusInactive', { serverKey })
-            )
-            void refreshConnectedServers()
-          })
-          .catch((error) => {
-            editServer(serverKey, {
-              ...(config ?? (mcpServers[serverKey] as MCPServerConfig)),
-              active: false,
-            })
-            setErrorMessage({
-              message: error,
-              subtitle: t('mcp-servers:checkParams'),
-            })
-            // Show a user-visible toast so the error isn't silently swallowed
-            const errMsg =
-              typeof error === 'string'
-                ? error
-                : error instanceof Error
-                  ? error.message
-                  : String(error)
-            toast.error(`Failed to start MCP server "${serverKey}"`, {
-              description:
-                errMsg.length > 300 ? errMsg.slice(0, 300) + '...' : errMsg,
-            })
-          })
-          .finally(() => {
-            if (isMountedRef.current) {
-              setLoadingServers((prev) => ({ ...prev, [serverKey]: false }))
-            }
-          })
-      } else {
-        editServer(serverKey, {
-          ...(config ?? (mcpServers[serverKey] as MCPServerConfig)),
-          active,
+  const toggleServer = async (
+    serverKey: string,
+    active: boolean
+  ): Promise<boolean> => {
+    if (!serverKey) return false
+
+    const config = getServerConfig(serverKey)
+    if (!config) {
+      console.error(
+        `Cannot ${active ? 'start' : 'stop'} unknown MCP server "${serverKey}"`
+      )
+      return false
+    }
+
+    setLoadingServers((prev) => ({ ...prev, [serverKey]: true }))
+    let backendActivated = false
+    try {
+      if (active) {
+        await serviceHub.mcp().activateMCPServer(serverKey, {
+          ...config,
+          active: true,
         })
-        syncServers()
-        serviceHub
-          .mcp()
-          .deactivateMCPServer(serverKey)
-          .finally(() => {
-            void refreshConnectedServers()
-            if (isMountedRef.current) {
-              setLoadingServers((prev) => ({ ...prev, [serverKey]: false }))
-            }
-          })
+        backendActivated = true
+        editServer(serverKey, { ...config, active: true })
+        await syncServers()
+      } else {
+        editServer(serverKey, { ...config, active: false })
+        await syncServers()
+        // Inactive configurations have no running backend entry; asking Rust
+        // to deactivate one returns "Server not found" and must not block
+        // editing or deleting that configuration.
+        if (config.active) {
+          await serviceHub.mcp().deactivateMCPServer(serverKey)
+        }
+      }
+
+      toast.success(
+        active
+          ? t('mcp-servers:serverStatusActive', { serverKey })
+          : t('mcp-servers:serverStatusInactive', { serverKey })
+      )
+      await refreshConnectedServers()
+      return true
+    } catch (error) {
+      // Keep the persisted switch state aligned with the backend when a
+      // transition fails. In particular, a failed stop must remain active.
+      if (active && backendActivated) {
+        try {
+          await serviceHub.mcp().deactivateMCPServer(serverKey)
+        } catch (rollbackError) {
+          console.error(
+            'Failed to stop MCP server during rollback:',
+            rollbackError
+          )
+        }
+      }
+      editServer(serverKey, {
+        ...config,
+        active: active ? false : (config.active ?? false),
+      })
+      try {
+        await syncServers()
+      } catch (syncError) {
+        console.error('Failed to roll back MCP server state:', syncError)
+      }
+      const errMsg =
+        typeof error === 'string'
+          ? error
+          : error instanceof Error
+            ? error.message
+            : String(error)
+      setErrorMessage({
+        message: errMsg,
+        subtitle: t('mcp-servers:checkParams'),
+      })
+      toast.error(
+        `Failed to ${active ? 'start' : 'stop'} MCP server "${serverKey}"`,
+        {
+          description:
+            errMsg.length > 300 ? errMsg.slice(0, 300) + '...' : errMsg,
+        }
+      )
+      return false
+    } finally {
+      if (isMountedRef.current) {
+        setLoadingServers((prev) => ({ ...prev, [serverKey]: false }))
       }
     }
   }
@@ -461,7 +557,11 @@ function MCPServersDesktop() {
 
     return () => {
       isActive = false
-      unlisten?.()
+      try {
+        unlisten?.()
+      } catch (error) {
+        console.error('Failed to remove MCP update listener:', error)
+      }
     }
   }, [refreshConnectedServers])
 
@@ -481,6 +581,7 @@ function MCPServersDesktop() {
             <Button
               variant="outline"
               size="sm"
+              disabled={isAnyServerLoading}
               onClick={() => handleOpenDialog()}
               className="relative z-50"
             >
@@ -519,6 +620,7 @@ function MCPServersDesktop() {
                             aria-label={t('mcp-servers:editAllJson')}
                             size="icon-xs"
                             variant="ghost"
+                            disabled={isAnyServerLoading}
                           >
                             <Code size={18} className="text-muted-foreground" />
                           </Button>
@@ -566,7 +668,7 @@ function MCPServersDesktop() {
                           updateToolCallTimeout(event.target.value)
                         }
                         onBlur={() => {
-                          void syncServers()
+                          void syncEditedServers()
                         }}
                         className="w-28"
                       />
@@ -685,6 +787,7 @@ function MCPServersDesktop() {
                             <Button
                               size="icon-xs"
                               variant="ghost"
+                              disabled={!!loadingServers[key]}
                               onClick={() => handleOpenJsonEditor(key)}
                               title={t('mcp-servers:editJson.title', {
                                 serverName: key,
@@ -701,6 +804,7 @@ function MCPServersDesktop() {
                             <Button
                               size="icon-xs"
                               variant="ghost"
+                              disabled={!!loadingServers[key]}
                               onClick={() => handleEdit(key)}
                               title={t('mcp-servers:editServer')}
                               aria-label={t('mcp-servers:editServer')}
@@ -713,6 +817,7 @@ function MCPServersDesktop() {
                             <Button
                               size="icon-xs"
                               variant="ghost"
+                              disabled={!!loadingServers[key]}
                               onClick={() => handleDeleteClick(key)}
                               title={t('mcp-servers:deleteServer.title')}
                               aria-label={t('mcp-servers:deleteServer.title')}
@@ -725,9 +830,10 @@ function MCPServersDesktop() {
                             <div className="ml-2">
                               <Switch
                                 checked={config.active}
+                                disabled={!!loadingServers[key]}
                                 loading={!!loadingServers[key]}
                                 onCheckedChange={(checked) =>
-                                  toggleServer(key, checked)
+                                  void toggleServer(key, checked)
                                 }
                               />
                             </div>

@@ -840,7 +840,24 @@ export function useThreadChat({
     const controller = new AbortController()
     contextIncreaseAbortRef.current = controller
 
-    await serviceHub.models().stopModel(modelId, provider.provider)
+    try {
+      const result = await serviceHub
+        .models()
+        .stopModel(modelId, provider.provider)
+      if (result && !result.success) {
+        console.error(
+          'Failed to stop model before increasing context size:',
+          result.error || 'Model unload reported an unknown failure'
+        )
+        return
+      }
+    } catch (error) {
+      console.error(
+        'Failed to stop model before increasing context size:',
+        error
+      )
+      return
+    }
     if (controller.signal.aborted) return
     if (contextIncreaseTimerRef.current) {
       clearTimeout(contextIncreaseTimerRef.current)

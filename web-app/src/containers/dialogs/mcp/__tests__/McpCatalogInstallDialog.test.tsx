@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { afterEach, describe, it, expect, beforeEach, vi } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import type { InputHTMLAttributes, ReactNode } from 'react'
 import { McpCatalogInstallDialog } from '../McpCatalogInstallDialog'
 import { useMCPServers } from '@/hooks/tools/useMCPServers'
@@ -7,7 +7,9 @@ import type { McpCatalogEntry } from '@/schemas/mcp-catalog.schema'
 
 const mocks = vi.hoisted(() => ({
   addServer: vi.fn(),
+  deleteServer: vi.fn(),
   syncServers: vi.fn(),
+  toastError: vi.fn(),
   toastSuccess: vi.fn(),
 }))
 
@@ -20,7 +22,7 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
 vi.mock('sonner', () => ({
   toast: {
     success: mocks.toastSuccess,
-    error: vi.fn(),
+    error: mocks.toastError,
   },
 }))
 
@@ -132,8 +134,14 @@ describe('McpCatalogInstallDialog', () => {
     vi.clearAllMocks()
     useMCPServers.setState({
       addServer: mocks.addServer,
+      deleteServer: mocks.deleteServer,
       syncServers: mocks.syncServers,
     })
+    mocks.syncServers.mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it('shows the full untruncated command and args for stdio entries', () => {
@@ -177,7 +185,7 @@ describe('McpCatalogInstallDialog', () => {
     expect(screen.getByLabelText('GITHUB_TOOLSETS')).toHaveValue('all')
   })
 
-  it('produces the correct stdio config on Confirm, kept inactive', () => {
+  it('produces the correct stdio config on Confirm, kept inactive', async () => {
     const { onOpenChange } = renderDialog(stdioEntry)
     fireEvent.change(screen.getByLabelText('GITHUB_PERSONAL_ACCESS_TOKEN'), {
       target: { value: '  ghp_secret  ' },
@@ -195,13 +203,15 @@ describe('McpCatalogInstallDialog', () => {
       active: false,
     })
     expect(mocks.syncServers).toHaveBeenCalledOnce()
-    expect(mocks.toastSuccess).toHaveBeenCalledWith(
-      'mcp-servers:catalog.installSuccess'
-    )
-    expect(onOpenChange).toHaveBeenCalledWith(false)
+    await waitFor(() => {
+      expect(mocks.toastSuccess).toHaveBeenCalledWith(
+        'mcp-servers:catalog.installSuccess'
+      )
+      expect(onOpenChange).toHaveBeenCalledWith(false)
+    })
   })
 
-  it('produces the correct http config with headers on Confirm', () => {
+  it('produces the correct http config with headers on Confirm', async () => {
     renderDialog(httpEntry)
     expect(screen.getByText('https://mcp.example.com/mcp')).toBeInTheDocument()
 
@@ -222,7 +232,10 @@ describe('McpCatalogInstallDialog', () => {
       headers: { Authorization: 'Bearer abc' },
       active: false,
     })
-    expect(mocks.syncServers).toHaveBeenCalledOnce()
+    await waitFor(() => {
+      expect(mocks.syncServers).toHaveBeenCalledOnce()
+      expect(mocks.toastSuccess).toHaveBeenCalled()
+    })
   })
 
   it('renders nothing without an entry', () => {
@@ -234,5 +247,24 @@ describe('McpCatalogInstallDialog', () => {
       />
     )
     expect(container).toBeEmptyDOMElement()
+  })
+
+  it('rolls back and stays open when persistence fails', async () => {
+    mocks.syncServers.mockRejectedValueOnce(new Error('disk full'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { onOpenChange } = renderDialog(httpEntry)
+    fireEvent.change(screen.getByLabelText('Authorization'), {
+      target: { value: 'Bearer abc' },
+    })
+
+    fireEvent.click(screen.getByText('mcp-servers:catalog.confirmInstall'))
+
+    await waitFor(() => {
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        'mcp-servers:catalog.installFailed'
+      )
+    })
+    expect(mocks.deleteServer).toHaveBeenCalledWith('remote-search')
+    expect(onOpenChange).not.toHaveBeenCalled()
   })
 })

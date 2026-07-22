@@ -19,15 +19,20 @@ export type BootstrapEventsInput = {
  */
 export function bootstrapEvents(input: BootstrapEventsInput): () => void {
   const { serviceHub, setProviders } = input
+  let disposed = false
+  let refreshGeneration = 0
 
   const handleModelImported = () => {
+    const generation = ++refreshGeneration
     serviceHub
       .providers()
       .getProviders()
       .then((providers) => {
+        if (disposed || generation !== refreshGeneration) return
         setProviders(providers, serviceHub.path().sep())
       })
       .catch((error) => {
+        if (disposed || generation !== refreshGeneration) return
         console.error('Failed to reload providers after model import:', error)
       })
   }
@@ -35,6 +40,8 @@ export function bootstrapEvents(input: BootstrapEventsInput): () => void {
   events.on(AppEvent.onModelImported, handleModelImported)
 
   return () => {
+    disposed = true
+    refreshGeneration += 1
     events.off(AppEvent.onModelImported, handleModelImported)
   }
 }

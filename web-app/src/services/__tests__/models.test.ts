@@ -437,12 +437,34 @@ describe('DefaultModelsService', () => {
         .mockRejectedValueOnce(new Error('unload failed'))
         .mockResolvedValue(undefined)
 
-      await modelsService.stopAllModels()
+      await expect(modelsService.stopAllModels()).rejects.toThrow(
+        'Failed to stop 1 model'
+      )
 
       expect(mockEngine.unload).toHaveBeenCalledTimes(2)
       expect(warnSpy).toHaveBeenCalledWith(
         '[ModelsService] stopAllModels unload failed:',
         expect.any(Error)
+      )
+      warnSpy.mockRestore()
+    })
+
+    it('rejects when an engine reports an unsuccessful unload result', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      mockEngine.getLoadedModels.mockResolvedValue(['model1', 'model2'])
+      mockInvoke.mockResolvedValue([])
+      mockEngine.unload
+        .mockResolvedValueOnce({ success: false, error: 'model is busy' })
+        .mockResolvedValueOnce({ success: true })
+
+      await expect(modelsService.stopAllModels()).rejects.toThrow(
+        'Failed to stop 1 model'
+      )
+
+      expect(mockEngine.unload).toHaveBeenCalledTimes(2)
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[ModelsService] stopAllModels unload failed:',
+        expect.objectContaining({ message: 'model is busy' })
       )
       warnSpy.mockRestore()
     })

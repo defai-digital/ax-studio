@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => {
   const listeners = new Map<string, (event: { payload: unknown }) => void>()
   return {
     listeners,
+    listen: vi.fn(),
     voice: {
       isAvailable: vi.fn().mockReturnValue(true),
       startRecording: vi.fn().mockResolvedValue(undefined),
@@ -28,12 +29,7 @@ vi.mock('@/hooks/useServiceHub', () => ({
   useServiceHub: () => ({
     voice: () => mocks.voice,
     events: () => ({
-      listen: vi.fn(async (event: string, handler: never) => {
-        mocks.listeners.set(event, handler)
-        return () => {
-          mocks.listeners.delete(event)
-        }
-      }),
+      listen: mocks.listen,
       emit: vi.fn().mockResolvedValue(undefined),
     }),
   }),
@@ -72,6 +68,14 @@ describe('useVoiceInput', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.listeners.clear()
+    mocks.listen.mockImplementation(
+      async (event: string, handler: (event: { payload: unknown }) => void) => {
+        mocks.listeners.set(event, handler)
+        return () => {
+          mocks.listeners.delete(event)
+        }
+      }
+    )
     mocks.voice.isAvailable.mockReturnValue(true)
     mocks.voice.getStatus.mockResolvedValue({
       state: 'idle',
@@ -324,6 +328,50 @@ describe('useVoiceInput', () => {
 
     emitVoiceEvent('voice-state', { state: 'idle' })
     expect(result.current.state).toBe('idle')
+  })
+
+  it('cleans up successful subscriptions when another registration fails', async () => {
+    const cleanups = new Map<string, ReturnType<typeof vi.fn>>()
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {})
+    mocks.listen.mockImplementation(
+      async (event: string, handler: (event: { payload: unknown }) => void) => {
+        if (event === 'voice-state') {
+          throw new Error('state listener unavailable')
+        }
+        mocks.listeners.set(event, handler)
+        const cleanup = vi.fn(() => mocks.listeners.delete(event))
+        cleanups.set(event, cleanup)
+        return cleanup
+      }
+    )
+
+    const hook = renderUseVoiceInput()
+    await flush()
+    hook.unmount()
+
+    expect(cleanups.get('voice-level')).toHaveBeenCalledOnce()
+    expect(cleanups.get('voice-transcript')).toHaveBeenCalledOnce()
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Failed to subscribe to a voice event:',
+      expect.objectContaining({ message: 'state listener unavailable' })
+    )
+    consoleErrorSpy.mockRestore()
+  })
+
+  it('ignores an event that was already queued when the hook unmounts', async () => {
+    const hook = renderUseVoiceInput()
+    await flush()
+    const queuedTranscript = mocks.listeners.get('voice-transcript')
+    expect(queuedTranscript).toBeDefined()
+
+    hook.unmount()
+    act(() => {
+      queuedTranscript?.({ payload: { text: 'too late' } })
+    })
+
+    expect(setPrompt).not.toHaveBeenCalled()
   })
 
   it('swallows a not-recording stop rejection (auto-stop won the race)', async () => {

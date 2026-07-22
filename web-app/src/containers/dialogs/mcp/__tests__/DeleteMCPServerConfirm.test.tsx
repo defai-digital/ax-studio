@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { DeleteMCPServerConfirm } from '../DeleteMCPServerConfirm'
 
 vi.mock('@/i18n/react-i18next-compat', () => ({
@@ -78,7 +78,7 @@ describe('DeleteMCPServerConfirm', () => {
     expect(del).toHaveAttribute('data-autofocus', 'false')
   })
 
-  it('calls onConfirm when delete is clicked', () => {
+  it('calls onConfirm when delete is clicked', async () => {
     const onConfirm = vi.fn()
     const onOpenChange = vi.fn()
     render(
@@ -91,6 +91,28 @@ describe('DeleteMCPServerConfirm', () => {
     )
     fireEvent.click(screen.getByText('mcp-servers:deleteServer.delete'))
     expect(onConfirm).toHaveBeenCalledOnce()
-    expect(onOpenChange).toHaveBeenCalledWith(false)
+    await waitFor(() => {
+      expect(onOpenChange).toHaveBeenCalledWith(false)
+    })
+  })
+
+  it('stays open when deletion is rejected by the handler', async () => {
+    const onOpenChange = vi.fn()
+    render(
+      <DeleteMCPServerConfirm
+        open
+        onOpenChange={onOpenChange}
+        serverName="filesystem"
+        onConfirm={vi.fn().mockResolvedValue(false)}
+      />
+    )
+
+    fireEvent.click(screen.getByText('mcp-servers:deleteServer.delete'))
+    await waitFor(() => {
+      expect(
+        screen.getByText('mcp-servers:deleteServer.delete')
+      ).not.toBeDisabled()
+    })
+    expect(onOpenChange).not.toHaveBeenCalled()
   })
 })

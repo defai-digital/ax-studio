@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '@testing-library/jest-dom'
 
 const mocks = vi.hoisted(() => {
@@ -383,6 +383,10 @@ describe('Local API Server settings route', () => {
     } as unknown as Window['core']
   })
 
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('renders the stopped server state and checks current status on mount', async () => {
     renderLocalApiServerRoute()
 
@@ -548,5 +552,110 @@ describe('Local API Server settings route', () => {
 
     expect(mocks.setServerStatus).toHaveBeenCalledWith('pending')
     expect(mocks.setServerStatus).toHaveBeenCalledWith('stopped')
+  })
+
+  it('restores running status when stopping the server fails', async () => {
+    mocks.appState.serverStatus = 'running'
+    mocks.getServerStatus.mockResolvedValue(true)
+    mocks.stopServer.mockRejectedValueOnce(new Error('backend refused'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    renderLocalApiServerRoute()
+    fireEvent.click(screen.getByText('settings:localApiServer.stopServer'))
+
+    await waitFor(() => {
+      expect(mocks.toast.error).toHaveBeenCalledWith('Failed to stop server', {
+        description: 'backend refused',
+      })
+    })
+    expect(mocks.setServerStatus).toHaveBeenLastCalledWith('running')
+  })
+
+  it('keeps running status when the bridge is unavailable during stop', async () => {
+    mocks.appState.serverStatus = 'running'
+    mocks.getServerStatus.mockResolvedValue(true)
+    window.core = undefined
+
+    renderLocalApiServerRoute()
+    fireEvent.click(screen.getByText('settings:localApiServer.stopServer'))
+
+    await waitFor(() => {
+      expect(mocks.toast.error).toHaveBeenCalledWith('Failed to stop server', {
+        description: 'Core API not available',
+      })
+    })
+    expect(mocks.setServerStatus).toHaveBeenLastCalledWith('running')
+    expect(mocks.stopServer).not.toHaveBeenCalled()
+  })
+
+  it('updates a stale running status after the server stops externally', async () => {
+    mocks.appState.serverStatus = 'running'
+    mocks.getServerStatus
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+    renderLocalApiServerRoute()
+    await waitFor(() => {
+      expect(mocks.getServerStatus).toHaveBeenCalledOnce()
+    })
+    mocks.setServerStatus.mockClear()
+
+    window.dispatchEvent(new Event('focus'))
+
+    await waitFor(() => {
+      expect(mocks.setServerStatus).toHaveBeenCalledWith('stopped')
+    })
+  })
+
+  it('does not let a delayed status check overwrite a completed start', async () => {
+    const statusCheck = deferred<boolean>()
+    mocks.getServerStatus.mockReturnValueOnce(statusCheck.promise)
+    renderLocalApiServerRoute()
+
+    fireEvent.click(screen.getByText('settings:localApiServer.startServer'))
+    await waitFor(() => {
+      expect(mocks.setServerStatus).toHaveBeenCalledWith('running')
+    })
+
+    await act(async () => {
+      statusCheck.resolve(false)
+      await statusCheck.promise
+    })
+
+    expect(mocks.setServerStatus).toHaveBeenLastCalledWith('running')
+  })
+
+  it('ignores a focus status check started while the server is starting', async () => {
+    const start = deferred<number>()
+    const statusCheck = deferred<boolean>()
+    mocks.startServer.mockReturnValueOnce(start.promise)
+    renderLocalApiServerRoute()
+    await waitFor(() => {
+      expect(mocks.getServerStatus).toHaveBeenCalledOnce()
+    })
+
+    fireEvent.click(screen.getByText('settings:localApiServer.startServer'))
+    await waitFor(() => {
+      expect(mocks.startServer).toHaveBeenCalledOnce()
+    })
+
+    mocks.getServerStatus.mockReturnValueOnce(statusCheck.promise)
+    window.dispatchEvent(new Event('focus'))
+    await waitFor(() => {
+      expect(mocks.getServerStatus).toHaveBeenCalledTimes(2)
+    })
+
+    await act(async () => {
+      start.resolve(31419)
+      await start.promise
+    })
+    await waitFor(() => {
+      expect(mocks.setServerStatus).toHaveBeenLastCalledWith('running')
+    })
+
+    await act(async () => {
+      statusCheck.resolve(false)
+      await statusCheck.promise
+    })
+    expect(mocks.setServerStatus).toHaveBeenLastCalledWith('running')
   })
 })
