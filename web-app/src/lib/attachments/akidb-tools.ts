@@ -62,9 +62,14 @@ export function hasAkidbIngestOrExtractTools(tools: NamedMcpTool[]): boolean {
   )
 }
 
-/** Whether binary document indexing should be offered / attempted. */
+/** Whether embeddings/vector indexing should be offered / attempted. */
 export function canIndexBinaryAttachments(tools: NamedMcpTool[]): boolean {
-  return hasAkidbIngestOrExtractTools(tools)
+  return tools.some((t) => t.name === 'fabric_ingest_run')
+}
+
+/** Whether binary documents can be parsed for inline attachment. */
+export function canExtractBinaryAttachments(tools: NamedMcpTool[]): boolean {
+  return tools.some((t) => t.name === 'fabric_extract')
 }
 
 /**

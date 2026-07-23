@@ -461,6 +461,54 @@ describe('useDocumentAttachmentHandler', () => {
     )
   })
 
+  it('uses forced inline parsing when only fabric_extract is available', async () => {
+    mockGetTools.mockResolvedValue([{ name: 'fabric_extract' }])
+    mockDialogOpen.mockResolvedValue(['/docs/report.pdf'])
+    ;(fs.fileStat as ReturnType<typeof vi.fn>).mockResolvedValue({
+      size: 2048,
+    })
+
+    const { processAttachmentsForSend } = await import(
+      '@/lib/attachmentProcessing'
+    )
+    vi.mocked(processAttachmentsForSend).mockResolvedValueOnce({
+      processedAttachments: [
+        {
+          name: 'report.pdf',
+          type: 'document',
+          path: '/docs/report.pdf',
+          processed: true,
+          injectionMode: 'inline',
+          inlineContent: 'pdf text',
+        },
+      ],
+      hasEmbeddedDocuments: false,
+    })
+
+    const { result } = renderHook(() =>
+      useDocumentAttachmentHandler({
+        attachmentsKey: ATTACHMENTS_KEY,
+        effectiveThreadId: 'thread-1',
+      })
+    )
+
+    await act(async () => {
+      await result.current.handleAttachDocsIngest()
+    })
+
+    expect(mockShowPrompt).not.toHaveBeenCalled()
+    expect(processAttachmentsForSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parsePreference: 'inline',
+        forceInline: true,
+      })
+    )
+    const sent = vi.mocked(processAttachmentsForSend).mock.calls[0][0]
+      .attachments as Attachment[]
+    expect(sent.some((a) => a.name.endsWith('.pdf'))).toBe(true)
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
   it('mixed batch without AkiDB: one summary toast, only text files processed', async () => {
     mockGetTools.mockResolvedValue([])
     mockDialogOpen.mockResolvedValue(['/docs/notes.md', '/docs/report.pdf'])

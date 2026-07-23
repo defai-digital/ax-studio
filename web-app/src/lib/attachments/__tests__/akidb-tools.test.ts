@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   binaryAttachmentSkipMessage,
+  canExtractBinaryAttachments,
   canIndexBinaryAttachments,
   classifyAttachmentIndexerCapability,
   hasAkidbAttachmentTools,
@@ -113,6 +114,8 @@ describe('hasAkidbIngestOrExtractTools / canIndexBinaryAttachments', () => {
     expect(canIndexBinaryAttachments([{ name: 'fabric_ingest_run' }])).toBe(
       true
     )
+    expect(canIndexBinaryAttachments([{ name: 'fabric_extract' }])).toBe(false)
+    expect(canExtractBinaryAttachments([{ name: 'fabric_extract' }])).toBe(true)
   })
 })
 
