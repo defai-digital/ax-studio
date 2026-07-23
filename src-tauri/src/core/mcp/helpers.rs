@@ -684,7 +684,6 @@ pub fn extract_active_status(config: &Value) -> Option<bool> {
 
 // These focused parser tests stay beside the parsing helpers; the remainder of
 // this file contains lifecycle orchestration that is easier to audit separately.
-#[allow(clippy::items_after_test_module)]
 /// Default HTTP connect timeout when `config.timeout` is unset (≤10s per ADR-003).
 const DEFAULT_HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -693,6 +692,7 @@ fn http_connect_timeout(configured: Option<Duration>) -> Duration {
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
 
