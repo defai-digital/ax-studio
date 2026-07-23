@@ -405,7 +405,7 @@ struct FabricCliCommand {
 /// paths (e.g. `/bin/sh`) are rejected. Args are filtered for dangerous
 /// interpreter flags (`-c`, `-e`, `--eval`, …) to match the MCP spawn path.
 fn validate_mcp_cli_command(raw_command: &str) -> Result<(), String> {
-    const ALLOWED: &[&str] = &["node", "npx", "bun", "python", "python3", "uvx"];
+    const ALLOWED: &[&str] = &["node", "npx", "bun", "python", "python3", "uvx", "akidb"];
     if raw_command.contains('/') || raw_command.contains('\\') {
         return Err(format!(
             "Blocked path-based command '{raw_command}' in knowledge-base MCP config; \
@@ -756,6 +756,11 @@ mod tests {
     #[test]
     fn cli_allowlist_accepts_bun() {
         assert!(validate_mcp_cli_command("bun").is_ok());
+    }
+
+    #[test]
+    fn cli_allowlist_accepts_akidb() {
+        assert!(validate_mcp_cli_command("akidb").is_ok());
     }
 
     #[test]

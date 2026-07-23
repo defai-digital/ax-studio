@@ -22,7 +22,7 @@ use crate::core::{
 };
 use ax_studio_utils::{can_override_npx, can_override_uvx};
 
-const ALLOWED_COMMANDS: &[&str] = &["node", "python", "python3", "bun", "npx", "uvx"];
+const ALLOWED_COMMANDS: &[&str] = &["node", "python", "python3", "bun", "npx", "uvx", "akidb"];
 const DANGEROUS_ENV_KEYS: &[&str] = &[
     "LD_PRELOAD",
     "DYLD_INSERT_LIBRARIES",
