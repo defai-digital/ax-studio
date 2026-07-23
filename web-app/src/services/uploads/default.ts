@@ -38,7 +38,7 @@ async function ensureAkidbAvailable(mcp: MCPService): Promise<void> {
   }
   if (!mcpAvailable) {
     throw new Error(
-      'AkiDB is not configured. Enable the ax-studio MCP server in Settings → MCP Servers to use document indexing.'
+      'AkiDB is not configured. Enable or add the ax-studio AkiDB MCP server in Settings → MCP Servers. AX BI MCP and tool toggles do not provide document indexing.'
     )
   }
 }

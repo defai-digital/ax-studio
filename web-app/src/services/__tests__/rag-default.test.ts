@@ -1,4 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+
+const readFileSync = vi.hoisted(() => vi.fn())
+
+vi.mock('@ax-studio/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@ax-studio/core')>()
+  return {
+    ...actual,
+    fs: {
+      ...(actual as { fs?: object }).fs,
+      readFileSync,
+    },
+  }
+})
+
 import { DefaultRAGService } from '../rag/default'
 import { useFileRegistry } from '@/lib/file-registry'
 import type { ServiceHub } from '@/services'
@@ -6,6 +20,7 @@ import type { ServiceHub } from '@/services'
 function makeServiceHub(callToolResult: {
   error: string
   content: Array<{ text: string }>
+  isError?: boolean
 }): ServiceHub {
   return {
     mcp: () => ({
@@ -65,9 +80,15 @@ describe('DefaultRAGService', () => {
   })
 
   describe('parseDocument', () => {
-    it('returns empty string when serviceHub not set', async () => {
-      const result = await service.parseDocument('/tmp/doc.pdf')
-      expect(result).toBe('')
+    beforeEach(() => {
+      readFileSync.mockReset()
+    })
+
+    it('falls back to local text read when MCP is not set', async () => {
+      readFileSync.mockResolvedValueOnce('local markdown body')
+      const result = await service.parseDocument('/tmp/doc.md', 'md')
+      expect(readFileSync).toHaveBeenCalledWith('/tmp/doc.md')
+      expect(result).toBe('local markdown body')
     })
 
     it('calls fabric_extract and returns text', async () => {
@@ -87,20 +108,22 @@ describe('DefaultRAGService', () => {
 
       const result = await service.parseDocument('/tmp/doc.pdf')
       expect(result).toBe('Extracted document content here')
+      expect(readFileSync).not.toHaveBeenCalled()
     })
 
-    it('returns empty string on error', async () => {
+    it('falls back to local text when fabric_extract errors on a text file', async () => {
       const hub = makeServiceHub({
         error: 'file not found',
         content: [],
       })
       service.setMcpService(hub.mcp())
+      readFileSync.mockResolvedValueOnce('recovered text')
 
-      const result = await service.parseDocument('/tmp/missing.pdf')
-      expect(result).toBe('')
+      const result = await service.parseDocument('/tmp/notes.txt', 'txt')
+      expect(result).toBe('recovered text')
     })
 
-    it('returns empty string when fabric_extract sets isError without top-level error', async () => {
+    it('returns empty string when fabric_extract fails and type is not locally readable', async () => {
       const hub = makeServiceHub({
         error: '',
         isError: true,
@@ -109,8 +132,9 @@ describe('DefaultRAGService', () => {
       service.setMcpService(hub.mcp())
 
       // Must not treat error content text as the document body
-      const result = await service.parseDocument('/tmp/locked.pdf')
+      const result = await service.parseDocument('/tmp/locked.pdf', 'pdf')
       expect(result).toBe('')
+      expect(readFileSync).not.toHaveBeenCalled()
     })
 
     it('handles plain text response (non-JSON)', async () => {

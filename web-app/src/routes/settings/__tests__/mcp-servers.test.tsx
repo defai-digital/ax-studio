@@ -549,6 +549,25 @@ describe('MCP servers settings route', () => {
     expect(mocks.setErrorMessage).toHaveBeenCalled()
   })
 
+  it('keeps the switch off when the backend server is already stopped', async () => {
+    mocks.mcpServers.alpha = { command: 'server-command', active: true }
+    mocks.deactivateMCPServer.mockRejectedValueOnce(
+      new Error('Server alpha not found')
+    )
+    renderMCPServersRoute()
+
+    fireEvent.click(screen.getByRole('checkbox', { checked: true }))
+
+    await waitFor(() => {
+      expect(mocks.editServer).toHaveBeenLastCalledWith(
+        'alpha',
+        expect.objectContaining({ active: false })
+      )
+    })
+    expect(mocks.toastError).not.toHaveBeenCalled()
+    expect(mocks.setErrorMessage).not.toHaveBeenCalled()
+  })
+
   it('aborts a bulk JSON replacement when an existing server cannot stop', async () => {
     mocks.mcpServers.alpha = { command: 'old-command', active: true }
     mocks.deactivateMCPServer.mockRejectedValueOnce(new Error('stop failed'))

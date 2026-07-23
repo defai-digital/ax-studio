@@ -33,6 +33,7 @@ import { extractErrorMessage } from '@/lib/utils/error'
 import { basename, fileExtension } from '@/lib/utils'
 import { withTimeout } from '@/lib/utils/async'
 import { deleteIndexedFileChunks } from '@/lib/attachments/delete-indexed-file'
+import { hasAkidbIngestOrExtractTools } from '@/lib/attachments/akidb-tools'
 
 const ATTACHMENT_AUTO_INLINE_FALLBACK_BYTES = 512 * 1024
 const ATTACHMENT_MODEL_READY_TIMEOUT_MS = 5_000
@@ -201,38 +202,58 @@ export function useDocumentAttachmentHandler({
           ? rawContextThreshold
           : undefined
 
-      // Always ask the user how to process each document (inline vs embeddings).
-      // The dialog is rendered at root level in __root.tsx.
+      // Always ask the user how to process each document (inline vs embeddings)
+      // when AkiDB tools are available. Without fabric_ingest/fabric_extract
+      // (standard install after unpublished preset removal), force inline so
+      // attach still works via local text parse / fabric-free path.
       const docsNeedingPrompt = docs.filter((doc) => {
         return !doc.processed && !doc.injectionMode
       })
 
       const docChoices = new Map<string, 'inline' | 'embeddings'>()
 
-      if (docsNeedingPrompt.length > 0) {
-        for (let i = 0; i < docsNeedingPrompt.length; i++) {
-          const doc = docsNeedingPrompt[i]
-          const choice = await useAttachmentIngestionPrompt
-            .getState()
-            .showPrompt(
-              doc,
-              ATTACHMENT_AUTO_INLINE_FALLBACK_BYTES,
-              i,
-              docsNeedingPrompt.length
-            )
+      let akidbAvailable = false
+      try {
+        const tools = await serviceHub.mcp().getTools()
+        akidbAvailable = hasAkidbIngestOrExtractTools(tools)
+      } catch {
+        akidbAvailable = false
+      }
 
-          if (!choice) {
-            setAttachmentsForThread(attachmentsKey, (prev) =>
-              prev.filter(
-                (att) =>
-                  !docsNeedingPrompt.some(
-                    (d) => d.path && att.path && d.path === att.path
-                  )
-              )
-            )
-            return
+      if (docsNeedingPrompt.length > 0) {
+        if (!akidbAvailable) {
+          for (const doc of docsNeedingPrompt) {
+            if (doc.path) docChoices.set(doc.path, 'inline')
           }
-          if (doc.path) docChoices.set(doc.path, choice)
+          toast.info('Document indexing unavailable', {
+            description:
+              'Attaching as inline content. Enable or add the ax-studio AkiDB MCP server for embeddings-based indexing.',
+          })
+        } else {
+          for (let i = 0; i < docsNeedingPrompt.length; i++) {
+            const doc = docsNeedingPrompt[i]
+            const choice = await useAttachmentIngestionPrompt
+              .getState()
+              .showPrompt(
+                doc,
+                ATTACHMENT_AUTO_INLINE_FALLBACK_BYTES,
+                i,
+                docsNeedingPrompt.length
+              )
+
+            if (!choice) {
+              setAttachmentsForThread(attachmentsKey, (prev) =>
+                prev.filter(
+                  (att) =>
+                    !docsNeedingPrompt.some(
+                      (d) => d.path && att.path && d.path === att.path
+                    )
+                )
+              )
+              return
+            }
+            if (doc.path) docChoices.set(doc.path, choice)
+          }
         }
       }
 
@@ -285,7 +306,9 @@ export function useDocumentAttachmentHandler({
             selectedProvider,
             contextThreshold,
             estimateTokens,
-            parsePreference,
+            // Without AkiDB tools, force inline so settings set to "embeddings"
+            // do not route every file into a failing fabric_ingest_run call.
+            parsePreference: akidbAvailable ? parsePreference : 'inline',
             perFileChoices: docChoices.size > 0 ? docChoices : undefined,
             updateAttachmentProcessing,
           })
@@ -365,24 +388,9 @@ export function useDocumentAttachmentHandler({
         return
       }
 
-      // Check MCP availability before opening file picker
-      try {
-        const tools = await serviceHub.mcp().getTools()
-        const hasAkidb = tools.some(
-          (t) => t.name === 'fabric_ingest_run' || t.name === 'fabric_extract'
-        )
-        if (!hasAkidb) {
-          toast.error('Document attachment requires the ax-studio MCP server', {
-            description: 'Enable it in Settings → MCP Servers',
-          })
-          return
-        }
-      } catch {
-        toast.error('Document attachment requires the ax-studio MCP server', {
-          description: 'Enable it in Settings → MCP Servers',
-        })
-        return
-      }
+      // Do not hard-block the file picker when AkiDB/fabric tools are missing.
+      // Processing falls back to inline local parse for text documents; binary
+      // types that need fabric_extract surface a per-file error after selection.
 
       const selection = await serviceHub.dialog().open({
         multiple: true,

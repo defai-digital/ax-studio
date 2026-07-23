@@ -180,3 +180,10 @@ Phase 1 typed client uses MCP streamable HTTP as transport and only wraps high-l
 - AX Studio AX BI workspace是否加入明確 Chart／Dashboard／Auto selector。
 
 這些後續決策不得改變本 ADR 的 owner boundary。
+
+## Implementation findings (2026-07-23)
+
+Post–Phase 1 root-cause analysis of two reported regressions (details in Tech Spec §8):
+
+1. **ax-bi MCP connection toggle cannot be switched OFF.** Root cause unchanged (header-less persisted config + keychain token → boot activation fails → no running entry). **Fix shipped:** deactivate is idempotent (frontend swallows missing-server errors; Rust `deactivate_mcp_server` treats missing map entry as success). Store sync after `connectAxBiMcpServer` remains a follow-up.
+2. **Document attachment broken (out of AX BI scope).** **Fix shipped:** graceful inline degrade when AkiDB/`fabric_*` tools are absent (no pre-picker hard gate; local text parse fallback). Does not change the owner boundary above; full embeddings/RAG still requires an AkiDB MCP server.

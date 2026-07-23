@@ -162,42 +162,50 @@ export class DefaultRAGService implements RAGService {
 
   // ── Document parsing (inline mode) ────────────────────────────────────
 
-  async parseDocument(path: string, _type?: string): Promise<string> {
+  async parseDocument(path: string, type?: string): Promise<string> {
     const hub = this.mcpService
-    if (!hub) {
-      console.warn('[RAG] parseDocument: ServiceHub not available')
-      return ''
-    }
 
-    try {
-      const result = await hub.callTool({
-        toolName: 'fabric_extract',
-        arguments: { file_path: path },
-      })
-
-      const failure = getMcpToolFailureMessage(result)
-      if (failure) {
-        console.warn('[RAG] fabric_extract error:', failure)
-        return ''
-      }
-
-      const text = result.content?.[0]?.text
-      if (!text) {
-        console.warn('[RAG] fabric_extract returned empty content')
-        return ''
-      }
-
+    if (hub) {
       try {
-        const parsed = JSON.parse(text)
-        const content = typeof parsed.text === 'string' ? parsed.text : ''
-        return content
-      } catch {
-        return text
+        const result = await hub.callTool({
+          toolName: 'fabric_extract',
+          arguments: { file_path: path },
+        })
+
+        const failure = getMcpToolFailureMessage(result)
+        if (failure) {
+          console.warn('[RAG] fabric_extract error:', failure)
+        } else {
+          const text = result.content?.[0]?.text
+          if (text) {
+            try {
+              const parsed = JSON.parse(text)
+              const content = typeof parsed.text === 'string' ? parsed.text : ''
+              if (content) return content
+            } catch {
+              return text
+            }
+          } else {
+            console.warn('[RAG] fabric_extract returned empty content')
+          }
+        }
+      } catch (err) {
+        console.warn(
+          '[RAG] fabric_extract unavailable; trying local text fallback',
+          err
+        )
       }
-    } catch (err) {
-      console.error('[RAG] parseDocument failed:', err)
-      return ''
+    } else {
+      console.warn(
+        '[RAG] parseDocument: MCP unavailable; trying local text fallback'
+      )
     }
+
+    // Graceful degrade when AkiDB/fabric-ingest MCP is absent (standard install).
+    const { parseLocalDocumentText } = await import(
+      '@/lib/attachments/local-parse'
+    )
+    return parseLocalDocumentText(path, type)
   }
 
   // ── Private handlers ──────────────────────────────────────────────────

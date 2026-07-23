@@ -65,6 +65,46 @@ describe('processAttachmentsForSend', () => {
     expect(result.hasEmbeddedDocuments).toBe(false)
   })
 
+  it('falls back to inline when embeddings ingest fails but text parse succeeds', async () => {
+    const parseDocument = vi.fn().mockResolvedValue('local file body')
+    const ingestFileAttachment = vi
+      .fn()
+      .mockRejectedValue(
+        new Error(
+          'AkiDB is not configured. Enable or add the ax-studio AkiDB MCP server'
+        )
+      )
+    const hub = createMockServiceHub({
+      uploads: { ingestFileAttachment },
+      rag: { parseDocument },
+    })
+    const doc: Attachment = {
+      name: 'notes.md',
+      type: 'document',
+      path: '/docs/notes.md',
+      fileType: 'md',
+    }
+
+    const result = await processAttachmentsForSend({
+      attachments: [doc],
+      threadId: 'thread-1',
+      serviceHub: hub,
+      parsePreference: 'embeddings',
+    })
+
+    expect(ingestFileAttachment).toHaveBeenCalled()
+    expect(parseDocument).toHaveBeenCalledWith('/docs/notes.md', 'md')
+    expect(result.processedAttachments).toHaveLength(1)
+    expect(result.processedAttachments[0]).toEqual(
+      expect.objectContaining({
+        injectionMode: 'inline',
+        inlineContent: 'local file body',
+        processed: true,
+      })
+    )
+    expect(result.hasEmbeddedDocuments).toBe(false)
+  })
+
   it('skips already-processed images with an id', async () => {
     const img: Attachment = {
       name: 'test.png',

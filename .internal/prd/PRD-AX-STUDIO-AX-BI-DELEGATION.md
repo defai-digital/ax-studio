@@ -213,3 +213,10 @@ AX Studio 的 `web-app/src/lib/ax-bi/dashboard-workflow.ts` 同時負責：
 - AX Studio 的 Python prompt 不再宣稱本地 Matplotlib 圖表會自動執行或捕捉。
 - 通用 artifact rendering 未被移除。
 - AX Studio 與 AX BI 兩個 repo 都記錄驗證結果與剩餘 Phase 2／3 工作。
+
+## 15. 已知問題（2026-07-23 root-cause 分析）
+
+詳細技術根因見 Tech Spec §8；此處僅記錄產品面影響：
+
+1. **附件功能在標準安裝下完全無法使用。** 根因：AkiDB gate + 未發佈 preset 移除。**已修復：** 無 `fabric_*` tools 時不再阻擋 picker，改以 inline 本機文字讀取降級（txt/md/csv/html）；embeddings／RAG 仍需 AkiDB MCP。
+2. **ax-bi MCP 連線無法透過 toggle 關閉。** 根因：token 在 keychain、config 無 Authorization → 重啟 activation 失敗、無 running entry。**已修復：** 前端與後端 deactivate 皆將 missing server 視為成功，switch 可維持 OFF。`connectAxBiMcpServer` 的 store 同步仍為後續項。

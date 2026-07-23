@@ -28,6 +28,7 @@ import { listen } from '@tauri-apps/api/event'
 import { SystemEvent } from '@/types/events'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { isMissingRunningServerError } from '@/lib/mcp/deactivate-errors'
 
 // Descriptions and setup hints for official MCP servers
 const OFFICIAL_SERVER_HINTS: Record<
@@ -467,7 +468,16 @@ function MCPServersDesktop() {
         // to deactivate one returns "Server not found" and must not block
         // editing or deleting that configuration.
         if (config.active) {
-          await serviceHub.mcp().deactivateMCPServer(serverKey)
+          try {
+            await serviceHub.mcp().deactivateMCPServer(serverKey)
+          } catch (error) {
+            if (!isMissingRunningServerError(error)) {
+              throw error
+            }
+            console.info(
+              `MCP server "${serverKey}" was already stopped while disabling it.`
+            )
+          }
         }
       }
 

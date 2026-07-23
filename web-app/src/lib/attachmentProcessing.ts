@@ -190,52 +190,84 @@ export const processAttachmentsForSend = async (
         )
       }
 
-      if (targetMode === 'inline' && parsedContent) {
+      const finishInline = (content: string) => {
         processedAttachments.push({
           ...doc,
           processing: false,
           processed: true,
-          inlineContent: parsedContent,
+          inlineContent: content,
           injectionMode: 'inline',
         })
 
         notifyUpdate(doc, 'done', {
           processing: false,
           processed: true,
-          inlineContent: parsedContent,
+          inlineContent: content,
           injectionMode: 'inline',
         })
+      }
+
+      if (targetMode === 'inline' && parsedContent) {
+        finishInline(parsedContent)
         continue
       }
 
-      // Default: ingest as embeddings
+      // Default: ingest as embeddings (also recovers when inline parse failed
+      // but fabric_ingest is available). When AkiDB is missing, catch falls
+      // back to inline text if parseDocument can still produce content.
       notifyUpdate(doc, 'processing')
 
-      const res = projectId
-        ? await serviceHub
-            .uploads()
-            .ingestFileAttachmentForProject(projectId, doc)
-        : await serviceHub.uploads().ingestFileAttachment(threadId, doc)
+      try {
+        const res = projectId
+          ? await serviceHub
+              .uploads()
+              .ingestFileAttachmentForProject(projectId, doc)
+          : await serviceHub.uploads().ingestFileAttachment(threadId, doc)
 
-      processedAttachments.push({
-        ...doc,
-        id: res.id,
-        size: res.size ?? doc.size,
-        chunkCount: res.chunkCount ?? doc.chunkCount,
-        processing: false,
-        processed: true,
-        injectionMode: 'embeddings',
-      })
-      hasEmbeddedDocuments = true
+        processedAttachments.push({
+          ...doc,
+          id: res.id,
+          size: res.size ?? doc.size,
+          chunkCount: res.chunkCount ?? doc.chunkCount,
+          processing: false,
+          processed: true,
+          injectionMode: 'embeddings',
+        })
+        hasEmbeddedDocuments = true
 
-      notifyUpdate(doc, 'done', {
-        id: res.id,
-        size: res.size ?? doc.size,
-        chunkCount: res.chunkCount ?? doc.chunkCount,
-        processing: false,
-        processed: true,
-        injectionMode: 'embeddings',
-      })
+        notifyUpdate(doc, 'done', {
+          id: res.id,
+          size: res.size ?? doc.size,
+          chunkCount: res.chunkCount ?? doc.chunkCount,
+          processing: false,
+          processed: true,
+          injectionMode: 'embeddings',
+        })
+      } catch (ingestErr) {
+        if (!projectId) {
+          let fallbackContent = parsedContent
+          if (!fallbackContent && doc.path) {
+            try {
+              fallbackContent = await serviceHub
+                .rag()
+                .parseDocument?.(doc.path, doc.fileType)
+            } catch (parseErr) {
+              console.warn(
+                `[AttachProc] Inline fallback parse failed for ${doc.name}`,
+                parseErr
+              )
+            }
+          }
+          if (fallbackContent) {
+            console.info(
+              `[AttachProc] Embeddings unavailable for ${doc.name}; using inline content`
+            )
+            finishInline(fallbackContent)
+            continue
+          }
+        }
+        throw ingestErr
+      }
     } catch (err) {
       console.error(`Failed to ingest ${doc.name}:`, err)
       notifyUpdate(doc, 'error')

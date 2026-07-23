@@ -155,31 +155,38 @@ pub async fn deactivate_mcp_server<R: Runtime>(
 
     // Remove from running servers map first so try_unwrap can succeed when
     // no in-flight operations hold a reference.
+    // Missing entry is success: deactivating a non-running server is already
+    // the desired end state (e.g. boot-time activation failed but config
+    // still had active: true — common for ax-bi after token-stripped restart).
     let service = {
         let mut servers_map = state.mcp_servers.lock().await;
-        servers_map
-            .remove(&name)
-            .ok_or_else(|| format!("Server {name} not found"))?
+        servers_map.remove(&name)
     };
 
-    // Attempt explicit cancellation — succeeds when no in-flight refs exist.
-    // If other refs exist (e.g., an active tool call), the service stops via
-    // Drop once those operations complete.
-    match Arc::try_unwrap(service) {
-        Ok(RunningServiceEnum::NoInit(service)) => {
-            log::info!("Stopping server {name}...");
-            service.cancel().await.map_err(|e| e.to_string())?;
+    if let Some(service) = service {
+        // Attempt explicit cancellation — succeeds when no in-flight refs exist.
+        // If other refs exist (e.g., an active tool call), the service stops via
+        // Drop once those operations complete.
+        match Arc::try_unwrap(service) {
+            Ok(RunningServiceEnum::NoInit(service)) => {
+                log::info!("Stopping server {name}...");
+                service.cancel().await.map_err(|e| e.to_string())?;
+            }
+            Ok(RunningServiceEnum::WithInit(service)) => {
+                log::info!("Stopping server {name} with initialization...");
+                service.cancel().await.map_err(|e| e.to_string())?;
+            }
+            Err(arc) => {
+                log::info!(
+                    "Server {name} has active references; will stop when in-flight operations complete"
+                );
+                drop(arc);
+            }
         }
-        Ok(RunningServiceEnum::WithInit(service)) => {
-            log::info!("Stopping server {name} with initialization...");
-            service.cancel().await.map_err(|e| e.to_string())?;
-        }
-        Err(arc) => {
-            log::info!(
-                "Server {name} has active references; will stop when in-flight operations complete"
-            );
-            drop(arc);
-        }
+    } else {
+        log::info!(
+            "Server {name} was not running; treating deactivate as success"
+        );
     }
 
     {

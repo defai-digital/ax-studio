@@ -13,6 +13,11 @@ vi.mock('sonner', () => ({
   },
 }))
 
+const mockGetTools = vi.fn().mockResolvedValue([
+  { name: 'fabric_ingest_run', server: 'ax-studio' },
+  { name: 'fabric_extract', server: 'ax-studio' },
+])
+
 vi.mock('@ax-studio/core', () => ({
   ContentType: { Text: 'text' },
   MessageStatus: { Ready: 'ready' },
@@ -107,10 +112,7 @@ vi.mock('@/hooks/useServiceHub', () => ({
     projects: () => ({}),
     mcp: () => ({
       callTool: mockMcpCallTool,
-      getTools: vi.fn().mockResolvedValue([
-        { name: 'fabric_ingest_run', server: 'ax-studio' },
-        { name: 'fabric_extract', server: 'ax-studio' },
-      ]),
+      getTools: mockGetTools,
     }),
   }),
   getServiceHub: () => ({}),
@@ -144,6 +146,10 @@ describe('useDocumentAttachmentHandler', () => {
     mockStartModel.mockResolvedValue(undefined)
     mockGetActiveModels.mockResolvedValue(['model-1'])
     mockGetTokensCount.mockResolvedValue(100)
+    mockGetTools.mockResolvedValue([
+      { name: 'fabric_ingest_run', server: 'ax-studio' },
+      { name: 'fabric_extract', server: 'ax-studio' },
+    ])
     ;(fs.fileStat as ReturnType<typeof vi.fn>).mockResolvedValue({
       size: 1000,
     })
@@ -331,6 +337,83 @@ describe('useDocumentAttachmentHandler', () => {
         size: undefined,
       })
     )
+  })
+
+  // ── No hard gate when AkiDB/fabric tools are missing ──────────────────────
+
+  it('opens the file picker even when fabric_* tools are absent', async () => {
+    mockGetTools.mockResolvedValue([])
+    mockDialogOpen.mockResolvedValue(null)
+
+    const { result } = renderHook(() =>
+      useDocumentAttachmentHandler({
+        attachmentsKey: ATTACHMENTS_KEY,
+        effectiveThreadId: 'thread-1',
+      })
+    )
+
+    await act(async () => {
+      await result.current.handleAttachDocsIngest()
+    })
+
+    expect(mockDialogOpen).toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalledWith(
+      expect.stringMatching(/AkiDB|ax-studio MCP/i),
+      expect.anything()
+    )
+  })
+
+  it('attaches documents with inline force when AkiDB tools are missing', async () => {
+    mockGetTools.mockResolvedValue([])
+    mockDialogOpen.mockResolvedValue(['/docs/notes.md'])
+    ;(fs.fileStat as ReturnType<typeof vi.fn>).mockResolvedValue({
+      size: 128,
+    })
+
+    const { processAttachmentsForSend } = await import(
+      '@/lib/attachmentProcessing'
+    )
+    vi.mocked(processAttachmentsForSend).mockResolvedValueOnce({
+      processedAttachments: [
+        {
+          name: 'notes.md',
+          type: 'document',
+          path: '/docs/notes.md',
+          processed: true,
+          injectionMode: 'inline',
+          inlineContent: '# notes',
+        },
+      ],
+      hasEmbeddedDocuments: false,
+    })
+
+    const { result } = renderHook(() =>
+      useDocumentAttachmentHandler({
+        attachmentsKey: ATTACHMENTS_KEY,
+        effectiveThreadId: 'thread-1',
+      })
+    )
+
+    await act(async () => {
+      await result.current.handleAttachDocsIngest()
+    })
+
+    expect(mockShowPrompt).not.toHaveBeenCalled()
+    expect(toast.info).toHaveBeenCalledWith(
+      'Document indexing unavailable',
+      expect.objectContaining({
+        description: expect.stringContaining('inline'),
+      })
+    )
+    expect(processAttachmentsForSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parsePreference: 'inline',
+        perFileChoices: expect.any(Map),
+      })
+    )
+    const choices = vi.mocked(processAttachmentsForSend).mock.calls[0][0]
+      .perFileChoices as Map<string, string>
+    expect(choices.get('/docs/notes.md')).toBe('inline')
   })
 
   // ── handleRemoveAttachment ───────────────────────────────────────────────

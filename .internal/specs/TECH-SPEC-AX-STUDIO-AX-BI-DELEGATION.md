@@ -102,3 +102,38 @@ UI shows `message`, optional plan, and opens `artifactUrl` only via safe externa
 | Product requirements / phases | PRD (historical); new work needs a new PRD if scope expands |
 | Classification heuristics, tools, projection | **Code** under `web-app/src/lib/ax-bi/` |
 | REST/SDK long-term transport | Future ADR + AX BI contract — not this as-built note |
+
+---
+
+## 8. Known issues (root-caused 2026-07-23)
+
+### 8.1 Document attachment is dead on standard installs (AkiDB gate without AkiDB server)
+
+**Symptom:** clicking "Attach Document" does nothing — the file picker never opens; only an error toast appears.
+
+**Root cause (two-sided):**
+
+- Frontend gate: `web-app/src/hooks/chat/use-document-attachment-handler.ts:372-389` (`handleAttachDocsIngest`) requires MCP tools `fabric_ingest_run` / `fabric_extract` from `serviceHub.mcp().getTools()` **before** opening the picker, and returns early otherwise. `getTools()` only lists tools from connected servers. A second hard requirement exists in `web-app/src/services/uploads/default.ts` (`ensureAkidbAvailable`).
+- Backend removal: `src-tauri/src/core/mcp/constants.rs:12-53` — the `ax-studio` preset (`npx -y @ax-fabric/fabric-ingest mcp server`) was removed from `DEFAULT_MCP_CONFIG` because the npm package is unpublished (commit `894cf556`); migration v8 (`remove_unpublished_ax_studio_mcp_config`, `src-tauri/src/core/setup.rs`) also deletes it from existing user configs. The unit test at `constants.rs:60-64` asserts its absence.
+
+Net effect: no `fabric_*` tools ever exist on fresh installs or upgraded installs that used the preset, so the gate always trips. The feature only works for users who manually point an `ax-studio` MCP entry at a local ax-fabric `cli.js` build.
+
+**Scope note:** this is the AkiDB/fabric-ingest RAG attachment pipeline, orthogonal to AX BI delegation; recorded here because no other `.internal` doc covers attachments.
+
+**Status (fixed):** graceful degrade shipped — pre-picker AkiDB hard gate removed; when `fabric_ingest_run` / `fabric_extract` are absent, attach forces inline mode and `parseDocument` falls back to local UTF-8 read for text-like types (`txt`/`md`/`csv`/`html`/`htm`). Embeddings ingest still requires AkiDB when chosen and tools are present. Binary formats still need fabric_extract for extract; embeddings path remains optional/enhanced.
+
+### 8.2 ax-bi MCP toggle cannot be switched OFF
+
+**Symptom:** the ax-bi switch in Settings → MCP servers flips back ON after toggling it off.
+
+**Root cause chain:**
+
+1. Toggle OFF → `toggleServer` writes `active: false` to config, then calls `deactivateMCPServer` (`web-app/src/routes/settings/mcp-servers.tsx:454-545`).
+2. Backend `deactivate_mcp_server` (`src-tauri/src/core/mcp/commands.rs:158-163`) returns `"Server ax-bi not found"` when there is no running entry in `state.mcp_servers`.
+3. The frontend catch block treats that as fatal and rolls the store back to `active: true` (HEAD version), rewriting the config — the switch reverts.
+
+**Why ax-bi has no running entry while showing ON:** `connectAxBiMcpServer` (`web-app/src/lib/ax-bi/datasets.ts:104-131`) persists the config **without** the `Authorization` header (`removeAuthorizationHeader`, line 111) and injects the Bearer token only into the runtime activation call; the token lives in the OS keychain (`src-tauri/src/core/secrets/mod.rs`). At next app launch, boot-time activation (`run_mcp_commands`, `src-tauri/src/core/mcp/helpers.rs`) runs with the header-less config, fails (401 / endpoint down), and failed starts are never inserted into `state.mcp_servers` — yet `active: true` remains in config and UI. Same outcome when the HTTP connection drops mid-session.
+
+**Secondary defect (still unfixed):** `connectAxBiMcpServer` bypasses the zustand store (`editServer`/`setServers`), so the settings toggle can show stale state until the next bootstrap reload; toggling ON from that stale state re-activates with the header-less config and also fails.
+
+**Status (fixed):** frontend treats missing-running-server deactivate errors as success (`isMissingRunningServerError` in `web-app/src/lib/mcp/deactivate-errors.ts`, used by `mcp-servers.tsx` toggle OFF) so the switch stays OFF. Backend `deactivate_mcp_server` is idempotent: a missing map entry is success. Secondary defect (store sync after `connectAxBiMcpServer`) remains open and is out of scope for this toggle fix.
