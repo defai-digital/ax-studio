@@ -116,3 +116,6 @@ outputs/
 # Merge conflict artifacts
 *.orig
 *.rej
+
+# Local Tauri runtime data (rocksdb, caches) — never commit
+src-tauri/data/
