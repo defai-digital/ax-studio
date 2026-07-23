@@ -33,7 +33,12 @@ import { extractErrorMessage } from '@/lib/utils/error'
 import { basename, fileExtension } from '@/lib/utils'
 import { withTimeout } from '@/lib/utils/async'
 import { deleteIndexedFileChunks } from '@/lib/attachments/delete-indexed-file'
-import { hasAkidbIngestOrExtractTools } from '@/lib/attachments/akidb-tools'
+import {
+  binaryAttachmentSkipMessage,
+  canIndexBinaryAttachments,
+  classifyAttachmentIndexerCapability,
+  type AttachmentIndexerCapability,
+} from '@/lib/attachments/akidb-tools'
 import { isLocallyReadableDocument } from '@/lib/attachments/local-parse'
 
 const ATTACHMENT_AUTO_INLINE_FALLBACK_BYTES = 512 * 1024
@@ -213,22 +218,28 @@ export function useDocumentAttachmentHandler({
 
       const docChoices = new Map<string, 'inline' | 'embeddings'>()
 
-      let akidbAvailable = false
+      // ADR-005: capability from tool contract, not server name.
+      // Binary indexing only when fabric_ingest_run / fabric_extract present.
+      // AkiDB v0.9 search/pack alone → not index-capable.
+      let canFabricIndex = false
+      let indexerCapability: AttachmentIndexerCapability = 'none'
       try {
         const tools = await serviceHub.mcp().getTools()
-        akidbAvailable = hasAkidbIngestOrExtractTools(tools)
+        canFabricIndex = canIndexBinaryAttachments(tools)
+        indexerCapability = classifyAttachmentIndexerCapability(tools)
       } catch {
-        akidbAvailable = false
+        canFabricIndex = false
+        indexerCapability = 'none'
       }
 
-      // When AkiDB is unavailable, split by local readability: text → inline,
-      // binary → skip embeddings path entirely (never fabric_ingest_run).
+      // When fabric indexing is unavailable (none or aki-v09-only), split by
+      // local readability: text → inline; binary → skip embeddings entirely.
       let docsToProcess = docs
       const BINARY_SKIP_MESSAGE =
-        'PDF/DOCX and other binary documents need the AkiDB MCP server for reading — see Settings → MCP Servers.'
+        binaryAttachmentSkipMessage(indexerCapability)
 
       if (docsNeedingPrompt.length > 0) {
-        if (!akidbAvailable) {
+        if (!canFabricIndex) {
           const readable: Attachment[] = []
           const binary: Attachment[] = []
           for (const doc of docsNeedingPrompt) {
@@ -270,11 +281,16 @@ export function useDocumentAttachmentHandler({
               description: `${readable.length} text file${readable.length === 1 ? '' : 's'} attached. ${binary.length} binary file${binary.length === 1 ? '' : 's'} skipped — ${BINARY_SKIP_MESSAGE}`,
             })
           } else if (binary.length > 0) {
-            toast.warning('Documents need AkiDB', {
-              description: BINARY_SKIP_MESSAGE,
-            })
+            toast.warning(
+              indexerCapability === 'aki-v09-only'
+                ? 'AkiDB cannot index these files'
+                : 'Documents need a compatible indexer',
+              {
+                description: BINARY_SKIP_MESSAGE,
+              }
+            )
           }
-          // Text-only with no AkiDB: attach quietly (no toast).
+          // Text-only without fabric indexer: attach quietly (no toast).
         } else {
           for (let i = 0; i < docsNeedingPrompt.length; i++) {
             const doc = docsNeedingPrompt[i]
@@ -356,11 +372,12 @@ export function useDocumentAttachmentHandler({
             selectedProvider,
             contextThreshold,
             estimateTokens,
-            // Without AkiDB tools, force inline so settings set to "embeddings"
-            // do not route every file into a failing fabric_ingest_run call.
-            parsePreference: akidbAvailable ? parsePreference : 'inline',
+            // Without fabric ingest/extract, force inline so settings set to
+            // "embeddings" do not route into a failing fabric_ingest_run call.
+            parsePreference: canFabricIndex ? parsePreference : 'inline',
             // forceInline wins over any doc-level parseMode (precedence fix).
-            forceInline: !akidbAvailable,
+            forceInline: !canFabricIndex,
+            indexerCapability,
             perFileChoices: docChoices.size > 0 ? docChoices : undefined,
             updateAttachmentProcessing,
           })

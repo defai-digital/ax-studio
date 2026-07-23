@@ -19,28 +19,31 @@ import {
   projectCollectionId,
   fabricDocumentId,
 } from '@/lib/file-registry'
+import {
+  classifyAttachmentIndexerCapability,
+  unavailableIndexerErrorMessage,
+  type AttachmentIndexerCapability,
+} from '@/lib/attachments/akidb-tools'
 
-/** Cached result of the MCP availability probe (reset on each service construction). */
-let mcpAvailabilityChecked = false
-let mcpAvailable = false
-
-async function ensureAkidbAvailable(mcp: MCPService): Promise<void> {
-  if (mcpAvailabilityChecked && mcpAvailable) return
+/**
+ * Gate fabric_ingest_run: only proceed when the real ingest tool is present.
+ * AkiDB v0.9 search/pack alone must not pass (ADR-005 / UXQ-014).
+ */
+export async function ensureAkidbAvailable(mcp: MCPService): Promise<void> {
+  let capability: AttachmentIndexerCapability = 'none'
   try {
     const tools = await mcp.getTools()
-    mcpAvailable = tools.some(
-      (t) => t.name === 'fabric_ingest_run' || t.name === 'fabric_search'
-    )
-    mcpAvailabilityChecked = true
+    capability = classifyAttachmentIndexerCapability(tools)
+    const hasIngest = tools.some((t) => t.name === 'fabric_ingest_run')
+    if (hasIngest) return
   } catch {
-    mcpAvailable = false
-    mcpAvailabilityChecked = true
+    capability = 'none'
   }
-  if (!mcpAvailable) {
-    throw new Error(
-      'AkiDB is not configured. Enable or add the ax-studio AkiDB MCP server in Settings → MCP Servers. AX BI MCP and tool toggles do not provide document indexing.'
-    )
+  // fabric_search/extract without fabric_ingest_run cannot satisfy this gate
+  if (capability === 'fabric-compatible') {
+    capability = 'none'
   }
+  throw new Error(unavailableIndexerErrorMessage(capability))
 }
 
 /**
@@ -164,8 +167,6 @@ export class DefaultUploadsService implements UploadsService {
    */
   setMcpService(mcp: MCPService): void {
     this.mcpService = mcp
-    // Reset the cache when the hub is (re-)set so the next call re-probes.
-    mcpAvailabilityChecked = false
   }
 
   // ── Images — unchanged, no vector indexing ────────────────────────────

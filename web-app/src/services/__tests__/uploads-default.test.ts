@@ -1,9 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { DefaultUploadsService } from '../uploads/default'
+import {
+  DefaultUploadsService,
+  ensureAkidbAvailable,
+} from '../uploads/default'
 import { fabricDocumentId } from '@/lib/file-registry'
 import { useFileRegistry } from '@/lib/file-registry'
 import type { Attachment } from '@/types/attachment'
 import type { ServiceHub } from '@/services'
+import type { MCPService } from '../mcp/types'
 
 // Mock ulidx
 vi.mock('ulidx', () => {
@@ -49,6 +53,60 @@ describe('DefaultUploadsService', () => {
 
   afterEach(() => {
     consoleWarnSpy.mockRestore()
+  })
+
+  describe('ensureAkidbAvailable (ADR-005 contract gate)', () => {
+    it('allows when fabric_ingest_run is present', async () => {
+      const mcp = {
+        getTools: vi
+          .fn()
+          .mockResolvedValue([{ name: 'fabric_ingest_run' }]),
+      } as unknown as MCPService
+      await expect(ensureAkidbAvailable(mcp)).resolves.toBeUndefined()
+    })
+
+    it('rejects empty tools without AX BI jargon', async () => {
+      const mcp = {
+        getTools: vi.fn().mockResolvedValue([]),
+      } as unknown as MCPService
+      try {
+        await ensureAkidbAvailable(mcp)
+        expect.unreachable('should have thrown')
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        expect(msg).toMatch(/not available|Settings → MCP Servers/i)
+        expect(msg).not.toMatch(/AX BI MCP and tool toggles/i)
+      }
+    })
+
+    it('rejects AkiDB v0.9-only tools with contract-incompatible message', async () => {
+      const mcp = {
+        getTools: vi.fn().mockResolvedValue([
+          { name: 'search' },
+          { name: 'pack' },
+          { name: 'memory_write' },
+          { name: 'memory_read' },
+          { name: 'status' },
+        ]),
+      } as unknown as MCPService
+      try {
+        await ensureAkidbAvailable(mcp)
+        expect.unreachable('should have thrown')
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        expect(msg).toMatch(/lacks compatible|fabric_ingest_run/i)
+        expect(msg).not.toMatch(/AX BI|tool toggles/i)
+      }
+    })
+
+    it('rejects fabric_search alone (ingest still required)', async () => {
+      const mcp = {
+        getTools: vi.fn().mockResolvedValue([{ name: 'fabric_search' }]),
+      } as unknown as MCPService
+      await expect(ensureAkidbAvailable(mcp)).rejects.toThrow(
+        /not available|Settings → MCP Servers/i
+      )
+    })
   })
 
   describe('ingestImage', () => {
@@ -382,7 +440,28 @@ describe('DefaultUploadsService', () => {
 
       await expect(
         service.ingestFileAttachment('t1', makeDocAttachment())
-      ).rejects.toThrow('AkiDB is not configured')
+      ).rejects.toThrow(/not available|Settings → MCP Servers/i)
+    })
+
+    it('throws contract-incompatible error for AkiDB v0.9-only tools', async () => {
+      const hub = {
+        mcp: () => ({
+          getTools: vi.fn().mockResolvedValue([
+            { name: 'search' },
+            { name: 'pack' },
+            { name: 'memory_write' },
+            { name: 'memory_read' },
+            { name: 'status' },
+          ]),
+          callTool: vi.fn(),
+        }),
+      } as unknown as ServiceHub
+      service.setMcpService(hub.mcp())
+
+      await expect(
+        service.ingestFileAttachment('t1', makeDocAttachment())
+      ).rejects.toThrow(/lacks compatible|fabric_ingest_run/i)
+      expect(hub.mcp().callTool).not.toHaveBeenCalled()
     })
   })
 

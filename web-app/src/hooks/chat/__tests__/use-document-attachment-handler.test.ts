@@ -444,9 +444,15 @@ describe('useDocumentAttachmentHandler', () => {
     expect(toast.info).not.toHaveBeenCalled()
     expect(toast.warning).toHaveBeenCalledTimes(1)
     expect(toast.warning).toHaveBeenCalledWith(
-      'Documents need AkiDB',
+      expect.stringMatching(/compatible indexer|AkiDB cannot index/i),
       expect.objectContaining({
         description: expect.stringMatching(/Settings → MCP Servers/i),
+      })
+    )
+    expect(toast.warning).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        description: expect.not.stringMatching(/AX BI|tool toggles/i),
       })
     )
     const atts = useChatAttachments.getState().getAttachments(ATTACHMENTS_KEY)

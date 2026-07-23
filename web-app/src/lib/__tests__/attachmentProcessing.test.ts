@@ -327,8 +327,49 @@ describe('processAttachmentsForSend', () => {
       doc,
       'error',
       expect.objectContaining({
-        error: expect.stringMatching(/AkiDB MCP server|Settings → MCP Servers/i),
+        error: expect.stringMatching(
+          /fabric-compatible|Settings → MCP Servers|document-indexing/i
+        ),
       })
+    )
+    expect(updateAttachmentProcessing).toHaveBeenCalledWith(
+      doc,
+      'error',
+      expect.objectContaining({
+        error: expect.not.stringMatching(/AX BI|tool toggles/i),
+      })
+    )
+  })
+
+  it('forceInline with aki-v09-only capability never calls uploads', async () => {
+    const { toast } = await import('sonner')
+    const parseDocument = vi.fn().mockResolvedValue('')
+    const ingestFileAttachment = vi.fn()
+    const hub = createMockServiceHub({
+      uploads: { ingestFileAttachment },
+      rag: { parseDocument },
+    })
+    const doc: Attachment = {
+      name: 'deck.pptx',
+      type: 'document',
+      path: '/docs/deck.pptx',
+      fileType: 'pptx',
+    }
+
+    await processAttachmentsForSend({
+      attachments: [doc],
+      threadId: 'thread-1',
+      serviceHub: hub,
+      parsePreference: 'embeddings',
+      forceInline: true,
+      indexerCapability: 'aki-v09-only',
+      updateAttachmentProcessing: vi.fn(),
+    })
+
+    expect(ingestFileAttachment).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalledWith(
+      'Failed to index attachments',
+      expect.anything()
     )
   })
 

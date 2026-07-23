@@ -1,6 +1,10 @@
 import { toast } from 'sonner'
 
 import { extractErrorMessage, toError } from '@/lib/utils/error'
+import {
+  binaryAttachmentSkipMessage,
+  type AttachmentIndexerCapability,
+} from '@/lib/attachments/akidb-tools'
 
 import type { ServiceHub } from '@/services'
 import type { Attachment } from '@/types/attachment'
@@ -23,6 +27,8 @@ type AttachmentProcessingOptions = {
    * cannot re-route into a guaranteed-failing fabric_ingest_run).
    */
   forceInline?: boolean
+  /** ADR-005 capability for skip messaging when forceInline cannot parse. */
+  indexerCapability?: AttachmentIndexerCapability
   autoFallbackMode?: 'inline' | 'embeddings'
   perFileChoices?: Map<string, 'inline' | 'embeddings'>
   updateAttachmentProcessing?: (
@@ -59,6 +65,7 @@ export const processAttachmentsForSend = async (
     estimateTokens,
     parsePreference,
     forceInline = false,
+    indexerCapability = 'none',
     autoFallbackMode,
     perFileChoices,
     updateAttachmentProcessing,
@@ -242,8 +249,7 @@ export const processAttachmentsForSend = async (
           finishInline(inlineContent)
           continue
         }
-        const skipMessage =
-          'Could not attach this file as text. Binary documents (PDF/DOCX) need the AkiDB MCP server — see Settings → MCP Servers.'
+        const skipMessage = binaryAttachmentSkipMessage(indexerCapability)
         notifyUpdate(doc, 'error', {
           processing: false,
           error: skipMessage,
