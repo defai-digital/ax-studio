@@ -29,6 +29,8 @@ import { SystemEvent } from '@/types/events'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { isMissingRunningServerError } from '@/lib/mcp/deactivate-errors'
+import { AX_BI_SERVER } from '@/lib/ax-bi/endpoints'
+import { activateAxBiWithStoredToken } from '@/lib/ax-bi/activation'
 
 // Descriptions and setup hints for official MCP servers
 const OFFICIAL_SERVER_HINTS: Record<
@@ -454,13 +456,20 @@ function MCPServersDesktop() {
     let backendActivated = false
     try {
       if (active) {
-        await serviceHub.mcp().activateMCPServer(serverKey, {
-          ...config,
-          active: true,
-        })
-        backendActivated = true
-        editServer(serverKey, { ...config, active: true })
-        await syncServers()
+        if (serverKey === AX_BI_SERVER) {
+          // Inject keychain token at activation; helper persists active only
+          // after success and keeps the zustand store in sync.
+          await activateAxBiWithStoredToken(serviceHub)
+          backendActivated = true
+        } else {
+          await serviceHub.mcp().activateMCPServer(serverKey, {
+            ...config,
+            active: true,
+          })
+          backendActivated = true
+          editServer(serverKey, { ...config, active: true })
+          await syncServers()
+        }
       } else {
         editServer(serverKey, { ...config, active: false })
         await syncServers()

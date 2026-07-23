@@ -1,11 +1,6 @@
 import type { ServiceHub } from '@/services'
-import type { MCPConfig } from '@/services/mcp/types'
-import type { MCPServerConfig } from '@/hooks/tools/useMCPServers'
 import type { MCPTool, MCPToolCallResult } from '@ax-studio/core'
-import {
-  readStoredAxBiMcpToken,
-  storeAxBiMcpToken,
-} from './token-storage'
+import { readStoredAxBiMcpToken } from './token-storage'
 import {
   getFirstMcpText,
   getMcpToolFailureMessage,
@@ -19,6 +14,11 @@ import {
 } from './endpoints'
 
 export { DEFAULT_AX_BI_MCP_URL } from './endpoints'
+export {
+  activateAxBiWithStoredToken,
+  connectAxBiMcpServer,
+  normalizeAxBiToken,
+} from './activation'
 
 export type AxBiDataset = {
   id?: string | number
@@ -28,39 +28,9 @@ export type AxBiDataset = {
   url?: string
 }
 
-function containsControlCharacter(value: string): boolean {
-  return Array.from(value).some((character) => {
-    const code = character.charCodeAt(0)
-    return code <= 31 || code === 127
-  })
-}
-
-function normalizeAxBiToken(token: string): string {
-  const normalized = token.trim()
-  if (!normalized) {
-    throw new Error('AX BI API key or JWT is required.')
-  }
-  if (containsControlCharacter(normalized)) {
-    throw new Error('AX BI API key or JWT contains invalid characters.')
-  }
-  return normalized
-}
-
 export async function hasConfiguredAxBiMcpToken(): Promise<boolean> {
   const token = await readStoredAxBiMcpToken()
   return typeof token === 'string' && token.trim().length > 0
-}
-
-function removeAuthorizationHeader(
-  headers: Record<string, string> | undefined
-): Record<string, string> | undefined {
-  if (!headers) return undefined
-  const filtered = Object.fromEntries(
-    Object.entries(headers).filter(
-      ([name]) => name.toLowerCase() !== 'authorization'
-    )
-  )
-  return Object.keys(filtered).length > 0 ? filtered : undefined
 }
 
 export async function getConfiguredAxBiMcpUrl(
@@ -72,64 +42,6 @@ export async function getConfiguredAxBiMcpUrl(
     .catch(() => null)
   const axBi = config?.mcpServers?.[AX_BI_SERVER]
   return normalizeAxBiMcpUrl(axBi?.url ?? DEFAULT_AX_BI_MCP_URL)
-}
-
-export async function connectAxBiMcpServer({
-  serviceHub,
-  url,
-  token,
-}: {
-  serviceHub: ServiceHub
-  url: string
-  token?: string
-}): Promise<string> {
-  let authToken: string | null
-  if (token !== undefined && token.trim().length > 0) {
-    authToken = normalizeAxBiToken(token)
-    await storeAxBiMcpToken(authToken)
-  } else {
-    authToken = await readStoredAxBiMcpToken()
-  }
-  if (!authToken) {
-    throw new Error('AX BI API key or JWT is required.')
-  }
-  authToken = normalizeAxBiToken(authToken)
-
-  const normalizedUrl = normalizeAxBiMcpUrl(url)
-  const config = await serviceHub
-    .mcp()
-    .getMCPConfig()
-    .catch((): MCPConfig => ({}))
-  const existingServer = config.mcpServers?.[AX_BI_SERVER]
-  const persistedServer: MCPServerConfig = {
-    ...existingServer,
-    command: '',
-    args: [],
-    env: existingServer?.env ?? {},
-    type: 'http',
-    url: normalizedUrl,
-    headers: removeAuthorizationHeader(existingServer?.headers),
-    active: true,
-  }
-  const runtimeServer: MCPServerConfig = {
-    ...persistedServer,
-    headers: {
-      ...(persistedServer.headers ?? {}),
-      Authorization: `Bearer ${authToken}`,
-    },
-  }
-
-  await serviceHub.mcp().updateMCPConfig(
-    JSON.stringify({
-      mcpServers: {
-        ...(config.mcpServers ?? {}),
-        [AX_BI_SERVER]: persistedServer,
-      },
-      mcpSettings: config.mcpSettings,
-    })
-  )
-  await serviceHub.mcp().activateMCPServer(AX_BI_SERVER, runtimeServer)
-  return normalizedUrl
 }
 
 function axBiToolNames(tools: MCPTool[]): Set<string> {

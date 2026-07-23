@@ -130,7 +130,7 @@ export async function bootstrapProviders(
 
   try {
     // Load providers, MCP config, and assistants concurrently with bounded waits.
-    await Promise.all([
+    const [, mcpBootstrapData] = await Promise.all([
       withTimeout(
         getProvidersOnce(serviceHub).then((providers) => {
           if (isCancelled()) return
@@ -148,14 +148,16 @@ export async function bootstrapProviders(
 
       withTimeout(
         getMCPConfigOnce(serviceHub).then((data) => {
-          if (isCancelled()) return
+          if (isCancelled()) return undefined
           setServers(data.mcpServers ?? {})
           setSettings(data.mcpSettings ?? null)
+          return data
         }),
         MCP_BOOTSTRAP_TIMEOUT_MS,
         `MCP bootstrap timed out after ${MCP_BOOTSTRAP_TIMEOUT_MS}ms`
       ).catch((error) => {
         console.error('[bootstrap-providers] MCP bootstrap failed:', error)
+        return undefined
       }),
 
       withTimeout(
@@ -189,6 +191,29 @@ export async function bootstrapProviders(
     if (isCancelled()) {
       disposed = true
       return { result: ok(), unsubscribeDeepLink: () => {} }
+    }
+
+    // ADR-003: boot auto-start may have launched ax-bi without the keychain
+    // token. After store load, if ax-bi is active but not running, inject the
+    // token and activate once (outside the MCP config timeout).
+    const axBi = mcpBootstrapData?.mcpServers?.['ax-bi']
+    if (axBi?.active) {
+      try {
+        const connected = await serviceHub.mcp().getConnectedServers()
+        if (!connected.includes('ax-bi')) {
+          const { activateAxBiWithStoredToken } = await import(
+            '@/lib/ax-bi/activation'
+          )
+          if (!isCancelled()) {
+            await activateAxBiWithStoredToken(serviceHub)
+          }
+        }
+      } catch (error) {
+        console.warn(
+          '[bootstrap-providers] AX BI auth compensation failed:',
+          error
+        )
+      }
     }
 
     // Deep link: fetch current and register listener

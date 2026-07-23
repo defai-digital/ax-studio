@@ -102,7 +102,7 @@ async fn validate_external_transport_url(
 
     if !is_loopback_host && ax_studio_utils::is_internal_url(transport_url) {
         return Err(format!(
-            "MCP {transport_kind} URL for server {server_name} points to an internal/private address, which is not allowed"
+            "MCP {transport_kind} URL for server {server_name} points to an internal/private address, which is not allowed. Only loopback addresses (127.0.0.1, localhost, ::1) are supported"
         ));
     }
 
@@ -113,7 +113,7 @@ async fn validate_external_transport_url(
     for addr in addrs {
         if is_loopback_host && !addr.ip().is_loopback() {
             return Err(format!(
-                "MCP {transport_kind} URL for server {server_name} resolves outside loopback, which is not allowed for localhost"
+                "MCP {transport_kind} URL for server {server_name} resolves outside loopback, which is not allowed for localhost. Only loopback addresses (127.0.0.1, localhost, ::1) are supported"
             ));
         }
         if is_loopback_host && addr.ip().is_loopback() {
@@ -121,7 +121,7 @@ async fn validate_external_transport_url(
         }
         if ax_studio_utils::is_private_ip(addr.ip()) {
             return Err(format!(
-                "MCP {transport_kind} URL for server {server_name} resolves to an internal/private address, which is not allowed"
+                "MCP {transport_kind} URL for server {server_name} resolves to an internal/private address, which is not allowed. Only loopback addresses (127.0.0.1, localhost, ::1) are supported"
             ));
         }
     }
@@ -330,18 +330,31 @@ async fn schedule_mcp_start_task<R: Runtime>(
     if config_params.transport_type.as_deref() == Some("http") && config_params.url.is_some() {
         let transport_url = config_params.url.as_deref().unwrap_or("");
         validate_external_transport_url(&name, "HTTP", transport_url).await?;
-        if let Some(connect_timeout) = config_params.timeout {
-            log::debug!("MCP HTTP server {name} configured connect timeout: {connect_timeout:?}");
-        }
+        let handshake_timeout = http_connect_timeout(config_params.timeout);
+        log::debug!(
+            "MCP HTTP server {name} connect timeout: {handshake_timeout:?}"
+        );
         let transport = StreamableHttpClientTransport::from_config(
             StreamableHttpClientTransportConfig::with_uri(transport_url.to_string())
                 .custom_headers(build_mcp_headers(&config_params.headers)?),
         );
 
         let client_info = mcp_client_info("AX Studio Streamable Client");
-        let client = client_info.serve(transport).await.inspect_err(|e| {
-            log::error!("client error: {e:?}");
-        });
+        let client = match timeout(handshake_timeout, client_info.serve(transport)).await {
+            Ok(result) => result.inspect_err(|e| {
+                log::error!("client error: {e:?}");
+            }),
+            Err(_) => {
+                log::error!(
+                    "Timed out connecting to MCP HTTP server {name} after {}s",
+                    handshake_timeout.as_secs()
+                );
+                return Err(format!(
+                    "Timed out connecting to MCP server {name} after {}s",
+                    handshake_timeout.as_secs()
+                ));
+            }
+        };
 
         match client {
             Ok(client) => {
@@ -674,9 +687,31 @@ pub fn extract_active_status(config: &Value) -> Option<bool> {
 // These focused parser tests stay beside the parsing helpers; the remainder of
 // this file contains lifecycle orchestration that is easier to audit separately.
 #[allow(clippy::items_after_test_module)]
+/// Default HTTP connect timeout when `config.timeout` is unset (≤10s per ADR-003).
+const DEFAULT_HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+fn http_connect_timeout(configured: Option<Duration>) -> Duration {
+    configured.unwrap_or(DEFAULT_HTTP_CONNECT_TIMEOUT)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // --- HTTP connect timeout ---
+
+    #[test]
+    fn test_http_connect_timeout_defaults_to_10s() {
+        assert_eq!(http_connect_timeout(None), Duration::from_secs(10));
+    }
+
+    #[test]
+    fn test_http_connect_timeout_uses_configured_value() {
+        assert_eq!(
+            http_connect_timeout(Some(Duration::from_secs(3))),
+            Duration::from_secs(3)
+        );
+    }
 
     // --- extract_command_args ---
 

@@ -43,6 +43,7 @@ function makeServiceHub(overrides: Record<string, unknown> = {}) {
         mcpServers: { server1: { command: 'test' } },
         mcpSettings: { autoApprove: true },
       }),
+      getConnectedServers: vi.fn().mockResolvedValue([]),
       ...((overrides.mcp as Record<string, unknown>) ?? {}),
     }),
     assistants: () => ({

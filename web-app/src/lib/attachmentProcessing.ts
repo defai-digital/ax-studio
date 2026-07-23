@@ -17,6 +17,12 @@ type AttachmentProcessingOptions = {
   contextThreshold?: number
   estimateTokens?: (text: string) => Promise<number | undefined>
   parsePreference: 'auto' | 'inline' | 'embeddings' | 'prompt'
+  /**
+   * When true, always use inline mode and ignore doc-level `parseMode`
+   * (used for no-AkiDB forced-inline batches so user embeddings settings
+   * cannot re-route into a guaranteed-failing fabric_ingest_run).
+   */
+  forceInline?: boolean
   autoFallbackMode?: 'inline' | 'embeddings'
   perFileChoices?: Map<string, 'inline' | 'embeddings'>
   updateAttachmentProcessing?: (
@@ -52,6 +58,7 @@ export const processAttachmentsForSend = async (
     contextThreshold,
     estimateTokens,
     parsePreference,
+    forceInline = false,
     autoFallbackMode,
     perFileChoices,
     updateAttachmentProcessing,
@@ -117,7 +124,9 @@ export const processAttachmentsForSend = async (
 
       notifyUpdate(doc, 'processing')
 
-      const targetPreference = doc.parseMode ?? parsePreference
+      // forceInline wins over doc-level parseMode (UXQ-011 precedence fix).
+      const targetPreference: AttachmentProcessingOptions['parsePreference'] =
+        forceInline ? 'inline' : (doc.parseMode ?? parsePreference)
       let targetMode: DocumentInjectionMode =
         targetPreference === 'inline' ? 'inline' : 'embeddings'
       let parsedContent: string | undefined

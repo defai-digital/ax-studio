@@ -223,6 +223,58 @@ describe('RenderMarkdown', () => {
     const html = markdownContainer?.innerHTML ?? ''
     expect(html).toContain('&lt;!DOCTYPE html&gt;')
   })
+
+  it('renders fenced code blocks with Streamdown container, language, and copy control', async () => {
+    const content = 'Example:\n\n```typescript\nconst x: number = 1\n```\n'
+    const { container } = render(<RenderMarkdown content={content} />)
+    const markdown = container.querySelector('.markdown')
+    expect(markdown).toBeTruthy()
+
+    // Wait for Streamdown async code plugin / highlighter if needed
+    await vi.waitFor(
+      () => {
+        const block = container.querySelector(
+          '[data-streamdown="code-block"]'
+        )
+        expect(block).toBeTruthy()
+      },
+      { timeout: 5000 }
+    )
+
+    const block = container.querySelector('[data-streamdown="code-block"]')
+    expect(block).toBeTruthy()
+    const header = container.querySelector(
+      '[data-streamdown="code-block-header"]'
+    )
+    expect(header).toBeTruthy()
+    const headerText = header?.textContent?.toLowerCase() ?? ''
+    expect(headerText).toMatch(/typescript|ts/)
+
+    // Copy control present (button or action region)
+    const actions = container.querySelector(
+      '[data-streamdown="code-block-actions"]'
+    )
+    const copyButton =
+      actions?.querySelector('button') ??
+      container.querySelector(
+        '[data-streamdown="code-block"] button'
+      )
+    expect(copyButton).toBeTruthy()
+  })
+
+  it('leaves inline code unaffected by fenced code-block chrome', () => {
+    const content = 'Use the `inline_token` value.'
+    const { container } = render(<RenderMarkdown content={content} />)
+    const markdown = container.querySelector('.markdown')
+    expect(markdown).toBeTruthy()
+    expect(markdown?.textContent).toContain('inline_token')
+    expect(
+      container.querySelector('[data-streamdown="code-block"]')
+    ).toBeNull()
+    const code = container.querySelector('code')
+    expect(code).toBeTruthy()
+    expect(code?.textContent).toContain('inline_token')
+  })
   describe('LaTeX normalization - display math', () => {
     it('converts \\[...\\] to $$ display math', () => {
       const content = 'Here is math:\n\\[\nx^2 + y^2\n\\]\nDone'

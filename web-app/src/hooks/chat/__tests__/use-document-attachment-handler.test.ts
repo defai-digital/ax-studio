@@ -363,7 +363,7 @@ describe('useDocumentAttachmentHandler', () => {
     )
   })
 
-  it('attaches documents with inline force when AkiDB tools are missing', async () => {
+  it('attaches text documents quietly when AkiDB tools are missing', async () => {
     mockGetTools.mockResolvedValue([])
     mockDialogOpen.mockResolvedValue(['/docs/notes.md'])
     ;(fs.fileStat as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -399,21 +399,154 @@ describe('useDocumentAttachmentHandler', () => {
     })
 
     expect(mockShowPrompt).not.toHaveBeenCalled()
-    expect(toast.info).toHaveBeenCalledWith(
-      'Document indexing unavailable',
-      expect.objectContaining({
-        description: expect.stringContaining('inline'),
-      })
-    )
+    // Text-only no-AkiDB: attach quietly — no info/error toast.
+    expect(toast.info).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(toast.warning).not.toHaveBeenCalled()
     expect(processAttachmentsForSend).toHaveBeenCalledWith(
       expect.objectContaining({
         parsePreference: 'inline',
+        forceInline: true,
         perFileChoices: expect.any(Map),
       })
     )
     const choices = vi.mocked(processAttachmentsForSend).mock.calls[0][0]
       .perFileChoices as Map<string, string>
     expect(choices.get('/docs/notes.md')).toBe('inline')
+  })
+
+  it('skips binary documents with one warning when AkiDB is missing', async () => {
+    mockGetTools.mockResolvedValue([])
+    mockDialogOpen.mockResolvedValue(['/docs/report.pdf'])
+    ;(fs.fileStat as ReturnType<typeof vi.fn>).mockResolvedValue({
+      size: 2048,
+    })
+
+    const { processAttachmentsForSend } = await import(
+      '@/lib/attachmentProcessing'
+    )
+    vi.mocked(processAttachmentsForSend).mockClear()
+
+    const { result } = renderHook(() =>
+      useDocumentAttachmentHandler({
+        attachmentsKey: ATTACHMENTS_KEY,
+        effectiveThreadId: 'thread-1',
+      })
+    )
+
+    await act(async () => {
+      await result.current.handleAttachDocsIngest()
+    })
+
+    // Binary never enters processAttachmentsForSend / fabric_ingest_run.
+    expect(processAttachmentsForSend).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(toast.info).not.toHaveBeenCalled()
+    expect(toast.warning).toHaveBeenCalledTimes(1)
+    expect(toast.warning).toHaveBeenCalledWith(
+      'Documents need AkiDB',
+      expect.objectContaining({
+        description: expect.stringMatching(/Settings → MCP Servers/i),
+      })
+    )
+    const atts = useChatAttachments.getState().getAttachments(ATTACHMENTS_KEY)
+    expect(atts.some((a) => a.error && /AkiDB|Settings/i.test(a.error))).toBe(
+      true
+    )
+  })
+
+  it('mixed batch without AkiDB: one summary toast, only text files processed', async () => {
+    mockGetTools.mockResolvedValue([])
+    mockDialogOpen.mockResolvedValue(['/docs/notes.md', '/docs/report.pdf'])
+    ;(fs.fileStat as ReturnType<typeof vi.fn>).mockResolvedValue({
+      size: 512,
+    })
+
+    const { processAttachmentsForSend } = await import(
+      '@/lib/attachmentProcessing'
+    )
+    vi.mocked(processAttachmentsForSend).mockResolvedValueOnce({
+      processedAttachments: [
+        {
+          name: 'notes.md',
+          type: 'document',
+          path: '/docs/notes.md',
+          processed: true,
+          injectionMode: 'inline',
+          inlineContent: '# notes',
+        },
+      ],
+      hasEmbeddedDocuments: false,
+    })
+
+    const { result } = renderHook(() =>
+      useDocumentAttachmentHandler({
+        attachmentsKey: ATTACHMENTS_KEY,
+        effectiveThreadId: 'thread-1',
+      })
+    )
+
+    await act(async () => {
+      await result.current.handleAttachDocsIngest()
+    })
+
+    expect(processAttachmentsForSend).toHaveBeenCalledTimes(1)
+    const sent = vi.mocked(processAttachmentsForSend).mock.calls[0][0]
+      .attachments as Attachment[]
+    expect(sent.every((a) => a.name.endsWith('.md'))).toBe(true)
+    expect(sent.some((a) => a.name.endsWith('.pdf'))).toBe(false)
+    expect(toast.warning).toHaveBeenCalledTimes(1)
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(toast.info).not.toHaveBeenCalled()
+  })
+
+  it('forceInline wins over embeddings parsePreference without AkiDB', async () => {
+    mockGetTools.mockResolvedValue([])
+    mockParsePreference = 'embeddings'
+    mockDialogOpen.mockResolvedValue(['/docs/notes.md'])
+    ;(fs.fileStat as ReturnType<typeof vi.fn>).mockResolvedValue({
+      size: 128,
+    })
+
+    const { processAttachmentsForSend } = await import(
+      '@/lib/attachmentProcessing'
+    )
+    vi.mocked(processAttachmentsForSend).mockResolvedValueOnce({
+      processedAttachments: [
+        {
+          name: 'notes.md',
+          type: 'document',
+          path: '/docs/notes.md',
+          processed: true,
+          injectionMode: 'inline',
+          inlineContent: '# notes',
+        },
+      ],
+      hasEmbeddedDocuments: false,
+    })
+
+    const { result } = renderHook(() =>
+      useDocumentAttachmentHandler({
+        attachmentsKey: ATTACHMENTS_KEY,
+        effectiveThreadId: 'thread-1',
+      })
+    )
+
+    await act(async () => {
+      await result.current.handleAttachDocsIngest()
+    })
+
+    expect(processAttachmentsForSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parsePreference: 'inline',
+        forceInline: true,
+      })
+    )
+    // No parseMode on attachment that would override forceInline
+    const { createDocumentAttachment } = await import('@/types/attachment')
+    expect(createDocumentAttachment).toHaveBeenCalledWith(
+      expect.not.objectContaining({ parseMode: 'embeddings' })
+    )
   })
 
   // ── handleRemoveAttachment ───────────────────────────────────────────────

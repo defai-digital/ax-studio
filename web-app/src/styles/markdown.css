@@ -120,27 +120,59 @@
     opacity: 0.8;
   }
 
-  /* Code */
-  code {
+  /* Inline code only — fenced blocks use Streamdown data-streamdown attrs */
+  :not(pre) > code {
     font-family: monospace;
     @apply bg-secondary text-foreground;
     padding: 0.2em 0.4em;
     border-radius: 3px;
   }
 
-  pre {
+  /* Streamdown fenced code block (UXQ-030/031) */
+  [data-streamdown='code-block'] {
+    @apply border border-border bg-secondary/40 text-foreground;
+    border-radius: 0.5rem;
+    margin-bottom: 0.75em;
+    overflow: hidden;
+  }
+
+  [data-streamdown='code-block-header'] {
+    @apply flex items-center justify-between gap-2 border-b border-border bg-muted/50 px-3 py-1.5;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+      'Liberation Mono', 'Courier New', monospace;
+    font-size: 0.75rem;
+    line-height: 1.25rem;
+    color: var(--muted-foreground, oklch(0.5 0 0));
+  }
+
+  [data-streamdown='code-block-actions'] {
+    @apply flex items-center gap-1;
+  }
+
+  [data-streamdown='code-block'] pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+      'Liberation Mono', 'Courier New', monospace;
+    @apply bg-transparent text-foreground m-0 px-3 py-3;
+    overflow-x: auto;
+    margin-bottom: 0;
+  }
+
+  [data-streamdown='code-block'] pre code,
+  [data-streamdown='code-block'] code {
+    background-color: transparent;
+    padding: 0;
+    border-radius: 0;
+    @apply text-sm!;
+    display: block;
+  }
+
+  /* Legacy bare pre (outside Streamdown code-block chrome) */
+  .markdown > pre,
+  .markdown :not([data-streamdown='code-block']) > pre {
     font-family: monospace;
     @apply bg-secondary text-foreground px-0!;
     overflow-x: auto;
-    /* border-radius: 8px; */
     margin-bottom: 8px;
-  }
-
-  pre code {
-    background-color: transparent;
-    padding: 2px;
-    @apply text-sm!;
-    display: inline-block;
   }
 
   /* Links */

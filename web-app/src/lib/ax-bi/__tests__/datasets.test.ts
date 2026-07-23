@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  activateAxBiWithStoredToken,
   connectAxBiMcpServer,
   hasConfiguredAxBiMcpToken,
   listAxBiDatasets,
+  normalizeAxBiToken,
 } from '../datasets'
+import { useMCPServers } from '@/hooks/tools/useMCPServers'
+import { classifyAxBiConnectionError } from '../mcp-result'
 
 const tokenStorageMocks = vi.hoisted(() => ({
   read: vi.fn(),
@@ -20,6 +24,10 @@ describe('ax-bi datasets', () => {
     vi.clearAllMocks()
     tokenStorageMocks.read.mockResolvedValue('stored-ax-bi-token')
     tokenStorageMocks.store.mockResolvedValue(undefined)
+    useMCPServers.setState({
+      mcpServers: {},
+      deletedServerKeys: [],
+    })
   })
 
   function makeDatasetServiceHub(result: unknown) {
@@ -364,5 +372,161 @@ describe('ax-bi datasets', () => {
     await expect(
       listAxBiDatasets({ serviceHub: serviceHub as never })
     ).rejects.toThrow('access denied')
+  })
+
+  it('strips optional Bearer prefix from tokens (case-insensitive)', () => {
+    expect(normalizeAxBiToken('Bearer abc.def.ghi')).toBe('abc.def.ghi')
+    expect(normalizeAxBiToken('bearer  tok ')).toBe('tok')
+    expect(normalizeAxBiToken('BEARER sst_secret')).toBe('sst_secret')
+    expect(normalizeAxBiToken('  plain-token  ')).toBe('plain-token')
+  })
+
+  it('activateAxBiWithStoredToken injects Authorization only at runtime', async () => {
+    const updateMCPConfig = vi.fn().mockResolvedValue(undefined)
+    const activateMCPServer = vi.fn().mockResolvedValue(undefined)
+    const serviceHub = {
+      mcp: () => ({
+        getMCPConfig: vi.fn().mockResolvedValue({
+          mcpServers: {
+            'ax-bi': {
+              type: 'http',
+              url: 'http://127.0.0.1:31421/mcp',
+              active: false,
+            },
+          },
+        }),
+        updateMCPConfig,
+        activateMCPServer,
+      }),
+    }
+
+    useMCPServers.setState({
+      mcpServers: {
+        'ax-bi': {
+          command: '',
+          args: [],
+          env: {},
+          type: 'http',
+          url: 'http://127.0.0.1:31421/mcp',
+          active: false,
+        },
+      },
+    })
+
+    await activateAxBiWithStoredToken(serviceHub as never)
+
+    expect(activateMCPServer).toHaveBeenCalledWith(
+      'ax-bi',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer stored-ax-bi-token' },
+        active: true,
+      })
+    )
+    const saved = JSON.parse(updateMCPConfig.mock.calls[0][0])
+    expect(saved.mcpServers['ax-bi'].active).toBe(true)
+    expect(saved.mcpServers['ax-bi'].headers?.Authorization).toBeUndefined()
+    expect(useMCPServers.getState().mcpServers['ax-bi']?.active).toBe(true)
+    expect(
+      useMCPServers.getState().mcpServers['ax-bi']?.headers?.Authorization
+    ).toBeUndefined()
+  })
+
+  it('persists active true only after successful activation', async () => {
+    const updateMCPConfig = vi.fn().mockResolvedValue(undefined)
+    const activateMCPServer = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Failed to connect to server: 401 Unauthorized'))
+    const serviceHub = {
+      mcp: () => ({
+        getMCPConfig: vi.fn().mockResolvedValue({
+          mcpServers: {
+            'ax-bi': {
+              type: 'http',
+              url: 'http://127.0.0.1:31421/mcp',
+              command: '',
+              args: [],
+              env: {},
+            },
+          },
+        }),
+        updateMCPConfig,
+        activateMCPServer,
+      }),
+    }
+
+    useMCPServers.setState({
+      mcpServers: {
+        'ax-bi': {
+          command: '',
+          args: [],
+          env: {},
+          type: 'http',
+          url: 'http://127.0.0.1:31421/mcp',
+          active: false,
+        },
+      },
+    })
+
+    await expect(
+      connectAxBiMcpServer({
+        serviceHub: serviceHub as never,
+        url: 'http://127.0.0.1:31421/mcp',
+      })
+    ).rejects.toThrow(/401|Failed to connect/)
+
+    // Failure path writes active:false, never active:true
+    expect(updateMCPConfig).toHaveBeenCalled()
+    for (const call of updateMCPConfig.mock.calls) {
+      const saved = JSON.parse(call[0])
+      expect(saved.mcpServers['ax-bi'].active).toBe(false)
+    }
+    expect(useMCPServers.getState().mcpServers['ax-bi']?.active).toBe(false)
+  })
+
+  it('strips pasted Bearer prefix when storing a new connect token', async () => {
+    const updateMCPConfig = vi.fn().mockResolvedValue(undefined)
+    const activateMCPServer = vi.fn().mockResolvedValue(undefined)
+    const serviceHub = {
+      mcp: () => ({
+        getMCPConfig: vi.fn().mockResolvedValue({}),
+        updateMCPConfig,
+        activateMCPServer,
+      }),
+    }
+
+    await connectAxBiMcpServer({
+      serviceHub: serviceHub as never,
+      url: 'http://127.0.0.1:31421/mcp',
+      token: 'Bearer  pasted-secret-token  ',
+    })
+
+    expect(tokenStorageMocks.store).toHaveBeenCalledWith('pasted-secret-token')
+    expect(activateMCPServer.mock.calls[0][1]).toMatchObject({
+      headers: { Authorization: 'Bearer pasted-secret-token' },
+    })
+  })
+
+  it('classifies connection failures without echoing secrets', () => {
+    expect(
+      classifyAxBiConnectionError(new Error('HTTP 401 Unauthorized Bearer secret-token'))
+    ).toMatchObject({ kind: 'auth' })
+    expect(
+      classifyAxBiConnectionError(new Error('Timed out connecting to MCP server ax-bi after 10s'))
+    ).toMatchObject({ kind: 'timeout' })
+    expect(
+      classifyAxBiConnectionError(
+        new Error(
+          'MCP HTTP URL for server ax-bi points to an internal/private address, which is not allowed. Only loopback addresses'
+        )
+      )
+    ).toMatchObject({ kind: 'address_rejected' })
+    expect(
+      classifyAxBiConnectionError(new Error('Failed to connect to server: connection refused'))
+    ).toMatchObject({ kind: 'unreachable' })
+    const auth = classifyAxBiConnectionError(
+      new Error('401 Authorization: Bearer real-secret-value')
+    )
+    expect(auth.message).not.toContain('real-secret-value')
+    expect(auth.message.toLowerCase()).toMatch(/auth|401|403/)
   })
 })

@@ -26,6 +26,7 @@ import {
   listAxBiDatasets,
   type AxBiDataset,
 } from '@/lib/ax-bi/datasets'
+import { classifyAxBiConnectionError } from '@/lib/ax-bi/mcp-result'
 import { cn } from '@/lib/utils'
 import { useAxBiSessions } from '@/stores/ax-bi-session-store'
 
@@ -137,7 +138,7 @@ export function AxBiWorkspace() {
       setConnectionMessage(`${nextDatasets.length} dataset${nextDatasets.length === 1 ? '' : 's'}`)
     } catch (error) {
       setConnectionStatus('error')
-      setConnectionMessage(error instanceof Error ? error.message : String(error))
+      setConnectionMessage(classifyAxBiConnectionError(error).message)
     } finally {
       setDatasetsLoading(false)
     }
@@ -159,7 +160,7 @@ export function AxBiWorkspace() {
       await refreshDatasets(datasetSearch)
     } catch (error) {
       setConnectionStatus('error')
-      setConnectionMessage(error instanceof Error ? error.message : String(error))
+      setConnectionMessage(classifyAxBiConnectionError(error).message)
     }
   }
 

@@ -34,6 +34,7 @@ import { basename, fileExtension } from '@/lib/utils'
 import { withTimeout } from '@/lib/utils/async'
 import { deleteIndexedFileChunks } from '@/lib/attachments/delete-indexed-file'
 import { hasAkidbIngestOrExtractTools } from '@/lib/attachments/akidb-tools'
+import { isLocallyReadableDocument } from '@/lib/attachments/local-parse'
 
 const ATTACHMENT_AUTO_INLINE_FALLBACK_BYTES = 512 * 1024
 const ATTACHMENT_MODEL_READY_TIMEOUT_MS = 5_000
@@ -220,15 +221,60 @@ export function useDocumentAttachmentHandler({
         akidbAvailable = false
       }
 
+      // When AkiDB is unavailable, split by local readability: text → inline,
+      // binary → skip embeddings path entirely (never fabric_ingest_run).
+      let docsToProcess = docs
+      const BINARY_SKIP_MESSAGE =
+        'PDF/DOCX and other binary documents need the AkiDB MCP server for reading — see Settings → MCP Servers.'
+
       if (docsNeedingPrompt.length > 0) {
         if (!akidbAvailable) {
+          const readable: Attachment[] = []
+          const binary: Attachment[] = []
           for (const doc of docsNeedingPrompt) {
-            if (doc.path) docChoices.set(doc.path, 'inline')
+            const typeOrPath = doc.fileType || doc.path || doc.name
+            if (isLocallyReadableDocument(typeOrPath)) {
+              readable.push(doc)
+              if (doc.path) docChoices.set(doc.path, 'inline')
+            } else {
+              binary.push(doc)
+            }
           }
-          toast.info('Document indexing unavailable', {
-            description:
-              'Attaching as inline content. Enable or add the ax-studio AkiDB MCP server for embeddings-based indexing.',
-          })
+          // Only process readable + already-processed docs; binaries never
+          // enter processAttachmentsForSend / fabric_ingest_run.
+          const alreadyReady = docs.filter(
+            (doc) => doc.processed || doc.injectionMode
+          )
+          docsToProcess = [...alreadyReady, ...readable]
+
+          if (binary.length > 0) {
+            setAttachmentsForThread(attachmentsKey, (prev) =>
+              prev.map((att) => {
+                const match = binary.find(
+                  (b) => b.path && att.path && b.path === att.path
+                )
+                if (!match) return att
+                return {
+                  ...att,
+                  processing: false,
+                  processed: false,
+                  error: BINARY_SKIP_MESSAGE,
+                }
+              })
+            )
+          }
+
+          // At most one summary toast per batch — never info+error pair.
+          if (readable.length > 0 && binary.length > 0) {
+            toast.warning('Some documents could not be attached', {
+              description: `${readable.length} text file${readable.length === 1 ? '' : 's'} attached. ${binary.length} binary file${binary.length === 1 ? '' : 's'} skipped — ${BINARY_SKIP_MESSAGE}`,
+            })
+          } else if (binary.length > 0) {
+            toast.warning('Documents need AkiDB', {
+              description: BINARY_SKIP_MESSAGE,
+            })
+          }
+          // Text-only with no AkiDB: attach quietly (no toast).
         } else {
           for (let i = 0; i < docsNeedingPrompt.length; i++) {
             const doc = docsNeedingPrompt[i]
@@ -297,10 +343,14 @@ export function useDocumentAttachmentHandler({
         }
       }
 
+      if (docsToProcess.length === 0) {
+        return
+      }
+
       try {
         const { processedAttachments, hasEmbeddedDocuments } =
           await processAttachmentsForSend({
-            attachments: docs,
+            attachments: docsToProcess,
             threadId: processingThreadId,
             serviceHub,
             selectedProvider,
@@ -309,6 +359,8 @@ export function useDocumentAttachmentHandler({
             // Without AkiDB tools, force inline so settings set to "embeddings"
             // do not route every file into a failing fabric_ingest_run call.
             parsePreference: akidbAvailable ? parsePreference : 'inline',
+            // forceInline wins over any doc-level parseMode (precedence fix).
+            forceInline: !akidbAvailable,
             perFileChoices: docChoices.size > 0 ? docChoices : undefined,
             updateAttachmentProcessing,
           })
@@ -422,7 +474,9 @@ export function useDocumentAttachmentHandler({
             path: p,
             fileType,
             size,
-            parseMode: parsePreference,
+            // Omit parseMode on this path so forced-inline (no AkiDB) cannot
+            // be overridden by a user embeddings preference (UXQ-011).
+            // processAttachmentsForSend uses forceInline / parsePreference.
           })
         )
       }

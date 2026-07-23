@@ -1,4 +1,13 @@
-import { type ComponentProps, type ReactNode, isValidElement, memo, useMemo, useCallback } from 'react'
+import {
+  type ComponentProps,
+  type ReactElement,
+  type ReactNode,
+  cloneElement,
+  isValidElement,
+  memo,
+  useMemo,
+  useCallback,
+} from 'react'
 import { AXMarkdown, axDefaultRehypePlugins } from '@/lib/markdown/renderer'
 import { cn, disableIndentedCodeBlockPlugin } from '@/lib/utils'
 import { cjk } from '@streamdown/cjk'
@@ -8,6 +17,8 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { CitationChip } from '@/components/citations/CitationChip'
 import { useCitations } from '@/hooks/citations/use-citations'
+import { axStudioLightTheme } from '@/lib/themes/shiki-theme-light'
+import { axStudioDarkTheme } from '@/lib/themes/shiki-theme-dark'
 
 /** Recursively extract text from React children (handles Streamdown's animated <span> wraps). */
 function extractTextFromNode(node: ReactNode): string {
@@ -113,14 +124,20 @@ function RenderMarkdownComponent({
   )
 
   /**
-   * Custom `pre` component:
-   * - All cases: return children unchanged (same as Streamdown default).
+   * Custom `pre` component — matches Streamdown's default:
+   * strip the outer <pre> but mark the child as a block (`data-block`) so the
+   * `code` component renders CodeBlock chrome (header/copy) instead of inline.
    *
    * Streamdown passes `passNode: true` so we receive the HAST pre node as `node`.
    */
   const preOverride = useMemo(
     () =>
       ({ children }: { node?: unknown; children?: ReactNode }) => {
+        if (isValidElement(children)) {
+          return cloneElement(children as ReactElement<{ 'data-block'?: string }>, {
+            'data-block': 'true',
+          })
+        }
         return <>{children}</>
       },
     []
@@ -180,6 +197,11 @@ function RenderMarkdownComponent({
           axDefaultRehypePlugins.harden,
         ]}
         components={mergedComponents as MarkdownComponents}
+        // App-themed Shiki highlighting + code-block chrome (header/copy).
+        shikiTheme={[axStudioLightTheme, axStudioDarkTheme]}
+        controls={{
+          code: { copy: true, download: false },
+        }}
         plugins={{
           code: code as NonNullable<ComponentProps<typeof AXMarkdown>['plugins']>['code'],
           cjk: cjk,

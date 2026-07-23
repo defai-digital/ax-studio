@@ -265,6 +265,28 @@ describe('processAttachmentsForSend', () => {
     expect(result.hasEmbeddedDocuments).toBe(false)
   })
 
+  it('forceInline overrides doc-level parseMode embeddings', async () => {
+    const doc: Attachment = {
+      name: 'forced.txt',
+      type: 'document',
+      path: '/path/to/forced.txt',
+      parseMode: 'embeddings',
+    }
+
+    const hub = createMockServiceHub()
+    const result = await processAttachmentsForSend({
+      attachments: [doc],
+      threadId: 'thread-1',
+      serviceHub: hub,
+      parsePreference: 'embeddings',
+      forceInline: true,
+    })
+
+    expect(result.processedAttachments).toHaveLength(1)
+    expect(result.processedAttachments[0].injectionMode).toBe('inline')
+    expect(hub.uploads().ingestFileAttachment).not.toHaveBeenCalled()
+  })
+
   it('falls back to embeddings when inline parsing fails', async () => {
     const doc: Attachment = {
       name: 'fallback-doc.txt',

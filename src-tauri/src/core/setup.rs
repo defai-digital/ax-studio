@@ -935,8 +935,21 @@ fn setup_window_theme_listener<R: Runtime>(
 ) {
     let window_label = window.label().to_string();
     let app_handle_clone = app_handle.clone();
+    #[cfg(target_os = "macos")]
+    let window_for_close = window.clone();
 
     window.on_window_event(move |event| {
+        // macOS: red close button hides the main window instead of quitting
+        // (platform convention). Cmd+Q / Quit still exit via ExitRequested.
+        #[cfg(target_os = "macos")]
+        if let WindowEvent::CloseRequested { api, .. } = event {
+            if window_label == "main" {
+                api.prevent_close();
+                let _ = window_for_close.hide();
+                return;
+            }
+        }
+
         if let WindowEvent::ThemeChanged(theme) = event {
             let theme_str = match theme {
                 tauri::Theme::Light => "light",
@@ -1087,6 +1100,20 @@ pub fn app_run_handler(app: &tauri::AppHandle, event: RunEvent) {
         RunEvent::Opened { urls } => {
             let paths = crate::core::open_files::paths_from_opened_urls(urls);
             crate::core::open_files::handle_opened_paths(app, paths);
+        }
+        // macOS: dock click with no visible windows restores the main window
+        // (pairs with CloseRequested hide above).
+        #[cfg(target_os = "macos")]
+        RunEvent::Reopen {
+            has_visible_windows, ..
+        } => {
+            if !has_visible_windows {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.unminimize();
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
         }
         RunEvent::ExitRequested { code, api, .. } => {
             log::warn!("Tauri exit requested with code: {code:?}");
