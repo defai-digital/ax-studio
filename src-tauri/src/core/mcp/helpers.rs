@@ -331,9 +331,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
         let transport_url = config_params.url.as_deref().unwrap_or("");
         validate_external_transport_url(&name, "HTTP", transport_url).await?;
         let handshake_timeout = http_connect_timeout(config_params.timeout);
-        log::debug!(
-            "MCP HTTP server {name} connect timeout: {handshake_timeout:?}"
-        );
+        log::debug!("MCP HTTP server {name} connect timeout: {handshake_timeout:?}");
         let transport = StreamableHttpClientTransport::from_config(
             StreamableHttpClientTransportConfig::with_uri(transport_url.to_string())
                 .custom_headers(build_mcp_headers(&config_params.headers)?),

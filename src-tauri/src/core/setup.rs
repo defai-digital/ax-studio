@@ -1105,7 +1105,8 @@ pub fn app_run_handler(app: &tauri::AppHandle, event: RunEvent) {
         // (pairs with CloseRequested hide above).
         #[cfg(target_os = "macos")]
         RunEvent::Reopen {
-            has_visible_windows, ..
+            has_visible_windows,
+            ..
         } => {
             if !has_visible_windows {
                 if let Some(window) = app.get_webview_window("main") {
