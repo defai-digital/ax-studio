@@ -11,11 +11,30 @@ import {
   mcpSettingsSchema,
   parseMcpServersRecord,
 } from '@/schemas/mcp.schema'
-import { extractErrorMessage, toError } from '@/lib/utils/error'
+import { extractErrorMessage } from '@/lib/utils/error'
 
 const DEFAULT_UNAVAILABLE_TOOL_ERROR = 'MCP service unavailable'
 const DEFAULT_UNAVAILABLE_TOOL_ERROR_AFTER_RESTART =
   'MCP service unavailable after restart'
+
+/**
+ * Preserve the underlying invoke/transport message when wrapping MCP lifecycle
+ * failures. Avoids collapsing string rejections into a generic shell only.
+ */
+function wrapMcpLifecycleError(error: unknown, genericShell: string): Error {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error
+  }
+  const detail = extractErrorMessage(error, '')
+  if (!detail || detail === genericShell) {
+    return new Error(genericShell)
+  }
+  // Avoid double-prefixing when detail already mentions the shell.
+  if (detail.toLowerCase().includes(genericShell.toLowerCase())) {
+    return new Error(detail)
+  }
+  return new Error(`${genericShell}: ${detail}`)
+}
 
 type MCPToolCallResult = Awaited<ReturnType<MCPService['callTool']>>
 
@@ -244,7 +263,9 @@ export class TauriMCPService implements MCPService {
       await invoke('activate_mcp_server', { name, config })
     } catch (error) {
       console.error(`Failed to activate MCP server "${name}":`, error)
-      throw toError(error, `Failed to activate MCP server "${name}"`)
+      // Tauri often rejects with a string/object, not Error — preserve the
+      // underlying transport/auth/timeout/SSRF cause for UI taxonomy (ADR-003).
+      throw wrapMcpLifecycleError(error, `Failed to activate MCP server "${name}"`)
     }
   }
 
@@ -253,7 +274,10 @@ export class TauriMCPService implements MCPService {
       await invoke('deactivate_mcp_server', { name })
     } catch (error) {
       console.error(`Failed to deactivate MCP server "${name}":`, error)
-      throw toError(error, `Failed to deactivate MCP server "${name}"`)
+      throw wrapMcpLifecycleError(
+        error,
+        `Failed to deactivate MCP server "${name}"`
+      )
     }
   }
 

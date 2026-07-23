@@ -31,6 +31,8 @@ import { cn } from '@/lib/utils'
 import { isMissingRunningServerError } from '@/lib/mcp/deactivate-errors'
 import { AX_BI_SERVER } from '@/lib/ax-bi/endpoints'
 import { activateAxBiWithStoredToken } from '@/lib/ax-bi/activation'
+import { classifyAxBiConnectionError } from '@/lib/ax-bi/mcp-result'
+import { extractErrorMessage } from '@/lib/utils/error'
 
 // Descriptions and setup hints for official MCP servers
 const OFFICIAL_SERVER_HINTS: Record<
@@ -519,12 +521,16 @@ function MCPServersDesktop() {
       } catch (syncError) {
         console.error('Failed to roll back MCP server state:', syncError)
       }
+      const rawMsg = extractErrorMessage(
+        error,
+        `Failed to ${active ? 'start' : 'stop'} MCP server "${serverKey}"`
+      )
+      // ax-bi: map to ADR-003 taxonomy (auth / timeout / SSRF / unreachable)
+      // so the toast is actionable, not only the generic activate shell.
       const errMsg =
-        typeof error === 'string'
-          ? error
-          : error instanceof Error
-            ? error.message
-            : String(error)
+        serverKey === AX_BI_SERVER && active
+          ? classifyAxBiConnectionError(error).message
+          : rawMsg
       setErrorMessage({
         message: errMsg,
         subtitle: t('mcp-servers:checkParams'),

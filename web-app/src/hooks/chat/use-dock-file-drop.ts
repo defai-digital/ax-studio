@@ -34,7 +34,6 @@ import { extractErrorMessage } from '@/lib/utils/error'
 
 export function useDockFileDrop() {
   const attachmentsKey = NEW_THREAD_ATTACHMENT_KEY
-  const parsePreference = useAttachments((s) => s.parseMode)
   const maxFileSizeMB = useAttachments((s) => s.maxFileSizeMB)
   const setAttachmentsForThread = useChatAttachments(
     (state) => state.setAttachments
@@ -133,7 +132,8 @@ export function useDockFileDrop() {
               path: p,
               fileType,
               size,
-              parseMode: parsePreference,
+              // Omit parseMode so no-AkiDB forceInline cannot be overridden by
+              // a user embeddings preference (same as file-picker attach path).
             })
           )
         }
@@ -187,7 +187,6 @@ export function useDockFileDrop() {
     },
     [
       attachmentsKey,
-      parsePreference,
       maxFileSizeMB,
       setAttachmentsForThread,
       processImageFiles,

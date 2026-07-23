@@ -287,6 +287,85 @@ describe('processAttachmentsForSend', () => {
     expect(hub.uploads().ingestFileAttachment).not.toHaveBeenCalled()
   })
 
+  it('forceInline never calls uploads when local parse is empty (no ensureAkidb toast)', async () => {
+    const { toast } = await import('sonner')
+    const parseDocument = vi.fn().mockResolvedValue('')
+    const ingestFileAttachment = vi.fn().mockRejectedValue(
+      new Error(
+        'AkiDB is not configured. Enable or add the ax-studio AkiDB MCP server in Settings → MCP Servers. AX BI MCP and tool toggles do not provide document indexing.'
+      )
+    )
+    const hub = createMockServiceHub({
+      uploads: { ingestFileAttachment },
+      rag: { parseDocument },
+    })
+    const doc: Attachment = {
+      name: 'report.pdf',
+      type: 'document',
+      path: '/docs/report.pdf',
+      fileType: 'pdf',
+      parseMode: 'embeddings',
+    }
+    const updateAttachmentProcessing = vi.fn()
+
+    const result = await processAttachmentsForSend({
+      attachments: [doc],
+      threadId: 'thread-1',
+      serviceHub: hub,
+      parsePreference: 'embeddings',
+      forceInline: true,
+      updateAttachmentProcessing,
+    })
+
+    expect(ingestFileAttachment).not.toHaveBeenCalled()
+    expect(result.processedAttachments).toHaveLength(0)
+    expect(toast.error).not.toHaveBeenCalledWith(
+      'Failed to index attachments',
+      expect.anything()
+    )
+    expect(updateAttachmentProcessing).toHaveBeenCalledWith(
+      doc,
+      'error',
+      expect.objectContaining({
+        error: expect.stringMatching(/AkiDB MCP server|Settings → MCP Servers/i),
+      })
+    )
+  })
+
+  it('forceInline attaches text without ingest when parse succeeds', async () => {
+    const { toast } = await import('sonner')
+    const parseDocument = vi.fn().mockResolvedValue('# notes')
+    const ingestFileAttachment = vi.fn()
+    const hub = createMockServiceHub({
+      uploads: { ingestFileAttachment },
+      rag: { parseDocument },
+    })
+    const doc: Attachment = {
+      name: 'notes.md',
+      type: 'document',
+      path: '/docs/notes.md',
+      fileType: 'md',
+      parseMode: 'embeddings',
+    }
+
+    const result = await processAttachmentsForSend({
+      attachments: [doc],
+      threadId: 'thread-1',
+      serviceHub: hub,
+      parsePreference: 'embeddings',
+      forceInline: true,
+    })
+
+    expect(ingestFileAttachment).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(result.processedAttachments[0]).toEqual(
+      expect.objectContaining({
+        injectionMode: 'inline',
+        inlineContent: '# notes',
+      })
+    )
+  })
+
   it('falls back to embeddings when inline parsing fails', async () => {
     const doc: Attachment = {
       name: 'fallback-doc.txt',

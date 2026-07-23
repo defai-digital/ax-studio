@@ -68,6 +68,38 @@ describe('TauriMCPService activation commands', () => {
     ).rejects.toThrow('boom')
   })
 
+  it('preserves string invoke rejections instead of a generic shell only', async () => {
+    invokeMock.mockRejectedValue(
+      'Timed out connecting to MCP server ax-bi after 10s'
+    )
+
+    await expect(
+      service.activateMCPServer('ax-bi', {
+        command: '',
+        args: [],
+        env: {},
+        type: 'http',
+        url: 'http://127.0.0.1:31421/mcp',
+      })
+    ).rejects.toThrow(/Timed out connecting to MCP server ax-bi/)
+  })
+
+  it('preserves object-shaped invoke rejections with a message field', async () => {
+    invokeMock.mockRejectedValue({
+      message: 'HTTP 401 Unauthorized',
+    })
+
+    await expect(
+      service.activateMCPServer('ax-bi', {
+        command: '',
+        args: [],
+        env: {},
+        type: 'http',
+        url: 'http://127.0.0.1:31421/mcp',
+      })
+    ).rejects.toThrow(/401 Unauthorized/)
+  })
+
   it('rethrows deactivation failures', async () => {
     invokeMock.mockRejectedValue(new Error('deactivate boom'))
 

@@ -221,6 +221,38 @@ export const processAttachmentsForSend = async (
         continue
       }
 
+      // forceInline (no-AkiDB path): never call uploads/embeddings —
+      // empty local parse must not fall through into ensureAkidbAvailable
+      // ("Failed to index attachments / AkiDB is not configured…").
+      if (forceInline) {
+        let inlineContent = parsedContent
+        if (!inlineContent && doc.path) {
+          try {
+            inlineContent = await serviceHub
+              .rag()
+              .parseDocument?.(doc.path, doc.fileType)
+          } catch (parseErr) {
+            console.warn(
+              `[AttachProc] forceInline re-parse failed for ${doc.name}`,
+              parseErr
+            )
+          }
+        }
+        if (inlineContent) {
+          finishInline(inlineContent)
+          continue
+        }
+        const skipMessage =
+          'Could not attach this file as text. Binary documents (PDF/DOCX) need the AkiDB MCP server — see Settings → MCP Servers.'
+        notifyUpdate(doc, 'error', {
+          processing: false,
+          error: skipMessage,
+        })
+        // Do not throw: batch-level "Failed to index attachments" toast is
+        // reserved for genuine embeddings failures, not no-AkiDB skips.
+        continue
+      }
+
       // Default: ingest as embeddings (also recovers when inline parse failed
       // but fabric_ingest is available). When AkiDB is missing, catch falls
       // back to inline text if parseDocument can still produce content.
