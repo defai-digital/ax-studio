@@ -184,9 +184,7 @@ pub async fn deactivate_mcp_server<R: Runtime>(
             }
         }
     } else {
-        log::info!(
-            "Server {name} was not running; treating deactivate as success"
-        );
+        log::info!("Server {name} was not running; treating deactivate as success");
     }
 
     {
