@@ -290,11 +290,13 @@ describe('processAttachmentsForSend', () => {
   it('forceInline never calls uploads when local parse is empty (no ensureAkidb toast)', async () => {
     const { toast } = await import('sonner')
     const parseDocument = vi.fn().mockResolvedValue('')
-    const ingestFileAttachment = vi.fn().mockRejectedValue(
-      new Error(
-        'AkiDB is not configured. Enable or add the ax-studio AkiDB MCP server in Settings → MCP Servers. AX BI MCP and tool toggles do not provide document indexing.'
+    const ingestFileAttachment = vi
+      .fn()
+      .mockRejectedValue(
+        new Error(
+          'AkiDB is not configured. Enable or add the ax-studio AkiDB MCP server in Settings → MCP Servers. AX BI MCP and tool toggles do not provide document indexing.'
+        )
       )
-    )
     const hub = createMockServiceHub({
       uploads: { ingestFileAttachment },
       rag: { parseDocument },
@@ -327,8 +329,87 @@ describe('processAttachmentsForSend', () => {
       doc,
       'error',
       expect.objectContaining({
-        error: expect.stringMatching(/AkiDB MCP server|Settings → MCP Servers/i),
+        error: expect.stringMatching(
+          /fabric-compatible|Settings → MCP Servers|document-indexing/i
+        ),
       })
+    )
+    expect(updateAttachmentProcessing).toHaveBeenCalledWith(
+      doc,
+      'error',
+      expect.objectContaining({
+        error: expect.not.stringMatching(/AX BI|tool toggles/i),
+      })
+    )
+  })
+
+  it('preserves native extraction errors for force-inline binary files', async () => {
+    const extractionError = new Error(
+      'PDF contains no extractable text; scanned PDFs require OCR'
+    )
+    const parseDocument = vi.fn().mockRejectedValue(extractionError)
+    const ingestFileAttachment = vi.fn()
+    const updateAttachmentProcessing = vi.fn()
+    const hub = createMockServiceHub({
+      uploads: { ingestFileAttachment },
+      rag: { parseDocument },
+    })
+    const doc: Attachment = {
+      name: 'scan.pdf',
+      type: 'document',
+      path: '/docs/scan.pdf',
+      fileType: 'pdf',
+    }
+
+    const result = await processAttachmentsForSend({
+      attachments: [doc],
+      threadId: 'thread-1',
+      serviceHub: hub,
+      parsePreference: 'inline',
+      forceInline: true,
+      updateAttachmentProcessing,
+    })
+
+    expect(result.processedAttachments).toHaveLength(0)
+    expect(ingestFileAttachment).not.toHaveBeenCalled()
+    expect(updateAttachmentProcessing).toHaveBeenCalledWith(
+      doc,
+      'error',
+      expect.objectContaining({
+        error: expect.stringMatching(/scanned PDFs require OCR/i),
+      })
+    )
+  })
+
+  it('forceInline with aki-v09-only capability never calls uploads', async () => {
+    const { toast } = await import('sonner')
+    const parseDocument = vi.fn().mockResolvedValue('')
+    const ingestFileAttachment = vi.fn()
+    const hub = createMockServiceHub({
+      uploads: { ingestFileAttachment },
+      rag: { parseDocument },
+    })
+    const doc: Attachment = {
+      name: 'deck.pptx',
+      type: 'document',
+      path: '/docs/deck.pptx',
+      fileType: 'pptx',
+    }
+
+    await processAttachmentsForSend({
+      attachments: [doc],
+      threadId: 'thread-1',
+      serviceHub: hub,
+      parsePreference: 'embeddings',
+      forceInline: true,
+      indexerCapability: 'aki-v09-only',
+      updateAttachmentProcessing: vi.fn(),
+    })
+
+    expect(ingestFileAttachment).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalledWith(
+      'Failed to index attachments',
+      expect.anything()
     )
   })
 

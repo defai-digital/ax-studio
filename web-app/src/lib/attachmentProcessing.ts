@@ -1,6 +1,10 @@
 import { toast } from 'sonner'
 
 import { extractErrorMessage, toError } from '@/lib/utils/error'
+import {
+  binaryAttachmentSkipMessage,
+  type AttachmentIndexerCapability,
+} from '@/lib/attachments/akidb-tools'
 
 import type { ServiceHub } from '@/services'
 import type { Attachment } from '@/types/attachment'
@@ -23,6 +27,8 @@ type AttachmentProcessingOptions = {
    * cannot re-route into a guaranteed-failing fabric_ingest_run).
    */
   forceInline?: boolean
+  /** ADR-005 capability for skip messaging when forceInline cannot parse. */
+  indexerCapability?: AttachmentIndexerCapability
   autoFallbackMode?: 'inline' | 'embeddings'
   perFileChoices?: Map<string, 'inline' | 'embeddings'>
   updateAttachmentProcessing?: (
@@ -59,6 +65,7 @@ export const processAttachmentsForSend = async (
     estimateTokens,
     parsePreference,
     forceInline = false,
+    indexerCapability = 'none',
     autoFallbackMode,
     perFileChoices,
     updateAttachmentProcessing,
@@ -130,6 +137,7 @@ export const processAttachmentsForSend = async (
       let targetMode: DocumentInjectionMode =
         targetPreference === 'inline' ? 'inline' : 'embeddings'
       let parsedContent: string | undefined
+      let inlineParseError: string | undefined
 
       // Project files always use embeddings, never inline
       if (projectId) {
@@ -145,6 +153,10 @@ export const processAttachmentsForSend = async (
             .rag()
             .parseDocument?.(doc.path!, doc.fileType)
         } catch (err) {
+          inlineParseError = extractErrorMessage(
+            err,
+            `Could not extract text from ${doc.name}`
+          )
           console.warn(
             `[AttachProc] Failed to parse ${doc.name} for inline use`,
             err
@@ -232,6 +244,10 @@ export const processAttachmentsForSend = async (
               .rag()
               .parseDocument?.(doc.path, doc.fileType)
           } catch (parseErr) {
+            inlineParseError = extractErrorMessage(
+              parseErr,
+              `Could not extract text from ${doc.name}`
+            )
             console.warn(
               `[AttachProc] forceInline re-parse failed for ${doc.name}`,
               parseErr
@@ -243,7 +259,7 @@ export const processAttachmentsForSend = async (
           continue
         }
         const skipMessage =
-          'Could not attach this file as text. Binary documents (PDF/DOCX) need the AkiDB MCP server — see Settings → MCP Servers.'
+          inlineParseError ?? binaryAttachmentSkipMessage(indexerCapability)
         notifyUpdate(doc, 'error', {
           processing: false,
           error: skipMessage,

@@ -1,9 +1,27 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { DefaultUploadsService } from '../uploads/default'
+
+const readFileSync = vi.hoisted(() => vi.fn())
+
+vi.mock('@ax-studio/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@ax-studio/core')>()
+  return {
+    ...actual,
+    fs: {
+      ...(actual as { fs?: object }).fs,
+      readFileSync,
+    },
+  }
+})
+
+import {
+  DefaultUploadsService,
+  ensureAkidbAvailable,
+} from '../uploads/default'
 import { fabricDocumentId } from '@/lib/file-registry'
 import { useFileRegistry } from '@/lib/file-registry'
 import type { Attachment } from '@/types/attachment'
 import type { ServiceHub } from '@/services'
+import type { MCPService } from '../mcp/types'
 
 // Mock ulidx
 vi.mock('ulidx', () => {
@@ -44,11 +62,59 @@ describe('DefaultUploadsService', () => {
   beforeEach(() => {
     service = new DefaultUploadsService()
     useFileRegistry.setState({ files: {} })
+    readFileSync.mockReset()
     consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
 
   afterEach(() => {
     consoleWarnSpy.mockRestore()
+  })
+
+  describe('ensureAkidbAvailable (ADR-005 contract gate)', () => {
+    it('allows when fabric_ingest_run is present', async () => {
+      const mcp = {
+        getTools: vi
+          .fn()
+          .mockResolvedValue([{ name: 'fabric_ingest_run' }]),
+      } as unknown as MCPService
+      await expect(ensureAkidbAvailable(mcp)).resolves.toBeUndefined()
+    })
+
+    it('rejects empty tools without AX BI jargon', async () => {
+      const mcp = {
+        getTools: vi.fn().mockResolvedValue([]),
+      } as unknown as MCPService
+      try {
+        await ensureAkidbAvailable(mcp)
+        expect.unreachable('should have thrown')
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        expect(msg).toMatch(/not available|Settings → MCP Servers/i)
+        expect(msg).not.toMatch(/AX BI MCP and tool toggles/i)
+      }
+    })
+
+    it('allows AkiDB v0.9 memory tools for text-document indexing', async () => {
+      const mcp = {
+        getTools: vi.fn().mockResolvedValue([
+          { name: 'search' },
+          { name: 'pack' },
+          { name: 'memory_write' },
+          { name: 'memory_read' },
+          { name: 'status' },
+        ]),
+      } as unknown as MCPService
+      await expect(ensureAkidbAvailable(mcp)).resolves.toBeUndefined()
+    })
+
+    it('rejects fabric_search alone (ingest still required)', async () => {
+      const mcp = {
+        getTools: vi.fn().mockResolvedValue([{ name: 'fabric_search' }]),
+      } as unknown as MCPService
+      await expect(ensureAkidbAvailable(mcp)).rejects.toThrow(
+        /not available|Settings → MCP Servers/i
+      )
+    })
   })
 
   describe('ingestImage', () => {
@@ -310,6 +376,95 @@ describe('DefaultUploadsService', () => {
       expect(files[0].chunk_count).toBe(5)
     })
 
+    it('indexes locally readable text documents through latest AkiDB memory_write', async () => {
+      const callTool = vi.fn().mockResolvedValue({
+        error: '',
+        content: [{ text: "stored memory 'chunk'" }],
+      })
+      const mcp = {
+        getTools: vi.fn().mockResolvedValue([
+          { name: 'search' },
+          { name: 'pack' },
+          { name: 'memory_write' },
+          { name: 'memory_read' },
+          { name: 'status' },
+        ]),
+        callTool,
+      } as unknown as MCPService
+      readFileSync.mockResolvedValueOnce('# Notes\n\nA useful markdown body.')
+      service.setMcpService(mcp)
+
+      const result = await service.ingestFileAttachment(
+        't1',
+        makeDocAttachment({
+          name: 'notes.md',
+          path: '/tmp/notes.md',
+          fileType: 'md',
+          size: 32,
+        })
+      )
+
+      expect(result.id).toBe(fabricDocumentId('/tmp/notes.md'))
+      expect(result.chunkCount).toBe(1)
+      expect(callTool).toHaveBeenCalledWith({
+        toolName: 'memory_write',
+        arguments: expect.objectContaining({
+          id: `${fabricDocumentId('/tmp/notes.md')}:0`,
+          kind: 'source',
+          text: expect.stringContaining('A useful markdown body.'),
+          source_uri: '/tmp/notes.md',
+          workspace: 'thread_t1',
+        }),
+      })
+      expect(useFileRegistry.getState().listFiles('thread_t1')).toHaveLength(1)
+    })
+
+    it('extracts and indexes binary documents through latest AkiDB memory_write', async () => {
+      const callTool = vi.fn().mockResolvedValue({
+        error: '',
+        content: [{ text: "stored memory 'chunk'" }],
+      })
+      const mcp = {
+        getTools: vi.fn().mockResolvedValue([
+          { name: 'search' },
+          { name: 'pack' },
+          { name: 'memory_write' },
+          { name: 'memory_read' },
+          { name: 'status' },
+        ]),
+        callTool,
+      } as unknown as MCPService
+      const core = {
+        invoke: vi.fn().mockResolvedValue({
+          text: '## Page 1\n\nExtracted PDF body.',
+          metadata: { format: 'pdf', unitCount: 1, truncated: false },
+          warnings: [],
+        }),
+      }
+      service.setMcpService(mcp)
+      service.setCoreService(core as never)
+
+      const result = await service.ingestFileAttachment(
+        't1',
+        makeDocAttachment()
+      )
+
+      expect(result.id).toBe(fabricDocumentId('/tmp/report.pdf'))
+      expect(result.chunkCount).toBe(1)
+      expect(core.invoke).toHaveBeenCalledWith('extract_document_text', {
+        path: '/tmp/report.pdf',
+        fileType: 'pdf',
+      })
+      expect(callTool).toHaveBeenCalledWith({
+        toolName: 'memory_write',
+        arguments: expect.objectContaining({
+          text: expect.stringContaining('Extracted PDF body.'),
+          source_uri: '/tmp/report.pdf',
+          workspace: 'thread_t1',
+        }),
+      })
+    })
+
     it('throws when fabric_ingest_run returns error', async () => {
       const hub = makeServiceHub({
         error: 'pipeline crashed',
@@ -382,7 +537,27 @@ describe('DefaultUploadsService', () => {
 
       await expect(
         service.ingestFileAttachment('t1', makeDocAttachment())
-      ).rejects.toThrow('AkiDB is not configured')
+      ).rejects.toThrow(/not available|Settings → MCP Servers/i)
+    })
+
+    it('rejects binary files with latest AkiDB v0.9 tools when native extraction is unavailable', async () => {
+      const callTool = vi.fn()
+      const mcp = {
+        getTools: vi.fn().mockResolvedValue([
+          { name: 'search' },
+          { name: 'pack' },
+          { name: 'memory_write' },
+          { name: 'memory_read' },
+          { name: 'status' },
+        ]),
+        callTool,
+      } as unknown as MCPService
+      service.setMcpService(mcp)
+
+      await expect(
+        service.ingestFileAttachment('t1', makeDocAttachment())
+      ).rejects.toThrow(/did not contain extractable text/i)
+      expect(callTool).not.toHaveBeenCalled()
     })
   })
 

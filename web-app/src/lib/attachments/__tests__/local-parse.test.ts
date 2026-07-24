@@ -8,6 +8,7 @@ vi.mock('@ax-studio/core', () => ({
 
 import {
   isLocallyReadableDocument,
+  isLocallyReadableDocumentFromHints,
   normalizeDocumentExtension,
   parseLocalDocumentText,
   LOCAL_TEXT_DOCUMENT_EXTENSIONS,
@@ -33,11 +34,31 @@ describe('local document parse fallback', () => {
     expect(normalizeDocumentExtension('/tmp/notes.CSV')).toBe('csv')
   })
 
+  it('recognizes text documents from fallback hints', () => {
+    expect(
+      isLocallyReadableDocumentFromHints(
+        'application/octet-stream',
+        '/docs/model-comparison-prompts.md',
+        'model-comparison-prompts.md'
+      )
+    ).toBe(true)
+  })
+
   it('reads plain text files via fs.readFileSync', async () => {
     readFileSync.mockResolvedValueOnce('# Hello\n\nbody')
     const text = await parseLocalDocumentText('/docs/readme.md', 'md')
     expect(readFileSync).toHaveBeenCalledWith('/docs/readme.md')
     expect(text).toBe('# Hello\n\nbody')
+  })
+
+  it('falls back to the path when fileType is generic', async () => {
+    readFileSync.mockResolvedValueOnce('# Hello from path fallback')
+    const text = await parseLocalDocumentText(
+      '/docs/readme.md',
+      'application/octet-stream'
+    )
+    expect(readFileSync).toHaveBeenCalledWith('/docs/readme.md')
+    expect(text).toBe('# Hello from path fallback')
   })
 
   it('returns empty string for binary types without reading', async () => {

@@ -33,8 +33,15 @@ import { extractErrorMessage } from '@/lib/utils/error'
 import { basename, fileExtension } from '@/lib/utils'
 import { withTimeout } from '@/lib/utils/async'
 import { deleteIndexedFileChunks } from '@/lib/attachments/delete-indexed-file'
-import { hasAkidbIngestOrExtractTools } from '@/lib/attachments/akidb-tools'
-import { isLocallyReadableDocument } from '@/lib/attachments/local-parse'
+import {
+  binaryAttachmentSkipMessage,
+  canExtractBinaryAttachments,
+  canIndexBinaryAttachments,
+  canIndexTextAttachments,
+  classifyAttachmentIndexerCapability,
+  type AttachmentIndexerCapability,
+} from '@/lib/attachments/akidb-tools'
+import { isLocallyReadableDocumentFromHints } from '@/lib/attachments/local-parse'
 
 const ATTACHMENT_AUTO_INLINE_FALLBACK_BYTES = 512 * 1024
 const ATTACHMENT_MODEL_READY_TIMEOUT_MS = 5_000
@@ -213,44 +220,78 @@ export function useDocumentAttachmentHandler({
 
       const docChoices = new Map<string, 'inline' | 'embeddings'>()
 
-      let akidbAvailable = false
+      // ADR-005: capability comes from tool contract, not server name.
+      // Binary indexing needs fabric_ingest_run. fabric_extract alone can
+      // still parse binary docs inline, but must not enable embeddings upload.
+      // AkiDB v0.9 search/pack alone → not index-capable.
+      let canFabricIndex = false
+      let canFabricExtract = false
+      let canAkiV09TextIndex = false
+      let indexerCapability: AttachmentIndexerCapability = 'none'
       try {
         const tools = await serviceHub.mcp().getTools()
-        akidbAvailable = hasAkidbIngestOrExtractTools(tools)
+        canFabricIndex = canIndexBinaryAttachments(tools)
+        canFabricExtract = canExtractBinaryAttachments(tools)
+        canAkiV09TextIndex = canIndexTextAttachments(tools)
+        indexerCapability = classifyAttachmentIndexerCapability(tools)
       } catch {
-        akidbAvailable = false
+        canFabricIndex = false
+        canFabricExtract = false
+        canAkiV09TextIndex = false
+        indexerCapability = 'none'
       }
+      const canNativeExtract =
+        serviceHub.rag().canExtractBinaryDocuments?.() ?? false
+      const canIndexBinaryAttachment =
+        canFabricIndex || (canAkiV09TextIndex && canNativeExtract)
+      const canIndexAnyAttachment = canFabricIndex || canAkiV09TextIndex
 
-      // When AkiDB is unavailable, split by local readability: text → inline,
-      // binary → skip embeddings path entirely (never fabric_ingest_run).
+      // Native desktop extraction handles supported binary files inline and can
+      // feed AkiDB v0.9 memory_write. fabric_extract remains the fallback for
+      // environments that provide the legacy compatibility contract.
       let docsToProcess = docs
-      const BINARY_SKIP_MESSAGE =
-        'PDF/DOCX and other binary documents need the AkiDB MCP server for reading — see Settings → MCP Servers.'
+      const BINARY_SKIP_MESSAGE = binaryAttachmentSkipMessage(indexerCapability)
 
       if (docsNeedingPrompt.length > 0) {
-        if (!akidbAvailable) {
+        if (!canIndexBinaryAttachment) {
           const readable: Attachment[] = []
           const binary: Attachment[] = []
           for (const doc of docsNeedingPrompt) {
-            const typeOrPath = doc.fileType || doc.path || doc.name
-            if (isLocallyReadableDocument(typeOrPath)) {
+            if (
+              isLocallyReadableDocumentFromHints(
+                doc.fileType,
+                doc.path,
+                doc.name
+              )
+            ) {
               readable.push(doc)
-              if (doc.path) docChoices.set(doc.path, 'inline')
+              if (!canAkiV09TextIndex && doc.path) {
+                docChoices.set(doc.path, 'inline')
+              }
             } else {
               binary.push(doc)
             }
           }
-          // Only process readable + already-processed docs; binaries never
-          // enter processAttachmentsForSend / fabric_ingest_run.
+
+          const binaryToProcess =
+            canFabricExtract || canNativeExtract ? binary : []
+          for (const doc of binaryToProcess) {
+            if (doc.path) docChoices.set(doc.path, 'inline')
+          }
+
+          // Only process docs that this capability set can handle. Binary docs
+          // without fabric_extract never enter the embeddings path.
           const alreadyReady = docs.filter(
             (doc) => doc.processed || doc.injectionMode
           )
-          docsToProcess = [...alreadyReady, ...readable]
+          docsToProcess = [...alreadyReady, ...readable, ...binaryToProcess]
 
-          if (binary.length > 0) {
+          const skippedBinary =
+            canFabricExtract || canNativeExtract ? [] : binary
+          if (skippedBinary.length > 0) {
             setAttachmentsForThread(attachmentsKey, (prev) =>
               prev.map((att) => {
-                const match = binary.find(
+                const match = skippedBinary.find(
                   (b) => b.path && att.path && b.path === att.path
                 )
                 if (!match) return att
@@ -265,16 +306,27 @@ export function useDocumentAttachmentHandler({
           }
 
           // At most one summary toast per batch — never info+error pair.
-          if (readable.length > 0 && binary.length > 0) {
+          if (readable.length > 0 && skippedBinary.length > 0) {
             toast.warning('Some documents could not be attached', {
-              description: `${readable.length} text file${readable.length === 1 ? '' : 's'} attached. ${binary.length} binary file${binary.length === 1 ? '' : 's'} skipped — ${BINARY_SKIP_MESSAGE}`,
+              description: `${readable.length} text file${readable.length === 1 ? '' : 's'} attached. ${skippedBinary.length} binary file${skippedBinary.length === 1 ? '' : 's'} skipped — ${BINARY_SKIP_MESSAGE}`,
             })
-          } else if (binary.length > 0) {
-            toast.warning('Documents need AkiDB', {
-              description: BINARY_SKIP_MESSAGE,
-            })
+          } else if (skippedBinary.length > 0) {
+            toast.warning(
+              indexerCapability === 'aki-v09-only'
+                ? 'AkiDB cannot index these files'
+                : 'Documents need a compatible indexer',
+              {
+                description: BINARY_SKIP_MESSAGE,
+              }
+            )
           }
-          // Text-only with no AkiDB: attach quietly (no toast).
+
+          if (canFabricExtract && !canAkiV09TextIndex) {
+            for (const doc of readable) {
+              if (doc.path) docChoices.set(doc.path, 'inline')
+            }
+          }
+          // Text-only without any indexer: attach quietly inline (no toast).
         } else {
           for (let i = 0; i < docsNeedingPrompt.length; i++) {
             const doc = docsNeedingPrompt[i]
@@ -356,11 +408,12 @@ export function useDocumentAttachmentHandler({
             selectedProvider,
             contextThreshold,
             estimateTokens,
-            // Without AkiDB tools, force inline so settings set to "embeddings"
-            // do not route every file into a failing fabric_ingest_run call.
-            parsePreference: akidbAvailable ? parsePreference : 'inline',
+            // Without fabric ingest/extract, force inline so settings set to
+            // "embeddings" do not route into a failing fabric_ingest_run call.
+            parsePreference: canIndexAnyAttachment ? parsePreference : 'inline',
             // forceInline wins over any doc-level parseMode (precedence fix).
-            forceInline: !akidbAvailable,
+            forceInline: !canIndexAnyAttachment,
+            indexerCapability,
             perFileChoices: docChoices.size > 0 ? docChoices : undefined,
             updateAttachmentProcessing,
           })
@@ -535,7 +588,6 @@ export function useDocumentAttachmentHandler({
     attachmentsEnabled,
     attachmentsKey,
     maxFileSizeMB,
-    parsePreference,
     processNewDocumentAttachments,
     serviceHub,
     setAttachmentsForThread,

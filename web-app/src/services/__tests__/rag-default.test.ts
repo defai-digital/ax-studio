@@ -16,6 +16,7 @@ vi.mock('@ax-studio/core', async (importOriginal) => {
 import { DefaultRAGService } from '../rag/default'
 import { useFileRegistry } from '@/lib/file-registry'
 import type { ServiceHub } from '@/services'
+import type { MCPService } from '../mcp/types'
 
 function makeServiceHub(callToolResult: {
   error: string
@@ -137,6 +138,34 @@ describe('DefaultRAGService', () => {
       expect(readFileSync).not.toHaveBeenCalled()
     })
 
+    it('uses native binary extraction when fabric_extract is unavailable', async () => {
+      const core = {
+        invoke: vi.fn().mockResolvedValue({
+          text: '## Page 1\n\nNative PDF text',
+          metadata: { format: 'pdf', unitCount: 1, truncated: false },
+          warnings: [],
+        }),
+      }
+      service.setCoreService(core as never)
+      service.setMcpService({
+        getTools: vi.fn().mockResolvedValue([
+          { name: 'search' },
+          { name: 'pack' },
+          { name: 'memory_write' },
+        ]),
+        callTool: vi.fn(),
+      })
+
+      await expect(
+        service.parseDocument('/tmp/report.pdf', 'pdf')
+      ).resolves.toBe('## Page 1\n\nNative PDF text')
+      expect(core.invoke).toHaveBeenCalledWith('extract_document_text', {
+        path: '/tmp/report.pdf',
+        fileType: 'pdf',
+      })
+      expect(service.canExtractBinaryDocuments()).toBe(true)
+    })
+
     it('handles plain text response (non-JSON)', async () => {
       const hub = makeServiceHub({
         error: '',
@@ -238,6 +267,43 @@ describe('DefaultRAGService', () => {
 
       expect(result.error).toContain('index unavailable')
       expect(result.error).toMatch(/Search failed/)
+    })
+
+    it('uses latest AkiDB pack when fabric_search is absent', async () => {
+      const mockCallTool = vi.fn().mockResolvedValue({
+        error: '',
+        content: [{ text: 'Packed context from latest AkiDB' }],
+      })
+      service.setMcpService({
+        getTools: vi.fn().mockResolvedValue([
+          { name: 'search' },
+          { name: 'pack' },
+          { name: 'memory_write' },
+          { name: 'memory_read' },
+          { name: 'status' },
+        ]),
+        callTool: mockCallTool,
+      } as unknown as MCPService)
+
+      const result = await service.callTool({
+        toolName: 'retrieve',
+        arguments: { query: 'markdown', top_k: 3 },
+        threadId: 'thread-123',
+        scope: 'thread',
+      })
+
+      expect(result.error).toBe('')
+      expect(mockCallTool).toHaveBeenCalledWith({
+        toolName: 'pack',
+        arguments: expect.objectContaining({
+          query: 'markdown',
+          top_k: 3,
+          workspace: 'thread_thread-123',
+        }),
+      })
+      const payload = JSON.parse(result.content[0].text)
+      expect(payload.mode).toBe('akidb-pack')
+      expect(payload.citations[0].text).toBe('Packed context from latest AkiDB')
     })
 
     it('returns error when query is empty', async () => {
@@ -423,6 +489,43 @@ describe('DefaultRAGService', () => {
 
       expect(result.error).toContain('collection missing')
       expect(result.error).toMatch(/get_chunks failed/)
+    })
+
+    it('reconstructs chunks locally for latest AkiDB text attachments', async () => {
+      const fileId = 'file-1'
+      useFileRegistry.getState().addFile('thread_thread-123', {
+        file_id: fileId,
+        file_name: 'notes.md',
+        file_path: '/tmp/notes.md',
+        file_type: 'md',
+        file_size: 100,
+        chunk_count: 1,
+        collection_id: 'thread_thread-123',
+        created_at: '2026-01-01T00:00:00Z',
+      })
+      readFileSync.mockResolvedValueOnce('one\n\ntwo\n\nthree')
+      const mockCallTool = vi.fn()
+      service.setMcpService({
+        getTools: vi.fn().mockResolvedValue([
+          { name: 'search' },
+          { name: 'pack' },
+          { name: 'memory_write' },
+        ]),
+        callTool: mockCallTool,
+      } as unknown as MCPService)
+
+      const result = await service.callTool({
+        toolName: 'get_chunks',
+        arguments: { file_id: fileId, start_order: 0, end_order: 0 },
+        threadId: 'thread-123',
+        scope: 'thread',
+      })
+
+      expect(result.error).toBe('')
+      expect(mockCallTool).not.toHaveBeenCalled()
+      const payload = JSON.parse(result.content[0].text)
+      expect(payload.chunks).toHaveLength(1)
+      expect(payload.chunks[0].text).toContain('one')
     })
 
     it('rejects non-integer chunk ranges before calling fabric_search', async () => {

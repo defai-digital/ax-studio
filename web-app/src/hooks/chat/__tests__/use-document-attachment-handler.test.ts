@@ -99,6 +99,7 @@ const mockMcpCallTool = vi
 const mockStartModel = vi.fn().mockResolvedValue(undefined)
 const mockGetActiveModels = vi.fn().mockResolvedValue(['model-1'])
 const mockGetTokensCount = vi.fn().mockResolvedValue(100)
+let mockCanExtractBinaryDocuments = false
 
 vi.mock('@/hooks/useServiceHub', () => ({
   useServiceHub: () => ({
@@ -113,6 +114,9 @@ vi.mock('@/hooks/useServiceHub', () => ({
     mcp: () => ({
       callTool: mockMcpCallTool,
       getTools: mockGetTools,
+    }),
+    rag: () => ({
+      canExtractBinaryDocuments: () => mockCanExtractBinaryDocuments,
     }),
   }),
   getServiceHub: () => ({}),
@@ -146,6 +150,7 @@ describe('useDocumentAttachmentHandler', () => {
     mockStartModel.mockResolvedValue(undefined)
     mockGetActiveModels.mockResolvedValue(['model-1'])
     mockGetTokensCount.mockResolvedValue(100)
+    mockCanExtractBinaryDocuments = false
     mockGetTools.mockResolvedValue([
       { name: 'fabric_ingest_run', server: 'ax-studio' },
       { name: 'fabric_extract', server: 'ax-studio' },
@@ -415,6 +420,53 @@ describe('useDocumentAttachmentHandler', () => {
     expect(choices.get('/docs/notes.md')).toBe('inline')
   })
 
+  it('treats markdown as text even when fileType metadata is generic', async () => {
+    mockGetTools.mockResolvedValue([])
+
+    const { processAttachmentsForSend } = await import(
+      '@/lib/attachmentProcessing'
+    )
+    vi.mocked(processAttachmentsForSend).mockResolvedValueOnce({
+      processedAttachments: [
+        {
+          name: 'model-comparison-prompts.md',
+          type: 'document',
+          path: '/docs/model-comparison-prompts.md',
+          fileType: 'application/octet-stream',
+          processed: true,
+          injectionMode: 'inline',
+          inlineContent: '# model comparison',
+        },
+      ],
+      hasEmbeddedDocuments: false,
+    })
+
+    const { result } = renderHook(() =>
+      useDocumentAttachmentHandler({
+        attachmentsKey: ATTACHMENTS_KEY,
+        effectiveThreadId: 'thread-1',
+      })
+    )
+
+    await act(async () => {
+      await result.current.processNewDocumentAttachments([
+        {
+          name: 'model-comparison-prompts.md',
+          type: 'document',
+          path: '/docs/model-comparison-prompts.md',
+          fileType: 'application/octet-stream',
+        },
+      ])
+    })
+
+    expect(processAttachmentsForSend).toHaveBeenCalledTimes(1)
+    const sent = vi.mocked(processAttachmentsForSend).mock.calls[0][0]
+      .attachments as Attachment[]
+    expect(sent).toHaveLength(1)
+    expect(sent[0].name).toBe('model-comparison-prompts.md')
+    expect(toast.warning).not.toHaveBeenCalled()
+  })
+
   it('skips binary documents with one warning when AkiDB is missing', async () => {
     mockGetTools.mockResolvedValue([])
     mockDialogOpen.mockResolvedValue(['/docs/report.pdf'])
@@ -444,15 +496,111 @@ describe('useDocumentAttachmentHandler', () => {
     expect(toast.info).not.toHaveBeenCalled()
     expect(toast.warning).toHaveBeenCalledTimes(1)
     expect(toast.warning).toHaveBeenCalledWith(
-      'Documents need AkiDB',
+      expect.stringMatching(/compatible indexer|AkiDB cannot index/i),
       expect.objectContaining({
         description: expect.stringMatching(/Settings → MCP Servers/i),
+      })
+    )
+    expect(toast.warning).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        description: expect.not.stringMatching(/AX BI|tool toggles/i),
       })
     )
     const atts = useChatAttachments.getState().getAttachments(ATTACHMENTS_KEY)
     expect(atts.some((a) => a.error && /AkiDB|Settings/i.test(a.error))).toBe(
       true
     )
+  })
+
+  it('uses forced inline parsing when only fabric_extract is available', async () => {
+    mockGetTools.mockResolvedValue([{ name: 'fabric_extract' }])
+    mockDialogOpen.mockResolvedValue(['/docs/report.pdf'])
+    ;(fs.fileStat as ReturnType<typeof vi.fn>).mockResolvedValue({
+      size: 2048,
+    })
+
+    const { processAttachmentsForSend } = await import(
+      '@/lib/attachmentProcessing'
+    )
+    vi.mocked(processAttachmentsForSend).mockResolvedValueOnce({
+      processedAttachments: [
+        {
+          name: 'report.pdf',
+          type: 'document',
+          path: '/docs/report.pdf',
+          processed: true,
+          injectionMode: 'inline',
+          inlineContent: 'pdf text',
+        },
+      ],
+      hasEmbeddedDocuments: false,
+    })
+
+    const { result } = renderHook(() =>
+      useDocumentAttachmentHandler({
+        attachmentsKey: ATTACHMENTS_KEY,
+        effectiveThreadId: 'thread-1',
+      })
+    )
+
+    await act(async () => {
+      await result.current.handleAttachDocsIngest()
+    })
+
+    expect(mockShowPrompt).not.toHaveBeenCalled()
+    expect(processAttachmentsForSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parsePreference: 'inline',
+        forceInline: true,
+      })
+    )
+    const sent = vi.mocked(processAttachmentsForSend).mock.calls[0][0]
+      .attachments as Attachment[]
+    expect(sent.some((a) => a.name.endsWith('.pdf'))).toBe(true)
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('uses native inline extraction for binary documents without an MCP indexer', async () => {
+    mockCanExtractBinaryDocuments = true
+    mockGetTools.mockResolvedValue([])
+    mockDialogOpen.mockResolvedValue(['/docs/report.pdf'])
+
+    const { processAttachmentsForSend } = await import(
+      '@/lib/attachmentProcessing'
+    )
+    vi.mocked(processAttachmentsForSend).mockResolvedValueOnce({
+      processedAttachments: [
+        {
+          name: 'report.pdf',
+          type: 'document',
+          path: '/docs/report.pdf',
+          processed: true,
+          injectionMode: 'inline',
+          inlineContent: 'native pdf text',
+        },
+      ],
+      hasEmbeddedDocuments: false,
+    })
+
+    const { result } = renderHook(() =>
+      useDocumentAttachmentHandler({
+        attachmentsKey: ATTACHMENTS_KEY,
+        effectiveThreadId: 'thread-1',
+      })
+    )
+
+    await act(async () => {
+      await result.current.handleAttachDocsIngest()
+    })
+
+    expect(processAttachmentsForSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parsePreference: 'inline',
+        forceInline: true,
+      })
+    )
+    expect(toast.warning).not.toHaveBeenCalled()
   })
 
   it('mixed batch without AkiDB: one summary toast, only text files processed', async () => {
@@ -699,9 +847,7 @@ describe('useDocumentAttachmentHandler', () => {
       await result.current.processNewDocumentAttachments([first])
     })
 
-    const stored = useChatAttachments
-      .getState()
-      .getAttachments(ATTACHMENTS_KEY)
+    const stored = useChatAttachments.getState().getAttachments(ATTACHMENTS_KEY)
     expect(stored[0]).toEqual(expect.objectContaining({ id: 'first-id' }))
     expect(stored[1].id).toBeUndefined()
   })
@@ -995,7 +1141,10 @@ describe('useDocumentAttachmentHandler', () => {
       content: [
         {
           text: JSON.stringify({
-            results: [{ chunkId: 'should-not-delete-1' }, { chunkId: 'should-not-delete-2' }],
+            results: [
+              { chunkId: 'should-not-delete-1' },
+              { chunkId: 'should-not-delete-2' },
+            ],
           }),
         },
       ],
@@ -1010,9 +1159,11 @@ describe('useDocumentAttachmentHandler', () => {
         collection_id: 'thread_thread-1',
         created_at: '2026-01-01T00:00:00Z',
       })
-      useChatAttachments.getState().setAttachments(ATTACHMENTS_KEY, [
-        { name: 'iserror.pdf', type: 'document', id: 'iserror-file' },
-      ])
+      useChatAttachments
+        .getState()
+        .setAttachments(ATTACHMENTS_KEY, [
+          { name: 'iserror.pdf', type: 'document', id: 'iserror-file' },
+        ])
     })
 
     const { result } = renderHook(() =>
