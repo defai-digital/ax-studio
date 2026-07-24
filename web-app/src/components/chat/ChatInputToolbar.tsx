@@ -168,13 +168,15 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
 
   return (
     <div className="absolute z-20 bg-transparent bottom-0 w-full px-2 pb-2 pt-1">
-      <div className="flex justify-between items-center w-full">
+      <div className="flex items-center w-full gap-2 overflow-hidden">
         {/* Left: model selector + action buttons */}
-        <div className="px-1 flex items-center gap-1 flex-1 min-w-0">
-          {modelSelector && <div className="shrink-0">{modelSelector}</div>}
+        <div className="px-1 flex items-center gap-1 flex-1 min-w-0 overflow-hidden">
+          {modelSelector && (
+            <div className="min-w-0 max-w-[210px] shrink">{modelSelector}</div>
+          )}
           <div
             className={cn(
-              'px-1 flex items-center flex-1 min-w-0 gap-1',
+              'px-1 flex items-center min-w-0 gap-1 shrink-0',
               isStreaming && 'opacity-50 pointer-events-none'
             )}
           >
@@ -445,8 +447,8 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
         </div>
 
         {/* Right: keyboard hints + token counter + send/stop */}
-        <div className="flex items-center gap-2">
-          <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground/70 mr-1">
+        <div className="flex shrink-0 items-center gap-1.5">
+          <div className="hidden xl:flex items-center gap-2 text-xs text-muted-foreground/70 mr-1 whitespace-nowrap">
             <span>{t('common:sendHint')}</span>
             <span>{t('common:newlineHint')}</span>
           </div>
@@ -454,7 +456,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
           {tokenCounterCompact &&
             !initialMessage &&
             (threadMessages?.length > 0 || prompt.trim().length > 0) && (
-              <div className="flex-1 flex justify-center">
+              <div className="hidden md:flex shrink-0 justify-center">
                 <TokenCounter messages={threadMessages || []} />
               </div>
             )}

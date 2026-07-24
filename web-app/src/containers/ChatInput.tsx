@@ -37,6 +37,7 @@ import { toast } from 'sonner'
 import { route } from '@/constants/routes'
 import { COMPOSER_FOCUS_EVENT } from '@/types/events'
 import { resolveEffectiveSelectedModel } from '@/lib/chat/selected-model'
+import { hasSendableAttachment } from '@/lib/attachments/sendable'
 
 type ChatInputProps = {
   className?: string
@@ -297,6 +298,7 @@ const ChatInput = memo(function ChatInput({
     onSubmit,
     projectId,
     selectedModel,
+    attachmentsKey,
     assistants,
     selectedAssistant,
     setSelectedAssistant,
@@ -304,11 +306,14 @@ const ChatInput = memo(function ChatInput({
     setPrompt,
   })
 
+  const canSubmitAttachments = hasSendableAttachment(pendingAttachments)
+
   const submitCurrentPrompt = useCallback(() => {
     const currentPrompt = textareaRef.current?.value ?? prompt
-    if (!currentPrompt.trim() || ingestingDocs) return
+    if (ingestingDocs) return
+    if (!currentPrompt.trim() && !canSubmitAttachments) return
     void handleSendMessage(currentPrompt)
-  }, [handleSendMessage, ingestingDocs, prompt])
+  }, [canSubmitAttachments, handleSendMessage, ingestingDocs, prompt])
 
   // Voice input (on-device whisper.cpp STT) — mic button in the toolbar,
   // transcript inserted at the textarea cursor.

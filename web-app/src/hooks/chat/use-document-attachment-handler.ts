@@ -37,10 +37,11 @@ import {
   binaryAttachmentSkipMessage,
   canExtractBinaryAttachments,
   canIndexBinaryAttachments,
+  canIndexTextAttachments,
   classifyAttachmentIndexerCapability,
   type AttachmentIndexerCapability,
 } from '@/lib/attachments/akidb-tools'
-import { isLocallyReadableDocument } from '@/lib/attachments/local-parse'
+import { isLocallyReadableDocumentFromHints } from '@/lib/attachments/local-parse'
 
 const ATTACHMENT_AUTO_INLINE_FALLBACK_BYTES = 512 * 1024
 const ATTACHMENT_MODEL_READY_TIMEOUT_MS = 5_000
@@ -225,84 +226,102 @@ export function useDocumentAttachmentHandler({
       // AkiDB v0.9 search/pack alone → not index-capable.
       let canFabricIndex = false
       let canFabricExtract = false
+      let canAkiV09TextIndex = false
       let indexerCapability: AttachmentIndexerCapability = 'none'
       try {
         const tools = await serviceHub.mcp().getTools()
         canFabricIndex = canIndexBinaryAttachments(tools)
         canFabricExtract = canExtractBinaryAttachments(tools)
+        canAkiV09TextIndex = canIndexTextAttachments(tools)
         indexerCapability = classifyAttachmentIndexerCapability(tools)
       } catch {
         canFabricIndex = false
         canFabricExtract = false
+        canAkiV09TextIndex = false
         indexerCapability = 'none'
       }
+      const canIndexAnyAttachment = canFabricIndex || canAkiV09TextIndex
 
-      // When fabric indexing is unavailable, never offer embeddings. If
-      // fabric_extract exists, force all docs through inline parsing. Otherwise
-      // split by local readability: text → inline; binary → skip entirely.
+      // When fabric indexing is unavailable, latest AkiDB memory_write can still
+      // index locally readable text files. Binary docs require fabric_extract for
+      // inline parsing; otherwise they are skipped before embeddings upload.
       let docsToProcess = docs
       const BINARY_SKIP_MESSAGE =
         binaryAttachmentSkipMessage(indexerCapability)
 
       if (docsNeedingPrompt.length > 0) {
         if (!canFabricIndex) {
-          if (canFabricExtract) {
-            for (const doc of docsNeedingPrompt) {
+          const readable: Attachment[] = []
+          const binary: Attachment[] = []
+          for (const doc of docsNeedingPrompt) {
+            if (
+              isLocallyReadableDocumentFromHints(
+                doc.fileType,
+                doc.path,
+                doc.name
+              )
+            ) {
+              readable.push(doc)
+              if (!canAkiV09TextIndex && doc.path) {
+                docChoices.set(doc.path, 'inline')
+              }
+            } else {
+              binary.push(doc)
+            }
+          }
+
+          const binaryToProcess = canFabricExtract ? binary : []
+          for (const doc of binaryToProcess) {
+            if (doc.path) docChoices.set(doc.path, 'inline')
+          }
+
+          // Only process docs that this capability set can handle. Binary docs
+          // without fabric_extract never enter the embeddings path.
+          const alreadyReady = docs.filter(
+            (doc) => doc.processed || doc.injectionMode
+          )
+          docsToProcess = [...alreadyReady, ...readable, ...binaryToProcess]
+
+          const skippedBinary = canFabricExtract ? [] : binary
+          if (skippedBinary.length > 0) {
+            setAttachmentsForThread(attachmentsKey, (prev) =>
+              prev.map((att) => {
+                const match = skippedBinary.find(
+                  (b) => b.path && att.path && b.path === att.path
+                )
+                if (!match) return att
+                return {
+                  ...att,
+                  processing: false,
+                  processed: false,
+                  error: BINARY_SKIP_MESSAGE,
+                }
+              })
+            )
+          }
+
+          // At most one summary toast per batch — never info+error pair.
+          if (readable.length > 0 && skippedBinary.length > 0) {
+            toast.warning('Some documents could not be attached', {
+              description: `${readable.length} text file${readable.length === 1 ? '' : 's'} attached. ${skippedBinary.length} binary file${skippedBinary.length === 1 ? '' : 's'} skipped — ${BINARY_SKIP_MESSAGE}`,
+            })
+          } else if (skippedBinary.length > 0) {
+            toast.warning(
+              indexerCapability === 'aki-v09-only'
+                ? 'AkiDB cannot index these files'
+                : 'Documents need a compatible indexer',
+              {
+                description: BINARY_SKIP_MESSAGE,
+              }
+            )
+          }
+
+          if (canFabricExtract && !canAkiV09TextIndex) {
+            for (const doc of readable) {
               if (doc.path) docChoices.set(doc.path, 'inline')
             }
-          } else {
-            const readable: Attachment[] = []
-            const binary: Attachment[] = []
-            for (const doc of docsNeedingPrompt) {
-              const typeOrPath = doc.fileType || doc.path || doc.name
-              if (isLocallyReadableDocument(typeOrPath)) {
-                readable.push(doc)
-                if (doc.path) docChoices.set(doc.path, 'inline')
-              } else {
-                binary.push(doc)
-              }
-            }
-            // Only process readable + already-processed docs; binaries never
-            // enter processAttachmentsForSend / fabric_ingest_run.
-            const alreadyReady = docs.filter(
-              (doc) => doc.processed || doc.injectionMode
-            )
-            docsToProcess = [...alreadyReady, ...readable]
-
-            if (binary.length > 0) {
-              setAttachmentsForThread(attachmentsKey, (prev) =>
-                prev.map((att) => {
-                  const match = binary.find(
-                    (b) => b.path && att.path && b.path === att.path
-                  )
-                  if (!match) return att
-                  return {
-                    ...att,
-                    processing: false,
-                    processed: false,
-                    error: BINARY_SKIP_MESSAGE,
-                  }
-                })
-              )
-            }
-
-            // At most one summary toast per batch — never info+error pair.
-            if (readable.length > 0 && binary.length > 0) {
-              toast.warning('Some documents could not be attached', {
-                description: `${readable.length} text file${readable.length === 1 ? '' : 's'} attached. ${binary.length} binary file${binary.length === 1 ? '' : 's'} skipped — ${BINARY_SKIP_MESSAGE}`,
-              })
-            } else if (binary.length > 0) {
-              toast.warning(
-                indexerCapability === 'aki-v09-only'
-                  ? 'AkiDB cannot index these files'
-                  : 'Documents need a compatible indexer',
-                {
-                  description: BINARY_SKIP_MESSAGE,
-                }
-              )
-            }
-            // Text-only without fabric indexer: attach quietly (no toast).
           }
+          // Text-only without any indexer: attach quietly inline (no toast).
         } else {
           for (let i = 0; i < docsNeedingPrompt.length; i++) {
             const doc = docsNeedingPrompt[i]
@@ -386,9 +405,9 @@ export function useDocumentAttachmentHandler({
             estimateTokens,
             // Without fabric ingest/extract, force inline so settings set to
             // "embeddings" do not route into a failing fabric_ingest_run call.
-            parsePreference: canFabricIndex ? parsePreference : 'inline',
+            parsePreference: canIndexAnyAttachment ? parsePreference : 'inline',
             // forceInline wins over any doc-level parseMode (precedence fix).
-            forceInline: !canFabricIndex,
+            forceInline: !canIndexAnyAttachment,
             indexerCapability,
             perFileChoices: docChoices.size > 0 ? docChoices : undefined,
             updateAttachmentProcessing,

@@ -23,7 +23,11 @@ export function normalizeDocumentExtension(
   if (!fileTypeOrPath) return ''
   // Bare extension ("md"), dotted (".md"), filename ("notes.md"), or path.
   const trimmed = fileTypeOrPath.trim()
-  if (!trimmed.includes('/') && !trimmed.includes('\\') && !trimmed.includes('.')) {
+  if (
+    !trimmed.includes('/') &&
+    !trimmed.includes('\\') &&
+    !trimmed.includes('.')
+  ) {
     return trimmed.replace(/^\./, '').toLowerCase()
   }
   if (/^\.[a-z0-9]+$/i.test(trimmed)) {
@@ -37,6 +41,12 @@ export function isLocallyReadableDocument(fileTypeOrPath?: string): boolean {
   return (LOCAL_TEXT_DOCUMENT_EXTENSIONS as readonly string[]).includes(ext)
 }
 
+export function isLocallyReadableDocumentFromHints(
+  ...hints: Array<string | undefined>
+): boolean {
+  return hints.some((hint) => isLocallyReadableDocument(hint))
+}
+
 /**
  * Read a text-like document from disk. Returns empty string for binary types
  * or on read failure (caller decides whether to error or skip).
@@ -45,10 +55,12 @@ export async function parseLocalDocumentText(
   path: string,
   fileType?: string
 ): Promise<string> {
-  const ext = normalizeDocumentExtension(fileType || path)
-  if (!(LOCAL_TEXT_DOCUMENT_EXTENSIONS as readonly string[]).includes(ext)) {
-    return ''
-  }
+  const ext = [fileType, path]
+    .map((hint) => normalizeDocumentExtension(hint))
+    .find((candidate) =>
+      (LOCAL_TEXT_DOCUMENT_EXTENSIONS as readonly string[]).includes(candidate)
+    )
+  if (!ext) return ''
   try {
     const content = await fs.readFileSync(path)
     return typeof content === 'string' ? content : ''

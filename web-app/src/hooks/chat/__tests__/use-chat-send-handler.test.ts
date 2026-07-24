@@ -78,6 +78,10 @@ vi.mock('@/hooks/useServiceHub', () => ({
 
 import { useChatSendHandler } from '../use-chat-send-handler'
 import { useTemporaryChat } from '@/hooks/chat/useTemporaryChat'
+import {
+  useChatAttachments,
+  NEW_THREAD_ATTACHMENT_KEY,
+} from '@/hooks/chat/useChatAttachments'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -107,6 +111,7 @@ describe('useChatSendHandler', () => {
     modelState.selectedProvider = 'openai'
     threadsState.threads = {}
     useTemporaryChat.setState({ temporaryChatEnabled: false })
+    useChatAttachments.setState({ attachmentsByThread: {} })
     sessionStorage.clear()
     // Reset window.location.search
     Object.defineProperty(window, 'location', {
@@ -154,6 +159,29 @@ describe('useChatSendHandler', () => {
 
     expect(input.setMessage).not.toHaveBeenCalled()
     expect(input.setPrompt).not.toHaveBeenCalled()
+  })
+
+  it('submits a ready attachment without typed prompt text', async () => {
+    const onSubmit = vi.fn()
+    useChatAttachments.getState().setAttachments(NEW_THREAD_ATTACHMENT_KEY, [
+      {
+        name: 'notes.md',
+        type: 'document',
+        processed: true,
+        injectionMode: 'inline',
+        inlineContent: '# Notes',
+      },
+    ])
+    const input = { ...defaultInput(), onSubmit }
+    const { result } = renderHook(() => useChatSendHandler(input))
+
+    await act(async () => {
+      await result.current.handleSendMessage('   ')
+    })
+
+    expect(onSubmit).toHaveBeenCalledWith('Please use the attached file.')
+    expect(input.setMessage).toHaveBeenCalledWith('')
+    expect(input.setPrompt).toHaveBeenCalledWith('')
   })
 
   // ── Phase 2: onSubmit (AI SDK) path ──────────────────────────────────────

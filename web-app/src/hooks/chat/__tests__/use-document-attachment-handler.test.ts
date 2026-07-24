@@ -415,6 +415,53 @@ describe('useDocumentAttachmentHandler', () => {
     expect(choices.get('/docs/notes.md')).toBe('inline')
   })
 
+  it('treats markdown as text even when fileType metadata is generic', async () => {
+    mockGetTools.mockResolvedValue([])
+
+    const { processAttachmentsForSend } = await import(
+      '@/lib/attachmentProcessing'
+    )
+    vi.mocked(processAttachmentsForSend).mockResolvedValueOnce({
+      processedAttachments: [
+        {
+          name: 'model-comparison-prompts.md',
+          type: 'document',
+          path: '/docs/model-comparison-prompts.md',
+          fileType: 'application/octet-stream',
+          processed: true,
+          injectionMode: 'inline',
+          inlineContent: '# model comparison',
+        },
+      ],
+      hasEmbeddedDocuments: false,
+    })
+
+    const { result } = renderHook(() =>
+      useDocumentAttachmentHandler({
+        attachmentsKey: ATTACHMENTS_KEY,
+        effectiveThreadId: 'thread-1',
+      })
+    )
+
+    await act(async () => {
+      await result.current.processNewDocumentAttachments([
+        {
+          name: 'model-comparison-prompts.md',
+          type: 'document',
+          path: '/docs/model-comparison-prompts.md',
+          fileType: 'application/octet-stream',
+        },
+      ])
+    })
+
+    expect(processAttachmentsForSend).toHaveBeenCalledTimes(1)
+    const sent = vi.mocked(processAttachmentsForSend).mock.calls[0][0]
+      .attachments as Attachment[]
+    expect(sent).toHaveLength(1)
+    expect(sent[0].name).toBe('model-comparison-prompts.md')
+    expect(toast.warning).not.toHaveBeenCalled()
+  })
+
   it('skips binary documents with one warning when AkiDB is missing', async () => {
     mockGetTools.mockResolvedValue([])
     mockDialogOpen.mockResolvedValue(['/docs/report.pdf'])

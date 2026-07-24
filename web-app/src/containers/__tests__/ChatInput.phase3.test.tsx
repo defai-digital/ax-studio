@@ -176,12 +176,14 @@ vi.mock('@/lib/utils', async (importOriginal) => {
 
 import { ChatInput } from '../ChatInput'
 import { resolveEffectiveSelectedModel } from '@/lib/chat/selected-model'
+import { useChatAttachments } from '@/hooks/chat/useChatAttachments'
 
 // ── Tests ───────────────────────────────────────────
 
 describe('ChatInput — Phase 3 Manual Test Protocol', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    useChatAttachments.setState({ attachmentsByThread: {} })
   })
 
   // Protocol #1: Basic send — Enter sends message
@@ -215,6 +217,24 @@ describe('ChatInput — Phase 3 Manual Test Protocol', () => {
 
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
     expect(mockHandleSendMessage).not.toHaveBeenCalled()
+  })
+
+  it('Enter key sends when input is empty and a Markdown attachment is ready', () => {
+    useChatAttachments.getState().setAttachments('t1', [
+      {
+        name: 'notes.md',
+        type: 'document',
+        processed: true,
+        injectionMode: 'inline',
+        inlineContent: '# Notes',
+      },
+    ])
+    render(<ChatInput threadId="t1" />)
+    const textarea = screen.getByTestId('chat-input')
+
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+
+    expect(mockHandleSendMessage).toHaveBeenCalledWith('')
   })
 
   // Protocol #2: Shift+Enter creates newline (does NOT send)

@@ -23,11 +23,15 @@ import {
   NEW_THREAD_ATTACHMENT_KEY,
 } from '@/hooks/chat/useChatAttachments'
 import { safeStorageSetItem } from '@/lib/storage/storage'
+import { hasSendableAttachment } from '@/lib/attachments/sendable'
+
+const ATTACHMENT_ONLY_PROMPT = 'Please use the attached file.'
 
 type Input = {
   onSubmit?: (text: string) => void
   projectId?: string
   selectedModel?: { id: string }
+  attachmentsKey?: string
   assistants: Assistant[]
   selectedAssistant: Assistant | undefined
   setSelectedAssistant: (a: Assistant | undefined) => void
@@ -43,6 +47,7 @@ export function useChatSendHandler({
   onSubmit,
   projectId,
   selectedModel: resolvedSelectedModel,
+  attachmentsKey,
   assistants,
   selectedAssistant,
   setSelectedAssistant,
@@ -70,13 +75,18 @@ export function useChatSendHandler({
         setMessage('Please select a model to start chatting.')
         return
       }
-      if (!prompt.trim()) return
+      const pendingKey =
+        attachmentsKey ??
+        useThreads.getState().currentThreadId ??
+        NEW_THREAD_ATTACHMENT_KEY
+      const pending = useChatAttachments.getState().getAttachments(pendingKey)
+      const hasReadyAttachment = hasSendableAttachment(pending)
+      if (!prompt.trim() && !hasReadyAttachment) return
+
+      const messageText = prompt.trim() ? prompt : ATTACHMENT_ONLY_PROMPT
       sendingRef.current = true
       try {
         // Guard: don't send while attachments are processing
-        const pendingKey =
-          useThreads.getState().currentThreadId || NEW_THREAD_ATTACHMENT_KEY
-        const pending = useChatAttachments.getState().getAttachments(pendingKey)
         if (pending.some((a) => a.processing)) {
           toast.info('Please wait for attachments to finish processing')
           return
@@ -84,7 +94,7 @@ export function useChatSendHandler({
 
         if (onSubmit) {
           // AI SDK path — caller owns thread management
-          onSubmit(prompt)
+          onSubmit(messageText)
           setMessage('')
           setPrompt('')
           return
@@ -97,7 +107,7 @@ export function useChatSendHandler({
           temporaryChatEnabled ||
           window.location.search.includes(`${TEMPORARY_CHAT_QUERY_ID}=true`)
 
-        const messagePayload = { text: prompt }
+        const messagePayload = { text: messageText }
 
         if (isTemporaryChat) {
           // The thread route redirects home for unknown IDs, so the in-memory
@@ -178,7 +188,7 @@ export function useChatSendHandler({
               id: selectedModelId,
               provider: selectedProvider,
             },
-            prompt,
+            messageText,
             assistant,
             projectMetadata
           )
@@ -186,7 +196,7 @@ export function useChatSendHandler({
           useThreads.getState().updateThread(newThread.id, {
             metadata: {
               ...(newThread.metadata ?? {}),
-              pendingInitialMessage: prompt,
+              pendingInitialMessage: messageText,
             },
           })
 
@@ -219,7 +229,7 @@ export function useChatSendHandler({
         setPrompt('')
       } catch (error) {
         console.error('Failed to send message:', error)
-        setMessage(prompt)
+        setMessage(messageText)
         toast.error('Failed to send message', {
           description:
             error instanceof Error
@@ -232,6 +242,7 @@ export function useChatSendHandler({
     },
     [
       assistants,
+      attachmentsKey,
       createThread,
       onSubmit,
       projectId,

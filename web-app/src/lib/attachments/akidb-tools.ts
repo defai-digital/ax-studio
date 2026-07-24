@@ -4,7 +4,8 @@
  * Capability is determined from **tool names present**, never from a server
  * key (`ax-studio` / `akidb`) alone. AkiDB v0.9 tools (`search`/`pack`/
  * `memory_*`/`status`) are NOT fabric-ingest compatible and must not enable
- * binary attachment indexing.
+ * binary attachment indexing. They can still index locally parsed text files via
+ * AX Studio's compatibility shim.
  */
 
 /** Fabric-ingest contract used by uploads + RAG parse paths. */
@@ -67,6 +68,18 @@ export function canIndexBinaryAttachments(tools: NamedMcpTool[]): boolean {
   return tools.some((t) => t.name === 'fabric_ingest_run')
 }
 
+/** Whether latest AkiDB can store locally parsed text attachment chunks. */
+export function canIndexTextAttachments(tools: NamedMcpTool[]): boolean {
+  const names = new Set(tools.map((t) => t.name))
+  return names.has('memory_write') && (names.has('pack') || names.has('search'))
+}
+
+/** Whether latest AkiDB can retrieve text indexed by the compatibility shim. */
+export function canRetrieveTextAttachments(tools: NamedMcpTool[]): boolean {
+  const names = new Set(tools.map((t) => t.name))
+  return names.has('pack')
+}
+
 /** Whether binary documents can be parsed for inline attachment. */
 export function canExtractBinaryAttachments(tools: NamedMcpTool[]): boolean {
   return tools.some((t) => t.name === 'fabric_extract')
@@ -81,7 +94,8 @@ export function binaryAttachmentSkipMessage(
 ): string {
   if (capability === 'aki-v09-only') {
     return (
-      'The connected AkiDB server lacks compatible document-indexing tools ' +
+      'The connected AkiDB server can index text documents, but lacks binary ' +
+      'document-indexing tools ' +
       '(fabric_ingest_run / fabric_extract). Binary files (PDF/DOCX) cannot be ' +
       'indexed yet — see Settings → MCP Servers.'
     )
@@ -101,9 +115,10 @@ export function unavailableIndexerErrorMessage(
 ): string {
   if (capability === 'aki-v09-only') {
     return (
-      'The connected AkiDB version lacks compatible document-indexing tools ' +
-      '(fabric_ingest_run / fabric_extract). Binary indexing is unavailable ' +
-      'until a fabric-compatible indexer is configured in Settings → MCP Servers.'
+      'The connected AkiDB version can index text documents, but lacks compatible ' +
+      'binary document-indexing tools (fabric_ingest_run / fabric_extract). ' +
+      'Binary indexing is unavailable until a fabric-compatible indexer is ' +
+      'configured in Settings → MCP Servers.'
     )
   }
   return (

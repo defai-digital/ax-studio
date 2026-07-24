@@ -3,7 +3,9 @@
  *
  * Document ingestion is delegated to the ax-studio MCP server which runs the
  * full AkiDB pipeline (extract → chunk → embed → upsert → publish) in a
- * single `fabric_ingest_run` call.
+ * single `fabric_ingest_run` call. Latest AkiDB builds that expose
+ * `memory_write`/`pack` are supported for locally readable text documents via
+ * a compatibility adapter.
  *
  * Image ingestion is unchanged — images are delivered to the model as base64
  * content parts, not indexed in a vector store.
@@ -20,14 +22,16 @@ import {
   fabricDocumentId,
 } from '@/lib/file-registry'
 import {
+  canIndexTextAttachments,
   classifyAttachmentIndexerCapability,
   unavailableIndexerErrorMessage,
   type AttachmentIndexerCapability,
 } from '@/lib/attachments/akidb-tools'
+import { indexAttachmentWithAkiV09Memory } from '@/lib/attachments/aki-v09-compat'
 
 /**
- * Gate fabric_ingest_run: only proceed when the real ingest tool is present.
- * AkiDB v0.9 search/pack alone must not pass (ADR-005 / UXQ-014).
+ * Gate document indexing: fabric_ingest_run supports the full binary pipeline;
+ * latest AkiDB memory_write/pack supports locally parsed text documents.
  */
 export async function ensureAkidbAvailable(mcp: MCPService): Promise<void> {
   let capability: AttachmentIndexerCapability = 'none'
@@ -36,11 +40,8 @@ export async function ensureAkidbAvailable(mcp: MCPService): Promise<void> {
     capability = classifyAttachmentIndexerCapability(tools)
     const hasIngest = tools.some((t) => t.name === 'fabric_ingest_run')
     if (hasIngest) return
+    if (canIndexTextAttachments(tools)) return
   } catch {
-    capability = 'none'
-  }
-  // fabric_search/extract without fabric_ingest_run cannot satisfy this gate
-  if (capability === 'fabric-compatible') {
     capability = 'none'
   }
   throw new Error(unavailableIndexerErrorMessage(capability))
@@ -225,6 +226,18 @@ export class DefaultUploadsService implements UploadsService {
       return { id: ulid() }
     }
 
+    let tools: Awaited<ReturnType<MCPService['getTools']>> = []
+    try {
+      tools = await hub.getTools()
+    } catch {
+      await ensureAkidbAvailable(hub)
+    }
+
+    const hasFabricIngest = tools.some((t) => t.name === 'fabric_ingest_run')
+    if (!hasFabricIngest && canIndexTextAttachments(tools)) {
+      return this.ingestTextDocumentWithAkiV09(collectionId, attachment, hub)
+    }
+
     await ensureAkidbAvailable(hub)
 
     const result = await hub.callTool({
@@ -269,6 +282,41 @@ export class DefaultUploadsService implements UploadsService {
       id: fileId,
       size: attachment.size,
       chunkCount: metrics.totalChunksGenerated,
+    }
+  }
+
+  private async ingestTextDocumentWithAkiV09(
+    collectionId: string,
+    attachment: Attachment,
+    hub: MCPService
+  ): Promise<UploadResult> {
+    const result = await indexAttachmentWithAkiV09Memory({
+      mcp: hub,
+      collectionId,
+      attachment,
+    })
+
+    const path = attachment.path!
+    const existing = useFileRegistry
+      .getState()
+      .listFiles(collectionId)
+      .find((file) => file.file_path === path)
+
+    useFileRegistry.getState().addFile(collectionId, {
+      file_id: result.fileId,
+      file_name: attachment.name,
+      file_path: path,
+      file_type: attachment.fileType,
+      file_size: result.size,
+      chunk_count: result.chunkCount,
+      collection_id: collectionId,
+      created_at: existing?.created_at ?? new Date().toISOString(),
+    })
+
+    return {
+      id: result.fileId,
+      size: result.size,
+      chunkCount: result.chunkCount,
     }
   }
 }

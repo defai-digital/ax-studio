@@ -835,10 +835,10 @@ export const DropdownModelProvider = memo(function DropdownModelProvider({
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
-        <div className="relative z-30 flex items-center gap-1">
+        <div className="relative z-30 flex min-w-0 max-w-full items-center gap-1">
           <button
             type="button"
-            className="relative z-30 flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted/60 transition-all group border border-transparent hover:border-border/50"
+            className="relative z-30 flex min-w-0 max-w-full items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted/60 transition-all group border border-transparent hover:border-border/50"
           >
             {/* Provider color indicator / Auto icon */}
             {isAutoActive ? (
@@ -853,7 +853,7 @@ export const DropdownModelProvider = memo(function DropdownModelProvider({
             )}
             <span
               className={cn(
-                'text-foreground/90 truncate max-w-[160px]',
+                'text-foreground/90 truncate min-w-0 max-w-[160px]',
                 !selectedModel?.id && 'text-muted-foreground'
               )}
               style={{ fontSize: '13px', fontWeight: 500 }}

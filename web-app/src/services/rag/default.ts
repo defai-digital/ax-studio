@@ -17,11 +17,15 @@ import {
   projectCollectionId,
 } from '@/lib/file-registry'
 import { getMcpToolFailureMessage } from '@/lib/ax-bi/mcp-result'
+import { canRetrieveTextAttachments } from '@/lib/attachments/akidb-tools'
+import { chunkTextForAkiV09 } from '@/lib/attachments/aki-v09-compat'
+import { parseLocalDocumentText } from '@/lib/attachments/local-parse'
 
 const RAG_SERVER = 'rag-internal'
 const RETRIEVE_DEFAULT_TOP_K = 3
 const RETRIEVE_MIN_TOP_K = 1
 const RETRIEVE_MAX_TOP_K = 10
+const AKI_V09_PACK_TOKEN_BUDGET = 4_096
 
 const RAG_TOOLS: MCPTool[] = [
   {
@@ -139,6 +143,24 @@ export class DefaultRAGService implements RAGService {
     return RAG_TOOL_NAMES
   }
 
+  private async getMcpTools(): Promise<MCPTool[] | null> {
+    const hub = this.mcpService
+    if (!hub || typeof hub.getTools !== 'function') return null
+    try {
+      return await hub.getTools()
+    } catch (err) {
+      console.warn('[RAG] Failed to inspect MCP tools:', err)
+      return null
+    }
+  }
+
+  private async shouldUseAkiV09Retrieval(): Promise<boolean> {
+    const tools = await this.getMcpTools()
+    if (!tools) return false
+    const hasFabricSearch = tools.some((tool) => tool.name === 'fabric_search')
+    return !hasFabricSearch && canRetrieveTextAttachments(tools)
+  }
+
   // ── Tool execution ────────────────────────────────────────────────────
 
   async callTool(args: {
@@ -167,26 +189,33 @@ export class DefaultRAGService implements RAGService {
 
     if (hub) {
       try {
-        const result = await hub.callTool({
-          toolName: 'fabric_extract',
-          arguments: { file_path: path },
-        })
+        const tools = await this.getMcpTools()
+        const canCallFabricExtract =
+          tools === null || tools.some((tool) => tool.name === 'fabric_extract')
 
-        const failure = getMcpToolFailureMessage(result)
-        if (failure) {
-          console.warn('[RAG] fabric_extract error:', failure)
-        } else {
-          const text = result.content?.[0]?.text
-          if (text) {
-            try {
-              const parsed = JSON.parse(text)
-              const content = typeof parsed.text === 'string' ? parsed.text : ''
-              if (content) return content
-            } catch {
-              return text
-            }
+        if (canCallFabricExtract) {
+          const result = await hub.callTool({
+            toolName: 'fabric_extract',
+            arguments: { file_path: path },
+          })
+
+          const failure = getMcpToolFailureMessage(result)
+          if (failure) {
+            console.warn('[RAG] fabric_extract error:', failure)
           } else {
-            console.warn('[RAG] fabric_extract returned empty content')
+            const text = result.content?.[0]?.text
+            if (text) {
+              try {
+                const parsed = JSON.parse(text)
+                const content =
+                  typeof parsed.text === 'string' ? parsed.text : ''
+                if (content) return content
+              } catch {
+                return text
+              }
+            } else {
+              console.warn('[RAG] fabric_extract returned empty content')
+            }
           }
         }
       } catch (err) {
@@ -201,10 +230,6 @@ export class DefaultRAGService implements RAGService {
       )
     }
 
-    // Graceful degrade when AkiDB/fabric-ingest MCP is absent (standard install).
-    const { parseLocalDocumentText } = await import(
-      '@/lib/attachments/local-parse'
-    )
     return parseLocalDocumentText(path, type)
   }
 
@@ -254,6 +279,43 @@ export class DefaultRAGService implements RAGService {
     }
 
     try {
+      if (await this.shouldUseAkiV09Retrieval()) {
+        const result = await hub.callTool({
+          toolName: 'pack',
+          arguments: {
+            query,
+            top_k: topK,
+            token_budget: AKI_V09_PACK_TOKEN_BUDGET,
+            workspace: collectionId,
+          },
+        })
+
+        const packFailure = getMcpToolFailureMessage(result)
+        if (packFailure) {
+          return fail(`Search failed: ${packFailure}`)
+        }
+
+        const packedText = result.content?.[0]?.text?.trim() ?? ''
+        return ok({
+          thread_id: args.threadId,
+          project_id: args.projectId,
+          scope: args.scope,
+          query,
+          citations: packedText
+            ? [
+                {
+                  id: `akidb-pack:${collectionId}`,
+                  text: packedText,
+                  score: 1,
+                  file_id: '',
+                  chunk_file_order: 0,
+                },
+              ]
+            : [],
+          mode: 'akidb-pack',
+        })
+      }
+
       const searchArgs: Record<string, unknown> = {
         query,
         collection_id: collectionId,
@@ -374,6 +436,43 @@ export class DefaultRAGService implements RAGService {
     }
 
     try {
+      if (await this.shouldUseAkiV09Retrieval()) {
+        const entry = useFileRegistry.getState().getFile(collectionId, fileId)
+        if (!entry) {
+          return ok({
+            thread_id: args.threadId,
+            scope: args.scope,
+            file_id: fileId,
+            chunks: [],
+          })
+        }
+
+        const text = await parseLocalDocumentText(
+          entry.file_path,
+          entry.file_type
+        )
+        const chunks = chunkTextForAkiV09(text)
+          .map((chunk, index) => ({
+            id: `${fileId}:${index}`,
+            text: chunk,
+            score: 1,
+            file_id: fileId,
+            chunk_file_order: index,
+          }))
+          .filter(
+            (chunk) =>
+              chunk.chunk_file_order >= startOrder &&
+              chunk.chunk_file_order <= endOrder
+          )
+
+        return ok({
+          thread_id: args.threadId,
+          scope: args.scope,
+          file_id: fileId,
+          chunks,
+        })
+      }
+
       // fabric_search ranks by score, not file order. Request enough candidates
       // for the requested range, then filter/sort by offset client-side.
       const rangeSize = endOrder - startOrder + 1
