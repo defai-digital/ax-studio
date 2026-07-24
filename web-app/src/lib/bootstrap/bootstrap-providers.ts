@@ -5,7 +5,7 @@
  * Returns an unsubscribe function for the deep-link event listener.
  */
 import type { ServiceHub } from '@/services/index'
-import type { MCPServerConfig, MCPSettings } from '@/hooks/tools/useMCPServers'
+import type { MCPServerConfig, MCPSettings } from '@/services/mcp/types'
 import { deepLinkPayloadSchema } from '@/schemas/events.schema'
 import { assistantsSchema } from '@/schemas/assistants.schema'
 import { SystemEvent } from '@/types/events'

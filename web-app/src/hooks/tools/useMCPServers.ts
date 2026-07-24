@@ -1,39 +1,20 @@
 import { create } from 'zustand'
 import { getServiceHub } from '@/hooks/useServiceHub'
+// Pure types and the default-settings constant are owned by the MCP service
+// layer; re-exported here so existing import sites keep working.
+export type {
+  MCPServerConfig,
+  MCPServers,
+  MCPSettings,
+} from '@/services/mcp/types'
+import {
+  DEFAULT_MCP_SETTINGS,
+  type MCPServerConfig,
+  type MCPServers,
+  type MCPSettings,
+} from '@/services/mcp/types'
 
-// Define the structure of an MCP server configuration
-export type MCPServerConfig = {
-  command: string
-  args: string[]
-  env: Record<string, string>
-  active?: boolean
-  type?: 'stdio' | 'http' | 'sse'
-  url?: string
-  headers?: Record<string, string>
-  timeout?: number
-  official?: boolean
-  managed?: boolean
-  integration?: string
-}
-
-// Define the structure of all MCP servers
-export type MCPServers = {
-  [key: string]: MCPServerConfig
-}
-
-export type MCPSettings = {
-  toolCallTimeoutSeconds: number
-  baseRestartDelayMs: number
-  maxRestartDelayMs: number
-  backoffMultiplier: number
-}
-
-export const DEFAULT_MCP_SETTINGS: MCPSettings = {
-  toolCallTimeoutSeconds: 30,
-  baseRestartDelayMs: 1000,
-  maxRestartDelayMs: 30000,
-  backoffMultiplier: 2,
-}
+export { DEFAULT_MCP_SETTINGS }
 
 type MCPServerStoreState = {
   open: boolean

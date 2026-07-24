@@ -1,9 +1,47 @@
 /**
  * MCP Service Types
+ *
+ * The pure data contracts (`MCPServerConfig`, `MCPServers`, `MCPSettings`) and
+ * the `DEFAULT_MCP_SETTINGS` constant live here in the service layer so lower
+ * layers (services, lib) do not need to import from a UI hook. The
+ * `useMCPServers` hook re-exports them for its existing call sites.
  */
 
 import { MCPTool, MCPToolCallResult } from '@ax-studio/core'
-import type { MCPServerConfig, MCPServers, MCPSettings } from '@/hooks/tools/useMCPServers'
+
+// Define the structure of an MCP server configuration
+export type MCPServerConfig = {
+  command: string
+  args: string[]
+  env: Record<string, string>
+  active?: boolean
+  type?: 'stdio' | 'http' | 'sse'
+  url?: string
+  headers?: Record<string, string>
+  timeout?: number
+  official?: boolean
+  managed?: boolean
+  integration?: string
+}
+
+// Define the structure of all MCP servers
+export type MCPServers = {
+  [key: string]: MCPServerConfig
+}
+
+export type MCPSettings = {
+  toolCallTimeoutSeconds: number
+  baseRestartDelayMs: number
+  maxRestartDelayMs: number
+  backoffMultiplier: number
+}
+
+export const DEFAULT_MCP_SETTINGS: MCPSettings = {
+  toolCallTimeoutSeconds: 30,
+  baseRestartDelayMs: 1000,
+  maxRestartDelayMs: 30000,
+  backoffMultiplier: 2,
+}
 
 export interface MCPConfig {
   mcpServers?: MCPServers

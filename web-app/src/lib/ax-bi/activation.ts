@@ -5,11 +5,8 @@
  * `active: true` only after success and keeps the zustand store in sync.
  */
 import type { ServiceHub } from '@/services'
-import type { MCPConfig } from '@/services/mcp/types'
-import {
-  type MCPServerConfig,
-  useMCPServers,
-} from '@/hooks/tools/useMCPServers'
+import type { MCPConfig, MCPServerConfig } from '@/services/mcp/types'
+import { useMCPServers } from '@/hooks/tools/useMCPServers'
 import {
   readStoredAxBiMcpToken,
   storeAxBiMcpToken,
