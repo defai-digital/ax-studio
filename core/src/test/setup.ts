@@ -1,6 +1,4 @@
-import { vi } from 'vitest'
-
-// Ensure window exists in test environment  
+// Ensure window exists in test environment
 if (typeof window === 'undefined') {
   global.window = {} as any
 }
