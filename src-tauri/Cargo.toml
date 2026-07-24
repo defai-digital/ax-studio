@@ -1,6 +1,6 @@
 [package]
 name = "ax-studio"
-version = "2.2.1"
+version = "2.2.2"
 description = "AX Studio — AI desktop application powered by your own backend services."
 authors = ["AX Studio"]
 license = "Apache-2.0"

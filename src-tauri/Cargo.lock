@@ -410,7 +410,7 @@ dependencies = [
 
 [[package]]
 name = "ax-studio"
-version = "2.2.1"
+version = "2.2.2"
 dependencies = [
  "ax-engine-core",
  "ax-engine-sdk",
@@ -6659,7 +6659,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-hardware"
-version = "2.2.1"
+version = "2.2.2"
 dependencies = [
  "libc",
  "libloading 0.8.9",
@@ -6700,7 +6700,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-llamacpp"
-version = "2.2.1"
+version = "2.2.2"
 dependencies = [
  "ax-studio-utils",
  "base64 0.22.1",

@@ -1,6 +1,6 @@
 {
   "name": "@ax-studio/tauri-plugin-hardware-api",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "private": true,
   "description": "Hardware monitoring plugin API for Tauri",
   "license": "Apache-2.0",

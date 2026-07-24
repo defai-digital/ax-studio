@@ -1,7 +1,7 @@
 {
   "name": "@ax-studio/web-app",
   "private": true,
-  "version": "2.2.1",
+  "version": "2.2.2",
   "license": "Apache-2.0",
   "homepage": "https://github.com/defai-digital/ax-studio",
   "repository": {
