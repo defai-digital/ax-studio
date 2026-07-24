@@ -344,9 +344,24 @@ class PlatformServiceHub implements ServiceHub {
         const svc = this.ragService as { setMcpService: (mcp: MCPService) => void }
         svc.setMcpService(this.mcpService)
       }
+      if ('setCoreService' in this.ragService) {
+        const svc = this.ragService as {
+          setCoreService: (
+            core: CoreService,
+            nativeExtractionAvailable: boolean
+          ) => void
+        }
+        svc.setCoreService(this.coreService, isPlatformTauri())
+      }
       if ('setMcpService' in this.uploadsService) {
         const svc = this.uploadsService as { setMcpService: (mcp: MCPService) => void }
         svc.setMcpService(this.mcpService)
+      }
+      if ('setCoreService' in this.uploadsService) {
+        const svc = this.uploadsService as {
+          setCoreService: (core: CoreService) => void
+        }
+        svc.setCoreService(this.coreService)
       }
 
       this.initialized = true

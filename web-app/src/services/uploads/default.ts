@@ -4,8 +4,8 @@
  * Document ingestion is delegated to the ax-studio MCP server which runs the
  * full AkiDB pipeline (extract → chunk → embed → upsert → publish) in a
  * single `fabric_ingest_run` call. Latest AkiDB builds that expose
- * `memory_write`/`pack` are supported for locally readable text documents via
- * a compatibility adapter.
+ * `memory_write`/`pack` are supported through AX Studio's bounded local
+ * document extractor and compatibility adapter.
  *
  * Image ingestion is unchanged — images are delivered to the model as base64
  * content parts, not indexed in a vector store.
@@ -28,10 +28,12 @@ import {
   type AttachmentIndexerCapability,
 } from '@/lib/attachments/akidb-tools'
 import { indexAttachmentWithAkiV09Memory } from '@/lib/attachments/aki-v09-compat'
+import { extractDocumentText } from '@/lib/attachments/document-extraction'
+import type { CoreService } from '@/services/core/types'
 
 /**
  * Gate document indexing: fabric_ingest_run supports the full binary pipeline;
- * latest AkiDB memory_write/pack supports locally parsed text documents.
+ * latest AkiDB memory_write/pack supports locally extracted documents.
  */
 export async function ensureAkidbAvailable(mcp: MCPService): Promise<void> {
   let capability: AttachmentIndexerCapability = 'none'
@@ -160,6 +162,7 @@ function normalizePipelineErrors(
 
 export class DefaultUploadsService implements UploadsService {
   private mcpService: MCPService | null = null
+  private coreService: CoreService | null = null
 
   /**
    * Called once during ServiceHub initialization to give us a back-reference
@@ -168,6 +171,10 @@ export class DefaultUploadsService implements UploadsService {
    */
   setMcpService(mcp: MCPService): void {
     this.mcpService = mcp
+  }
+
+  setCoreService(core: CoreService): void {
+    this.coreService = core
   }
 
   // ── Images — unchanged, no vector indexing ────────────────────────────
@@ -235,7 +242,7 @@ export class DefaultUploadsService implements UploadsService {
 
     const hasFabricIngest = tools.some((t) => t.name === 'fabric_ingest_run')
     if (!hasFabricIngest && canIndexTextAttachments(tools)) {
-      return this.ingestTextDocumentWithAkiV09(collectionId, attachment, hub)
+      return this.ingestDocumentWithAkiV09(collectionId, attachment, hub)
     }
 
     await ensureAkidbAvailable(hub)
@@ -285,15 +292,21 @@ export class DefaultUploadsService implements UploadsService {
     }
   }
 
-  private async ingestTextDocumentWithAkiV09(
+  private async ingestDocumentWithAkiV09(
     collectionId: string,
     attachment: Attachment,
     hub: MCPService
   ): Promise<UploadResult> {
+    const extracted = await extractDocumentText({
+      path: attachment.path!,
+      fileType: attachment.fileType,
+      core: this.coreService,
+    })
     const result = await indexAttachmentWithAkiV09Memory({
       mcp: hub,
       collectionId,
       attachment,
+      extractedText: extracted.text,
     })
 
     const path = attachment.path!

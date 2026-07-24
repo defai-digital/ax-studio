@@ -39,17 +39,20 @@ export async function indexAttachmentWithAkiV09Memory(options: {
   mcp: MCPService
   collectionId: string
   attachment: Attachment
+  extractedText?: string
 }): Promise<{ fileId: string; chunkCount: number; size?: number }> {
-  const { mcp, collectionId, attachment } = options
+  const { mcp, collectionId, attachment, extractedText } = options
   if (!attachment.path) {
     throw new Error('AkiDB memory indexing requires a file path')
   }
 
-  const text = await parseLocalDocumentText(attachment.path, attachment.fileType)
+  const text =
+    extractedText ??
+    (await parseLocalDocumentText(attachment.path, attachment.fileType))
   const chunks = chunkTextForAkiV09(text)
   if (chunks.length === 0) {
     throw new Error(
-      'This file cannot be indexed by the connected AkiDB server. Text files are supported; PDF/DOCX require fabric_extract or fabric_ingest_run.'
+      'This file did not contain extractable text and cannot be indexed.'
     )
   }
 

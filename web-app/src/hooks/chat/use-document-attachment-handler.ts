@@ -240,17 +240,20 @@ export function useDocumentAttachmentHandler({
         canAkiV09TextIndex = false
         indexerCapability = 'none'
       }
+      const canNativeExtract =
+        serviceHub.rag().canExtractBinaryDocuments?.() ?? false
+      const canIndexBinaryAttachment =
+        canFabricIndex || (canAkiV09TextIndex && canNativeExtract)
       const canIndexAnyAttachment = canFabricIndex || canAkiV09TextIndex
 
-      // When fabric indexing is unavailable, latest AkiDB memory_write can still
-      // index locally readable text files. Binary docs require fabric_extract for
-      // inline parsing; otherwise they are skipped before embeddings upload.
+      // Native desktop extraction handles supported binary files inline and can
+      // feed AkiDB v0.9 memory_write. fabric_extract remains the fallback for
+      // environments that provide the legacy compatibility contract.
       let docsToProcess = docs
-      const BINARY_SKIP_MESSAGE =
-        binaryAttachmentSkipMessage(indexerCapability)
+      const BINARY_SKIP_MESSAGE = binaryAttachmentSkipMessage(indexerCapability)
 
       if (docsNeedingPrompt.length > 0) {
-        if (!canFabricIndex) {
+        if (!canIndexBinaryAttachment) {
           const readable: Attachment[] = []
           const binary: Attachment[] = []
           for (const doc of docsNeedingPrompt) {
@@ -270,7 +273,8 @@ export function useDocumentAttachmentHandler({
             }
           }
 
-          const binaryToProcess = canFabricExtract ? binary : []
+          const binaryToProcess =
+            canFabricExtract || canNativeExtract ? binary : []
           for (const doc of binaryToProcess) {
             if (doc.path) docChoices.set(doc.path, 'inline')
           }
@@ -282,7 +286,8 @@ export function useDocumentAttachmentHandler({
           )
           docsToProcess = [...alreadyReady, ...readable, ...binaryToProcess]
 
-          const skippedBinary = canFabricExtract ? [] : binary
+          const skippedBinary =
+            canFabricExtract || canNativeExtract ? [] : binary
           if (skippedBinary.length > 0) {
             setAttachmentsForThread(attachmentsKey, (prev) =>
               prev.map((att) => {

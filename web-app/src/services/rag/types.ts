@@ -16,4 +16,6 @@ export interface RAGService {
   getToolNames(): Promise<string[]>
   // Parse a document to text for inline injection decisions
   parseDocument?: (path: string, type?: string) => Promise<string>
+  // Whether the desktop bridge can extract supported binary documents locally.
+  canExtractBinaryDocuments?: () => boolean
 }

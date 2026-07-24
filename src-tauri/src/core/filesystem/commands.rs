@@ -703,7 +703,7 @@ pub async fn read_file_base64<R: Runtime>(
     .map_err(|error| format!("read_file_base64 task join error: {error}"))?
 }
 
-async fn resolve_approved_read_file<R: Runtime>(
+pub(super) async fn resolve_approved_read_file<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     state: &State<'_, AppState>,
     raw_path: String,

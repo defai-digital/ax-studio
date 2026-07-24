@@ -138,6 +138,34 @@ describe('DefaultRAGService', () => {
       expect(readFileSync).not.toHaveBeenCalled()
     })
 
+    it('uses native binary extraction when fabric_extract is unavailable', async () => {
+      const core = {
+        invoke: vi.fn().mockResolvedValue({
+          text: '## Page 1\n\nNative PDF text',
+          metadata: { format: 'pdf', unitCount: 1, truncated: false },
+          warnings: [],
+        }),
+      }
+      service.setCoreService(core as never)
+      service.setMcpService({
+        getTools: vi.fn().mockResolvedValue([
+          { name: 'search' },
+          { name: 'pack' },
+          { name: 'memory_write' },
+        ]),
+        callTool: vi.fn(),
+      })
+
+      await expect(
+        service.parseDocument('/tmp/report.pdf', 'pdf')
+      ).resolves.toBe('## Page 1\n\nNative PDF text')
+      expect(core.invoke).toHaveBeenCalledWith('extract_document_text', {
+        path: '/tmp/report.pdf',
+        fileType: 'pdf',
+      })
+      expect(service.canExtractBinaryDocuments()).toBe(true)
+    })
+
     it('handles plain text response (non-JSON)', async () => {
       const hub = makeServiceHub({
         error: '',

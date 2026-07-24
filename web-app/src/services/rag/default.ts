@@ -19,7 +19,9 @@ import {
 import { getMcpToolFailureMessage } from '@/lib/ax-bi/mcp-result'
 import { canRetrieveTextAttachments } from '@/lib/attachments/akidb-tools'
 import { chunkTextForAkiV09 } from '@/lib/attachments/aki-v09-compat'
+import { extractDocumentText } from '@/lib/attachments/document-extraction'
 import { parseLocalDocumentText } from '@/lib/attachments/local-parse'
+import type { CoreService } from '@/services/core/types'
 
 const RAG_SERVER = 'rag-internal'
 const RETRIEVE_DEFAULT_TOP_K = 3
@@ -128,9 +130,20 @@ function parseStringArgument(value: unknown): string {
 
 export class DefaultRAGService implements RAGService {
   private mcpService: MCPService | null = null
+  private coreService: CoreService | null = null
+  private nativeExtractionAvailable = false
 
   setMcpService(mcp: MCPService): void {
     this.mcpService = mcp
+  }
+
+  setCoreService(core: CoreService, nativeExtractionAvailable = true): void {
+    this.coreService = core
+    this.nativeExtractionAvailable = nativeExtractionAvailable
+  }
+
+  canExtractBinaryDocuments(): boolean {
+    return this.nativeExtractionAvailable
   }
 
   // ── Tool definitions ──────────────────────────────────────────────────
@@ -230,7 +243,12 @@ export class DefaultRAGService implements RAGService {
       )
     }
 
-    return parseLocalDocumentText(path, type)
+    const extracted = await extractDocumentText({
+      path,
+      fileType: type,
+      core: this.coreService,
+    })
+    return extracted.text
   }
 
   // ── Private handlers ──────────────────────────────────────────────────
