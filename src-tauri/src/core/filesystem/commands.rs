@@ -725,12 +725,23 @@ async fn resolve_approved_read_path<R: Runtime>(
     if raw_path.is_empty() || raw_path.len() > 4 * 1024 || raw_path.chars().any(char::is_control) {
         return Err(format!("{command}: invalid path"));
     }
-    let clean_path = if raw_path.starts_with("file:/") || raw_path.starts_with("file:\\") {
-        ax_studio_utils::normalize_file_path(&raw_path)
+    if raw_path.starts_with("http://") || raw_path.starts_with("https://") {
+        return Err(format!(
+            "{command}: network URLs are not valid filesystem paths"
+        ));
+    }
+
+    // Legacy `file://…` paths are app-data-relative (same contract as resolve_path).
+    // Resolving them under the app data folder preserves existing frontend call sites
+    // and the tests that use `file://relative-name`. Absolute paths from the native
+    // open dialog are handled below and require picker approval when outside app data.
+    let candidate = if raw_path.starts_with("file:/") || raw_path.starts_with("file:\\") {
+        resolve_path(app_handle.clone(), &raw_path)?
     } else {
-        raw_path
+        PathBuf::from(&raw_path)
     };
-    let path = PathBuf::from(clean_path)
+
+    let path = candidate
         .canonicalize()
         .map(|path| ax_studio_utils::normalize_path(&path))
         .map_err(|error| format!("Cannot resolve read path: {error}"))?;
