@@ -628,12 +628,14 @@ pub fn exists_sync<R: Runtime>(
 }
 
 #[tauri::command]
-/// Return file metadata for a path inside the app data folder.
-pub fn file_stat<R: Runtime>(
+/// Return file metadata for an app-data or native-picker-approved path.
+pub async fn file_stat<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
+    state: State<'_, AppState>,
     request: FileStatRequest,
 ) -> Result<FileStat, String> {
-    let path = resolve_path(app_handle, &request.into_path()?)?;
+    let raw_path = request.into_path()?;
+    let path = resolve_approved_read_path(app_handle, &state, raw_path, "file_stat").await?;
     let metadata = fs::metadata(&path).map_err(|e| e.to_string())?;
     let is_directory = metadata.is_dir();
     let size = if is_directory { 0 } else { metadata.len() };
@@ -642,12 +644,14 @@ pub fn file_stat<R: Runtime>(
 }
 
 #[tauri::command]
-/// Read a UTF-8 text file from the app data folder.
-pub fn read_file_sync<R: Runtime>(
+/// Read a UTF-8 text file from an app-data or native-picker-approved path.
+pub async fn read_file_sync<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
+    state: State<'_, AppState>,
     request: SinglePathRequest,
 ) -> Result<String, String> {
-    let path = resolve_path(app_handle, &request.into_path("read_file_sync")?)?;
+    let raw_path = request.into_path("read_file_sync")?;
+    let path = resolve_approved_read_file(app_handle, &state, raw_path, "read_file_sync").await?;
     let metadata = fs::metadata(&path)
         .map_err(|error| format!("read_file_sync: failed to stat {}: {error}", path.display()))?;
     if !metadata.is_file() {
@@ -705,6 +709,19 @@ async fn resolve_approved_read_file<R: Runtime>(
     raw_path: String,
     command: &str,
 ) -> Result<PathBuf, String> {
+    let path = resolve_approved_read_path(app_handle, state, raw_path, command).await?;
+    if !path.is_file() {
+        return Err(format!("{command}: path is not a file"));
+    }
+    Ok(path)
+}
+
+async fn resolve_approved_read_path<R: Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    state: &State<'_, AppState>,
+    raw_path: String,
+    command: &str,
+) -> Result<PathBuf, String> {
     if raw_path.is_empty() || raw_path.len() > 4 * 1024 || raw_path.chars().any(char::is_control) {
         return Err(format!("{command}: invalid path"));
     }
@@ -717,9 +734,6 @@ async fn resolve_approved_read_file<R: Runtime>(
         .canonicalize()
         .map(|path| ax_studio_utils::normalize_path(&path))
         .map_err(|error| format!("Cannot resolve read path: {error}"))?;
-    if !path.is_file() {
-        return Err(format!("{command}: path is not a file"));
-    }
 
     let app_data_folder = crate::core::app::commands::get_app_data_folder_path(app_handle);
     let app_data_folder = app_data_folder

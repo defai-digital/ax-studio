@@ -114,9 +114,11 @@ fn test_exists_sync() {
     fs::remove_file(file_path).unwrap();
 }
 
-#[test]
-fn test_read_file_sync() {
+#[tokio::test]
+async fn test_read_file_sync() {
     let app = mock_app();
+    app.manage(test_app_state());
+    let state = app.state::<AppState>();
     let path = "file://test_read_file_sync_file";
     let dir_path = get_app_data_folder_path(app.handle().clone());
     fs::create_dir_all(&dir_path).unwrap();
@@ -125,9 +127,50 @@ fn test_read_file_sync() {
     let request = SinglePathRequest::Legacy {
         args: vec![path.to_string()],
     };
-    let result = read_file_sync(app.handle().clone(), request).unwrap();
+    let result = read_file_sync(app.handle().clone(), state, request)
+        .await
+        .unwrap();
     assert_eq!(result, "test content".to_string());
     fs::remove_file(file_path).unwrap();
+}
+
+#[tokio::test]
+async fn test_read_file_sync_accepts_picker_approved_text_file() {
+    let app = mock_app();
+    app.manage(test_app_state());
+    let state = app.state::<AppState>();
+
+    let outside = tempfile::tempdir().unwrap();
+    let outside_file = outside.path().join("selected.md");
+    fs::write(&outside_file, "# selected").unwrap();
+
+    let denied = read_file_sync(
+        app.handle().clone(),
+        state.clone(),
+        SinglePathRequest::Typed {
+            path: outside_file.to_string_lossy().into_owned(),
+        },
+    )
+    .await
+    .unwrap_err();
+    assert!(denied.contains("not approved"));
+
+    state
+        .approved_read_files
+        .lock()
+        .await
+        .insert(approved_read_path(&outside_file));
+
+    let content = read_file_sync(
+        app.handle().clone(),
+        state,
+        SinglePathRequest::Typed {
+            path: outside_file.to_string_lossy().into_owned(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(content, "# selected");
 }
 
 #[tokio::test]
@@ -561,9 +604,11 @@ fn test_normalize_save_target_path_rejects_relative_paths() {
     assert!(normalize_save_target_path("relative/file.txt").is_err());
 }
 
-#[test]
-fn test_file_stat_accepts_legacy_and_typed_requests() {
+#[tokio::test]
+async fn test_file_stat_accepts_legacy_and_typed_requests() {
     let app = mock_app();
+    app.manage(test_app_state());
+    let state = app.state::<AppState>();
     let dir_path = get_app_data_folder_path(app.handle().clone());
     fs::create_dir_all(&dir_path).unwrap();
     let file_path = dir_path.join("test_file_stat.txt");
@@ -571,32 +616,94 @@ fn test_file_stat_accepts_legacy_and_typed_requests() {
 
     let legacy = file_stat(
         app.handle().clone(),
+        state.clone(),
         FileStatRequest::Legacy {
             args: "file://test_file_stat.txt".to_string(),
         },
     )
+    .await
     .unwrap();
     assert_eq!(legacy.size, 5);
 
     let legacy_args = file_stat(
         app.handle().clone(),
+        state.clone(),
         FileStatRequest::LegacyArgs {
             args: vec!["file://test_file_stat.txt".to_string()],
         },
     )
+    .await
     .unwrap();
     assert_eq!(legacy_args.size, 5);
 
     let typed = file_stat(
         app.handle().clone(),
+        state,
         FileStatRequest::Typed {
             path: "file://test_file_stat.txt".to_string(),
         },
     )
+    .await
     .unwrap();
     assert_eq!(typed.size, 5);
 
     fs::remove_file(file_path).unwrap();
+}
+
+#[tokio::test]
+async fn test_file_stat_accepts_picker_approved_file_and_directory() {
+    let app = mock_app();
+    app.manage(test_app_state());
+    let state = app.state::<AppState>();
+
+    let outside = tempfile::tempdir().unwrap();
+    let outside_file = outside.path().join("selected.txt");
+    fs::write(&outside_file, "selected").unwrap();
+
+    let denied = file_stat(
+        app.handle().clone(),
+        state.clone(),
+        FileStatRequest::Typed {
+            path: outside_file.to_string_lossy().into_owned(),
+        },
+    )
+    .await
+    .unwrap_err();
+    assert!(denied.contains("not approved"));
+
+    {
+        let mut approved_files = state.approved_read_files.lock().await;
+        approved_files.insert(approved_read_path(&outside_file));
+    }
+
+    let file = file_stat(
+        app.handle().clone(),
+        state.clone(),
+        FileStatRequest::Typed {
+            path: outside_file.to_string_lossy().into_owned(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(!file.is_directory);
+    assert_eq!(file.size, 8);
+
+    {
+        let mut approved_dirs = state.approved_read_directories.lock().await;
+        approved_dirs.insert(approved_read_path(outside.path()));
+    }
+
+    let directory = file_stat(
+        app.handle().clone(),
+        state,
+        FileStatRequest::Typed {
+            path: outside.path().to_string_lossy().into_owned(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(directory.is_directory);
+    assert_eq!(directory.size, 0);
 }
 
 #[tokio::test]
