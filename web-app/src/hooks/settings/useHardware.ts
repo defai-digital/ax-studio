@@ -2,66 +2,24 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { localStorageKey } from '@/constants/localStorage'
 import { createSafeJSONStorage } from '@/lib/storage/storage'
-
-// Hardware data types
-export interface CPU {
-  arch: string
-  core_count: number
-  extensions: string[]
-  name: string
-  usage: number
-  instructions?: string[] // Cortex migration: ensure instructions data ready
-}
-
-export interface GPU {
-  name: string
-  total_memory: number
-  vendor: string
-  uuid: string
-  driver_version: string
-  activated?: boolean
-  nvidia_info: {
-    index: number
-    compute_capability: string
-  }
-  vulkan_info: {
-    index: number
-    device_id: number
-    device_type: string
-    api_version: string
-  }
-}
-
-export interface OS {
-  name: string
-  version: string
-}
-
-export interface RAM {
-  available: number
-  total: number
-}
-
-export interface HardwareData {
-  cpu: CPU
-  gpus: GPU[]
-  os_type: string
-  os_name: string
-  total_memory: number
-  os?: OS
-  ram?: RAM
-}
-
-export interface SystemUsage {
-  cpu: number
-  used_memory: number
-  total_memory: number
-  gpus: {
-    uuid: string
-    used_memory: number
-    total_memory: number
-  }[]
-}
+// Pure hardware data contracts are owned by the service layer; re-exported
+// here so existing import sites keep working.
+export type {
+  CPU,
+  GPU,
+  OS,
+  RAM,
+  HardwareData,
+  SystemUsage,
+} from '@/services/hardware/types'
+import type {
+  CPU,
+  GPU,
+  OS,
+  RAM,
+  HardwareData,
+  SystemUsage,
+} from '@/services/hardware/types'
 
 // Default values
 const defaultHardwareData: HardwareData = {
