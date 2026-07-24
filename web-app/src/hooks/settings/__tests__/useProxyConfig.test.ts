@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { AES } from 'crypto-js'
 import { proxyConfigStorage, useProxyConfig } from '../useProxyConfig'
 
 const secureSecretMocks = vi.hoisted(() => ({
@@ -360,14 +359,12 @@ describe('useProxyConfig', () => {
     })
 
     it('migrates the legacy encrypted password and scrubs local storage', async () => {
-      const legacyPassword = AES.encrypt(
-        'legacy-password',
-        'ax-studio-secure-proxy-key'
-      ).toString()
+      const legacyCiphertext =
+        'U2FsdGVkX1/0JMfa8ZHSLXXib7F6SbFIzaFPHPwDekM='
       localStorage.setItem(
         'proxy-config-settings',
         JSON.stringify({
-          state: { proxyEnabled: true, proxyPassword: legacyPassword },
+          state: { proxyEnabled: true, proxyPassword: legacyCiphertext },
           version: 0,
         })
       )
@@ -382,7 +379,7 @@ describe('useProxyConfig', () => {
         'legacy-password'
       )
       expect(localStorage.getItem('proxy-config-settings')).not.toContain(
-        legacyPassword
+        legacyCiphertext
       )
     })
 
