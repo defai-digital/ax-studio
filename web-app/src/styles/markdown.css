@@ -130,31 +130,65 @@
 
   /* Streamdown fenced code block (UXQ-030/031) */
   [data-streamdown='code-block'] {
-    @apply border border-border bg-secondary/40 text-foreground;
+    @apply border border-border bg-background text-foreground;
     border-radius: 0.5rem;
-    margin-bottom: 0.75em;
+    margin: 1rem 0;
     overflow: hidden;
   }
 
   [data-streamdown='code-block-header'] {
-    @apply flex items-center justify-between gap-2 border-b border-border bg-muted/50 px-3 py-1.5;
+    @apply flex h-10 items-center justify-between gap-2 border-b border-border bg-muted/50 px-3;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
       'Liberation Mono', 'Courier New', monospace;
     font-size: 0.75rem;
-    line-height: 1.25rem;
     color: var(--muted-foreground, oklch(0.5 0 0));
+  }
+
+  .markdown-code-block__language {
+    color: #4f46e5;
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    text-transform: lowercase;
+    white-space: nowrap;
   }
 
   [data-streamdown='code-block-actions'] {
     @apply flex items-center gap-1;
   }
 
+  .markdown-code-block__action {
+    @apply inline-flex size-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  }
+
+  .markdown-code-block__body {
+    position: relative;
+    min-width: 0;
+  }
+
+  .markdown-code-block__body--collapsed {
+    max-height: 26rem;
+    overflow: hidden;
+  }
+
+  .markdown-code-block__fade {
+    @apply pointer-events-none absolute inset-x-0 bottom-0 h-16;
+    background: linear-gradient(to bottom, transparent, var(--background));
+  }
+
+  [data-streamdown='code-block-body'] > div {
+    border-radius: 0;
+  }
+
   [data-streamdown='code-block'] pre {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
       'Liberation Mono', 'Courier New', monospace;
-    @apply bg-transparent text-foreground m-0 px-3 py-3;
+    @apply m-0 bg-transparent px-4 py-3 text-foreground;
     overflow-x: auto;
     margin-bottom: 0;
+    overflow-wrap: normal;
+    white-space: pre;
+    word-break: normal;
   }
 
   [data-streamdown='code-block'] pre code,
@@ -164,6 +198,25 @@
     border-radius: 0;
     @apply text-sm!;
     display: block;
+    min-width: max-content;
+  }
+
+  .dark [data-streamdown='code-block'] {
+    background: #0d1117;
+    border-color: rgb(255 255 255 / 8%);
+  }
+
+  .dark [data-streamdown='code-block-header'] {
+    background: #161b22;
+    border-color: rgb(255 255 255 / 7%);
+  }
+
+  .dark .markdown-code-block__language {
+    color: #82aaff;
+  }
+
+  .dark .markdown-code-block__fade {
+    background: linear-gradient(to bottom, transparent, #0d1117);
   }
 
   /* Legacy bare pre (outside Streamdown code-block chrome) */

@@ -7,18 +7,17 @@ import type { ThemeRegistrationRaw } from 'shiki'
 export const axStudioDarkTheme: ThemeRegistrationRaw = {
   name: 'ax-studio-dark',
   type: 'dark',
-  settings: [],
   colors: {
     'editor.background': '#09090b',
     'editor.foreground': '#e2e8f0',
     'editorLineNumber.foreground': '#52525b',
     'editorLineNumber.activeForeground': '#a1a1aa',
   },
-  tokenColors: [
+  settings: [
     {
       scope: ['comment', 'punctuation.definition.comment'],
       settings: {
-        foreground: '#546e7a',
+        foreground: '#7f8c98',
         fontStyle: 'italic',
       },
     },
@@ -31,7 +30,7 @@ export const axStudioDarkTheme: ThemeRegistrationRaw = {
     {
       scope: ['string', 'string.quoted'],
       settings: {
-        foreground: '#c3e88d',
+        foreground: '#addb67',
       },
     },
     {
@@ -90,13 +89,82 @@ export const axStudioDarkTheme: ThemeRegistrationRaw = {
     {
       scope: ['punctuation'],
       settings: {
-        foreground: '#89ddff',
+        foreground: '#a6accd',
       },
     },
     {
       scope: ['keyword.operator'],
       settings: {
         foreground: '#89ddff',
+      },
+    },
+    {
+      scope: [
+        'variable.parameter',
+        'meta.function.parameters variable',
+        'meta.parameters variable',
+      ],
+      settings: {
+        foreground: '#f07178',
+      },
+    },
+    {
+      scope: [
+        'variable.other.property',
+        'support.type.property-name',
+        'meta.object-literal.key',
+        'meta.mapping.key',
+      ],
+      settings: {
+        foreground: '#ffcb6b',
+      },
+    },
+    {
+      scope: [
+        'support.function.builtin',
+        'support.variable',
+        'variable.language',
+        'entity.name.namespace',
+      ],
+      settings: {
+        foreground: '#89ddff',
+      },
+    },
+    {
+      scope: [
+        'constant.other',
+        'constant.character',
+        'constant.character.escape',
+      ],
+      settings: {
+        foreground: '#f78c6c',
+      },
+    },
+    {
+      scope: [
+        'entity.name.function.decorator',
+        'meta.decorator',
+        'punctuation.decorator',
+      ],
+      settings: {
+        foreground: '#c792ea',
+      },
+    },
+    {
+      scope: ['string.regexp', 'constant.other.regex'],
+      settings: {
+        foreground: '#f07178',
+      },
+    },
+    {
+      scope: [
+        'markup.heading',
+        'markup.bold',
+        'entity.name.section',
+        'punctuation.definition.heading',
+      ],
+      settings: {
+        foreground: '#82aaff',
       },
     },
   ],

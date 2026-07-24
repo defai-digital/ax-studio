@@ -7,18 +7,17 @@ import type { ThemeRegistrationRaw } from 'shiki'
 export const axStudioLightTheme: ThemeRegistrationRaw = {
   name: 'ax-studio-light',
   type: 'light',
-  settings: [],
   colors: {
     'editor.background': '#fafafa',
     'editor.foreground': '#24292e',
     'editorLineNumber.foreground': '#a1a1aa',
     'editorLineNumber.activeForeground': '#24292e',
   },
-  tokenColors: [
+  settings: [
     {
       scope: ['comment', 'punctuation.definition.comment'],
       settings: {
-        foreground: '#6a737d',
+        foreground: '#59636e',
         fontStyle: 'italic',
       },
     },
@@ -90,13 +89,82 @@ export const axStudioLightTheme: ThemeRegistrationRaw = {
     {
       scope: ['punctuation'],
       settings: {
-        foreground: '#6b7280',
+        foreground: '#64748b',
       },
     },
     {
       scope: ['keyword.operator'],
       settings: {
         foreground: '#4f46e5',
+      },
+    },
+    {
+      scope: [
+        'variable.parameter',
+        'meta.function.parameters variable',
+        'meta.parameters variable',
+      ],
+      settings: {
+        foreground: '#be123c',
+      },
+    },
+    {
+      scope: [
+        'variable.other.property',
+        'support.type.property-name',
+        'meta.object-literal.key',
+        'meta.mapping.key',
+      ],
+      settings: {
+        foreground: '#b45309',
+      },
+    },
+    {
+      scope: [
+        'support.function.builtin',
+        'support.variable',
+        'variable.language',
+        'entity.name.namespace',
+      ],
+      settings: {
+        foreground: '#0369a1',
+      },
+    },
+    {
+      scope: [
+        'constant.other',
+        'constant.character',
+        'constant.character.escape',
+      ],
+      settings: {
+        foreground: '#c2410c',
+      },
+    },
+    {
+      scope: [
+        'entity.name.function.decorator',
+        'meta.decorator',
+        'punctuation.decorator',
+      ],
+      settings: {
+        foreground: '#7c3aed',
+      },
+    },
+    {
+      scope: ['string.regexp', 'constant.other.regex'],
+      settings: {
+        foreground: '#be123c',
+      },
+    },
+    {
+      scope: [
+        'markup.heading',
+        'markup.bold',
+        'entity.name.section',
+        'punctuation.definition.heading',
+      ],
+      settings: {
+        foreground: '#4338ca',
       },
     },
   ],

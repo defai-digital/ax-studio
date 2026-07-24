@@ -17,37 +17,41 @@ export const CodeBlock = ({
   children,
   ...props
 }: CodeBlockProps) => {
-  const [html, setHtml] = useState<string>('')
-  const [darkHtml, setDarkHtml] = useState<string>('')
+  const renderKey = `${language}:${showLineNumbers ? '1' : '0'}:${code}`
+  const fallbackHtml = useMemo(() => {
+    const escaped = code
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+    return `<pre><code>${escaped}</code></pre>`
+  }, [code])
+  const [highlighted, setHighlighted] = useState<{
+    dark: string
+    key: string
+    light: string
+  } | null>(null)
 
   useEffect(() => {
     let cancelled = false
     highlightCode(code, language, showLineNumbers)
       .then(([light, dark]) => {
         if (!cancelled) {
-          setHtml(light)
-          setDarkHtml(dark)
+          setHighlighted({ dark, key: renderKey, light })
         }
       })
       .catch((error) => {
         console.error('[CodeBlock] Failed to highlight code:', error)
-        // Fallback: show raw code when highlighting fails
-        if (!cancelled) {
-          const escaped = code
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-          const fallback = `<pre><code>${escaped}</code></pre>`
-          setHtml(fallback)
-          setDarkHtml(fallback)
-        }
       })
 
     return () => {
       cancelled = true
     }
-  }, [code, language, showLineNumbers])
+  }, [code, language, renderKey, showLineNumbers])
 
+  const html =
+    highlighted?.key === renderKey ? highlighted.light : fallbackHtml
+  const darkHtml =
+    highlighted?.key === renderKey ? highlighted.dark : fallbackHtml
   const sanitizedHtml = useMemo(() => DOMPurify.sanitize(html), [html])
   const sanitizedDarkHtml = useMemo(
     () => DOMPurify.sanitize(darkHtml),

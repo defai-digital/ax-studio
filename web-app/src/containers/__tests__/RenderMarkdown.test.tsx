@@ -1,6 +1,24 @@
-import { render } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import { RenderMarkdown } from '../RenderMarkdown'
+
+vi.mock('@/components/ai-elements/code-block', () => ({
+  CodeBlock: ({
+    className,
+    code,
+  }: {
+    className?: string
+    code: string
+  }) => (
+    <div className={className}>
+      <pre>
+        <code>
+          <span style={{ color: '#82aaff' }}>{code}</span>
+        </code>
+      </pre>
+    </div>
+  ),
+}))
 
 vi.mock('@i18n/react-i18next-compat', () => ({
   useTranslation: () => ({
@@ -14,6 +32,16 @@ Object.assign(navigator, {
     writeText: vi.fn(),
   },
 })
+
+async function waitForSyntaxHighlight(container: HTMLElement) {
+  await vi.waitFor(() => {
+    expect(
+      container.querySelector(
+        '[data-streamdown="code-block-body"] span[style*="color"]'
+      )
+    ).toBeTruthy()
+  })
+}
 
 describe('RenderMarkdown', () => {
   it('preserves line breaks in model responses (when isUser == undefined)', () => {
@@ -222,9 +250,10 @@ describe('RenderMarkdown', () => {
     expect(markdownContainer).toBeTruthy()
     const html = markdownContainer?.innerHTML ?? ''
     expect(html).toContain('&lt;!DOCTYPE html&gt;')
+    await waitForSyntaxHighlight(container)
   })
 
-  it('renders fenced code blocks with Streamdown container, language, and copy control', async () => {
+  it('renders fenced code blocks with language and exactly one copy control', async () => {
     const content = 'Example:\n\n```typescript\nconst x: number = 1\n```\n'
     const { container } = render(<RenderMarkdown content={content} />)
     const markdown = container.querySelector('.markdown')
@@ -250,16 +279,85 @@ describe('RenderMarkdown', () => {
     const headerText = header?.textContent?.toLowerCase() ?? ''
     expect(headerText).toMatch(/typescript|ts/)
 
-    // Copy control present (button or action region)
     const actions = container.querySelector(
       '[data-streamdown="code-block-actions"]'
     )
-    const copyButton =
-      actions?.querySelector('button') ??
-      container.querySelector(
-        '[data-streamdown="code-block"] button'
+    expect(actions).toBeTruthy()
+    expect(
+      screen.getAllByRole('button', { name: 'Copy code' })
+    ).toHaveLength(1)
+
+    await waitForSyntaxHighlight(container)
+  })
+
+  it('copies the complete fenced code from the top-right control', async () => {
+    const content = '```python\nprint("hello")\nprint("world")\n```'
+    const { container } = render(<RenderMarkdown content={content} />)
+
+    await vi.waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Copy code' })
+      ).toBeInTheDocument()
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy code' }))
+    })
+
+    await vi.waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+        'print("hello")\nprint("world")'
       )
-    expect(copyButton).toBeTruthy()
+    })
+    await waitForSyntaxHighlight(container)
+  })
+
+  it('reliably expands and collapses long fenced code blocks', async () => {
+    const longCode = Array.from(
+      { length: 24 },
+      (_, index) => `const line${index + 1} = ${index + 1}`
+    ).join('\n')
+    const { container } = render(
+      <RenderMarkdown content={`\`\`\`typescript\n${longCode}\n\`\`\``} />
+    )
+
+    await vi.waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Expand code' })
+      ).toBeInTheDocument()
+    })
+    await waitForSyntaxHighlight(container)
+
+    const body = container.querySelector(
+      '[data-streamdown="code-block-body"]'
+    )
+    expect(body).toHaveAttribute('data-expanded', 'false')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand code' }))
+    expect(body).toHaveAttribute('data-expanded', 'true')
+    expect(
+      screen.getByRole('button', { name: 'Collapse code' })
+    ).toHaveAttribute('aria-expanded', 'true')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse code' }))
+    expect(body).toHaveAttribute('data-expanded', 'false')
+  })
+
+  it('does not show an expand control for short fenced code blocks', async () => {
+    const { container } = render(
+      <RenderMarkdown content={'```javascript\nconst x = 1\n```'} />
+    )
+
+    await vi.waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Copy code' })
+      ).toBeInTheDocument()
+    })
+
+    expect(
+      screen.queryByRole('button', { name: 'Expand code' })
+    ).not.toBeInTheDocument()
+    await waitForSyntaxHighlight(container)
   })
 
   it('leaves inline code unaffected by fenced code-block chrome', () => {

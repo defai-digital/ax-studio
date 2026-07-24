@@ -19,6 +19,7 @@ import { CitationChip } from '@/components/citations/CitationChip'
 import { useCitations } from '@/hooks/citations/use-citations'
 import { axStudioLightTheme } from '@/lib/themes/shiki-theme-light'
 import { axStudioDarkTheme } from '@/lib/themes/shiki-theme-dark'
+import { MarkdownCodeBlock } from '@/components/markdown/MarkdownCodeBlock'
 
 /** Recursively extract text from React children (handles Streamdown's animated <span> wraps). */
 function extractTextFromNode(node: ReactNode): string {
@@ -166,10 +167,15 @@ function RenderMarkdownComponent({
     [citationData]
   )
 
-  // Merge our pre override with any caller-supplied components.
+  // Merge our code-block chrome with any caller-supplied components.
   // Caller components take precedence (spread after).
   const mergedComponents = useMemo(
-    () => ({ pre: preOverride, a: anchorOverride, ...components }),
+    () => ({
+      pre: preOverride,
+      code: MarkdownCodeBlock,
+      a: anchorOverride,
+      ...components,
+    }),
     [preOverride, anchorOverride, components]
   )
 
@@ -197,10 +203,10 @@ function RenderMarkdownComponent({
           axDefaultRehypePlugins.harden,
         ]}
         components={mergedComponents as MarkdownComponents}
-        // App-themed Shiki highlighting + code-block chrome (header/copy).
+        // App-themed Shiki highlighting with AX-owned code-block controls.
         shikiTheme={[axStudioLightTheme, axStudioDarkTheme]}
         controls={{
-          code: { copy: true, download: false },
+          code: false,
         }}
         plugins={{
           code: code as NonNullable<ComponentProps<typeof AXMarkdown>['plugins']>['code'],
