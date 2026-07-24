@@ -16,10 +16,17 @@ const createFallbackEventsBridge = (): CoreEventsBridge => {
       handlers.set(eventName, current)
       return () => {
         current.delete(handler as EventHandler)
+        // Free the entry once the last subscriber goes away so the
+        // event-name registry cannot grow without bound over the process
+        // lifetime.
+        if (current.size === 0) handlers.delete(eventName)
       }
     },
     off: (eventName, handler) => {
-      handlers.get(eventName)?.delete(handler as EventHandler)
+      const current = handlers.get(eventName)
+      if (!current) return
+      current.delete(handler as EventHandler)
+      if (current.size === 0) handlers.delete(eventName)
     },
     emit: (eventName, object) => {
       const registered = handlers.get(eventName)
