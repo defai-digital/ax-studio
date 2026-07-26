@@ -43,6 +43,10 @@ import {
   AX_ENGINE_SIDECAR_DEFAULT_API_KEY,
   AX_ENGINE_SIDECAR_DEFAULT_BASE_URL,
 } from './local-engine/sidecar-backend'
+import { toAxEngineOpenAIParams } from './ax-engine/request-params'
+
+// Re-export for tests that drive the shipped mapping entry point.
+export { toAxEngineOpenAIParams } from './ax-engine/request-params'
 
 // Use the webview's native fetch for AI requests to the local proxy.
 // Tauri's HTTP plugin (tauriFetch) bypasses CORS but its Response.body
@@ -569,15 +573,11 @@ export class ModelFactory {
     // main process — chat goes directly to its OpenAI-compatible endpoint.
     const isAxEngine = isAxEngineProvider(provider.provider)
     const useAxEngineSidecar = isAxEngine && isPlatformElectron()
-    const openAIParams = toOpenAIParams(parameters)
-    if (isAxEngine) {
-      // top_k is not part of OpenAI's public schema, but the in-process fetch
-      // shim accepts it. Preserve AX Studio's default (20): exact sampled MTP
-      // requires a bounded target filter, and silently dropping this field
-      // forced every temperature-sampled MTP request onto direct fallback.
-      const topK = parameters.top_k
-      if (topK != null) openAIParams.top_k = topK
-    }
+    // Ax-engine has its own supported sampling surface (top_k, repetition_penalty,
+    // max_completion_tokens; no frequency/presence penalties).
+    const openAIParams = isAxEngine
+      ? toAxEngineOpenAIParams(parameters)
+      : toOpenAIParams(parameters)
 
     // Normalize non-standard streaming SSE responses from various providers.
     // Applied to proxy providers since the proxy passes streaming bytes through unchanged.

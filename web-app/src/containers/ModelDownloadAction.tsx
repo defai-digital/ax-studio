@@ -80,6 +80,22 @@ export const ModelDownloadAction = ({
     () => toDownloadProcesses(downloads),
     [downloads]
   )
+  const sanitizedModelId = sanitizeModelId(
+    variant.model_id.split('/').pop() || variant.model_id
+  )
+  const isDownloading =
+    localDownloadingModels.has(variant.model_id) ||
+    downloadProcesses.some(
+      (process) =>
+        process.id === variant.model_id || process.id === sanitizedModelId
+    )
+  const downloadProgress =
+    downloadProcesses.find(
+      (process) =>
+        process.id === variant.model_id || process.id === sanitizedModelId
+    )?.progress ?? 0
+  // Single flag so isStarting → downloading does not tear down listeners.
+  const needsDownloadEvents = isStarting || isDownloading
 
   const navigate = useNavigate()
 
@@ -94,6 +110,11 @@ export const ModelDownloadAction = ({
   }, [downloadedModel])
 
   useEffect(() => {
+    // Expanded catalogs can contain hundreds of variant actions. The shared
+    // stores are sufficient for idle rows; event subscriptions are needed
+    // only for the variant currently starting or downloading.
+    if (!needsDownloadEvents) return
+
     const sid = sanitizeModelId(
       variant.model_id.split('/').pop() || variant.model_id
     )
@@ -167,7 +188,12 @@ export const ModelDownloadAction = ({
       events.off(DownloadEvent.onFileDownloadStopped, handleFinished)
       events.off(AppEvent.onModelImported, handleImported)
     }
-  }, [removeLocalDownloadingModel, setStartingState, variant.model_id])
+  }, [
+    needsDownloadEvents,
+    removeLocalDownloadingModel,
+    setStartingState,
+    variant.model_id,
+  ])
 
   const handleUseModel = useCallback(
     (modelId: string, provider = 'llamacpp') => {
@@ -275,19 +301,6 @@ export const ModelDownloadAction = ({
     setStartingState,
     clearDownloadTimer,
   ])
-
-  const sanitizedModelId = sanitizeModelId(
-    variant.model_id.split('/').pop() || variant.model_id
-  )
-  const isDownloading =
-    localDownloadingModels.has(variant.model_id) ||
-    downloadProcesses.some(
-      (e) => e.id === variant.model_id || e.id === sanitizedModelId
-    )
-  const downloadProgress =
-    downloadProcesses.find(
-      (e) => e.id === variant.model_id || e.id === sanitizedModelId
-    )?.progress || 0
 
   if (isDownloading) {
     return (

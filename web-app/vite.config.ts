@@ -102,6 +102,10 @@ export default defineConfig(() => {
     resolve: {
       alias: {
         ...electronShimAliases,
+        // token.js imports mime-types in the renderer. mime-types requires
+        // Node's path.extname, which Vite otherwise externalizes to an empty
+        // browser proxy and breaks URL-based image MIME detection.
+        path: 'path-browserify',
         '@': path.resolve(__dirname, './src'),
         '@ax-studio/core': path.resolve(__dirname, '../core/src/index.ts'),
         '@ax-studio/conversational-extension': path.resolve(__dirname, '../extensions/conversational-extension/src/index.ts'),

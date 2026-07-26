@@ -35,15 +35,23 @@ export function normalizeProviderId(providerId: string): string {
 }
 
 /**
- * In-process AX Engine no longer uses a local HTTP engine (old :19997 port).
- * Chat goes through Tauri IPC (`mlx_chat_*`); this placeholder only satisfies
- * provider schema / OpenAI-compatible settings fields.
- *
- * Port `0` marks "no listening server". Do not point this at a real port.
+ * Historical placeholder for the retired in-process-only product story.
+ * Port `0` means "no listening server". Electron chat does **not** use this —
+ * ModelFactory resolves the live sidecar base URL from `ax_engine_status`
+ * (default loopback 31418/v1). Kept for migration of old persisted settings.
  */
 export const MLX_IN_PROCESS_BASE_URL = 'http://127.0.0.1:0/v1'
 /** @deprecated Use MLX_IN_PROCESS_BASE_URL — same placeholder for AX Engine. */
 export const AX_ENGINE_IN_PROCESS_BASE_URL = MLX_IN_PROCESS_BASE_URL
+
+/**
+ * Default OpenAI-compatible base for the managed `ax-engine serve` sidecar
+ * (docs: ax-engine LOCAL-ENGINE-CLIENTS / SERVER). Live chat prefers the URL
+ * reported by `ax_engine_status` when the server is ready.
+ */
+export const AX_ENGINE_SIDECAR_DEFAULT_BASE_URL = 'http://127.0.0.1:31418/v1'
+/** Default Bearer key when `AX_ENGINE_API_KEY` is unset (sidecar manager). */
+export const AX_ENGINE_SIDECAR_DEFAULT_API_KEY = 'local'
 
 /** Pre-in-process defaults that must be rewritten on load. */
 export const LEGACY_MLX_BASE_URLS = new Set([
@@ -51,6 +59,11 @@ export const LEGACY_MLX_BASE_URLS = new Set([
   'http://127.0.0.1:19997',
   'http://localhost:19997/v1',
   'http://localhost:19997',
+  // Retired port-0 placeholder — rewrite to the sidecar default on load.
+  MLX_IN_PROCESS_BASE_URL,
+  'http://127.0.0.1:0',
+  'http://localhost:0/v1',
+  'http://localhost:0',
 ])
 
 export const LEGACY_BUNDLED_MLX_MODEL_IDS = new Set([
@@ -350,18 +363,16 @@ export const predefinedProviders = [
     ],
     models: [],
   },
-  // AX Engine (AX Studio -> Tauri IPC -> ax-engine-sdk native runner -> Apple MLX)
-  //
-  // Default Local Engine backend is **in_process** (ADR-009). There is no
-  // HTTP MLX server. Sidecar `ax-engine serve` is optional/future —
-  // see web-app/src/lib/local-engine/.
+  // AX Engine — Electron manages `ax-engine serve` as a local OpenAI-compatible
+  // sidecar (default http://127.0.0.1:31418/v1). Chat uses the live URL/key from
+  // ax_engine_status when ready; these defaults match the managed server.
   // Models are discovered from HF cache / app-managed imports. Do not add
   // catalog models here, otherwise the Hub will mark them as downloaded before
   // they exist on disk.
   {
     active: true,
-    api_key: 'sk-local-ax-engine',
-    base_url: MLX_IN_PROCESS_BASE_URL,
+    api_key: AX_ENGINE_SIDECAR_DEFAULT_API_KEY,
+    base_url: AX_ENGINE_SIDECAR_DEFAULT_BASE_URL,
     explore_models_url: 'https://huggingface.co/mlx-community',
     provider: AX_ENGINE_PROVIDER_ID,
     settings: [
@@ -369,22 +380,22 @@ export const predefinedProviders = [
         key: 'base-url',
         title: 'Base URL',
         description:
-          'Not used for chat. AX Engine runs in-process via ax-engine-sdk (Tauri IPC). Port 0 means no local HTTP engine is listening.',
+          'OpenAI-compatible base for the managed ax-engine serve sidecar (default loopback :31418/v1). Chat prefers the live URL from the engine status when the server is running.',
         controller_type: 'input',
         controller_props: {
-          placeholder: MLX_IN_PROCESS_BASE_URL,
-          value: MLX_IN_PROCESS_BASE_URL,
+          placeholder: AX_ENGINE_SIDECAR_DEFAULT_BASE_URL,
+          value: AX_ENGINE_SIDECAR_DEFAULT_BASE_URL,
         },
       },
       {
         key: 'api-key',
         title: 'API Key',
         description:
-          'Local in-process runner; any non-empty value works. Stored only on this machine.',
+          'Bearer token for the local sidecar (AX_ENGINE_API_KEY, default "local"). Stored only on this machine.',
         controller_type: 'input',
         controller_props: {
-          placeholder: 'sk-local-ax-engine',
-          value: 'sk-local-ax-engine',
+          placeholder: AX_ENGINE_SIDECAR_DEFAULT_API_KEY,
+          value: AX_ENGINE_SIDECAR_DEFAULT_API_KEY,
           type: 'password',
           input_actions: ['unobscure', 'copy'],
         },

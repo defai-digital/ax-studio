@@ -96,11 +96,19 @@ export function DownloadButtonPlaceholder({
     ) ?? model.quants?.[0]
 
   const modelId = quant?.model_id || model.model_name
+  const canDownload = (model.quants?.length ?? 0) > 0
 
   const downloadProcesses = useMemo(
     () => toDownloadProcesses(downloads),
     [downloads]
   )
+  const isDownloading =
+    localDownloadingModels.has(modelId) ||
+    downloadProcesses.some((process) => process.id === modelId)
+  const downloadProgress =
+    downloadProcesses.find((process) => process.id === modelId)?.progress ?? 0
+  // Single flag so isStarting → downloading does not tear down listeners.
+  const needsDownloadEvents = isStarting || isDownloading
 
   const downloadedModel = useMemo(
     () => findDownloadedLocalModel(providers, modelId, model.developer),
@@ -112,6 +120,12 @@ export function DownloadButtonPlaceholder({
   }, [downloadedModel])
 
   useEffect(() => {
+    // Hub catalogs can render hundreds of model actions. Idle rows derive
+    // their state from the shared stores and must not each attach seven
+    // listeners to the global emitter. Subscribe only while this row owns or
+    // observes an active download.
+    if (!canDownload || !needsDownloadEvents) return
+
     const handleVerified = (state: DownloadState) => {
       const downloadId = state.downloadId ?? state.modelId
       if (downloadId === modelId) {
@@ -176,9 +190,15 @@ export function DownloadButtonPlaceholder({
       events.off(DownloadEvent.onFileDownloadStopped, handleFinished)
       events.off(AppEvent.onModelImported, handleImported)
     }
-  }, [modelId, removeDownload, removeLocalDownloadingModel, setStartingState])
+  }, [
+    canDownload,
+    needsDownloadEvents,
+    modelId,
+    removeLocalDownloadingModel,
+    setStartingState,
+  ])
 
-  if ((model.quants?.length ?? 0) === 0) {
+  if (!canDownload) {
     return (
       <a
         href={getHuggingFaceModelUrl(model.model_name)}
@@ -193,12 +213,6 @@ export function DownloadButtonPlaceholder({
   }
 
   const modelUrl = quant?.path || modelId
-  const isDownloading =
-    localDownloadingModels.has(modelId) ||
-    downloadProcesses.some((e) => e.id === modelId)
-
-  const downloadProgress =
-    downloadProcesses.find((e) => e.id === modelId)?.progress || 0
 
   const handleDownload = async () => {
     // Check if this is an MLX model and if MLX is supported on this platform

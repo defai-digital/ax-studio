@@ -215,6 +215,17 @@ describe('DownloadButtonPlaceholder', () => {
     expect(screen.getByText('hub:download')).toBeInTheDocument()
   })
 
+  it('does not subscribe idle catalog rows to global download events', () => {
+    render(
+      <DownloadButtonPlaceholder
+        model={baseModel}
+        handleUseModel={handleUseModel}
+      />
+    )
+
+    expect(mockEvents.on).not.toHaveBeenCalled()
+  })
+
   it('starts full-repo download for MLX Hugging Face repo quants', () => {
     const mlxModel = {
       ...baseModel,
@@ -368,6 +379,7 @@ describe('DownloadButtonPlaceholder', () => {
     )
 
     expect(screen.getByText('50%')).toBeInTheDocument()
+    expect(mockEvents.on).toHaveBeenCalledTimes(7)
   })
 
   it('hides download button when downloading', () => {

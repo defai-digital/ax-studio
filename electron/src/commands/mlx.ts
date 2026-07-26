@@ -177,8 +177,53 @@ async function generateModelManifest(modelDir: string): Promise<void> {
   validateExistingManifest(normalized)
 }
 
+/**
+ * Host capability probe for the ax-engine / MLX provider path.
+ *
+ * Electron does not host an in-process MLX runtime (inference is the
+ * `ax-engine serve` sidecar). The renderer still calls this before listing
+ * local MLX models so unsupported hosts fail fast with a clear message.
+ */
+export function probeMlxRuntime(): {
+  host: {
+    supported_mlx_runtime: boolean
+    detection_error: string | null
+  }
+  metal: { fully_available: boolean }
+} {
+  const isDarwin = process.platform === 'darwin'
+  const isArm64 = process.arch === 'arm64'
+  const supported = isDarwin && isArm64
+
+  let detectionError: string | null = null
+  if (!isDarwin) {
+    detectionError = 'MLX requires macOS'
+  } else if (!isArm64) {
+    detectionError = 'MLX requires Apple Silicon (arm64)'
+  }
+
+  // Metal.framework is present on all modern macOS installs; treat it as the
+  // toolchain signal the renderer expects (same shape as the Tauri probe).
+  const metalFramework = '/System/Library/Frameworks/Metal.framework'
+  const metalAvailable = isDarwin && fs.existsSync(metalFramework)
+
+  return {
+    host: {
+      supported_mlx_runtime: supported,
+      detection_error: detectionError,
+    },
+    metal: {
+      fully_available: metalAvailable && supported,
+    },
+  }
+}
+
 export function createMlxHandlers(): Record<string, CommandHandler> {
   return {
+    // Capability probe used by Settings → Test Connection / model refresh for
+    // ax-engine and legacy MLX providers (must not HTTP-fetch base_url).
+    mlx_runtime_probe: () => probeMlxRuntime(),
+
     // Pure path construction (the snapshot dir need not exist yet) — the
     // extension joins save paths under it before downloading.
     mlx_hf_snapshot_dir: (args) =>

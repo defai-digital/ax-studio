@@ -536,7 +536,7 @@ describe('TauriProvidersService', () => {
         }),
       ])
     )
-    expect(mlxProvider?.base_url).toBe('http://127.0.0.1:0/v1')
+    expect(mlxProvider?.base_url).toBe('http://127.0.0.1:31418/v1')
   })
 
   it('skips a failing runtime engine without hiding built-in providers', async () => {

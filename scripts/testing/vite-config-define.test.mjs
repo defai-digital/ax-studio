@@ -59,6 +59,12 @@ describe('web-app vite config defines', () => {
     expect(config.server?.strictPort).toBe(true)
   })
 
+  it('polyfills Node path for browser-only token.js MIME detection', async () => {
+    const config = await resolveConfig()
+
+    expect(config.resolve?.alias?.path).toBe('path-browserify')
+  })
+
   it('falls back to the default update check interval for invalid values', async () => {
     process.env.UPDATE_CHECK_INTERVAL_MS = '-1'
 

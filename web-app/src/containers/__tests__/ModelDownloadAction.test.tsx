@@ -161,6 +161,12 @@ describe('ModelDownloadAction', () => {
     consoleErrorSpy.mockRestore()
   })
 
+  it('does not subscribe idle variant rows to global download events', () => {
+    render(<ModelDownloadAction variant={variant} model={model as never} />)
+
+    expect(mockEvents.on).not.toHaveBeenCalled()
+  })
+
   it('starts a model download when clicked', () => {
     render(<ModelDownloadAction variant={variant} model={model as never} />)
 

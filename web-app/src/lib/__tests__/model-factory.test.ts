@@ -274,11 +274,11 @@ describe('ModelFactory', () => {
       expect(model).toBeDefined()
     })
 
-    it('routes ax-engine through the proxy fetch with its metadata extractor', async () => {
+    it('routes ax-engine through the proxy fetch with its metadata extractor when not Electron', async () => {
       const provider: ProviderObject = {
         provider: 'ax-engine',
         api_key: '',
-        base_url: 'http://127.0.0.1:0/v1',
+        base_url: 'http://127.0.0.1:31418/v1',
         models: [],
         settings: [],
         active: true,
@@ -286,8 +286,7 @@ describe('ModelFactory', () => {
 
       await ModelFactory.createModel('mlx-community/Qwen3.6-27B-4bit', provider)
 
-      // The in-process MLX IPC fetch shim is gone: baseFetch is always
-      // createStreamingPatchFetch(native fetch), routed via the local proxy.
+      // Non-Electron: still proxy-routed with ax-engine metadata extractor.
       expect(createAxEngineMetadataExtractor).toHaveBeenCalledTimes(1)
       expect(createOpenAICompatible).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -337,12 +336,12 @@ describe('ModelFactory', () => {
       )
     })
 
-    it('preserves top_k for AX Engine so sampled MTP can use its exact route', async () => {
+    it('maps ax-engine sampling fields and strips unsupported penalties', async () => {
       httpFetchMock.mockResolvedValueOnce(new Response('{}'))
       const provider: ProviderObject = {
         provider: 'ax-engine',
         api_key: '',
-        base_url: 'http://127.0.0.1:0/v1',
+        base_url: 'http://127.0.0.1:31418/v1',
         models: [],
         settings: [],
         active: true,
@@ -351,7 +350,15 @@ describe('ModelFactory', () => {
       await ModelFactory.createModel(
         'mlx-community/Qwen3.6-27B-MTP',
         provider,
-        { temperature: 0.7, top_p: 0.8, top_k: 20 }
+        {
+          temperature: 0.7,
+          top_p: 0.8,
+          top_k: 20,
+          repeat_penalty: 1.12,
+          max_output_tokens: 2048,
+          frequency_penalty: 0.7,
+          presence_penalty: 0.7,
+        }
       )
       const config = vi.mocked(createOpenAICompatible).mock.calls.at(-1)?.[0]
       await config?.fetch?.('http://localhost/v1/chat/completions', {
@@ -367,7 +374,13 @@ describe('ModelFactory', () => {
         temperature: 0.7,
         top_p: 0.8,
         top_k: 20,
+        repetition_penalty: 1.12,
+        max_tokens: 2048,
+        max_completion_tokens: 2048,
       })
+      expect(forwardedBody).not.toHaveProperty('frequency_penalty')
+      expect(forwardedBody).not.toHaveProperty('presence_penalty')
+      expect(forwardedBody).not.toHaveProperty('repeat_penalty')
     })
 
     it('should create an OpenAI-compatible model for groq provider', async () => {

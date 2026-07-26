@@ -4,15 +4,17 @@ import type { HuggingFaceRepo, CatalogModel } from '../models/types'
 import { EngineManager, events, DownloadEvent, ContentType } from '@ax-studio/core'
 import bundledModelCatalog from '@/data/model-catalog.json'
 
-const { mockEvents, mockDownloadEvent, mockInvoke } = vi.hoisted(() => ({
-  mockEvents: {
-    emit: vi.fn(),
-  },
-  mockDownloadEvent: {
-    onFileDownloadStopped: 'onFileDownloadStopped',
-  } as Record<string, string>,
-  mockInvoke: vi.fn(),
-}))
+const { mockEvents, mockDownloadEvent, mockInvoke, mockIsPlatformElectron } =
+  vi.hoisted(() => ({
+    mockEvents: {
+      emit: vi.fn(),
+    },
+    mockDownloadEvent: {
+      onFileDownloadStopped: 'onFileDownloadStopped',
+    } as Record<string, string>,
+    mockInvoke: vi.fn(),
+    mockIsPlatformElectron: vi.fn(() => false),
+  }))
 
 // Mock EngineManager and events
 vi.mock('@ax-studio/core', () => ({
@@ -29,6 +31,11 @@ vi.mock('@ax-studio/core', () => ({
 
 vi.mock('@/lib/tauri-shim/api-core', () => ({
   invoke: mockInvoke,
+}))
+
+vi.mock('@/lib/platform/utils', () => ({
+  isPlatformElectron: () => mockIsPlatformElectron(),
+  isPlatformTauri: () => false,
 }))
 
 // Mock fetch
@@ -62,6 +69,7 @@ describe('DefaultModelsService', () => {
   beforeEach(() => {
     modelsService = new DefaultModelsService()
     vi.clearAllMocks()
+    mockIsPlatformElectron.mockReturnValue(false)
     mockEngineManager.get.mockReset()
     mockEngineManager.get.mockReturnValue(mockEngine)
     ;(EngineManager.instance as any).mockReturnValue(mockEngineManager)
@@ -585,11 +593,12 @@ describe('DefaultModelsService', () => {
       )
     })
 
-    it('should load mlx models through the MLX SDK command', async () => {
+    it('should load mlx models through the MLX SDK command outside Electron', async () => {
       const provider = {
         provider: 'ax-engine',
         models: [{ id: 'model1', settings: {} }],
       } as any
+      mockIsPlatformElectron.mockReturnValue(false)
       mockInvoke.mockResolvedValue(undefined)
 
       await expect(modelsService.startModel(provider, 'model1')).resolves.toEqual({
@@ -604,6 +613,61 @@ describe('DefaultModelsService', () => {
       expect(mockInvoke).toHaveBeenCalledWith('mlx_load_model', { modelId: 'model1' })
       expect(mockEngineManager.get).not.toHaveBeenCalled()
       expect(mockEngine.load).not.toHaveBeenCalled()
+    })
+
+    it('should start ax-engine models via sidecar ensure on Electron (no mlx_load_model)', async () => {
+      const provider = {
+        provider: 'ax-engine',
+        models: [{ id: 'model1', settings: {} }],
+      } as any
+      mockIsPlatformElectron.mockReturnValue(true)
+      mockInvoke.mockImplementation(async (cmd: string) => {
+        if (cmd === 'mlx_resolve_model_dir') return '/models/model1'
+        if (cmd === 'ax_engine_ensure') {
+          return {
+            phase: 'ready',
+            baseURL: 'http://127.0.0.1:31418/v1',
+            apiKey: 'local',
+            models: ['model1'],
+            port: 31418,
+            pid: 99,
+          }
+        }
+        throw new Error(`unexpected invoke: ${cmd}`)
+      })
+
+      await expect(modelsService.startModel(provider, 'model1')).resolves.toEqual({
+        pid: 99,
+        port: 31418,
+        model_id: 'model1',
+        model_path: '/models/model1',
+        is_embedding: false,
+        api_key: 'local',
+      })
+
+      expect(mockInvoke.mock.calls.map((c) => c[0])).toEqual([
+        'mlx_resolve_model_dir',
+        'ax_engine_ensure',
+      ])
+      expect(mockInvoke.mock.calls.map((c) => c[0])).not.toContain(
+        'mlx_load_model'
+      )
+      expect(mockEngine.load).not.toHaveBeenCalled()
+    })
+
+    it('should stop ax-engine models via sidecar unload on Electron', async () => {
+      mockIsPlatformElectron.mockReturnValue(true)
+      mockInvoke.mockResolvedValue({})
+      await expect(
+        modelsService.stopModel('model1', 'ax-engine')
+      ).resolves.toEqual({ success: true })
+      expect(mockInvoke).toHaveBeenCalledWith('ax_engine_unload_model', {
+        modelId: 'model1',
+        model_id: 'model1',
+      })
+      expect(mockInvoke.mock.calls.map((c) => c[0])).not.toContain(
+        'mlx_unload_model'
+      )
     })
 
     it('should throw a helpful error when the provider engine is unavailable', async () => {

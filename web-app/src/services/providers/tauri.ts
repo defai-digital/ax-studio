@@ -5,12 +5,15 @@
 import { models as providerModels } from 'token.js'
 import {
   AX_ENGINE_PROVIDER_ID,
+  AX_ENGINE_SIDECAR_DEFAULT_API_KEY,
+  AX_ENGINE_SIDECAR_DEFAULT_BASE_URL,
   isAxEngineProvider,
   LEGACY_MLX_BASE_URLS,
   MLX_IN_PROCESS_BASE_URL,
   normalizeProviderId,
   predefinedProviders,
 } from '@/constants/providers'
+import { isPlatformElectron } from '@/lib/platform/utils'
 import { EngineManager } from '@ax-studio/core'
 import { ModelCapabilities } from '@/types/models'
 import { modelSettings } from '@/lib/predefined'
@@ -59,8 +62,81 @@ function isInProcessMlxProvider(provider: ModelProvider): boolean {
 }
 
 /**
+ * Electron path: list models from the managed ax-engine serve sidecar via
+ * OpenAI-compatible GET /v1/models (status baseURL when ready).
+ */
+async function fetchAxEngineSidecarModels(
+  provider: ModelProvider
+): Promise<string[]> {
+  const { invoke } = await import('@/lib/tauri-shim/api-core')
+  // Host capability probe first (Metal / Apple Silicon).
+  const probe = (await invoke('mlx_runtime_probe')) as {
+    host?: { supported_mlx_runtime?: boolean; detection_error?: string | null }
+    metal?: { fully_available?: boolean }
+  }
+  if (!probe?.host?.supported_mlx_runtime) {
+    const detail = probe?.host?.detection_error
+      ? `: ${probe.host.detection_error}`
+      : ''
+    throw new Error(
+      `MLX runtime is not supported on this host (Apple Silicon + Metal required)${detail}`
+    )
+  }
+  if (!probe?.metal?.fully_available) {
+    throw new Error(
+      'Metal toolchain is not fully available for MLX. Install Xcode command-line tools and try again.'
+    )
+  }
+
+  let baseURL = AX_ENGINE_SIDECAR_DEFAULT_BASE_URL
+  let apiKey =
+    provider.api_key?.trim() || AX_ENGINE_SIDECAR_DEFAULT_API_KEY
+  try {
+    const status = (await invoke('ax_engine_status')) as {
+      baseURL?: string | null
+      apiKey?: string | null
+      models?: string[]
+      phase?: string
+    }
+    if (status?.baseURL) baseURL = status.baseURL
+    if (status?.apiKey) apiKey = status.apiKey
+    // Prefer status.models when ready to avoid an extra HTTP hop.
+    if (
+      (status?.phase === 'ready' || status?.phase === 'degraded') &&
+      Array.isArray(status.models) &&
+      status.models.length > 0
+    ) {
+      return [...status.models].sort((a, b) => a.localeCompare(b))
+    }
+  } catch {
+    // Fall through to HTTP /models against defaults.
+  }
+
+  const url = `${baseURL.replace(/\/+$/, '')}/models`
+  const response = await globalThis.fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    signal: AbortSignal.timeout(10_000),
+  })
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    throw new Error(
+      `ax-engine /v1/models failed: HTTP ${response.status}${body ? `: ${body.slice(0, 200)}` : ''}`
+    )
+  }
+  const json = (await response.json()) as { data?: Array<{ id?: unknown }> }
+  const ids = (json.data ?? [])
+    .map((m) => m?.id)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0)
+  return ids.sort((a, b) => a.localeCompare(b))
+}
+
+/**
  * Probe the in-process MLX runtime and return installed model ids.
- * Used by Settings → Test Connection (must not HTTP-fetch base_url).
+ * Used outside Electron (legacy) when no sidecar HTTP server is managed.
  */
 async function fetchInProcessMlxModels(): Promise<string[]> {
   try {
@@ -516,9 +592,12 @@ export class TauriProvidersService implements ProvidersService {
   }
 
   async fetchModelsFromProvider(provider: ModelProvider): Promise<string[]> {
-    // MLX is in-process (ax-engine-sdk via Tauri IPC). Never hit a local HTTP
-    // engine URL (including the legacy :19997 default).
+    // Electron: managed ax-engine serve sidecar over OpenAI /v1.
+    // Non-Electron legacy: in-process probe + HF cache listing.
     if (isInProcessMlxProvider(provider)) {
+      if (isPlatformElectron()) {
+        return fetchAxEngineSidecarModels(provider)
+      }
       return fetchInProcessMlxModels()
     }
 

@@ -33,6 +33,13 @@ import {
 } from '@/lib/huggingface'
 import { invoke } from '@/lib/tauri-shim/api-core'
 import { isAxEngineProvider } from '@/constants/providers'
+import { isPlatformElectron } from '@/lib/platform/utils'
+import {
+  ensureAxEngineSidecarModel,
+  listAxEngineSidecarModels,
+  sessionFromAxEngineStatus,
+  unloadAxEngineSidecarModel,
+} from '@/lib/ax-engine/sidecar-lifecycle'
 
 // Default provider for local inference
 const defaultProvider = 'llamacpp'
@@ -418,6 +425,10 @@ export class DefaultModelsService implements ModelsService {
     }
 
     if (isAxEngineProvider(provider)) {
+      // Electron: managed sidecar status is the source of truth for loaded models.
+      if (isPlatformElectron()) {
+        return listAxEngineSidecarModels()
+      }
       return invoke<string[]>('mlx_list_loaded')
     }
 
@@ -431,6 +442,9 @@ export class DefaultModelsService implements ModelsService {
     provider?: string
   ): Promise<UnloadResult | undefined> {
     if (isAxEngineProvider(provider)) {
+      if (isPlatformElectron()) {
+        return unloadAxEngineSidecarModel(model)
+      }
       try {
         await invoke('mlx_unload_model', { modelId: model })
         return { success: true }
@@ -493,6 +507,12 @@ export class DefaultModelsService implements ModelsService {
     bypassAutoUnload: boolean = false
   ): Promise<SessionInfo | undefined> {
     if (isAxEngineProvider(provider.provider)) {
+      // Electron product path: managed `ax-engine serve` sidecar (OpenAI /v1).
+      // Never call unimplemented in-process mlx_load_model under Electron.
+      if (isPlatformElectron()) {
+        const { status, modelPath } = await ensureAxEngineSidecarModel(model)
+        return sessionFromAxEngineStatus(model, modelPath, status)
+      }
       await invoke('mlx_load_model', { modelId: model })
       return {
         pid: 0,
