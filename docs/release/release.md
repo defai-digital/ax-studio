@@ -41,16 +41,51 @@ A release must therefore attach those generated metadata files alongside the
 installers for update checks to succeed. The renderer UI is
 `web-app/src/containers/ElectronUpdateBanner.tsx`.
 
+## CI release pipeline
+
+`.github/workflows/ax-studio-electron-build.yml` replaced the retired Tauri
+release workflows. It triggers on version-tag pushes (`v*`) and on
+`workflow_dispatch` (optional `publish` boolean, default `false` = dry build
+that only uploads workflow artifacts).
+
+Jobs:
+
+- `build-macos` (`macos-latest`): installs deps via the bundled Yarn
+  (`node .yarn/releases/yarn-4.5.3.cjs install --immutable` — corepack is not
+  relied upon), builds core/web/electron, then runs
+  `node scripts/dist-electron.mjs --mac`. Uploads `*.dmg`, `*.zip`,
+  `latest-mac.yml`, and `*.blockmap` as the `electron-dist-macos` artifact.
+- `build-windows` (`windows-latest`): same flow with `--win` (NSIS x64 +
+  arm64), uploading `*.exe`, `latest.yml`, and `*.blockmap` as
+  `electron-dist-windows`.
+- `release` (needs both builds; runs on tag pushes or dispatch with
+  `publish: true`): downloads both artifacts and attaches every file —
+  installers plus the electron-updater feeds — to the GitHub Release for the
+  tag via `softprops/action-gh-release`. On a manual publish from a non-tag
+  ref the tag name is derived from the root `package.json` version.
+
+Both build jobs fail fast when a pushed tag's version does not match the root
+`package.json` version — `scripts/dist-electron.mjs` injects that value into
+the build, so a mismatch would ship a mis-versioned release.
+
 ## Signing / notarization
 
-CI concern, intentionally not solved locally:
+CI wires credentials through environment variables electron-builder
+understands; everything degrades gracefully when secrets are absent:
 
-- macOS: sign with a Developer ID Application identity and notarize
-  (`notarize: false` in `electron-builder.yml` until CI wires credentials;
+- macOS: set `APPLE_CERTIFICATE` (base64 .p12) + `APPLE_CERTIFICATE_PASSWORD`
+  or `APPLE_SIGNING_IDENTITY` to sign. Notarization uses either
+  `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` or the API-key
+  variant `APPLE_API_KEY_B64` (base64 .p8) + `APPLE_API_KEY_ID` +
+  `APPLE_API_ISSUER`. When signing AND notary credentials are present the
+  workflow passes `-c.mac.notarize=true` (the yml keeps `notarize: false` for
+  local builds); electron-builder runs the notary step itself — no separate
+  `notarytool` step. Without any signing secrets the build runs unsigned with
+  `CSC_IDENTITY_AUTO_DISCOVERY=false` and still succeeds.
   `electron/build/entitlements.mac.plist` carries the minimal Chromium/V8
-  entitlement set).
-- Windows: Authenticode-sign the NSIS installer per DEFAI Private Limited
-  policy.
+  entitlement set.
+- Windows: set `CSC_LINK` + `CSC_KEY_PASSWORD` for Authenticode signing;
+  without them electron-builder skips signing with a warning.
 
 ## Homebrew cask
 

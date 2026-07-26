@@ -107,3 +107,4 @@ electron/dist-preload/
 electron/dist-renderer/
 electron/dist-installer/
 !electron/build/
+!electron/README.md

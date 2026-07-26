@@ -19,6 +19,7 @@ all:
 install-and-build:
 	$(YARN) install
 	$(YARN) build:core
+	cd extensions && $(YARN) install
 
 # One-time setup for the desktop dev app. Re-run this after dependency or
 # core package changes.
