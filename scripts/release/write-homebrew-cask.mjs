@@ -46,11 +46,12 @@ const cask = `cask "ax-studio" do
   desc "AI workspace for cloud models, local inference, tools, and research"
   homepage "https://github.com/defai-digital/ax-studio"
 
+  # In-app updater is for manual/DMG installs only. Homebrew owns upgrades.
+  auto_updates false
   depends_on arch: :arm64
   depends_on macos: :sequoia
 
-  # In-app updater is for manual/DMG installs only. Homebrew owns upgrades.
-  auto_updates false
+  app "AX Studio.app"
 
   preflight do
     # Clears any pre-existing bundle (current or pre-rename "Ax-Studio.app" name) so
@@ -58,10 +59,10 @@ const cask = `cask "ax-studio" do
     [
       "#{appdir}/AX Studio.app",
       "#{appdir}/Ax-Studio.app",
-    ].each { |legacy_app| FileUtils.rm_rf(legacy_app) }
+    ].each do |legacy_app|
+      FileUtils.rm_r(legacy_app) if File.exist?(legacy_app)
+    end
   end
-
-  app "AX Studio.app"
 
   zap trash: [
     "~/Library/Application Support/AX Studio",

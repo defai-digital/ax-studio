@@ -87,16 +87,12 @@ executes AX Engine or `llama.cpp` binaries.
 2. Install and launch AX Studio:
 
 ```bash
-brew tap defai-digital/ax-studio
-brew trust defai-digital/ax-studio
-brew install --cask defai-digital/ax-studio/ax-studio
+brew install --cask defai-digital/tap/ax-studio
 open -a "AX Studio"
 ```
 
-Already have Homebrew? Start from step 2. The `brew trust` command supports
-Homebrew setups that require explicit trust for third-party taps.
-
-![Install AX Studio with Homebrew](docs/images/install-homebrew-ax-studio.gif)
+Already have Homebrew? Start from step 2. The fully qualified command adds the
+shared DefAI Digital tap automatically.
 
 The Homebrew cask is the fastest install path for supported Macs. Manual
 downloads are available from GitHub Releases if you prefer not to use Homebrew.
@@ -282,7 +278,7 @@ in-app updater can leave the install out of sync with the package manager.
 **macOS Homebrew** (if you installed with `brew install --cask`)
 
 ```bash
-brew upgrade --cask ax-studio
+brew upgrade --cask defai-digital/tap/ax-studio
 ```
 
 **macOS manual / DMG**
@@ -309,8 +305,7 @@ file hash to `SHA256SUMS-windows.txt` on the same release. IT silent upgrade:
 **macOS Homebrew**
 
 ```bash
-brew uninstall --cask ax-studio
-brew untap defai-digital/ax-studio
+brew uninstall --cask defai-digital/tap/ax-studio
 ```
 
 **Windows**

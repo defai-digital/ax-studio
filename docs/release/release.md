@@ -131,7 +131,7 @@ Release automation must never pipe downloaded content directly into a shell.
 
 The Homebrew tap update accepts either `HOMEBREW_TAP_TOKEN` or the legacy
 `TAP_TOKEN`. Prefer `HOMEBREW_TAP_TOKEN` for new configuration. The token needs
-write access to `defai-digital/homebrew-ax-studio`. Stable releases fail when
+write access to `defai-digital/homebrew-tap`. Stable releases fail when
 neither token is configured. After updating the cask, CI installs it on a clean
 macOS runner and verifies its version, Developer ID signature, and Gatekeeper
 assessment.
@@ -193,7 +193,7 @@ builds macOS Apple Silicon, Windows x64, and Windows ARM64 in parallel. It then:
    downloads the signatures again, and verifies them with
    `docs/release/ax-minisign.pub`.
 6. Publishes the GitHub release only after all artifact checks pass.
-7. Updates `defai-digital/homebrew-ax-studio`, installs the new cask on a clean
+7. Updates `defai-digital/homebrew-tap`, installs the new cask on a clean
    macOS runner, and verifies the installed application with Gatekeeper.
 8. Optionally opens a `microsoft/winget-pkgs` PR when `WINGET_PKGS_TOKEN` and
    `WINGET_PKGS_FORK` are configured (installer URLs must already be public).
