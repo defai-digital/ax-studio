@@ -20,7 +20,8 @@ function readJson(relativePath) {
  */
 describe('extensions CI install path', () => {
   it('install-and-build installs extensions with --no-immutable after packing core', () => {
-    const makefile = read('Makefile')
+    // Normalize CRLF (Windows checkout) so the recipe regex is portable.
+    const makefile = read('Makefile').replace(/\r\n/g, '\n')
     const installTarget = makefile.match(
       /^install-and-build:\n((?:[ \t]+.+\n)*)/m,
     )
