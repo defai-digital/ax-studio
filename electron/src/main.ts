@@ -1594,7 +1594,7 @@ function buildSmokeScript(
         router.state.location.pathname)
       const generalRendered = await waitFor(() => {
         const text = document.body.textContent || ''
-        return text.indexOf('App Version') !== -1 && text.indexOf('Data Folder') !== -1
+        return text.indexOf('App Version') !== -1 && text.indexOf('Data & Storage') !== -1
       }, 15000)
       check('/settings/general renders', generalRendered)
       const hrefs = Array.from(document.querySelectorAll('a')).map((a) => a.getAttribute('href') || '')
