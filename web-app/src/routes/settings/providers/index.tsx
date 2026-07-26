@@ -96,26 +96,18 @@ function ModelProviders() {
           </div>
           <div className="px-8 py-7">
             <div className="max-w-2xl">
-              {/* Section header */}
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h2
-                    className="text-foreground tracking-tight mb-1"
-                    style={{ fontSize: '16px', fontWeight: 600 }}
-                  >
-                    {t('common:modelProviders')}
-                  </h2>
-                  <p
-                    className="text-muted-foreground"
-                    style={{ fontSize: '13px' }}
-                  >
-                    {t('providers:connectDescription', {
-                      defaultValue:
-                        'Connect external APIs and local model engines.',
-                    })}
-                  </p>
-                </div>
-                <div className="shrink-0 ml-4">
+              {/* Toolbar — page title lives in sticky header above */}
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <p
+                  className="text-muted-foreground flex-1 min-w-0"
+                  style={{ fontSize: '13px' }}
+                >
+                  {t('providers:connectDescription', {
+                    defaultValue:
+                      'Connect external APIs and local model engines.',
+                  })}
+                </p>
+                <div className="shrink-0">
                   <AddProviderDialog
                     onCreateProvider={createProvider}
                     existingProviderNames={providers.map((p) => p.provider)}

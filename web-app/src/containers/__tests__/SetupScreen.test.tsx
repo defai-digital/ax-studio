@@ -4,35 +4,6 @@ import { SetupScreen } from '../SetupScreen'
 
 // ── Mocks ────────────────────────────────────────────────
 
-const mockSetTheme = vi.fn()
-const mockUpdateProvider = vi.fn()
-
-vi.mock('@/hooks/ui/useTheme', () => ({
-  useTheme: vi.fn(() => ({
-    activeTheme: 'auto',
-    setTheme: mockSetTheme,
-    isDark: true,
-    setIsDark: vi.fn(),
-  })),
-}))
-
-vi.mock('@/hooks/models/useModelProvider', () => ({
-  useModelProvider: vi.fn(() => ({
-    providers: [
-      { provider: 'llamacpp', active: true },
-      { provider: 'openai', active: false },
-      { provider: 'anthropic', active: true },
-      { provider: 'groq', active: false },
-      { provider: 'google', active: false },
-    ],
-    updateProvider: mockUpdateProvider,
-    selectedProvider: '',
-    selectedModel: null,
-    setProviders: vi.fn(),
-    addProvider: vi.fn(),
-  })),
-}))
-
 vi.mock('@/i18n/react-i18next-compat', () => ({
   useTranslation: () => ({
     t: (_key: string, opts?: { defaultValue?: string }) =>
@@ -89,20 +60,18 @@ function clickButton(label: string) {
 
 // ── Tests ────────────────────────────────────────────────
 
-describe('SetupScreen — Manual Test Protocol', () => {
+describe('SetupScreen — short onboarding', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
   })
 
-  // Protocol #1: First-run onboarding renders
   it('renders the onboarding wizard', () => {
     renderSetup()
     expect(screen.getByText('setup:welcome')).toBeInTheDocument()
   })
 
-  // Protocol #2: Navigate through all 6 steps
-  it('navigates through all 6 steps: Welcome → Mode → Theme → Providers → Privacy → Ready', () => {
+  it('navigates through 2 steps: Welcome → Ready', () => {
     renderSetup()
 
     // Step 0: Welcome
@@ -111,53 +80,14 @@ describe('SetupScreen — Manual Test Protocol', () => {
     expect(screen.getByText('setup:featureLightningFast')).toBeInTheDocument()
     expect(screen.getByText('setup:featurePrivateSecure')).toBeInTheDocument()
     expect(screen.getByText('setup:featureToolUse')).toBeInTheDocument()
+    expect(screen.getByText('setup:privacyOneLiner')).toBeInTheDocument()
 
-    // Step 0 has Skip button (not Back)
-    expect(screen.getByText('Skip')).toBeInTheDocument()
-    expect(screen.getByText('Continue')).toBeInTheDocument()
+    expect(screen.getByText('common:skip')).toBeInTheDocument()
+    expect(screen.getByText('common:continue')).toBeInTheDocument()
 
-    // Navigate to Step 1: Workspace mode
-    clickButton('Continue')
-    expect(screen.getByText('setup:workspaceModeTitle')).toBeInTheDocument()
-    expect(screen.getByText('setup:modeSimpleChat')).toBeInTheDocument()
-    expect(screen.getByText('setup:modeLocalPrivate')).toBeInTheDocument()
-    expect(screen.getByText('setup:modeDeveloperAgent')).toBeInTheDocument()
-    expect(screen.getByText('setup:modeKnowledge')).toBeInTheDocument()
-    expect(screen.getByText('setup:modeControlled')).toBeInTheDocument()
-    expect(screen.getByText('setup:recommended')).toBeInTheDocument()
-
-    // Now has Back button instead of Skip
-    expect(screen.getByText('Back')).toBeInTheDocument()
-
-    // Navigate to Step 2: Theme
-    clickButton('Continue')
-    expect(screen.getByText('Choose your theme')).toBeInTheDocument()
-    expect(screen.getByText('Light')).toBeInTheDocument()
-    expect(screen.getByText('Dark')).toBeInTheDocument()
-    expect(screen.getByText('System')).toBeInTheDocument()
-
-    // Navigate to Step 3: Providers
-    clickButton('Continue')
-    expect(screen.getByText('Set up providers')).toBeInTheDocument()
-    expect(screen.getByText('Local (LlamaCPP)')).toBeInTheDocument()
-    expect(screen.getByText('OpenAI')).toBeInTheDocument()
-    expect(screen.getByText('Anthropic')).toBeInTheDocument()
-    expect(screen.getByText('Groq')).toBeInTheDocument()
-    expect(screen.getByText('Google Gemini')).toBeInTheDocument()
-    expect(screen.getByText('Recommended')).toBeInTheDocument()
-
-    // Navigate to Step 4: Privacy
-    clickButton('Continue')
-    expect(screen.getByText('Your privacy matters')).toBeInTheDocument()
-    expect(screen.getByText('Local-first workspace')).toBeInTheDocument()
-    expect(screen.getByText('No AX Studio telemetry')).toBeInTheDocument()
-    expect(screen.getByText('Your keys, your control')).toBeInTheDocument()
-    expect(screen.getByText('Connected services are explicit')).toBeInTheDocument()
-
-    // Navigate to Step 5: Ready
-    clickButton('Continue')
-    expect(screen.getByText("You're all set!")).toBeInTheDocument()
-    expect(screen.getByText('setup:modeDeveloperAgent')).toBeInTheDocument()
+    // Step 1: Ready
+    clickButton('common:continue')
+    expect(screen.getByText('setup:readyTitle')).toBeInTheDocument()
     expect(screen.getByText('common:newChat')).toBeInTheDocument()
     expect(screen.getByText('common:search')).toBeInTheDocument()
     expect(
@@ -165,57 +95,16 @@ describe('SetupScreen — Manual Test Protocol', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('⌘ N')).toBeInTheDocument()
     expect(screen.getByText('⌘ K')).toBeInTheDocument()
+    expect(screen.getByText('setup:configureLater')).toBeInTheDocument()
 
-    // Final step shows "Get Started" instead of "Continue"
     expect(screen.getByText('setup:getStarted')).toBeInTheDocument()
-    expect(screen.queryByText('Continue')).not.toBeInTheDocument()
+    expect(screen.queryByText('common:continue')).not.toBeInTheDocument()
   })
 
-  // Protocol #3: Theme step applies immediately
-  it('calls setTheme when a theme option is clicked', () => {
-    renderSetup()
-    clickButton('Continue') // Mode
-    clickButton('Continue') // Theme
-
-    fireEvent.click(screen.getByText('Dark'))
-    expect(mockSetTheme).toHaveBeenCalledWith('dark')
-
-    fireEvent.click(screen.getByText('Light'))
-    expect(mockSetTheme).toHaveBeenCalledWith('light')
-
-    fireEvent.click(screen.getByText('System'))
-    expect(mockSetTheme).toHaveBeenCalledWith('auto')
-  })
-
-  // Protocol #4: Providers step toggles
-  it('calls updateProvider when a provider is toggled', () => {
-    renderSetup()
-    clickButton('Continue') // Mode
-    clickButton('Continue') // Theme
-    clickButton('Continue') // Providers
-
-    // Click OpenAI (currently inactive, should toggle to active)
-    fireEvent.click(screen.getByText('OpenAI'))
-    expect(mockUpdateProvider).toHaveBeenCalledWith('openai', { active: true })
-
-    // Click LlamaCPP (currently active, should toggle to inactive)
-    fireEvent.click(screen.getByText('Local (LlamaCPP)'))
-    expect(mockUpdateProvider).toHaveBeenCalledWith('llamacpp', {
-      active: false,
-    })
-  })
-
-  // Protocol #5: Get Started sets localStorage and calls onComplete
   it('completes setup: sets localStorage and calls onComplete', () => {
     const { onComplete } = renderSetup()
 
-    // Navigate to final step
-    clickButton('Continue') // 1
-    clickButton('Continue') // 2
-    clickButton('Continue') // 3
-    clickButton('Continue') // 4
-    clickButton('Continue') // 5
-
+    clickButton('common:continue')
     clickButton('setup:getStarted')
 
     expect(localStorage.getItem('setup-completed')).toBe('true')
@@ -223,76 +112,44 @@ describe('SetupScreen — Manual Test Protocol', () => {
     expect(onComplete).toHaveBeenCalledOnce()
   })
 
-  it('persists the selected workspace mode on completion', () => {
-    const { onComplete } = renderSetup()
-
-    clickButton('Continue') // Mode
-    fireEvent.click(screen.getByText('setup:modeLocalPrivate'))
-    clickButton('Continue') // Theme
-    clickButton('Continue') // Providers
-    clickButton('Continue') // Privacy
-    clickButton('Continue') // Ready
-
-    expect(screen.getByText('setup:modeLocalPrivate')).toBeInTheDocument()
-
-    clickButton('setup:getStarted')
-
-    expect(localStorage.getItem('setup-completed')).toBe('true')
-    expect(localStorage.getItem('workspace-mode')).toBe('local-private-ai')
-    expect(onComplete).toHaveBeenCalledOnce()
-  })
-
-  // Protocol #1 variant: Skip button on step 0 also completes setup
   it('skip button completes setup immediately', () => {
     const { onComplete } = renderSetup()
 
-    clickButton('Skip')
+    clickButton('common:skip')
 
     expect(localStorage.getItem('setup-completed')).toBe('true')
     expect(localStorage.getItem('workspace-mode')).toBe('developer-agent')
     expect(onComplete).toHaveBeenCalledOnce()
   })
 
-  // Back navigation works
   it('back button navigates to previous step', () => {
     renderSetup()
 
-    clickButton('Continue') // Go to Mode
-    expect(screen.getByText('setup:workspaceModeTitle')).toBeInTheDocument()
+    clickButton('common:continue')
+    expect(screen.getByText('setup:readyTitle')).toBeInTheDocument()
 
-    clickButton('Back') // Back to Welcome
+    clickButton('common:back')
     expect(screen.getByText('setup:welcome')).toBeInTheDocument()
   })
 
-  // Progress dots: 6 dots rendered
-  it('renders 6 progress dots', () => {
+  it('renders 2 progress dots', () => {
     const { container } = renderSetup()
-    // Progress dots are in the first flex gap-2 mb-8 container
     const dotsContainer = container.querySelector('.gap-2.mb-8')
     expect(dotsContainer).toBeInTheDocument()
     const dots = dotsContainer!.querySelectorAll('.rounded-full')
-    expect(dots).toHaveLength(6)
+    expect(dots).toHaveLength(2)
   })
 
-  // HeaderPage is rendered
   it('renders HeaderPage', () => {
     renderSetup()
     expect(screen.getByTestId('header-page')).toBeInTheDocument()
   })
 
-  // Cannot go past step 4 or before step 0
-  it('does not go past the last step or before the first step', () => {
+  it('does not go past the last step', () => {
     renderSetup()
 
-    // Navigate to last step
-    clickButton('Continue') // 1
-    clickButton('Continue') // 2
-    clickButton('Continue') // 3
-    clickButton('Continue') // 4
-    clickButton('Continue') // 5
-
-    expect(screen.getByText("You're all set!")).toBeInTheDocument()
-    // No "Continue" button on last step — only "Get Started"
-    expect(screen.queryByText('Continue')).not.toBeInTheDocument()
+    clickButton('common:continue')
+    expect(screen.getByText('setup:readyTitle')).toBeInTheDocument()
+    expect(screen.queryByText('common:continue')).not.toBeInTheDocument()
   })
 })

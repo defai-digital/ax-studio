@@ -105,6 +105,11 @@ export function PerformanceMonitor() {
         ? '#818cf8'
         : '#f59e0b'
 
+  // Keep the sidebar quiet when the runtime is idle — show only when useful.
+  if (status === 'idle' && !expanded) {
+    return null
+  }
+
   return (
     <div
       className="mx-3 mb-1 rounded-xl border overflow-hidden group-data-[collapsible=icon]:hidden"

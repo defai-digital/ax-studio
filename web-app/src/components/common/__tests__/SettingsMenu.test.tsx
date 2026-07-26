@@ -70,11 +70,15 @@ describe('SettingsMenu', () => {
     expect(hrefs).toEqual(['/settings/general', '/settings/providers/'])
   })
 
-  it('renders the App and AI group headers', () => {
+  it('uses a flat list without group headers', () => {
     render(<SettingsMenu />)
 
-    expect(screen.getByText('App')).toBeInTheDocument()
-    expect(screen.getByText('AI')).toBeInTheDocument()
+    expect(screen.queryByText('App')).not.toBeInTheDocument()
+    expect(screen.queryByText('AI')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('common:settingsGroupApp')
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('common:settingsGroupAi')).not.toBeInTheDocument()
   })
 
   it('highlights the active menu item', () => {

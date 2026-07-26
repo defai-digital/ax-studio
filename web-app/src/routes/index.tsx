@@ -39,15 +39,7 @@ import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { resolveSystemPrompt } from '@/lib/prompts/system-prompt'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  Zap,
-  Columns2,
-  Cpu,
-  Bolt,
-  Shield,
-  Wrench,
-  MessageSquareText,
-} from 'lucide-react'
+import { Zap, Columns2, MessageSquareText } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -65,13 +57,6 @@ export const Route = createFileRoute(route.home)({
   validateSearch: (search: Record<string, unknown>): SearchParams =>
     homeSearchSchema.parse(search),
 })
-
-const capabilityBadgeDefs = [
-  { icon: Cpu, labelKey: 'common:capabilityLocalModels' },
-  { icon: Bolt, labelKey: 'common:capabilityLightningFast' },
-  { icon: Shield, labelKey: 'common:capabilityPrivateLocal' },
-  { icon: Wrench, labelKey: 'common:capabilityToolsMcp' },
-] as const
 
 function Index() {
   const { t } = useTranslation()
@@ -231,29 +216,32 @@ function Index() {
           )}
         >
           <div className={cn('mx-auto w-full max-w-2xl min-w-0')}>
-            {/* Hero section */}
-            <div className="text-center mb-6">
+            {/* Composer-first hero — quiet, Ollama-like focus on the input */}
+            <div className="text-center mb-4">
               <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
+                initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-                className="mx-auto mb-4 size-16 rounded-2xl bg-brand-gradient flex items-center justify-center shadow-brand"
+                transition={{ duration: 0.25, ease: 'easeOut' }}
+                className="mx-auto mb-3 size-11 rounded-xl bg-brand-gradient flex items-center justify-center shadow-brand"
               >
-                <Zap className="size-7 text-primary-foreground" strokeWidth={2} />
+                <Zap
+                  className="size-5 text-primary-foreground"
+                  strokeWidth={2.5}
+                />
               </motion.div>
               <motion.h1
-                initial={{ opacity: 0, y: 8 }}
+                initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.05, duration: 0.4 }}
-                className="text-2xl sm:text-[30px] font-bold leading-tight"
+                transition={{ delay: 0.04, duration: 0.3 }}
+                className="text-xl sm:text-2xl font-semibold tracking-tight leading-tight"
               >
                 {t('common:homeHeroTitle')}
               </motion.h1>
               <motion.p
-                initial={{ opacity: 0, y: 8 }}
+                initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1, duration: 0.4 }}
-                className="text-muted-foreground text-sm mt-2"
+                transition={{ delay: 0.08, duration: 0.3 }}
+                className="text-muted-foreground text-sm mt-1.5"
               >
                 {t('common:homeHeroSubtitle')}
               </motion.p>
@@ -286,52 +274,30 @@ function Index() {
                 </div>
               </div>
             )}
-
-            {/* Capability badges */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.4, duration: 0.5 }}
-              className="flex flex-wrap items-center justify-center gap-3 mb-6"
-            >
-              {capabilityBadgeDefs.map((badge) => {
-                const Icon = badge.icon
-                return (
-                  <div
-                    key={badge.labelKey}
-                    className="flex items-center gap-1.5 text-xs text-muted-foreground"
-                  >
-                    <Icon className="size-3.5" />
-                    <span>{t(badge.labelKey)}</span>
-                  </div>
-                )
-              })}
-            </motion.div>
-
-            {/* Smart Start workflow selector */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2, duration: 0.35 }}
-            >
-              <WorkflowSelector
-                onPromptReady={(prompt) => {
-                  setGlobalPrompt(prompt)
-                  const input =
-                    document.querySelector<HTMLTextAreaElement>(
-                      '[data-chat-input]'
-                    )
-                  input?.focus()
-                }}
-              />
-            </motion.div>
           </div>
         </div>
-        {/* Input pinned at bottom */}
-        <div className="shrink-0 px-3 pb-2 sm:pb-4">
+        {/* Input + optional workflows pinned at bottom for composer-first layout */}
+        <div className="shrink-0 px-3 pb-2 sm:pb-4 space-y-3">
           <div className="mx-auto w-full max-w-2xl">
             <ChatInput model={selectedModel} initialMessage={true} />
           </div>
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.12, duration: 0.3 }}
+            className="mx-auto w-full max-w-2xl"
+          >
+            <WorkflowSelector
+              onPromptReady={(prompt) => {
+                setGlobalPrompt(prompt)
+                const input =
+                  document.querySelector<HTMLTextAreaElement>(
+                    '[data-chat-input]'
+                  )
+                input?.focus()
+              }}
+            />
+          </motion.div>
         </div>
       </div>
     </div>

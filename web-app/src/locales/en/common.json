@@ -125,7 +125,7 @@
     "chatInput": "Ask me anything..."
   },
   "homeHeroTitle": "What can I help you with?",
-  "homeHeroSubtitle": "Ask anything, build with AI, or explore what's possible.",
+  "homeHeroSubtitle": "Ask anything — local or cloud models.",
   "capabilityLocalModels": "Local models",
   "capabilityLightningFast": "Lightning fast",
   "capabilityPrivateLocal": "Private & local",

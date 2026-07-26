@@ -315,14 +315,16 @@ describe('Home Page (index.tsx) — Manual Test Protocol', () => {
     expect(sessionStorage.getItem('split-view-info')).toContain('split-thread')
   })
 
-  // Capability badges
-  it('renders 4 capability badges', () => {
+  // Composer-first empty state: no marketing capability badges
+  it('does not render capability badges on the home empty state', () => {
     renderIndex()
 
-    expect(screen.getByText('Local models')).toBeInTheDocument()
-    expect(screen.getByText('Lightning fast')).toBeInTheDocument()
-    expect(screen.getByText('Private & local')).toBeInTheDocument()
-    expect(screen.getByText('Tool use & MCP')).toBeInTheDocument()
+    expect(screen.queryByText('Local models')).not.toBeInTheDocument()
+    expect(screen.queryByText('Lightning fast')).not.toBeInTheDocument()
+    expect(screen.queryByText('Private & local')).not.toBeInTheDocument()
+    expect(screen.queryByText('Tool use & MCP')).not.toBeInTheDocument()
+    // Composer remains the primary affordance
+    expect(screen.getByTestId('chat-input-container')).toBeInTheDocument()
   })
 
   // Clears thread ID on mount

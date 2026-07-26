@@ -1,3 +1,4 @@
+import React from 'react'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { Route as GeneralRoute } from '../general'
@@ -243,6 +244,40 @@ vi.mock('@/components/settings/SettingsPageLayout', () => ({
   ),
 }))
 
+vi.mock('@/components/ui/collapsible', () => ({
+  Collapsible: ({
+    children,
+    open,
+  }: {
+    children: React.ReactNode
+    open?: boolean
+    onOpenChange?: (open: boolean) => void
+  }) => (
+    <div data-testid="collapsible" data-open={open ? 'true' : 'false'}>
+      {children}
+    </div>
+  ),
+  CollapsibleTrigger: ({
+    children,
+    asChild,
+    ...props
+  }: {
+    children: React.ReactNode
+    asChild?: boolean
+    onClick?: () => void
+  }) =>
+    asChild && React.isValidElement(children) ? (
+      children
+    ) : (
+      <button data-testid="collapsible-trigger" type="button" {...props}>
+        {children}
+      </button>
+    ),
+  CollapsibleContent: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="collapsible-content">{children}</div>
+  ),
+}))
+
 vi.mock('@/services/app/web', () => ({
   WebAppService: vi.fn().mockImplementation(() => ({
     factoryReset: vi.fn(),
@@ -411,14 +446,20 @@ describe('General Settings Route', () => {
       render(<Component />)
     })
 
-    const promptTextarea = screen.getByLabelText('Global Default Prompt')
+    const promptTextarea = screen.getByLabelText(
+      'settings:general.globalDefaultPrompt'
+    )
     expect(promptTextarea).toHaveClass('min-h-40')
     expect(promptTextarea).toHaveAttribute(
       'aria-describedby',
       'global-default-prompt-description'
     )
-    expect(screen.getByText('0 characters')).toBeInTheDocument()
-    expect(screen.getByText('Reset to Default')).toBeInTheDocument()
+    expect(
+      screen.getByText('settings:general.characterCount')
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('settings:general.resetToDefault')
+    ).toBeInTheDocument()
   })
 
   it('should render huggingface token input', async () => {

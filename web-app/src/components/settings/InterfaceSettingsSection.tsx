@@ -102,16 +102,15 @@ function AccentColorPicker() {
 }
 
 /**
- * Interface (theme/font size/accent) settings as a self-contained card. Used
- * by the standalone /settings/interface page (Tauri) and merged into
- * /settings/general under Electron (migration matrix §1).
+ * Appearance (theme/font size/accent) settings as a self-contained card.
+ * Merged into /settings/general under Electron (migration matrix §1).
  */
 export function InterfaceSettingsSection() {
   const { t } = useTranslation()
   const { resetInterface } = useInterfaceSettings()
 
   return (
-    <Card title={t('settings:interface.title')}>
+    <Card title={t('settings:general.appearance')}>
       <CardItem
         title={t('settings:interface.theme')}
         description={t('settings:interface.themeDesc')}

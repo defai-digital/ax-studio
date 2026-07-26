@@ -41,5 +41,9 @@
   "themeDesc": "Pick an appearance that works for you. You can change this later.",
   "themeLightDesc": "Clean and bright",
   "themeDarkDesc": "Easy on the eyes",
-  "themeSystemDesc": "Follows your OS"
+  "themeSystemDesc": "Follows your OS",
+  "privacyOneLiner": "Local-first: threads and models stay on your device. Cloud is opt-in.",
+  "readyTitle": "You're all set!",
+  "readyDescription": "Here are a few shortcuts to get you started.",
+  "configureLater": "Theme, providers, and advanced options live in Settings."
 }
