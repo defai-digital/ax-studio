@@ -706,3 +706,89 @@ describe('useModelProvider migrations', () => {
     )
   })
 })
+
+describe('useModelProvider - ax-engine base URL persist migration', () => {
+  beforeEach(() => {
+    localStorageMock.getItem.mockReturnValue(null)
+    localStorageMock.setItem.mockClear()
+    act(() => {
+      useModelProvider.setState({
+        providers: [],
+        selectedProvider: '',
+        selectedModel: null,
+        deletedModels: [],
+      })
+    })
+  })
+
+  it('rewrites legacy :19997 base_url to sidecar 31418/v1 via setProviders', () => {
+    const { result } = renderHook(() => useModelProvider())
+
+    act(() => {
+      result.current.setProviders([
+        {
+          provider: 'ax-engine',
+          active: true,
+          api_key: 'sk-local-ax-engine',
+          base_url: 'http://127.0.0.1:19997/v1',
+          models: [],
+          settings: [
+            {
+              key: 'base-url',
+              controller_props: {
+                value: 'http://127.0.0.1:19997/v1',
+                placeholder: 'http://127.0.0.1:19997/v1',
+              },
+            },
+          ],
+        } as ModelProvider,
+      ])
+    })
+
+    const provider = result.current.providers.find(
+      (p) => p.provider === 'ax-engine'
+    )
+    expect(provider?.base_url).toBe('http://127.0.0.1:31418/v1')
+    expect(provider?.base_url).not.toBe('http://127.0.0.1:0/v1')
+    expect(provider?.api_key).toBe('local')
+    expect(provider?.settings?.[0]?.controller_props).toEqual(
+      expect.objectContaining({
+        value: 'http://127.0.0.1:31418/v1',
+        placeholder: 'http://127.0.0.1:31418/v1',
+      })
+    )
+  })
+
+  it('rewrites retired port-0 placeholder to sidecar 31418/v1 via setProviders', () => {
+    const { result } = renderHook(() => useModelProvider())
+
+    act(() => {
+      result.current.setProviders([
+        {
+          provider: 'mlx',
+          active: true,
+          api_key: 'sk-local-mlx',
+          base_url: 'http://127.0.0.1:0/v1',
+          models: [],
+          settings: [
+            {
+              key: 'base-url',
+              controller_props: {
+                value: 'http://127.0.0.1:0/v1',
+                placeholder: 'http://127.0.0.1:0/v1',
+              },
+            },
+          ],
+        } as ModelProvider,
+      ])
+    })
+
+    const provider = result.current.providers.find(
+      (p) => p.provider === 'ax-engine'
+    )
+    expect(provider).toBeDefined()
+    expect(provider?.base_url).toBe('http://127.0.0.1:31418/v1')
+    expect(provider?.base_url).not.toMatch(/:0(\/|$)/)
+    expect(provider?.api_key).toBe('local')
+  })
+})

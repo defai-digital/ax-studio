@@ -4,9 +4,10 @@ import { localStorageKey } from '@/constants/localStorage'
 import {
   ANTHROPIC_DEFAULT_HEADERS,
   AX_ENGINE_PROVIDER_ID,
+  AX_ENGINE_SIDECAR_DEFAULT_API_KEY,
+  AX_ENGINE_SIDECAR_DEFAULT_BASE_URL,
   isAxEngineProvider,
   LEGACY_MLX_BASE_URLS,
-  MLX_IN_PROCESS_BASE_URL,
   normalizeProviderId,
 } from '@/constants/providers'
 import { mergeProviders } from '@/lib/providers/model-provider-merge'
@@ -320,30 +321,60 @@ const normalizeProvider = (value: unknown): ModelProvider | null => {
   const customHeader = normalizeProviderHeaders(value.custom_header)
   if (customHeader !== undefined) provider.custom_header = customHeader
 
-  // Persist migration: in-process AX Engine; drop the dead :19997 HTTP default.
+  // Persist migration: rewrite retired :19997 / port-0 URLs to the managed
+  // ax-engine serve sidecar default (31418/v1), never back to port-0.
   if (
     isAxEngineProvider(provider.provider) &&
     LEGACY_MLX_BASE_URLS.has((provider.base_url ?? '').trim().replace(/\/+$/, ''))
   ) {
     provider.provider = AX_ENGINE_PROVIDER_ID
-    provider.base_url = MLX_IN_PROCESS_BASE_URL
+    provider.base_url = AX_ENGINE_SIDECAR_DEFAULT_BASE_URL
+    if (
+      !provider.api_key ||
+      provider.api_key === 'sk-local-ax-engine' ||
+      provider.api_key === 'sk-local-mlx'
+    ) {
+      provider.api_key = AX_ENGINE_SIDECAR_DEFAULT_API_KEY
+    }
     provider.settings = provider.settings.map((setting) => {
-      if (setting.key !== 'base-url') return setting
-      const props = { ...(setting.controller_props ?? {}) }
-      const valueStr =
-        typeof props.value === 'string'
-          ? props.value.trim().replace(/\/+$/, '')
-          : ''
-      if (LEGACY_MLX_BASE_URLS.has(valueStr) || !props.value) {
-        props.value = MLX_IN_PROCESS_BASE_URL
+      if (setting.key === 'base-url') {
+        const props = { ...(setting.controller_props ?? {}) }
+        const valueStr =
+          typeof props.value === 'string'
+            ? props.value.trim().replace(/\/+$/, '')
+            : ''
+        if (LEGACY_MLX_BASE_URLS.has(valueStr) || !props.value) {
+          props.value = AX_ENGINE_SIDECAR_DEFAULT_BASE_URL
+        }
+        if (
+          typeof props.placeholder === 'string' &&
+          LEGACY_MLX_BASE_URLS.has(props.placeholder.trim().replace(/\/+$/, ''))
+        ) {
+          props.placeholder = AX_ENGINE_SIDECAR_DEFAULT_BASE_URL
+        }
+        return { ...setting, controller_props: props }
       }
-      if (
-        typeof props.placeholder === 'string' &&
-        LEGACY_MLX_BASE_URLS.has(props.placeholder.trim().replace(/\/+$/, ''))
-      ) {
-        props.placeholder = MLX_IN_PROCESS_BASE_URL
+      if (setting.key === 'api-key') {
+        const props = { ...(setting.controller_props ?? {}) }
+        const keyVal =
+          typeof props.value === 'string' ? props.value.trim() : ''
+        if (
+          !keyVal ||
+          keyVal === 'sk-local-ax-engine' ||
+          keyVal === 'sk-local-mlx'
+        ) {
+          props.value = AX_ENGINE_SIDECAR_DEFAULT_API_KEY
+          if (
+            typeof props.placeholder === 'string' &&
+            (props.placeholder.includes('sk-local') ||
+              LEGACY_MLX_BASE_URLS.has(props.placeholder))
+          ) {
+            props.placeholder = AX_ENGINE_SIDECAR_DEFAULT_API_KEY
+          }
+        }
+        return { ...setting, controller_props: props }
       }
-      return { ...setting, controller_props: props }
+      return setting
     })
   }
 

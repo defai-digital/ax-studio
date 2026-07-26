@@ -44,7 +44,7 @@ describe('mergeProviders', () => {
     expect(result[0].base_url).toBe('https://api.openai.com')
   })
 
-  it('rewrites legacy MLX HTTP engine base_url to the in-process placeholder', () => {
+  it('rewrites legacy :19997 ax-engine base_url to the sidecar default 31418/v1', () => {
     const existing = [
       makeProvider('ax-engine', [], {
         base_url: 'http://127.0.0.1:19997/v1',
@@ -61,6 +61,32 @@ describe('mergeProviders', () => {
     ]
     const incoming = [
       makeProvider('ax-engine', [], {
+        base_url: 'http://127.0.0.1:31418/v1',
+        settings: [
+          {
+            key: 'base-url',
+            controller_props: {
+              value: 'http://127.0.0.1:31418/v1',
+              placeholder: 'http://127.0.0.1:31418/v1',
+            },
+          },
+        ],
+      } as Partial<ModelProvider>),
+    ]
+    const result = mergeProviders(incoming, existing, [], '/')
+    expect(result[0].base_url).toBe('http://127.0.0.1:31418/v1')
+    expect(result[0].base_url).not.toBe('http://127.0.0.1:0/v1')
+    expect(result[0].settings?.[0]?.controller_props).toEqual(
+      expect.objectContaining({
+        value: 'http://127.0.0.1:31418/v1',
+        placeholder: 'http://127.0.0.1:31418/v1',
+      })
+    )
+  })
+
+  it('rewrites retired port-0 placeholder to the sidecar default 31418/v1', () => {
+    const existing = [
+      makeProvider('ax-engine', [], {
         base_url: 'http://127.0.0.1:0/v1',
         settings: [
           {
@@ -73,14 +99,44 @@ describe('mergeProviders', () => {
         ],
       } as Partial<ModelProvider>),
     ]
+    const incoming = [
+      makeProvider('ax-engine', [], {
+        base_url: 'http://127.0.0.1:31418/v1',
+        settings: [
+          {
+            key: 'base-url',
+            controller_props: {
+              value: 'http://127.0.0.1:31418/v1',
+              placeholder: 'http://127.0.0.1:31418/v1',
+            },
+          },
+        ],
+      } as Partial<ModelProvider>),
+    ]
     const result = mergeProviders(incoming, existing, [], '/')
-    expect(result[0].base_url).toBe('http://127.0.0.1:0/v1')
+    expect(result[0].base_url).toBe('http://127.0.0.1:31418/v1')
+    expect(result[0].base_url).not.toMatch(/:0(\/|$)/)
     expect(result[0].settings?.[0]?.controller_props).toEqual(
       expect.objectContaining({
-        value: 'http://127.0.0.1:0/v1',
-        placeholder: 'http://127.0.0.1:0/v1',
+        value: 'http://127.0.0.1:31418/v1',
+        placeholder: 'http://127.0.0.1:31418/v1',
       })
     )
+  })
+
+  it('does not rewrite a live sidecar base_url', () => {
+    const existing = [
+      makeProvider('ax-engine', [], {
+        base_url: 'http://127.0.0.1:31418/v1',
+      }),
+    ]
+    const incoming = [
+      makeProvider('ax-engine', [], {
+        base_url: 'http://127.0.0.1:31418/v1',
+      }),
+    ]
+    const result = mergeProviders(incoming, existing, [], '/')
+    expect(result[0].base_url).toBe('http://127.0.0.1:31418/v1')
   })
 
   it('excludes models in deletedModels from merged list', () => {

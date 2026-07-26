@@ -9,11 +9,11 @@
  *   always uses `/` (HF-style), not the OS filesystem separator.
  */
 import {
+  AX_ENGINE_SIDECAR_DEFAULT_BASE_URL,
   isAxEngineProvider,
   LEGACY_BUNDLED_MLX_MODEL_IDS,
   LEGACY_MLX_BASE_URLS,
   LOCAL_PROVIDER_IDS,
-  MLX_IN_PROCESS_BASE_URL,
   normalizeProviderId,
 } from '@/constants/providers'
 
@@ -21,7 +21,11 @@ function normalizeBaseUrl(url: string | undefined): string {
   return (url ?? '').trim().replace(/\/+$/, '')
 }
 
-function resolveAxEngineBaseUrl(
+/**
+ * Rewrite retired in-process / :19997 URLs to the managed sidecar default
+ * (`http://127.0.0.1:31418/v1`). Never rewrite back to port-0.
+ */
+export function resolveAxEngineBaseUrl(
   providerName: string,
   existingUrl: string | undefined,
   incomingUrl: string | undefined
@@ -31,7 +35,7 @@ function resolveAxEngineBaseUrl(
     isAxEngineProvider(providerName) &&
     LEGACY_MLX_BASE_URLS.has(normalizeBaseUrl(preferred))
   ) {
-    return MLX_IN_PROCESS_BASE_URL
+    return AX_ENGINE_SIDECAR_DEFAULT_BASE_URL
   }
   return preferred
 }
@@ -120,13 +124,13 @@ export function mergeProviders(
             normalizeBaseUrl(String(controllerProps.value ?? ''))
           )
         ) {
-          controllerProps.value = MLX_IN_PROCESS_BASE_URL
+          controllerProps.value = AX_ENGINE_SIDECAR_DEFAULT_BASE_URL
           if (
             LEGACY_MLX_BASE_URLS.has(
               normalizeBaseUrl(String(controllerProps.placeholder ?? ''))
             )
           ) {
-            controllerProps.placeholder = MLX_IN_PROCESS_BASE_URL
+            controllerProps.placeholder = AX_ENGINE_SIDECAR_DEFAULT_BASE_URL
           }
         }
         return {
