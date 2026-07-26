@@ -19,7 +19,9 @@ all:
 install-and-build:
 	$(YARN) install
 	$(YARN) build:core
-	cd extensions && $(YARN) install
+	# core/package.tgz is freshly packed each build (tar mtimes change its hash),
+	# so the extensions workspace cannot install in immutable mode.
+	cd extensions && $(YARN) install --no-immutable
 
 # One-time setup for the desktop dev app. Re-run this after dependency or
 # core package changes.
