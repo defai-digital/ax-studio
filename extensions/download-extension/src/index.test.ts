@@ -8,11 +8,11 @@ const { mockGetAppDataFolderPath, mockValidateUrlProtocol } = vi.hoisted(
 )
 
 // Mock Tauri APIs before import
-vi.mock('@tauri-apps/api/core', () => ({
+vi.mock('../../../web-app/src/lib/tauri-shim/api-core', () => ({
   invoke: vi.fn(),
 }))
 
-vi.mock('@tauri-apps/api/event', () => ({
+vi.mock('../../../web-app/src/lib/tauri-shim/api-event', () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
 }))
 
@@ -45,8 +45,8 @@ vi.mock('@ax-studio/core', () => ({
 ;(globalThis as Record<string, unknown>).SETTINGS = []
 
 import AxStudioDownloadManager from './index'
-import { invoke } from '@tauri-apps/api/core'
-import { listen } from '@tauri-apps/api/event'
+import { invoke } from '../../../web-app/src/lib/tauri-shim/api-core'
+import { listen } from '../../../web-app/src/lib/tauri-shim/api-event'
 
 describe('AxStudioDownloadManager', () => {
   let manager: AxStudioDownloadManager

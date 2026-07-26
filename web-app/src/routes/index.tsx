@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router'
 import { ChatInput } from '@/containers/ChatInput'
 import { HeaderPage } from '@/containers/HeaderPage'
-import { useTools } from '@/hooks/tools/useTools'
 import { cn } from '@/lib/utils'
 import {
   safeStorageGetItem,
@@ -87,7 +86,6 @@ function Index() {
   const { setCurrentThreadId, createThread } = useThreads()
   const { globalDefaultPrompt } = useGeneralSetting()
   const setGlobalPrompt = usePrompt((state) => state.setPrompt)
-  useTools()
 
   const [showThreadPromptEditor, setShowThreadPromptEditor] = useState(false)
   const [threadPromptDraft, setThreadPromptDraft] = useState(

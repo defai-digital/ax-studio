@@ -15,8 +15,8 @@ on:
       - 'vitest.config.ts'
       - 'scripts/**'
       - 'core/**'
+      - 'electron/**'
       - 'extensions/**'
-      - 'src-tauri/**'
       - 'web-app/**'
       - '!README.md'
       - 'Makefile'
@@ -36,9 +36,9 @@ on:
       - 'vitest.config.ts'
       - 'scripts/**'
       - 'Makefile'
+      - 'electron/**'
       - 'extensions/**'
       - 'core/**'
-      - 'src-tauri/**'
       - 'web-app/**'
       - '!README.md'
 
@@ -66,14 +66,6 @@ jobs:
       - name: Lint GitHub Actions workflows
         run: |
           go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
-
-      - name: Set up Node.js for release config validation
-        uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-
-      - name: Validate release config
-        run: node scripts/release/validate-release-config.mjs
 
   secret-scan:
     runs-on: ubuntu-latest
@@ -183,21 +175,6 @@ jobs:
           yarn --version
           yarn config set -H enableImmutableInstalls true
 
-      - name: Set up Xcode version
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: '26.2'
-
-      - name: Install pinned MLX build dependency
-        run: |
-          set -euo pipefail
-          MLX_VENV="$RUNNER_TEMP/ax-studio-mlx-venv"
-          python3 -m venv "$MLX_VENV"
-          PYO3_PYTHON="$MLX_VENV/bin/python" node scripts/prepare-mlx-runtime.mjs
-          echo "VIRTUAL_ENV=$MLX_VENV" >> "$GITHUB_ENV"
-          echo "$MLX_VENV/bin" >> "$GITHUB_PATH"
-          "$MLX_VENV/bin/python" -c 'import importlib.metadata; print("MLX", importlib.metadata.version("mlx"))'
-
       - name: Linter and test
         run: |
           make test
@@ -243,13 +220,6 @@ jobs:
           yarn --version
           yarn config set -H enableImmutableInstalls true
 
-      - name: Configure Cargo for Windows paths
-        shell: powershell
-        run: |
-          git config --global core.longpaths true
-          New-Item -ItemType Directory -Force C:\cargo | Out-Null
-          New-Item -ItemType Directory -Force C:\cargo-target | Out-Null
-
       - name: Lint
         shell: powershell
         timeout-minutes: 20
@@ -257,20 +227,6 @@ jobs:
           make lint
         env:
           NODE_OPTIONS: '--max-old-space-size=2048'
-          CARGO_HOME: C:\cargo
-          CARGO_TARGET_DIR: C:\cargo-target
-          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
-
-      - name: Download binaries
-        shell: powershell
-        timeout-minutes: 15
-        run: |
-          npx -y @yarnpkg/cli-dist@4.5.3 download:bin
-        env:
-          NODE_OPTIONS: '--max-old-space-size=2048'
-          CARGO_HOME: C:\cargo
-          CARGO_TARGET_DIR: C:\cargo-target
-          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
 
       - name: Vitest
         shell: powershell
@@ -282,54 +238,6 @@ jobs:
           npx -y @yarnpkg/cli-dist@4.5.3 vitest run --pool=threads
         env:
           NODE_OPTIONS: '--max-old-space-size=2048'
-          CARGO_HOME: C:\cargo
-          CARGO_TARGET_DIR: C:\cargo-target
-          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
-
-      - name: Prepare Tauri test assets
-        shell: powershell
-        timeout-minutes: 10
-        run: |
-          npx -y @yarnpkg/cli-dist@4.5.3 copy:assets:tauri
-          npx -y @yarnpkg/cli-dist@4.5.3 build:icon
-        env:
-          NODE_OPTIONS: '--max-old-space-size=2048'
-          CARGO_HOME: C:\cargo
-          CARGO_TARGET_DIR: C:\cargo-target
-          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
-
-      - name: Cargo test src-tauri
-        shell: powershell
-        timeout-minutes: 30
-        run: |
-          cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --features test-tauri -- --test-threads=1
-        env:
-          NODE_OPTIONS: '--max-old-space-size=2048'
-          CARGO_HOME: C:\cargo
-          CARGO_TARGET_DIR: C:\cargo-target
-          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
-
-      - name: Cargo test hardware plugin
-        shell: powershell
-        timeout-minutes: 15
-        run: |
-          cargo test --manifest-path src-tauri/plugins/tauri-plugin-hardware/Cargo.toml
-        env:
-          NODE_OPTIONS: '--max-old-space-size=2048'
-          CARGO_HOME: C:\cargo
-          CARGO_TARGET_DIR: C:\cargo-target
-          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
-
-      - name: Cargo test utils
-        shell: powershell
-        timeout-minutes: 10
-        run: |
-          cargo test --manifest-path src-tauri/utils/Cargo.toml
-        env:
-          NODE_OPTIONS: '--max-old-space-size=2048'
-          CARGO_HOME: C:\cargo
-          CARGO_TARGET_DIR: C:\cargo-target
-          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
 
   test-on-ubuntu:
     runs-on: ubuntu-latest
@@ -356,11 +264,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '24'
-
-      - name: Install Tauri dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y libglib2.0-dev libatk1.0-dev libpango1.0-dev libgtk-3-dev libsoup-3.0-dev libwebkit2gtk-4.1-dev librsvg2-dev libfuse2 libdbus-1-dev libasound2-dev webkit2gtk-driver
 
       - name: 'Cleanup cache'
         continue-on-error: true

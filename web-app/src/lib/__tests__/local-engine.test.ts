@@ -3,9 +3,7 @@ import {
   createLifecycle,
   derivePhaseFromSignals,
   mostSeverePhase,
-  InProcessLocalEngineBackend,
   SidecarHttpLocalEngineBackend,
-  createDefaultLocalEngineBackend,
   LOCAL_ENGINE_PHASE_RANK,
 } from '@/lib/local-engine'
 
@@ -74,29 +72,6 @@ describe('local-engine phases', () => {
   })
 })
 
-describe('InProcessLocalEngineBackend', () => {
-  it('is the studio default and uses mlx provider id', () => {
-    const backend = createDefaultLocalEngineBackend()
-    expect(backend).toBeInstanceOf(InProcessLocalEngineBackend)
-    expect(backend.info.kind).toBe('in_process')
-    expect(backend.info.providerId).toBe('ax-engine')
-  })
-
-  it('reports missing_dependency outside Tauri', async () => {
-    const backend = new InProcessLocalEngineBackend()
-    const lifecycle = await backend.probe()
-    expect(lifecycle.backend).toBe('in_process')
-    expect(lifecycle.phase).toBe('missing_dependency')
-    expect(lifecycle.blockers).toContain('studio.in_process.requires_tauri')
-  })
-
-  it('exposes OpenAI-shaped chat fetch from mlx ipc façade', () => {
-    const backend = new InProcessLocalEngineBackend()
-    const fetchFn = backend.createChatFetch?.()
-    expect(typeof fetchFn).toBe('function')
-  })
-})
-
 describe('SidecarHttpLocalEngineBackend', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -136,5 +111,12 @@ describe('SidecarHttpLocalEngineBackend', () => {
     const lifecycle = await backend.probe()
     expect(lifecycle.phase).toBe('missing_dependency')
     expect(lifecycle.blockers).toContain('studio.sidecar.unreachable')
+  })
+
+  it('is the only backend kind and speaks plain OpenAI-compatible HTTP', () => {
+    const backend = new SidecarHttpLocalEngineBackend()
+    expect(backend.info.kind).toBe('sidecar_http')
+    expect(backend.info.providerId).toBe('ax-engine')
+    expect(typeof backend.createChatFetch?.()).toBe('function')
   })
 })

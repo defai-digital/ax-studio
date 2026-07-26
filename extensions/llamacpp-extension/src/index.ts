@@ -53,7 +53,7 @@ import {
   GgufMetadata,
 } from '@ax-studio/tauri-plugin-llamacpp-api'
 
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '../../../web-app/src/lib/tauri-shim/api-core'
 import {
   configureBackends,
   awaitPendingBackendSelection,
@@ -342,6 +342,20 @@ function toAxServingModelId(modelId: string): string {
   return modelId.replace(/[^a-zA-Z0-9_.-]/g, '_')
 }
 
+/**
+ * True inside the Electron shell (the preload injects `window.axElectron`).
+ * Runtime check — the extension bundle is built once and shared across shells,
+ * so build-time constants cannot distinguish them. Under Electron, ax-serving
+ * is discontinued: model-manifest.json models are served by the ax-engine
+ * sidecar managed by the main process (`ax_engine_*` registry commands).
+ */
+function isElectronRuntime(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    (window as unknown as { axElectron?: unknown }).axElectron != null
+  )
+}
+
 function mergeModelIds(...modelIdGroups: string[][]): string[] {
   return Array.from(new Set(modelIdGroups.flat()))
 }
@@ -385,6 +399,16 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   private axServingSessions: Map<string, SessionInfo> = new Map()
   /** Coalesces concurrent ax-serving start attempts */
   private axServingStarting: Promise<void> | null = null
+
+  // ─── ax-engine sidecar state (Electron only) ─────────────────────────────
+  /**
+   * Subset of `axServingSessions` keys whose sessions are backed by the
+   * Electron-managed ax-engine sidecar rather than an ax-serving process.
+   * Sidecar sessions live in the same map so the shared session lookups keep
+   * working; this set switches health-check/reconcile/unload behavior to the
+   * `ax_engine_*` registry commands + authenticated OpenAI HTTP.
+   */
+  private axEngineSessionIds: Set<string> = new Set()
 
   // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -435,6 +459,10 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   }
 
   private async _autoStartEmbeddingModel(): Promise<void> {
+    // RAG / Knowledge Base is removed under Electron (migration matrix §1):
+    // `read_akidb_config` does not exist in the Electron main process and
+    // there is no knowledge-base settings page to configure an embedder.
+    if (isElectronRuntime()) return
     type AkidbConfig = {
       embedder?: {
         type?: string
@@ -1770,10 +1798,14 @@ export default class AxStudioLlamacppExtension extends AIEngine {
         : (this.config.engine_type || 'llamacpp')
       const embedding = isEmbedding || Boolean(cfg.embedding)
 
-      // ax-serving mode — handles text, vision, and embedding models
+      // ax-serving mode — handles text, vision, and embedding models.
+      // Under Electron, ax-serving is discontinued and the same manifest
+      // models are delegated to the ax-engine sidecar instead.
       if (engineType === 'ax-serving') {
         try {
-          return await this._doLoadAxServing(modelId, cfg, embedding, target)
+          return await (isElectronRuntime()
+            ? this._doLoadAxEngineSidecar(modelId, cfg, embedding, target)
+            : this._doLoadAxServing(modelId, cfg, embedding, target))
         } catch (axErr: unknown) {
           if (this._isAxServingArtifactError(axErr)) throw axErr
           console.warn(
@@ -1796,6 +1828,127 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       })
       throw e
     }
+  }
+
+  // ─── ax-engine sidecar load path (Electron) ───────────────────────────────
+
+  /**
+   * Load a model-manifest.json model via the Electron-managed ax-engine
+   * sidecar. The main process owns the binary lifecycle (`ax_engine_ensure`
+   * resolves the binary, port, posture and waits for readiness); the renderer
+   * then talks OpenAI-compatible HTTP to the sidecar baseURL with its Bearer
+   * key. Replaces the ax-serving path, which is discontinued under Electron.
+   */
+  private async _doLoadAxEngineSidecar(
+    modelId: string,
+    cfg: ModelConfig,
+    isEmbedding = false,
+    resolvedTarget?: ResolvedLoadTarget
+  ): Promise<SessionInfo> {
+    // Resolve absolute model path (same rules as the ax-serving path)
+    const modelPath =
+      resolvedTarget?.modelPath ?? (await this._resolveModelPathFromConfig(cfg))
+
+    if (!resolvedTarget?.pathVerified && !(await fs.existsSync(modelPath))) {
+      throw new Error(`Model path not found: ${modelPath}`)
+    }
+
+    const hasAxManifest =
+      resolvedTarget?.hasAxManifest ??
+      (await this._hasAxModelManifestAtPath(modelPath))
+    if (!hasAxManifest) {
+      throw new Error(
+        `${AX_SERVING_ARTIFACT_ERROR_PREFIX} ${AX_MODEL_MANIFEST_FILENAME} for "${modelId}". Generate AX artifacts for this model or choose a supported AX model.`
+      )
+    }
+
+    // Map the shared ctx_size setting onto the sidecar launch posture, the
+    // same way the ax-serving path forwarded it as context_length.
+    const ctxSize = toNumberSetting(this.config.ctx_size, 0)
+
+    const status = await invoke<{
+      phase: string
+      baseURL: string | null
+      apiKey: string | null
+      models?: string[]
+      detail?: string
+    }>('ax_engine_ensure', {
+      modelPath,
+      modelId,
+      ...(ctxSize > 0 ? { posture: { contextTokens: ctxSize } } : {}),
+    })
+
+    if (status.phase !== 'ready' || !status.baseURL) {
+      throw new Error(
+        `ax-engine sidecar failed to load "${modelId}" (phase: ${status.phase}): ${status.detail ?? 'no baseURL'}`
+      )
+    }
+
+    const port = Number(new URL(status.baseURL).port)
+    if (!Number.isFinite(port) || port <= 0) {
+      throw new Error(`ax-engine sidecar returned invalid baseURL: ${status.baseURL}`)
+    }
+
+    // Synthetic session — the sidecar manages the process, not the llamacpp
+    // plugin. Stored in axServingSessions so the shared session lookups
+    // (_requireSession, chat, delete, syncModelRoute) keep working; tracked
+    // in axEngineSessionIds so health-check/reconcile/unload use the sidecar.
+    const session: SessionInfo = {
+      pid: 0,
+      port,
+      model_id: modelId,
+      model_path: modelPath,
+      is_embedding: isEmbedding,
+      api_key: status.apiKey ?? '',
+    }
+    this.axServingSessions.set(modelId, session)
+    this.axEngineSessionIds.add(modelId)
+
+    await this._syncLocalProviderRegistration({
+      port,
+      apiKey: session.api_key,
+      models: [modelId],
+    })
+    await this._syncMlxProviderRegistration({
+      port,
+      apiKey: session.api_key,
+      models: [modelId],
+    })
+
+    events.emit(ModelEvent.OnModelReady, {
+      modelId,
+      port: session.port,
+      api_key: session.api_key,
+      provider: this.providerId,
+    })
+    return session
+  }
+
+  /** Drop sidecar sessions the ax-engine registry no longer reports as loaded. */
+  private async _reconcileAxEngineSessions(): Promise<string[]> {
+    if (this.axEngineSessionIds.size === 0) return []
+
+    try {
+      const status = await invoke<{
+        phase: string
+        models?: string[]
+      }>('ax_engine_status')
+      if (status.phase === 'ready' && Array.isArray(status.models)) {
+        const loaded = status.models
+        for (const modelId of Array.from(this.axEngineSessionIds)) {
+          if (
+            !loaded.includes(modelId) &&
+            !loaded.includes(toAxServingModelId(modelId))
+          ) {
+            this.axEngineSessionIds.delete(modelId)
+            this.axServingSessions.delete(modelId)
+          }
+        }
+      }
+    } catch (error) {
+      console.debug('[llamacpp] Failed to reconcile ax-engine sessions:', error)
+    }
+    return Array.from(this.axEngineSessionIds)
   }
 
   // ─── ax-serving load path ──────────────────────────────────────────────────
@@ -1921,13 +2074,14 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   private async _syncMlxProviderRegistration(preferred: {
     port: number
     models: string[]
+    apiKey?: string
   }) {
     try {
       await invoke('register_provider_config', {
         request: {
           provider: 'ax-engine',
           base_url: `http://127.0.0.1:${preferred.port}/v1`,
-          api_key: '',
+          api_key: preferred.apiKey ?? '',
           custom_headers: [],
           models: preferred.models,
         },
@@ -2004,9 +2158,17 @@ export default class AxStudioLlamacppExtension extends AIEngine {
   }
 
   private async _reconcileAxServingSessions(): Promise<string[]> {
+    // Sidecar-backed sessions (Electron) are reconciled against the ax-engine
+    // registry, never against the ax-serving process state below.
+    const sidecarModels = await this._reconcileAxEngineSessions()
+
     if (this.axServingPid <= 0 || this.axServingPort <= 0) {
-      this.axServingSessions.clear()
-      return []
+      for (const modelId of Array.from(this.axServingSessions.keys())) {
+        if (!this.axEngineSessionIds.has(modelId)) {
+          this.axServingSessions.delete(modelId)
+        }
+      }
+      return sidecarModels
     }
 
     try {
@@ -2025,6 +2187,7 @@ export default class AxStudioLlamacppExtension extends AIEngine {
       )
       const loadedSet = new Set(loaded)
       for (const modelId of Array.from(this.axServingSessions.keys())) {
+        if (this.axEngineSessionIds.has(modelId)) continue
         if (!loadedSet.has(modelId) && !loadedSet.has(toAxServingModelId(modelId))) {
           this.axServingSessions.delete(modelId)
         }
@@ -2431,6 +2594,23 @@ export default class AxStudioLlamacppExtension extends AIEngine {
           modelId: sessionId,
           provider: this.providerId,
         })
+        if (this.axEngineSessionIds.has(sessionId)) {
+          // ax-engine sidecar (Electron): unload via the registry — the main
+          // process translates this to `POST /v1/model/unload`, no respawn.
+          try {
+            await invoke('ax_engine_unload_model', { modelId: sessionId })
+          } catch (e) {
+            console.warn('[llamacpp] ax-engine sidecar unload error:', e)
+          }
+          this.axEngineSessionIds.delete(sessionId)
+          this.axServingSessions.delete(sessionId)
+          await this._syncLocalProviderRegistration()
+          events.emit(ModelEvent.OnModelStopped, {
+            modelId: sessionId,
+            provider: this.providerId,
+          })
+          return { success: true }
+        }
         // Unload via ax-serving HTTP API
         try {
           const encodedId = encodeURIComponent(toAxServingModelId(sessionId))
@@ -2640,6 +2820,31 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     pid: number,
     modelId: string
   ): Promise<void> {
+    if (this.axEngineSessionIds.has(modelId)) {
+      // ax-engine sidecar (Electron): no /health endpoint — probe the
+      // authenticated OpenAI models listing instead.
+      try {
+        const res = await fetch(`http://localhost:${port}/v1/models`, {
+          headers: {
+            Authorization: `Bearer ${this.axServingSessions.get(modelId)?.api_key ?? ''}`,
+          },
+          signal: AbortSignal.timeout(AX_SERVING_HEALTH_CHECK_TIMEOUT_MS),
+        })
+        if (!res.ok) {
+          throw new Error(`ax-engine sidecar health check failed (${res.status})`)
+        }
+      } catch (e: unknown) {
+        console.error('[llamacpp] ax-engine sidecar health check failed:', e)
+        this.axEngineSessionIds.delete(modelId)
+        this.axServingSessions.delete(modelId)
+        await this._syncLocalProviderRegistration()
+        throw new Error(
+          'ax-engine sidecar is not responding. Please reload the model.'
+        )
+      }
+      return
+    }
+
     const isAxServing = this.axServingSessions.has(modelId)
 
     if (isAxServing) {
@@ -3059,8 +3264,20 @@ export default class AxStudioLlamacppExtension extends AIEngine {
     try {
       const cfg = await this._readModelConfig(modelId)
       if (!cfg) return false
+      // Tool templates live in GGUF metadata; absolute non-GGUF paths (e.g.
+      // AX-native HF cache snapshot dirs) have nothing to probe, and joining
+      // them onto the app-data folder would only produce a doomed
+      // canonicalize round-trip.
+      if (
+        this._isAbsolutePath(cfg.model_path) &&
+        !cfg.model_path.toLowerCase().endsWith('.gguf')
+      ) {
+        return false
+      }
       const appData = await getAppDataFolderPath()
-      const modelPath = await joinPath([appData, cfg.model_path])
+      const modelPath = this._isAbsolutePath(cfg.model_path)
+        ? cfg.model_path
+        : await joinPath([appData, cfg.model_path])
       if (!(await this._isPathWithinModelsDir(modelPath))) return false
       const meta: GgufMetadata = await readGgufMetadata(modelPath)
       const template = meta.metadata?.['tokenizer.chat_template'] ?? ''

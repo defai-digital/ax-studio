@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   convertFileSrc: vi.fn(),
 }))
 
-vi.mock('@tauri-apps/api/core', () => ({
+vi.mock('@/lib/tauri-shim/api-core', () => ({
   invoke: mocks.invoke,
   convertFileSrc: mocks.convertFileSrc,
 }))

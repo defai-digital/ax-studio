@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+      Minimal entitlements for the Electron shell under hardened runtime.
+
+      Unlike src-tauri/Entitlements.plist, the Tauri-era keys are NOT mirrored:
+      no bundled Bun runtime (allow-jit for Bun) and no Homebrew MLX dylibs
+      loaded in-process (disable-library-validation) — MLX runs in the
+      ax-engine sidecar, a separate process.
+
+      The two keys below are Chromium/V8 requirements, not Bun/MLX leftovers:
+      any hardened-runtime Electron app crashes in the renderer without them
+      (V8 JIT + WebAssembly). See electronjs.org/docs/latest/tutorial/code-signing.
+    -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+</dict>
+</plist>

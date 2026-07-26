@@ -38,46 +38,4 @@ describe('toolchain version pins', () => {
       'every CI node-version must target Node 24',
     ).toEqual([])
   })
-
-  it('pins Rust MSRV to 1.88.0 across src-tauri manifests', () => {
-    const cargoTomls = [
-      'src-tauri/Cargo.toml',
-      'src-tauri/plugins/tauri-plugin-hardware/Cargo.toml',
-      'src-tauri/plugins/tauri-plugin-llamacpp/Cargo.toml',
-    ]
-
-    for (const relativePath of cargoTomls) {
-      const content = read(relativePath)
-      const match = content.match(/^rust-version\s*=\s*"([^"]+)"/m)
-      expect(match, `${relativePath} must declare rust-version`).not.toBeNull()
-      expect(match[1], `${relativePath} rust-version`).toBe('1.88.0')
-    }
-  })
-
-  it('pins AX Engine crates to one validated revision', () => {
-    const cargoToml = read('src-tauri/Cargo.toml')
-    const revisions = [...cargoToml.matchAll(
-      /^ax-engine-(?:core|sdk)\s*=\s*\{[^\n]*\brev\s*=\s*"([0-9a-f]{40})"/gm,
-    )].map((match) => match[1])
-
-    expect(revisions, 'both macOS AX Engine crates must be pinned').toHaveLength(2)
-    expect(
-      new Set(revisions).size,
-      'ax-engine-core and ax-engine-sdk must use the same source revision',
-    ).toBe(1)
-  })
-
-  it('forces Rollup plugin builds to exit on the Node 24 baseline', () => {
-    const pluginPackages = [
-      'src-tauri/plugins/tauri-plugin-hardware/package.json',
-      'src-tauri/plugins/tauri-plugin-llamacpp/package.json',
-    ]
-
-    for (const relativePath of pluginPackages) {
-      const pkg = JSON.parse(read(relativePath))
-      expect(pkg.scripts?.build, `${relativePath} build script`).toContain(
-        '--forceExit'
-      )
-    }
-  })
 })

@@ -11,7 +11,7 @@ import type { UIMessageChunk } from 'ai'
 
 import { useAppState } from '@/hooks/settings/useAppState'
 import { extractErrorMessage } from '@/lib/utils/error'
-import { isDiffusionGemmaModelId } from '@/lib/mlx-ipc-fetch'
+import { isDiffusionGemmaModelId } from '@/lib/ax-engine-metadata'
 
 import type { TokenUsageCallback } from './transport-types'
 import { stripUnavailableToolParts } from './transport-types'

@@ -1,10 +1,8 @@
 import {
   Check,
   Download,
-  Folder,
   FolderInput,
   ImagePlus,
-  MessageCircle,
   MoreHorizontal,
   Pencil,
   Pin,
@@ -12,12 +10,9 @@ import {
   Plus,
   Tag,
   Trash2,
-  X,
 } from 'lucide-react'
 import { CHAT_EXPORT_OPTIONS, exportThread } from '@/lib/export/thread-export'
 import { useThreads } from '@/hooks/threads/useThreads'
-import { useMessages } from '@/hooks/chat/useMessages'
-import { useThreadManagement } from '@/hooks/threads/useThreadManagement'
 import { useChatOrganizationStore } from '@/hooks/threads/useChatOrganization'
 import { NamePromptDialog } from '@/containers/dialogs/chat-organization/NamePromptDialog'
 import { memo, useCallback, useMemo, useState } from 'react'
@@ -64,22 +59,6 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-
-function formatRelativeTime(
-  timestamp: number,
-  t: (key: string, opts?: Record<string, unknown>) => string
-): string {
-  const now = Date.now() / 1000
-  const diff = now - timestamp
-  if (diff < 60) return t('common:time.justNow')
-  if (diff < 3600)
-    return t('common:time.minutesAgo', { count: Math.floor(diff / 60) })
-  if (diff < 86400)
-    return t('common:time.hoursAgo', { count: Math.floor(diff / 3600) })
-  if (diff < 604800)
-    return t('common:time.daysAgo', { count: Math.floor(diff / 86400) })
-  return new Date(timestamp * 1000).toLocaleDateString()
-}
 
 function normalizeLogoImageUrl(url: string): string | undefined {
   const trimmed = url.trim()
@@ -146,21 +125,17 @@ const ThreadItem = memo(
   ({
     thread,
     isMobile,
-    currentProjectId,
     onTogglePin,
     isPinned,
   }: {
     thread: Thread
     isMobile: boolean
-    currentProjectId?: string
     onTogglePin?: (threadId: string) => void
     isPinned?: boolean
   }) => {
     const deleteThread = useThreads((state) => state.deleteThread)
     const renameThread = useThreads((state) => state.renameThread)
     const updateThread = useThreads((state) => state.updateThread)
-    const getFolderById = useThreadManagement().getFolderById
-    const { folders } = useThreadManagement()
     const {
       folders: chatFolders,
       tags: chatTags,
@@ -178,22 +153,6 @@ const ThreadItem = memo(
     const [newTagDialogOpen, setNewTagDialogOpen] = useState(false)
     const threadTitle = thread.title || t('common:newThread')
 
-    // Read messages from store only if already loaded (no fetching in sidebar)
-    const messages = useMessages((state) => state.messages[thread.id])
-
-    const lastUserMessageText = useMemo(() => {
-      if (!messages || messages.length === 0) return undefined
-      for (let i = messages.length - 1; i >= 0; i--) {
-        if (messages[i].role === 'user') {
-          const textContent = messages[i].content?.find(
-            (c) => c.type === 'text'
-          )
-          return textContent?.text?.value
-        }
-      }
-      return undefined
-    }, [messages])
-
     const plainTitleForRename = useMemo(() => {
       return (thread.title || '').replace(/<span[^>]*>|<\/span>/g, '')
     }, [thread.title])
@@ -210,44 +169,7 @@ const ThreadItem = memo(
       return normalizeLogoImageUrl(chatLogo)
     }, [chatLogo])
 
-    const availableProjects = useMemo(() => {
-      return folders
-        .filter((f) => {
-          if (f.id === currentProjectId) return false
-          if (f.id === thread.metadata?.project?.id) return false
-          return true
-        })
-        .sort((a, b) => b.updated_at - a.updated_at)
-    }, [folders, currentProjectId, thread.metadata?.project?.id])
-
-    const assignThreadToProject = useCallback(
-      (threadId: string, projectId: string) => {
-        const project = getFolderById(projectId)
-        if (project && updateThread) {
-          const projectMetadata = {
-            id: project.id,
-            name: project.name,
-            updated_at: project.updated_at,
-            logo: project.logo,
-            projectPrompt: project.projectPrompt ?? null,
-          }
-
-          updateThread(threadId, {
-            metadata: {
-              ...thread.metadata,
-              project: projectMetadata,
-            },
-          })
-
-          toast.success(`Thread assigned to "${project.name}" successfully`)
-        }
-      },
-      [getFolderById, updateThread, thread.metadata]
-    )
-
     // Chat folders/tags (plain organization; exclusive folder membership).
-    // Folders only apply to non-project chats — project chats stay under
-    // their project page, so the "Move to folder" menu is hidden for them.
     const currentChatFolderId = thread.metadata?.folderId
     const threadTagIds = useMemo(
       () => thread.metadata?.tagIds ?? [],
@@ -370,59 +292,19 @@ const ThreadItem = memo(
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <SidebarMenuItem>
-            {currentProjectId ? (
-              <Link
-                to="/threads/$threadId"
-                params={{ threadId: thread.id }}
-                className="flex items-start gap-3 p-4 rounded-xl border border-border/50 hover:border-border hover:bg-muted/20 transition-all block"
-              >
-                <MessageCircle className="size-4 text-muted-foreground mt-0.5 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      {currentChatLogo && (
-                        <ChatLogoImage
-                          src={currentChatLogo}
-                          alt={threadTitle}
-                          className="shrink-0"
-                        />
-                      )}
-                      <span
-                        className="truncate"
-                        style={{ fontSize: '14px', fontWeight: 500 }}
-                      >
-                        {threadTitle}
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-muted-foreground shrink-0">
-                      {formatRelativeTime(thread.updated, t)}
-                    </span>
-                  </div>
-                  {lastUserMessageText && (
-                    <p className="text-[12px] text-muted-foreground mt-0.5 truncate pr-8">
-                      {lastUserMessageText}
-                    </p>
-                  )}
-                </div>
+            <SidebarMenuButton asChild>
+              <Link to="/threads/$threadId" params={{ threadId: thread.id }}>
+                {currentChatLogo && (
+                  <ChatLogoImage src={currentChatLogo} alt={threadTitle} />
+                )}
+                <span>{threadTitle}</span>
               </Link>
-            ) : (
-              <SidebarMenuButton asChild>
-                <Link to="/threads/$threadId" params={{ threadId: thread.id }}>
-                  {currentChatLogo && (
-                    <ChatLogoImage src={currentChatLogo} alt={threadTitle} />
-                  )}
-                  <span>{threadTitle}</span>
-                </Link>
-              </SidebarMenuButton>
-            )}
+            </SidebarMenuButton>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuAction
                   showOnHover
-                  className={cn(
-                    'hover:bg-sidebar-foreground/8',
-                    currentProjectId && 'mt-3.5 mr-2'
-                  )}
+                  className="hover:bg-sidebar-foreground/8"
                 >
                   <MoreHorizontal />
                   <span className="sr-only">More</span>
@@ -455,78 +337,46 @@ const ThreadItem = memo(
                 </DropdownMenuItem>
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger className="gap-2">
-                    <Folder className="size-4" />
-                    <span>{t('common:projects.addToProject')}</span>
+                    <FolderInput className="size-4" />
+                    <span>{t('common:chatOrganization.moveToFolder')}</span>
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent className="max-h-60 min-w-44 overflow-y-auto">
-                    {availableProjects.length === 0 ? (
-                      <DropdownMenuItem disabled>
-                        <span className="text-muted-foreground">
-                          {t('common:projects.noProjectsAvailable')}
-                        </span>
-                      </DropdownMenuItem>
-                    ) : (
-                      availableProjects.map((folder) => (
-                        <DropdownMenuItem
-                          key={folder.id}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            assignThreadToProject(thread.id, folder.id)
-                          }}
-                        >
-                          <Folder className="size-4" />
-                          <span className="truncate max-w-[200px]">
-                            {folder.name}
-                          </span>
-                        </DropdownMenuItem>
-                      ))
-                    )}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-                {!thread.metadata?.project && (
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger className="gap-2">
-                      <FolderInput className="size-4" />
-                      <span>{t('common:chatOrganization.moveToFolder')}</span>
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="max-h-60 min-w-44 overflow-y-auto">
+                    <DropdownMenuItem
+                      onSelect={() => handleAssignFolder(null)}
+                    >
+                      <Check
+                        className={cn(
+                          'size-4',
+                          currentChatFolderId && 'invisible'
+                        )}
+                      />
+                      <span>{t('common:chatOrganization.noFolder')}</span>
+                    </DropdownMenuItem>
+                    {sortedChatFolders.map((folder) => (
                       <DropdownMenuItem
-                        onSelect={() => handleAssignFolder(null)}
+                        key={folder.id}
+                        onSelect={() => handleAssignFolder(folder.id)}
                       >
                         <Check
                           className={cn(
                             'size-4',
-                            currentChatFolderId && 'invisible'
+                            currentChatFolderId !== folder.id && 'invisible'
                           )}
                         />
-                        <span>{t('common:chatOrganization.noFolder')}</span>
+                        <span className="truncate max-w-[200px]">
+                          {folder.name}
+                        </span>
                       </DropdownMenuItem>
-                      {sortedChatFolders.map((folder) => (
-                        <DropdownMenuItem
-                          key={folder.id}
-                          onSelect={() => handleAssignFolder(folder.id)}
-                        >
-                          <Check
-                            className={cn(
-                              'size-4',
-                              currentChatFolderId !== folder.id && 'invisible'
-                            )}
-                          />
-                          <span className="truncate max-w-[200px]">
-                            {folder.name}
-                          </span>
-                        </DropdownMenuItem>
-                      ))}
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onSelect={() => setNewFolderDialogOpen(true)}
-                      >
-                        <Plus className="size-4" />
-                        <span>{t('common:chatOrganization.newFolder')}…</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                )}
+                    ))}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onSelect={() => setNewFolderDialogOpen(true)}
+                    >
+                      <Plus className="size-4" />
+                      <span>{t('common:chatOrganization.newFolder')}…</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger className="gap-2">
                     <Tag className="size-4" />
@@ -577,29 +427,6 @@ const ThreadItem = memo(
                     ))}
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
-                {thread.metadata?.project && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        const projectName = thread.metadata?.project?.name
-                        updateThread(thread.id, {
-                          metadata: {
-                            ...thread.metadata,
-                            project: undefined,
-                          },
-                        })
-                        toast.success(
-                          `Thread removed from "${projectName}" successfully`
-                        )
-                      }}
-                    >
-                      <X className="size-4" />
-                      <span>Remove from project</span>
-                    </DropdownMenuItem>
-                  </>
-                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   variant="destructive"
@@ -706,8 +533,7 @@ const ThreadItem = memo(
               <PinActionContent isPinned={isPinned} iconClassName="mr-2" />
             </ContextMenuItem>
           )}
-          {!thread.metadata?.project && (
-            <ContextMenuSub>
+          <ContextMenuSub>
               <ContextMenuSubTrigger className="gap-2">
                 <FolderInput className="size-4 mr-2" />
                 <span>{t('common:chatOrganization.moveToFolder')}</span>
@@ -744,8 +570,7 @@ const ThreadItem = memo(
                   <span>{t('common:chatOrganization.newFolder')}…</span>
                 </ContextMenuItem>
               </ContextMenuSubContent>
-            </ContextMenuSub>
-          )}
+          </ContextMenuSub>
           <ContextMenuSub>
             <ContextMenuSubTrigger className="gap-2">
               <Tag className="size-4 mr-2" />
@@ -794,14 +619,12 @@ const ThreadItem = memo(
 
 type ThreadListProps = {
   threads: Thread[]
-  currentProjectId?: string
   onTogglePin?: (threadId: string) => void
   pinnedSet?: Set<string>
 }
 
 function ThreadList({
   threads,
-  currentProjectId,
   onTogglePin,
   pinnedSet,
 }: ThreadListProps) {
@@ -820,7 +643,6 @@ function ThreadList({
           key={thread.id}
           thread={thread}
           isMobile={isMobile}
-          currentProjectId={currentProjectId}
           onTogglePin={onTogglePin}
           isPinned={pinnedSet?.has(thread.id)}
         />

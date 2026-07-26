@@ -8,8 +8,21 @@
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "skipLibCheck": true,
-    "rootDir": "./src"
+    "rootDir": "./src",
+    "paths": {
+      "@tauri-apps/api/core": [
+        "../../web-app/src/lib/tauri-shim/api-core.ts"
+      ],
+      "@tauri-apps/api/event": [
+        "../../web-app/src/lib/tauri-shim/api-event.ts"
+      ]
+    }
   },
-  "include": ["./src"],
-  "exclude": ["**/*.test.ts", "vite.config.ts"]
+  "include": [
+    "./src"
+  ],
+  "exclude": [
+    "**/*.test.ts",
+    "vite.config.ts"
+  ]
 }

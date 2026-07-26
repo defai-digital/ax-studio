@@ -2,7 +2,7 @@
  * Tauri Events Service - Desktop implementation
  */
 
-import { emit, listen } from '@tauri-apps/api/event'
+import { emit, listen } from '@/lib/tauri-shim/api-event'
 import type { EventOptions, UnlistenFn, EventsService } from './types'
 import { withTauriFallback } from '../tauri-guard'
 

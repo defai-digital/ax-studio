@@ -9,11 +9,11 @@ const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
 }))
 
-vi.mock('@tauri-apps/plugin-http', () => ({
+vi.mock('@/lib/tauri-shim/plugin-http', () => ({
   fetch: mocks.fetchTauri,
 }))
 
-vi.mock('@tauri-apps/api/core', () => ({
+vi.mock('@/lib/tauri-shim/api-core', () => ({
   invoke: mocks.invoke,
 }))
 

@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import viteConfig from '../../web-app/vite.config.ts'
 
 const ENV_KEYS = [
-  'IS_TAURI',
   'IS_DEV',
   'AUTO_UPDATER_DISABLED',
   'UPDATE_CHECK_INTERVAL_MS',
@@ -41,18 +40,19 @@ describe('web-app vite config defines', () => {
   })
 
   it('serializes boolean env defines as boolean literals', async () => {
-    process.env.IS_TAURI = 'false'
     process.env.IS_DEV = 'true'
     process.env.AUTO_UPDATER_DISABLED = 'false'
 
     const config = await resolveConfig()
 
-    expect(config.define?.IS_TAURI).toBe('false')
     expect(config.define?.IS_DEV).toBe('true')
     expect(config.define?.AUTO_UPDATER_DISABLED).toBe('false')
+    // Electron is the only runtime: IS_ELECTRON is always on, IS_TAURI is gone.
+    expect(config.define?.IS_ELECTRON).toBe('true')
+    expect(config.define?.IS_TAURI).toBeUndefined()
   })
 
-  it('uses the fixed AX Studio Vite dev port (kept in sync with tauri.conf)', async () => {
+  it('uses the fixed AX Studio Vite dev port (kept in sync with Makefile DEV_PORT)', async () => {
     const config = await resolveConfig()
 
     expect(config.server?.port).toBe(31420)

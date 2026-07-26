@@ -2,7 +2,7 @@
  * Tauri Core Service - Desktop implementation
  */
 
-import { invoke, convertFileSrc } from '@tauri-apps/api/core'
+import { invoke, convertFileSrc } from '@/lib/tauri-shim/api-core'
 import type { ExtensionManifest } from '@/lib/extension'
 import type { InvokeArgs, CoreService } from './types'
 import { withTauriFallback, withTauriFallbackSync } from '../tauri-guard'

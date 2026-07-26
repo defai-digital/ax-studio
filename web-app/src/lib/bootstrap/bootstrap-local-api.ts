@@ -3,6 +3,7 @@
  * Pure async function; no React, no Zustand imports.
  */
 import type { ServiceHub } from '@/services/index'
+import { isElectronSmokeMode } from '@/lib/platform/utils'
 import { type BootstrapResult, ok, fail } from './bootstrap-result'
 
 export type LocalApiServerConfig = {
@@ -127,7 +128,9 @@ export async function bootstrapLocalApi(
     setApiKey,
   } = input
 
-  if (!enabled) return ok()
+  // Electron smoke runs the proxy checks itself; the auto-start (default
+  // port 31419) would race `start_server` and squat the ax-engine probe range.
+  if (!enabled || isElectronSmokeMode()) return ok()
 
   if (bootstrapLocalApiInFlight) {
     setServerStatus('pending')

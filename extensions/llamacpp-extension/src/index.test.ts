@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '../../../web-app/src/lib/tauri-shim/api-core'
 
 const mocks = vi.hoisted(() => {
   const storage = new Map<string, string>()
@@ -42,7 +42,7 @@ function ensureLocalStorage() {
   })
 }
 
-vi.mock('@tauri-apps/api/core', () => ({
+vi.mock('../../../web-app/src/lib/tauri-shim/api-core', () => ({
   invoke: vi.fn(),
 }))
 

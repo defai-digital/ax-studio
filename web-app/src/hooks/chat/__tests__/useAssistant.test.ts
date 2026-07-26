@@ -2,23 +2,13 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import { useAssistant, defaultAssistant } from '../useAssistant'
 
-const mockCreateAssistant = vi.fn()
-const mockDeleteAssistant = vi.fn()
-
-vi.mock('@/hooks/useServiceHub', () => ({
-  getServiceHub: () => ({
-    assistants: () => ({
-      createAssistant: mockCreateAssistant,
-      deleteAssistant: mockDeleteAssistant,
-    }),
-  }),
-}))
+// The assistants extension service is gone: addAssistant / updateAssistant /
+// deleteAssistant are purely in-memory store mutations (no persistence, no
+// optimistic rollback).
 
 describe('useAssistant', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockCreateAssistant.mockResolvedValue(undefined)
-    mockDeleteAssistant.mockResolvedValue(undefined)
     localStorage.clear()
     // Reset Zustand store to default state
     act(() => {
@@ -101,7 +91,7 @@ describe('useAssistant', () => {
     expect(result.current.assistants[0].id).toBe('ax-studio')
   })
 
-  it('rolls back assistant deletion when persistence fails', async () => {
+  it('deleting the current assistant falls back to the default assistant', () => {
     const { result } = renderHook(() => useAssistant())
     const assistant2 = {
       id: 'assistant-2',
@@ -118,22 +108,14 @@ describe('useAssistant', () => {
       result.current.setCurrentAssistant(assistant2)
     })
 
-    const consoleErrorSpy = vi
-      .spyOn(console, 'error')
-      .mockImplementation(() => {})
-    mockDeleteAssistant.mockRejectedValueOnce(new Error('disk full'))
-
-    await act(async () => {
+    act(() => {
       result.current.deleteAssistant('assistant-2')
-      await Promise.resolve()
     })
 
-    await vi.waitFor(() => {
-      expect(result.current.assistants).toContainEqual(assistant2)
-      expect(result.current.currentAssistant).toEqual(assistant2)
-    })
-
-    consoleErrorSpy.mockRestore()
+    // In-memory only: the deletion sticks (no persistence rollback), and the
+    // current assistant falls back to the built-in default.
+    expect(result.current.assistants).not.toContainEqual(assistant2)
+    expect(result.current.currentAssistant).toEqual(defaultAssistant)
   })
 
   it('should set current assistant', () => {

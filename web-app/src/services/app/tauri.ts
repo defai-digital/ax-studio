@@ -2,7 +2,7 @@
  * Tauri App Service - Desktop implementation
  */
 
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '@/lib/tauri-shim/api-core'
 import type { AppConfiguration } from '@ax-studio/core'
 import type { LogEntry, AppService } from './types'
 import { parseLogLine as parseStructuredLogLine } from './log-parser'

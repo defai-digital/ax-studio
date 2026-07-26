@@ -14,7 +14,6 @@ import {
 } from '@/constants/chat'
 import { defaultModel } from '@/lib/models'
 import { toast } from 'sonner'
-import { useServiceHub } from '@/hooks/useServiceHub'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { useTemporaryChat } from '@/hooks/chat/useTemporaryChat'
@@ -32,9 +31,6 @@ type Input = {
   projectId?: string
   selectedModel?: { id: string }
   attachmentsKey?: string
-  assistants: Assistant[]
-  selectedAssistant: Assistant | undefined
-  setSelectedAssistant: (a: Assistant | undefined) => void
   setMessage: (msg: string) => void
   setPrompt: (value: string) => void
 }
@@ -45,16 +41,11 @@ type Result = {
 
 export function useChatSendHandler({
   onSubmit,
-  projectId,
   selectedModel: resolvedSelectedModel,
   attachmentsKey,
-  assistants,
-  selectedAssistant,
-  setSelectedAssistant,
   setMessage,
   setPrompt,
 }: Input): Result {
-  const serviceHub = useServiceHub()
   const selectedModelFromStore = useModelProvider((s) => s.selectedModel)
   const selectedProvider = useModelProvider((s) => s.selectedProvider)
   const createThread = useThreads((s) => s.createThread)
@@ -121,7 +112,7 @@ export function useChatSendHandler({
                 provider: selectedProvider,
               },
               undefined,
-              selectedAssistant,
+              undefined,
               undefined,
               /* isTemporary */ true
             )
@@ -148,49 +139,12 @@ export function useChatSendHandler({
             params: { threadId: TEMPORARY_CHAT_ID },
           })
         } else {
-          let projectMetadata:
-            | {
-                id: string
-                name: string
-                updated_at: number
-                logo?: string
-                projectPrompt?: string | null
-              }
-            | undefined
-          let projectAssistantId: string | undefined
-
-          if (projectId) {
-            try {
-              const project = await serviceHub
-                .projects()
-                .getProjectById(projectId)
-              if (project) {
-                projectMetadata = {
-                  id: project.id,
-                  name: project.name,
-                  updated_at: project.updated_at,
-                  logo: project.logo,
-                  projectPrompt: project.projectPrompt ?? null,
-                }
-                projectAssistantId = project.assistantId
-              }
-            } catch (e) {
-              console.warn('Failed to fetch project metadata:', e)
-            }
-          }
-
-          const assistant = projectAssistantId
-            ? assistants.find((a) => a.id === projectAssistantId)
-            : selectedAssistant
-
           const newThread = await createThread(
             {
               id: selectedModelId,
               provider: selectedProvider,
             },
-            messageText,
-            assistant,
-            projectMetadata
+            messageText
           )
 
           useThreads.getState().updateThread(newThread.id, {
@@ -204,8 +158,6 @@ export function useChatSendHandler({
           useChatAttachments
             .getState()
             .transferAttachments(NEW_THREAD_ATTACHMENT_KEY, newThread.id)
-
-          setSelectedAssistant(undefined)
 
           const storedInitialMessage = safeStorageSetItem(
             sessionStorage,
@@ -241,20 +193,15 @@ export function useChatSendHandler({
       }
     },
     [
-      assistants,
       attachmentsKey,
       createThread,
       onSubmit,
-      projectId,
       router,
-      selectedAssistant,
       selectedModelFromStore,
       resolvedSelectedModel,
       selectedProvider,
-      serviceHub,
       setMessage,
       setPrompt,
-      setSelectedAssistant,
       temporaryChatEnabled,
     ]
   )

@@ -2,7 +2,7 @@
  * Tauri Dialog Service - Desktop implementation
  */
 
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '@/lib/tauri-shim/api-core'
 import type { DialogOpenOptions, DialogService } from './types'
 import { toError } from '@/lib/utils/error'
 

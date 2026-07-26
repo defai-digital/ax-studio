@@ -1,13 +1,9 @@
 import { PanelLeft } from 'lucide-react'
-import { memo, useCallback, type MouseEvent, type ReactNode } from 'react'
+import { memo, type ReactNode } from 'react'
 
 import { useLeftPanel } from '@/hooks/ui/useLeftPanel'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import {
-  startWindowDragFromMouseEvent,
-  toggleWindowMaximizeFromMouseEvent,
-} from '@/lib/window-drag'
 
 type HeaderPageProps = {
   children?: ReactNode
@@ -17,19 +13,6 @@ export const HeaderPage = memo(function HeaderPage({
   children,
 }: HeaderPageProps) {
   const { open, setLeftPanel } = useLeftPanel()
-  const handleWindowDrag = useCallback((event: MouseEvent<HTMLDivElement>) => {
-    if (IS_MACOS) return
-
-    startWindowDragFromMouseEvent(event, { logContext: 'HeaderPage' })
-  }, [])
-  const handleWindowDoubleClick = useCallback(
-    (event: MouseEvent<HTMLDivElement>) => {
-      if (IS_MACOS) return
-
-      toggleWindowMaximizeFromMouseEvent(event, { logContext: 'HeaderPage' })
-    },
-    []
-  )
 
   return (
     <div
@@ -38,8 +21,6 @@ export const HeaderPage = memo(function HeaderPage({
         IS_MACOS && !open ? 'pl-5' : 'pl-4',
         children === undefined && 'border-none'
       )}
-      onMouseDown={handleWindowDrag}
-      onDoubleClick={handleWindowDoubleClick}
     >
       <div className={cn('flex items-center w-full gap-2')}>
         {!open && (

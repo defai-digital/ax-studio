@@ -1,5 +1,3 @@
-import { getServiceHub } from '@/hooks/useServiceHub'
-import { Assistant as CoreAssistant } from '@ax-studio/core'
 import { create } from 'zustand'
 import { localStorageKey } from '@/constants/localStorage'
 import { safeStorageGetItem, safeStorageSetItem } from '@/lib/storage/storage'
@@ -89,29 +87,13 @@ const getInitialAssistantState = () => {
 
 export const useAssistant = create<AssistantState>((set, get) => ({
   ...getInitialAssistantState(),
+  // Single built-in default assistant (matrix §3) — the assistant extension
+  // and its persistence are gone, so mutations are in-memory only.
   addAssistant: (assistant) => {
     set((state) => ({ assistants: [...state.assistants, assistant] }))
-    getServiceHub()
-      .assistants()
-      .createAssistant(assistant as unknown as CoreAssistant)
-      .catch((error) => {
-        console.error('Failed to create assistant:', error)
-        // Remove only this optimistic entry. Replaying a whole snapshot would
-        // erase assistants added while the request was in flight.
-        set((state) => ({
-          assistants: state.assistants.filter(
-            (candidate) => candidate !== assistant
-          ),
-        }))
-      })
   },
   updateAssistant: (assistant) => {
-    const state = get()
-    const previousAssistant = state.assistants.find(
-      (candidate) => candidate.id === assistant.id
-    )
-    const previousCurrentAssistant = state.currentAssistant
-    set({
+    set((state) => ({
       assistants: state.assistants.map((a) =>
         a.id === assistant.id ? assistant : a
       ),
@@ -119,80 +101,23 @@ export const useAssistant = create<AssistantState>((set, get) => ({
         state.currentAssistant?.id === assistant.id
           ? assistant
           : state.currentAssistant,
-    })
-    getServiceHub()
-      .assistants()
-      .createAssistant(assistant as unknown as CoreAssistant)
-      .catch((error) => {
-        console.error('Failed to update assistant:', error)
-        set((current) => ({
-          assistants: previousAssistant
-            ? current.assistants.map((candidate) =>
-                candidate === assistant ? previousAssistant : candidate
-              )
-            : current.assistants.filter((candidate) => candidate !== assistant),
-          currentAssistant:
-            current.currentAssistant === assistant
-              ? previousCurrentAssistant
-              : current.currentAssistant,
-        }))
-      })
+    }))
   },
   deleteAssistant: (id) => {
     const state = get()
-    const assistantToDelete = state.assistants.find(
-      (assistant) => assistant.id === id
-    )
-    if (!assistantToDelete) return
-
-    // Check if we're deleting the current assistant
     const wasCurrentAssistant = state.currentAssistant?.id === id
-    const previousCurrentAssistant = state.currentAssistant
-    const deletedIndex = state.assistants.indexOf(assistantToDelete)
-    const nextCurrentAssistant = wasCurrentAssistant
-      ? defaultAssistant
-      : state.currentAssistant
 
     set({
       assistants: state.assistants.filter((assistant) => assistant.id !== id),
-      currentAssistant: nextCurrentAssistant,
+      currentAssistant: wasCurrentAssistant
+        ? defaultAssistant
+        : state.currentAssistant,
     })
 
     // If the deleted assistant was current, fallback to default and update localStorage
     if (wasCurrentAssistant) {
       setLastUsedAssistantId(defaultAssistant.id)
     }
-
-    getServiceHub()
-      .assistants()
-      .deleteAssistant(assistantToDelete as unknown as CoreAssistant)
-      .catch((error) => {
-        console.error('Failed to delete assistant:', error)
-        let restoredCurrent = false
-        set((current) => {
-          if (current.assistants.some((assistant) => assistant.id === id)) {
-            return current
-          }
-          const assistants = [...current.assistants]
-          assistants.splice(
-            Math.min(deletedIndex, assistants.length),
-            0,
-            assistantToDelete
-          )
-          const shouldRestoreCurrent =
-            wasCurrentAssistant && current.currentAssistant === defaultAssistant
-          restoredCurrent = shouldRestoreCurrent
-          return {
-            assistants,
-            currentAssistant: shouldRestoreCurrent
-              ? previousCurrentAssistant
-              : current.currentAssistant,
-          }
-        })
-        if (restoredCurrent && previousCurrentAssistant) {
-          setLastUsedAssistantId(previousCurrentAssistant.id)
-        }
-      })
   },
   setCurrentAssistant: (assistant, saveToStorage = true) => {
     if (assistant !== get().currentAssistant) {

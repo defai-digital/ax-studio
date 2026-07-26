@@ -6,8 +6,8 @@
  */
 
 import { getAppDataFolderPath, joinPath, fs, events } from '@ax-studio/core'
-import { invoke } from '@tauri-apps/api/core'
-import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
+import { invoke } from '../../../web-app/src/lib/tauri-shim/api-core'
+import { fetch as tauriFetch } from '../../../web-app/src/lib/tauri-shim/plugin-http'
 import {
   getLocalInstalledBackendsInternal,
   listSupportedBackendsFromRust,

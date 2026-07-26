@@ -1,24 +1,15 @@
-import type { ServiceHub } from '@/services'
-import type { MCPTool, MCPToolCallResult } from '@ax-studio/core'
 import { readStoredAxBiMcpToken } from './token-storage'
+import { getDirectAxBiClient, getElectronAxBiMcpUrl } from './direct-client'
 import {
   getFirstMcpText,
   getMcpToolFailureMessage,
   isRecord,
   parseJsonMcpResult,
+  type AxBiMcpResult,
 } from './mcp-result'
-import {
-  AX_BI_SERVER,
-  DEFAULT_AX_BI_MCP_URL,
-  normalizeAxBiMcpUrl,
-} from './endpoints'
 
 export { DEFAULT_AX_BI_MCP_URL } from './endpoints'
-export {
-  activateAxBiWithStoredToken,
-  connectAxBiMcpServer,
-  normalizeAxBiToken,
-} from './activation'
+export { normalizeAxBiToken } from './token-storage'
 
 export type AxBiDataset = {
   id?: string | number
@@ -33,64 +24,10 @@ export async function hasConfiguredAxBiMcpToken(): Promise<boolean> {
   return typeof token === 'string' && token.trim().length > 0
 }
 
-export async function getConfiguredAxBiMcpUrl(
-  serviceHub: ServiceHub
-): Promise<string> {
-  const config = await serviceHub
-    .mcp()
-    .getMCPConfig()
-    .catch(() => null)
-  const axBi = config?.mcpServers?.[AX_BI_SERVER]
-  return normalizeAxBiMcpUrl(axBi?.url ?? DEFAULT_AX_BI_MCP_URL)
-}
-
-function axBiToolNames(tools: MCPTool[]): Set<string> {
-  return new Set(
-    tools
-      .filter((tool) => tool.server === AX_BI_SERVER)
-      .map((tool) => tool.name)
-  )
-}
-
-export async function callAxBiMcpTool({
-  serviceHub,
-  toolName,
-  arguments: toolArguments,
-  retryOnTransportFailure = true,
-}: {
-  serviceHub: ServiceHub
-  toolName: string
-  arguments: Record<string, unknown>
-  retryOnTransportFailure?: boolean
-}): Promise<MCPToolCallResult> {
-  const toolNames = axBiToolNames(await serviceHub.mcp().getTools())
-  const retryOptions = retryOnTransportFailure
-    ? {}
-    : { retryOnTransportFailure: false }
-  if (toolNames.has(toolName)) {
-    return serviceHub.mcp().callTool({
-      serverName: AX_BI_SERVER,
-      toolName,
-      arguments: toolArguments,
-      ...retryOptions,
-    })
-  }
-
-  if (toolNames.has('call_tool')) {
-    return serviceHub.mcp().callTool({
-      serverName: AX_BI_SERVER,
-      toolName: 'call_tool',
-      arguments: {
-        name: toolName,
-        arguments: toolArguments,
-      },
-      ...retryOptions,
-    })
-  }
-
-  throw new Error(
-    `AX BI MCP is connected, but the ${toolName} tool is not available.`
-  )
+export function getConfiguredAxBiMcpUrl(): string {
+  // Zero-config — the MCP URL is hidden and defaults to the local AX BI
+  // stack (a dev/smoke localStorage override may point elsewhere).
+  return getElectronAxBiMcpUrl()
 }
 
 function collectDatasetRecords(
@@ -142,7 +79,7 @@ function normalizeDatasetRecord(
   }
 }
 
-function parseAxBiDatasetList(result: MCPToolCallResult): AxBiDataset[] {
+function parseAxBiDatasetList(result: AxBiMcpResult): AxBiDataset[] {
   const failure = getMcpToolFailureMessage(result)
   if (failure) throw new Error(failure)
 
@@ -167,24 +104,27 @@ function parseAxBiDatasetList(result: MCPToolCallResult): AxBiDataset[] {
     })
 }
 
+function listDatasetsArguments(search?: string): Record<string, unknown> {
+  return {
+    request: {
+      search: search?.trim() || undefined,
+      page: 1,
+      page_size: 50,
+      select_columns: ['id', 'table_name', 'schema', 'database_name', 'url'],
+    },
+  }
+}
+
 export async function listAxBiDatasets({
-  serviceHub,
   search,
 }: {
-  serviceHub: ServiceHub
   search?: string
-}): Promise<AxBiDataset[]> {
-  const result = await callAxBiMcpTool({
-    serviceHub,
-    toolName: 'list_datasets',
-    arguments: {
-      request: {
-        search: search?.trim() || undefined,
-        page: 1,
-        page_size: 50,
-        select_columns: ['id', 'table_name', 'schema', 'database_name', 'url'],
-      },
-    },
-  })
+} = {}): Promise<AxBiDataset[]> {
+  // Direct SDK path over plain fetch — no MCP layer involved.
+  const client = await getDirectAxBiClient()
+  const result = await client.ai.callTool(
+    'list_datasets',
+    listDatasetsArguments(search)
+  )
   return parseAxBiDatasetList(result)
 }

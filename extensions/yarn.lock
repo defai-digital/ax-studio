@@ -37,37 +37,37 @@ __metadata:
 
 "@ax-studio/core@file:../../core/package.tgz::locator=%40ax-studio%2Fassistant-extension%40workspace%3Aassistant-extension":
   version: 1.1.0
-  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=bcfbcf&locator=%40ax-studio%2Fassistant-extension%40workspace%3Aassistant-extension"
+  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=8d921b&locator=%40ax-studio%2Fassistant-extension%40workspace%3Aassistant-extension"
   peerDependencies:
     react: 19.0.1
-  checksum: 10c0/18e9d785bf10fa5a072e1af647deb346a18e235ee5ad6217c9242749fad2d840a81e5d7b6272f851b5cb453000e6724106435059f87d54af50686a3c2999a139
+  checksum: 10c0/1fe4a7684d7e64da24ddb15cb753ace5f705948ecc6abc8d7fc4d2fae643e5c8d6d56491fc98a03882153bf68916e55ffb183328241f4b1eb89555afe25799a1
   languageName: node
   linkType: hard
 
 "@ax-studio/core@file:../../core/package.tgz::locator=%40ax-studio%2Fconversational-extension%40workspace%3Aconversational-extension":
   version: 1.1.0
-  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=bcfbcf&locator=%40ax-studio%2Fconversational-extension%40workspace%3Aconversational-extension"
+  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=8d921b&locator=%40ax-studio%2Fconversational-extension%40workspace%3Aconversational-extension"
   peerDependencies:
     react: 19.0.1
-  checksum: 10c0/18e9d785bf10fa5a072e1af647deb346a18e235ee5ad6217c9242749fad2d840a81e5d7b6272f851b5cb453000e6724106435059f87d54af50686a3c2999a139
+  checksum: 10c0/1fe4a7684d7e64da24ddb15cb753ace5f705948ecc6abc8d7fc4d2fae643e5c8d6d56491fc98a03882153bf68916e55ffb183328241f4b1eb89555afe25799a1
   languageName: node
   linkType: hard
 
 "@ax-studio/core@file:../../core/package.tgz::locator=%40ax-studio%2Fdownload-extension%40workspace%3Adownload-extension":
   version: 1.1.0
-  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=bcfbcf&locator=%40ax-studio%2Fdownload-extension%40workspace%3Adownload-extension"
+  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=8d921b&locator=%40ax-studio%2Fdownload-extension%40workspace%3Adownload-extension"
   peerDependencies:
     react: 19.0.1
-  checksum: 10c0/18e9d785bf10fa5a072e1af647deb346a18e235ee5ad6217c9242749fad2d840a81e5d7b6272f851b5cb453000e6724106435059f87d54af50686a3c2999a139
+  checksum: 10c0/1fe4a7684d7e64da24ddb15cb753ace5f705948ecc6abc8d7fc4d2fae643e5c8d6d56491fc98a03882153bf68916e55ffb183328241f4b1eb89555afe25799a1
   languageName: node
   linkType: hard
 
 "@ax-studio/core@file:../../core/package.tgz::locator=%40ax-studio%2Fllamacpp-extension%40workspace%3Allamacpp-extension":
   version: 1.1.0
-  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=bcfbcf&locator=%40ax-studio%2Fllamacpp-extension%40workspace%3Allamacpp-extension"
+  resolution: "@ax-studio/core@file:../../core/package.tgz#../../core/package.tgz::hash=8d921b&locator=%40ax-studio%2Fllamacpp-extension%40workspace%3Allamacpp-extension"
   peerDependencies:
     react: 19.0.1
-  checksum: 10c0/18e9d785bf10fa5a072e1af647deb346a18e235ee5ad6217c9242749fad2d840a81e5d7b6272f851b5cb453000e6724106435059f87d54af50686a3c2999a139
+  checksum: 10c0/1fe4a7684d7e64da24ddb15cb753ace5f705948ecc6abc8d7fc4d2fae643e5c8d6d56491fc98a03882153bf68916e55ffb183328241f4b1eb89555afe25799a1
   languageName: node
   linkType: hard
 
@@ -76,7 +76,6 @@ __metadata:
   resolution: "@ax-studio/download-extension@workspace:download-extension"
   dependencies:
     "@ax-studio/core": ../../core/package.tgz
-    "@tauri-apps/api": "npm:2.8.0"
     react: "npm:19.0.1"
     rimraf: "npm:6.0.1"
     rolldown: "npm:1.0.0-beta.1"
@@ -92,10 +91,7 @@ __metadata:
   resolution: "@ax-studio/llamacpp-extension@workspace:llamacpp-extension"
   dependencies:
     "@ax-studio/core": ../../core/package.tgz
-    "@ax-studio/tauri-plugin-llamacpp-api": "link:../../src-tauri/plugins/tauri-plugin-llamacpp"
-    "@tauri-apps/api": "npm:2.8.0"
-    "@tauri-apps/plugin-http": "npm:2.5.0"
-    "@tauri-apps/plugin-log": "npm:^2.6.0"
+    "@ax-studio/tauri-plugin-llamacpp-api": "link:../llamacpp-api"
     react: "npm:19.0.1"
     rimraf: "npm:6.0.1"
     rolldown: "npm:1.0.0-beta.1"
@@ -106,10 +102,19 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@ax-studio/tauri-plugin-llamacpp-api@link:../../src-tauri/plugins/tauri-plugin-llamacpp::locator=%40ax-studio%2Fllamacpp-extension%40workspace%3Allamacpp-extension":
+"@ax-studio/tauri-plugin-llamacpp-api@link:../llamacpp-api::locator=%40ax-studio%2Fllamacpp-extension%40workspace%3Allamacpp-extension":
   version: 0.0.0-use.local
-  resolution: "@ax-studio/tauri-plugin-llamacpp-api@link:../../src-tauri/plugins/tauri-plugin-llamacpp::locator=%40ax-studio%2Fllamacpp-extension%40workspace%3Allamacpp-extension"
+  resolution: "@ax-studio/tauri-plugin-llamacpp-api@link:../llamacpp-api::locator=%40ax-studio%2Fllamacpp-extension%40workspace%3Allamacpp-extension"
   languageName: node
+  linkType: soft
+
+"@ax-studio/tauri-plugin-llamacpp-api@workspace:llamacpp-api":
+  version: 0.0.0-use.local
+  resolution: "@ax-studio/tauri-plugin-llamacpp-api@workspace:llamacpp-api"
+  dependencies:
+    typescript: "npm:5.9.2"
+    vitest: "npm:3.2.6"
+  languageName: unknown
   linkType: soft
 
 "@emnapi/core@npm:^1.3.1":
@@ -650,38 +655,6 @@ __metadata:
   version: 4.62.2
   resolution: "@rollup/rollup-win32-x64-msvc@npm:4.62.2"
   conditions: os=win32 & cpu=x64
-  languageName: node
-  linkType: hard
-
-"@tauri-apps/api@npm:2.8.0":
-  version: 2.8.0
-  resolution: "@tauri-apps/api@npm:2.8.0"
-  checksum: 10c0/fb111e4d7572372997b440ebe6879543fa8c4765151878e3fddfbfe809b18da29eed142ce83061d14a9ca6d896b3266dc8a4927c642d71cdc0b4277dc7e3aabf
-  languageName: node
-  linkType: hard
-
-"@tauri-apps/api@npm:^2.6.0, @tauri-apps/api@npm:^2.8.0":
-  version: 2.10.1
-  resolution: "@tauri-apps/api@npm:2.10.1"
-  checksum: 10c0/f3c0b2ba67a0b887440a7faa1e0589e847760ee30ec29b964f22573a46b817cb3af2199d6f5f7dfdda54d65b465ebaaa280454c610a5c53d808a0911fa15e45d
-  languageName: node
-  linkType: hard
-
-"@tauri-apps/plugin-http@npm:2.5.0":
-  version: 2.5.0
-  resolution: "@tauri-apps/plugin-http@npm:2.5.0"
-  dependencies:
-    "@tauri-apps/api": "npm:^2.6.0"
-  checksum: 10c0/eed47bb2adf012cde4409c4decae30e6b759f5828cb959cf43fc34c5fdfe68e6670f14f1134c8c4c941bc3fdb00e312772ebd72ec94e15c56ed1b7fbd47dd91c
-  languageName: node
-  linkType: hard
-
-"@tauri-apps/plugin-log@npm:^2.6.0":
-  version: 2.8.0
-  resolution: "@tauri-apps/plugin-log@npm:2.8.0"
-  dependencies:
-    "@tauri-apps/api": "npm:^2.8.0"
-  checksum: 10c0/04c21bae0174de8a394760e40986ae5f28e07830b9e7388dd9ddd4796c4b4eac7f80807a90498d5896a6113134efb1ddab1038be9c6ba2095c31b75f1b85dc7f
   languageName: node
   linkType: hard
 

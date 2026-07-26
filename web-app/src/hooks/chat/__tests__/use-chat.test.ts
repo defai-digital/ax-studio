@@ -20,7 +20,6 @@ const {
     setCostApprovalCallback: vi.fn(),
     setOnTokenUsage: vi.fn(),
     refreshTools: vi.fn(),
-    updateRagToolsAvailability: vi.fn(),
   }
   return {
     mockTransport: transport,
@@ -126,8 +125,8 @@ describe('useChat', () => {
 
     expect(result.current.messages).toEqual([])
     expect(result.current.status).toBe('ready')
-    expect(typeof result.current.updateRagToolsAvailability).toBe('function')
     expect(typeof result.current.updateSystemMessageDirect).toBe('function')
+    expect(typeof result.current.getLastRouterResult).toBe('function')
   })
 
   // ── Phase 2: Session management ──────────────────────────────────────────
@@ -204,24 +203,17 @@ describe('useChat', () => {
     expect(mockUseChatSDK).toHaveBeenCalled()
   })
 
-  // ── Phase 5: updateRagToolsAvailability ──────────────────────────────────
+  // ── Phase 5: Direct transport delegates ──────────────────────────────────
 
-  it('updateRagToolsAvailability delegates to transport', async () => {
-    const transport = { ...mockTransport }
+  it('getLastRouterResult reads the transport router result', () => {
+    const transport = { ...mockTransport, lastRouterResult: { route: 'chat' } }
     ;(createChatTransport as ReturnType<typeof vi.fn>).mockReturnValue(
       transport
     )
-    transport.updateRagToolsAvailability.mockResolvedValue(undefined)
 
     const { result } = renderHook(() => useChat({ sessionId: 'session-rag' }))
 
-    await result.current.updateRagToolsAvailability(true, true, true)
-
-    expect(transport.updateRagToolsAvailability).toHaveBeenCalledWith(
-      true,
-      true,
-      true
-    )
+    expect(result.current.getLastRouterResult()).toEqual({ route: 'chat' })
   })
 
   it('updateSystemMessageDirect delegates to transport', () => {

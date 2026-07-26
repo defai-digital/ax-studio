@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { TauriHardwareService } from '../hardware/tauri'
 import { HardwareData, SystemUsage } from '../hardware/types'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '@/lib/tauri-shim/api-core'
 
-// Mock @tauri-apps/api/core
-vi.mock('@tauri-apps/api/core', () => ({
+// Mock tauri/api/core
+vi.mock('@/lib/tauri-shim/api-core', () => ({
   invoke: vi.fn(),
 }))
 

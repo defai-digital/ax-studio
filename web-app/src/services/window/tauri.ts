@@ -2,7 +2,7 @@
  * Tauri Window Service - Desktop implementation
  */
 
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
+import { WebviewWindow } from '@/lib/tauri-shim/api-webview-window'
 import type { WindowConfig, WebviewWindowInstance, WindowService } from './types'
 import { themeStorageSchema } from '@/schemas/window.schema'
 import { safeStorageGetItem } from '@/lib/storage/storage'
@@ -182,7 +182,7 @@ export class TauriWindowService implements WindowService {
     let unlisten: (() => void) | null = null
     let closed = false
 
-    import('@tauri-apps/api/event')
+    import('@/lib/tauri-shim/api-event')
       .then(({ listen }) =>
         listen<string>('theme-changed', async (event) => {
           const theme = event.payload

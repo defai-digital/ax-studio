@@ -2,8 +2,8 @@
  * Tauri Theme Service - Desktop implementation
  */
 
-import { Theme } from '@tauri-apps/api/window'
-import { getAllWebviewWindows, type WebviewWindow } from '@tauri-apps/api/webviewWindow'
+import { Theme } from '@/lib/tauri-shim/api-window'
+import { getAllWebviewWindows, type WebviewWindow } from '@/lib/tauri-shim/api-webview-window'
 import type { ThemeMode, ThemeService } from './types'
 
 export class TauriThemeService implements ThemeService {

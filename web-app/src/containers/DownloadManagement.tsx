@@ -10,9 +10,8 @@ import {
   useDownloadStore,
 } from '@/hooks/models/useDownloadStore'
 import { useLeftPanel } from '@/hooks/ui/useLeftPanel'
-import { useAppUpdater } from '@/hooks/updater/useAppUpdater'
 import { useServiceHub } from '@/hooks/useServiceHub'
-import { DownloadEvent, DownloadState, events, AppEvent } from '@ax-studio/core'
+import { DownloadEvent, DownloadState, events } from '@ax-studio/core'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslation } from '@/i18n/react-i18next-compat'
@@ -78,96 +77,17 @@ export function DownloadManagement() {
   const [isPopoverOpen, setIsPopoverOpen] = useState(false)
   const serviceHub = useServiceHub()
   const { downloads, localDownloadingModels } = useDownloadStore()
-  const { updateState } = useAppUpdater()
-
-  const [appUpdateState, setAppUpdateState] = useState({
-    isDownloading: false,
-    downloadProgress: 0,
-    downloadedBytes: 0,
-    totalBytes: 0,
-  })
 
   const getDownloadId = useCallback(
     (state: DownloadState) => state.downloadId ?? state.modelId ?? '',
     []
   )
 
-  // Destructure the specific fields we use so the dep array is field-level
-  // rather than whole-object. The previous `[updateState]` dep fired on
-  // every backend update-state change, including fields this component
-  // doesn't care about (e.g. `isUpdateAvailable`).
-  const {
-    isDownloading: updateStateIsDownloading,
-    downloadProgress: updateStateDownloadProgress,
-    downloadedBytes: updateStateDownloadedBytes,
-    totalBytes: updateStateTotalBytes,
-  } = updateState
-  useEffect(() => {
-    setAppUpdateState({
-      isDownloading: updateStateIsDownloading,
-      downloadProgress: updateStateDownloadProgress,
-      downloadedBytes: updateStateDownloadedBytes,
-      totalBytes: updateStateTotalBytes,
-    })
-  }, [
-    updateStateIsDownloading,
-    updateStateDownloadProgress,
-    updateStateDownloadedBytes,
-    updateStateTotalBytes,
-  ])
-
-  const onAppUpdateDownloadUpdate = useCallback(
-    (data: {
-      progress?: number
-      downloadedBytes?: number
-      totalBytes?: number
-    }) => {
-      setAppUpdateState((prev) => ({
-        ...prev,
-        isDownloading: true,
-        downloadProgress: data.progress || 0,
-        downloadedBytes: data.downloadedBytes || 0,
-        totalBytes: data.totalBytes || 0,
-      }))
-    },
-    []
-  )
-
-  const onAppUpdateDownloadSuccess = useCallback(() => {
-    setAppUpdateState((prev) => ({
-      ...prev,
-      isDownloading: false,
-      downloadProgress: 1,
-    }))
-    toast.success(t('common:toast.appUpdateDownloaded.title'), {
-      description: t('common:toast.appUpdateDownloaded.description'),
-    })
-  }, [t])
-
-  const onAppUpdateDownloadError = useCallback(
-    (data?: { message?: string }) => {
-      setAppUpdateState((prev) => ({
-        ...prev,
-        isDownloading: false,
-      }))
-      toast.error(t('common:toast.appUpdateDownloadFailed.title'), {
-        description:
-          data?.message ||
-          t('common:toast.appUpdateDownloadFailed.description'),
-      })
-    },
-    [t]
-  )
-
   const downloadProcesses = useMemo(() => {
     return toDownloadProcesses(downloads, localDownloadingModels)
   }, [downloads, localDownloadingModels])
 
-  const downloadCount = useMemo(() => {
-    const modelDownloads = downloadProcesses.length
-    const appUpdateDownload = appUpdateState.isDownloading ? 1 : 0
-    return modelDownloads + appUpdateDownload
-  }, [downloadProcesses, appUpdateState.isDownloading])
+  const downloadCount = downloadProcesses.length
 
   const overallProgress = useMemo(() => {
     const modelTotal = downloadProcesses.reduce((acc, download) => {
@@ -177,24 +97,8 @@ export function DownloadManagement() {
       return acc + download.current
     }, 0)
 
-    // Include app update progress in overall calculation
-    const appUpdateTotal = appUpdateState.isDownloading
-      ? appUpdateState.totalBytes
-      : 0
-    const appUpdateCurrent = appUpdateState.isDownloading
-      ? appUpdateState.downloadedBytes
-      : 0
-
-    const total = modelTotal + appUpdateTotal
-    const current = modelCurrent + appUpdateCurrent
-
-    return total > 0 ? current / total : 0
-  }, [
-    downloadProcesses,
-    appUpdateState.isDownloading,
-    appUpdateState.totalBytes,
-    appUpdateState.downloadedBytes,
-  ])
+    return modelTotal > 0 ? modelCurrent / modelTotal : 0
+  }, [downloadProcesses])
 
   const onFileDownloadError = useCallback(
     (state: DownloadState) => {
@@ -352,9 +256,6 @@ export function DownloadManagement() {
     )
 
     // Register app update event listeners
-    events.on(AppEvent.onAppUpdateDownloadUpdate, onAppUpdateDownloadUpdate)
-    events.on(AppEvent.onAppUpdateDownloadSuccess, onAppUpdateDownloadSuccess)
-    events.on(AppEvent.onAppUpdateDownloadError, onAppUpdateDownloadError)
 
     return () => {
       events.off(DownloadEvent.onFileDownloadError, onFileDownloadError)
@@ -370,12 +271,6 @@ export function DownloadManagement() {
       )
 
       // Unregister app update event listeners
-      events.off(AppEvent.onAppUpdateDownloadUpdate, onAppUpdateDownloadUpdate)
-      events.off(
-        AppEvent.onAppUpdateDownloadSuccess,
-        onAppUpdateDownloadSuccess
-      )
-      events.off(AppEvent.onAppUpdateDownloadError, onAppUpdateDownloadError)
     }
   }, [
     onFileDownloadError,
@@ -383,9 +278,6 @@ export function DownloadManagement() {
     onModelValidationStarted,
     onModelValidationFailed,
     onFileDownloadAndVerificationSuccess,
-    onAppUpdateDownloadUpdate,
-    onAppUpdateDownloadSuccess,
-    onAppUpdateDownloadError,
   ])
 
   return (
@@ -432,14 +324,6 @@ export function DownloadManagement() {
                 <p>{t('downloading')}</p>
               </div>
               <div className="p-2 max-h-[300px] overflow-y-auto space-y-2">
-                {appUpdateState.isDownloading && (
-                  <DownloadProgressRow
-                    name="App Update"
-                    progress={appUpdateState.downloadProgress}
-                    current={appUpdateState.downloadedBytes}
-                    total={appUpdateState.totalBytes}
-                  />
-                )}
                 {downloadProcesses.map((download) => (
                   <DownloadProgressRow
                     key={download.id}

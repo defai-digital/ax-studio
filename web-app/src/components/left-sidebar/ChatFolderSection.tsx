@@ -24,7 +24,7 @@ import { useTranslation } from '@/i18n/react-i18next-compat'
 import { toast } from 'sonner'
 import { ThreadList } from '@/containers/ThreadList'
 import { useChatOrganizationStore } from '@/hooks/threads/useChatOrganization'
-import type { ChatFolder } from '@/services/chat-organization/types'
+import type { ChatFolder } from '@/lib/chat-organization'
 import { NamePromptDialog } from '@/containers/dialogs/chat-organization/NamePromptDialog'
 import { DeleteChatFolderDialog } from '@/containers/dialogs/chat-organization/DeleteChatFolderDialog'
 

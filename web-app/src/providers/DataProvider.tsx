@@ -1,22 +1,14 @@
 import { useModelProvider } from '@/hooks/models/useModelProvider'
-import { useAppUpdater } from '@/hooks/updater/useAppUpdater'
 import { useServiceHub } from '@/hooks/useServiceHub'
-import { useEffect, useCallback, useRef } from 'react'
-import { useMCPServers, DEFAULT_MCP_SETTINGS } from '@/hooks/tools/useMCPServers'
-import { useAssistant } from '@/hooks/chat/useAssistant'
-import { useNavigate } from '@tanstack/react-router'
-import { route } from '@/constants/routes'
+import { useEffect, useRef } from 'react'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 import { useAppState } from '@/hooks/settings/useAppState'
-import { isDev } from '@/lib/utils'
 import { bootstrapProviders } from '@/lib/bootstrap/bootstrap-providers'
 import { bootstrapThreads } from '@/lib/bootstrap/bootstrap-threads'
-import { bootstrapUpdater } from '@/lib/bootstrap/bootstrap-updater'
 import { bootstrapEvents } from '@/lib/bootstrap/bootstrap-events'
 import { bootstrapLocalApi } from '@/lib/bootstrap/bootstrap-local-api'
 import { syncRemoteProviders as syncRemoteProviderConfigs } from '@/lib/providers/provider-sync'
-import { encodeHubRouteParam } from '@/lib/hub'
 
 const PROVIDER_STARTUP_REFRESH_DELAYS_MS = [500, 1500, 3500, 7000] as const
 
@@ -26,11 +18,7 @@ export function DataProvider() {
   // Effect 2 must skip the first fire (triggered by bootstrapProviders setting
   // providers) to avoid registering every provider twice on startup.
   const bootstrapSyncDone = useRef(false)
-  const { checkForUpdate } = useAppUpdater()
-  const { setServers, setSettings } = useMCPServers()
-  const { setAssistants, initializeWithLastUsed } = useAssistant()
   const { setThreads } = useThreads()
-  const navigate = useNavigate()
   const serviceHub = useServiceHub()
 
   const {
@@ -48,46 +36,10 @@ export function DataProvider() {
   } = useLocalApiServer()
   const setServerStatus = useAppState((state) => state.setServerStatus)
 
-  // ─── Deep-link navigation handler (React-layer, needs useNavigate) ────────
-  const handleDeepLink = useCallback(
-    (urls: string[] | null) => {
-      if (!urls) return
-      const deeplink = urls[0]
-      if (!deeplink) return
-      let url: URL
-      try {
-        url = new URL(deeplink)
-      } catch {
-        console.error('Invalid deeplink URL:', deeplink)
-        return
-      }
-      const params = url.pathname.split('/').filter((s) => s.length > 0)
-      if (params.length < 3) return
-      const resource = params.slice(1).join('/')
-        .replace(/\.\./g, '')
-        .replace(/\0/g, '')
-      if (!resource || resource.startsWith('/') || resource.includes('..')) return
-      // `route.hub.model` is `/hub/$modelId` — the `modelId` param is
-      // required, otherwise TanStack Router throws at runtime.
-      navigate({
-        to: route.hub.model,
-        params: { modelId: encodeHubRouteParam(resource) },
-        search: { repo: resource },
-      })
-    },
-    [navigate]
-  )
-
   const startupSnapshot = useRef({
     serviceHub,
     setProviders,
-    checkForUpdate,
-    setServers,
-    setSettings,
-    setAssistants,
-    initializeWithLastUsed,
     setThreads,
-    handleDeepLink,
     enableOnStartup,
     serverHost,
     serverPort,
@@ -110,13 +62,7 @@ export function DataProvider() {
     const {
       serviceHub,
       setProviders,
-      checkForUpdate,
-      setServers,
-      setSettings,
-      setAssistants,
-      initializeWithLastUsed,
       setThreads,
-      handleDeepLink,
       enableOnStartup,
       serverHost,
       serverPort,
@@ -131,9 +77,7 @@ export function DataProvider() {
       setServerStatus,
     } = startupSnapshot.current
     let unmounted = false
-    let cleanupDeepLink: () => void = () => {}
     let cleanupEvents: () => void = () => {}
-    let cleanupUpdater: () => void = () => {}
     const providerStartupRefreshTimers: ReturnType<typeof setTimeout>[] = []
     let providerRequestSequence = 0
     let latestAppliedProviderRequest = 0
@@ -164,24 +108,10 @@ export function DataProvider() {
           pathSep
         )
       },
-      setServers,
-      setSettings: (s) => setSettings(s ?? DEFAULT_MCP_SETTINGS),
-      setAssistants,
-      initializeWithLastUsed,
-      onDeepLink: handleDeepLink,
       isCancelled: () => unmounted,
+    }).catch((error) => {
+      console.error('[DataProvider] bootstrapProviders failed:', error)
     })
-      .then(({ unsubscribeDeepLink }) => {
-        if (unmounted) {
-          // Component unmounted before bootstrap resolved — clean up immediately
-          unsubscribeDeepLink()
-        } else {
-          cleanupDeepLink = unsubscribeDeepLink
-        }
-      })
-      .catch((error) => {
-        console.error('[DataProvider] bootstrapProviders failed:', error)
-      })
 
     bootstrapThreads({
       serviceHub,
@@ -190,8 +120,6 @@ export function DataProvider() {
     }).catch((error) => {
       console.error('[DataProvider] bootstrapThreads failed:', error)
     })
-
-    cleanupUpdater = bootstrapUpdater({ checkForUpdate, isDev: isDev() })
 
     cleanupEvents = bootstrapEvents({ serviceHub, setProviders })
 
@@ -249,9 +177,7 @@ export function DataProvider() {
 
     return () => {
       unmounted = true
-      cleanupDeepLink()
       cleanupEvents()
-      cleanupUpdater()
       providerStartupRefreshTimers.forEach(clearTimeout)
     }
   }, [])

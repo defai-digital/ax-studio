@@ -10,7 +10,7 @@ The most helpful ways to contribute right now are:
 
 If the contribution policy changes in the future, this document will be updated.
 
-This repository is a Yarn workspace for the AX Studio desktop application. The app combines a React frontend, a Rust Tauri host, shared TypeScript packages, and packaged extensions.
+This repository is a Yarn workspace for the AX Studio desktop application. The app combines a React frontend, an Electron host (Node.js main process), shared TypeScript packages, and bundled extensions.
 
 Use this file as the contributor entry point, then follow the package-specific guides for the area you are changing.
 
@@ -19,8 +19,7 @@ Use this file as the contributor entry point, then follow the package-specific g
 - [Web App Guide](./web-app/CONTRIBUTING.md)
 - [Core SDK Guide](./core/CONTRIBUTING.md)
 - [Extensions Guide](./extensions/CONTRIBUTING.md)
-- [Tauri Backend Guide](./src-tauri/CONTRIBUTING.md)
-- [Tauri Plugins Guide](./src-tauri/plugins/CONTRIBUTING.md)
+- [Electron Shell Guide](./electron/README.md)
 
 ## Repository Overview
 
@@ -28,28 +27,19 @@ Use this file as the contributor entry point, then follow the package-specific g
 | --- | --- |
 | `web-app/` | React frontend, routes, components, stores, services |
 | `core/` | Shared TypeScript SDK used by the app and extensions |
-| `extensions/` | Packaged feature extensions |
-| `src-tauri/` | Rust host app, IPC commands, capabilities, plugins |
-| `scripts/` | Build, release, test, and quality-gate utilities |
+| `electron/` | Electron desktop shell: main/preload, IPC command handlers, packaging |
+| `extensions/` | Bundled feature extensions |
+| `scripts/` | Build, dev, test, and quality-gate utilities |
 | `docs/` | Public docs (legal, release, architecture) |
-| `pre-install/` | Generated extension `.tgz` bundles for Tauri resources (gitignored) |
-| `mlx.version` | Pinned MLX runtime version (read by prepare/release scripts) |
+| `mlx.version` | Pinned MLX runtime version (reserved for the future ax-engine runtime download) |
 | `package.json` / `yarn.lock` / `vitest.config.ts` / `Makefile` | Workspace orchestration at repo root |
 
-**Do not reorganize** package paths (`core/`, `web-app/`, `src-tauri/`, `pre-install/`, `mlx.version`) without updating CI and scripts. Generated roots such as `coverage/`, `report/`, `node_modules/`, and `src-tauri/target/` stay gitignored and are removed by `make clean`.
+**Do not reorganize** package paths (`core/`, `web-app/`, `electron/`, `extensions/`, `mlx.version`) without updating CI and scripts. Generated roots such as `coverage/`, `report/`, and `node_modules/` stay gitignored and are removed by `make clean`.
 
 ## Prerequisites
 
 - Node.js 24+
 - Yarn `4.5.3`
-- Rust toolchain
-- Tauri CLI
-
-Install Tauri CLI if needed:
-
-```bash
-cargo install tauri-cli
-```
 
 ## Development Setup
 
@@ -61,14 +51,14 @@ cd ax-studio
 make dev
 ```
 
-`make dev` installs dependencies, builds the shared packages and extensions, downloads required binaries, and launches the Tauri app in development mode.
+`make dev` installs dependencies, builds the shared core package, and launches the Electron app in development mode against the Vite dev server.
 
 Local development ports:
 
 | Port | Use |
 | --- | --- |
 | **31419** | AX Studio local inference API (`/v1`) |
-| **31420** | AX Studio Vite / Tauri frontend |
+| **31420** | AX Studio Vite dev server (loaded by the Electron shell) |
 | **31421** | AX BI MCP (`MCP_PORT`, `…/mcp`) |
 | **31422** | AX BI frontend dev (`NODE_PORT`) |
 | **31423** | AX BI web app (`AXBI_PORT`) |
@@ -76,10 +66,9 @@ Local development ports:
 | **31430** | AX Studio Vite HMR (explicit host only) |
 | **5432** / **6379** | Postgres / Redis (AX BI) |
 
-Keep the Studio frontend triple in sync if you change it:
-`web-app/vite.config.ts` (`server.port`), `src-tauri/tauri.conf.json`
-(`build.devUrl`), and `Makefile` `DEV_PORT`. AX BI port constants:
-`web-app/src/lib/ax-bi/endpoints.ts` and `src-tauri/src/core/mcp/constants.rs`.
+Keep the Studio frontend port in sync if you change it:
+`web-app/vite.config.ts` (`server.port`) and `Makefile` `DEV_PORT`. AX BI port
+constants: `web-app/src/lib/ax-bi/endpoints.ts`.
 
 Useful alternatives:
 
@@ -97,19 +86,17 @@ At a high level:
 
 - `web-app/` renders the UI and user workflows
 - `core/` provides shared TypeScript contracts and extension-facing APIs
-- `extensions/` package feature logic that is loaded by the application
-- `src-tauri/` handles native capabilities, local filesystem access, downloads, and process management
-- `src-tauri/plugins/` contains lower-level Rust plugins for specialized native integrations
+- `extensions/` package feature logic that is bundled into the application
+- `electron/` handles native capabilities, local filesystem access, downloads, and process management
 
-Most frontend-to-native communication happens through Tauri IPC, while shared app logic is exposed through the core SDK and extension system.
+Most frontend-to-native communication happens through Electron IPC (the web-app's `@tauri-apps/*` imports are aliased to a shim that bridges to the Electron main process), while shared app logic is exposed through the core SDK and extension system.
 
 ## Choosing Where to Work
 
 - UI, routes, settings, and interaction behavior: `web-app/`
 - Shared TypeScript contracts and extension interfaces: `core/`
 - Feature packaging and extension lifecycle code: `extensions/`
-- Native app commands, capabilities, and system integration: `src-tauri/`
-- Plugin-specific native behavior: `src-tauri/plugins/`
+- Native app commands, capabilities, and system integration: `electron/`
 - End-to-end testing and automation flows: `autoqa/`
 
 ## Testing Expectations
@@ -121,7 +108,7 @@ Common commands:
 ```bash
 yarn test
 make test
-cargo test --manifest-path src-tauri/Cargo.toml
+make smoke
 ```
 
 For focused work, package-level guides list more targeted commands.
@@ -134,12 +121,6 @@ For focused work, package-level guides list more targeted commands.
 - Keep React components functional and strongly typed
 - Follow workspace ESLint and Prettier conventions
 - Add or update tests for changed behavior
-
-### Rust
-
-- Run `cargo fmt`
-- Run `cargo clippy -- -D warnings` for touched crates when practical
-- Validate command inputs and use structured error handling
 
 ## Issues and Feedback
 

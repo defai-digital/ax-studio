@@ -1,4 +1,4 @@
-import { Bot, ChartNoAxesCombined, Plus, Search, Wrench } from 'lucide-react'
+import { ChartNoAxesCombined, Plus, Search } from 'lucide-react'
 import { route } from '@/constants/routes'
 
 import {
@@ -97,9 +97,7 @@ export function NavMain() {
       {/* Collapsed divider — matches Figma: w-6 h-px my-2 between Search and Hub */}
       <div className="hidden group-data-[collapsible=icon]:block w-6 h-px my-2 mx-auto bg-sidebar-border" />
 
-      {/* Nav — workspace destinations. These surface the app's differentiating
-          capabilities (model hub, assistants, MCP tools) that were otherwise
-          reachable only via Settings. */}
+      {/* Nav — workspace destinations (model hub, AX BI). */}
       <div className="pb-2 group-data-[collapsible=icon]:pb-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center">
         <SidebarMenu>
           <SidebarMenuItem>
@@ -122,16 +120,6 @@ export function NavMain() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip={t('common:assistants')}>
-              <Link to={route.settings.assistant}>
-                <Bot className="text-foreground/70" size={16} />
-                <span className="group-data-[collapsible=icon]:hidden">
-                  {t('common:assistants')}
-                </span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip={t('common:axBi')}>
               <Link to={route.axBi}>
                 <ChartNoAxesCombined className="text-foreground/70" size={16} />
@@ -144,16 +132,6 @@ export function NavMain() {
                 >
                   Beta
                 </Badge>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip={t('common:tools')}>
-              <Link to={route.settings.mcp_servers}>
-                <Wrench className="text-foreground/70" size={16} />
-                <span className="group-data-[collapsible=icon]:hidden">
-                  {t('common:tools')}
-                </span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

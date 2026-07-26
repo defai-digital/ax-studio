@@ -1,5 +1,15 @@
 import { ContentType, type ThreadMessage } from '@ax-studio/core'
-import type { ThreadFolder } from '@/services/projects/types'
+/**
+ * Workspace descriptor for exports. The projects feature is gone (migration
+ * matrix §1); this is the minimal shape the export serializers need.
+ */
+export type WorkspaceExportInfo = {
+  id: string
+  name: string
+  updated_at: number
+  logo?: string
+  projectPrompt?: string | null
+}
 
 export type WorkspaceChatExportFormat =
   | 'csv'
@@ -112,7 +122,7 @@ const extractThreadMessageText = (message: ThreadMessage): string => {
 }
 
 export const buildWorkspaceChatsExportData = (
-  workspace: ThreadFolder,
+  workspace: WorkspaceExportInfo,
   threads: WorkspaceThreadLike[],
   messagesByThreadId: Record<string, ThreadMessage[]>
 ): WorkspaceChatsExportData => {

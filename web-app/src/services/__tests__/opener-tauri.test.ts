@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   openUrl: vi.fn(),
 }))
 
-vi.mock('@tauri-apps/plugin-opener', () => ({
+vi.mock('@/lib/tauri-shim/plugin-opener', () => ({
   revealItemInDir: mocks.revealItemInDir,
   openUrl: mocks.openUrl,
 }))

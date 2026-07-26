@@ -18,10 +18,7 @@ import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useAppState } from '@/hooks/settings/useAppState'
 import { useAttachments } from '@/hooks/chat/useAttachments'
 import { useChatAttachments } from '@/hooks/chat/useChatAttachments'
-import { useAttachmentIngestionPrompt } from '@/hooks/chat/useAttachmentIngestionPrompt'
-import { useThreads } from '@/hooks/threads/useThreads'
 import { processAttachmentsForSend } from '@/lib/attachmentProcessing'
-import { useFileRegistry, threadCollectionId } from '@/lib/file-registry'
 import { createDocumentAttachment, type Attachment } from '@/types/attachment'
 import { getModelContextLength } from '@/lib/models'
 import {
@@ -32,18 +29,8 @@ import { normalizeFileSize } from '@/lib/attachments/size'
 import { extractErrorMessage } from '@/lib/utils/error'
 import { basename, fileExtension } from '@/lib/utils'
 import { withTimeout } from '@/lib/utils/async'
-import { deleteIndexedFileChunks } from '@/lib/attachments/delete-indexed-file'
-import {
-  binaryAttachmentSkipMessage,
-  canExtractBinaryAttachments,
-  canIndexBinaryAttachments,
-  canIndexTextAttachments,
-  classifyAttachmentIndexerCapability,
-  type AttachmentIndexerCapability,
-} from '@/lib/attachments/akidb-tools'
 import { isLocallyReadableDocumentFromHints } from '@/lib/attachments/local-parse'
 
-const ATTACHMENT_AUTO_INLINE_FALLBACK_BYTES = 512 * 1024
 const ATTACHMENT_MODEL_READY_TIMEOUT_MS = 5_000
 
 type Input = {
@@ -69,7 +56,6 @@ export function useDocumentAttachmentHandler({
   const activeModels = useAppState((state) => state.activeModels)
   const updateLoadingModel = useAppState((state) => state.updateLoadingModel)
   const setActiveModels = useAppState((state) => state.setActiveModels)
-  const parsePreference = useAttachments((s) => s.parseMode)
   const maxFileSizeMB = useAttachments((s) => s.maxFileSizeMB)
   const autoInlineContextRatio = useAttachments((s) => s.autoInlineContextRatio)
   const attachments = useChatAttachments(
@@ -220,40 +206,17 @@ export function useDocumentAttachmentHandler({
 
       const docChoices = new Map<string, 'inline' | 'embeddings'>()
 
-      // ADR-005: capability comes from tool contract, not server name.
-      // Binary indexing needs fabric_ingest_run. fabric_extract alone can
-      // still parse binary docs inline, but must not enable embeddings upload.
-      // AkiDB v0.9 search/pack alone → not index-capable.
-      let canFabricIndex = false
-      let canFabricExtract = false
-      let canAkiV09TextIndex = false
-      let indexerCapability: AttachmentIndexerCapability = 'none'
-      try {
-        const tools = await serviceHub.mcp().getTools()
-        canFabricIndex = canIndexBinaryAttachments(tools)
-        canFabricExtract = canExtractBinaryAttachments(tools)
-        canAkiV09TextIndex = canIndexTextAttachments(tools)
-        indexerCapability = classifyAttachmentIndexerCapability(tools)
-      } catch {
-        canFabricIndex = false
-        canFabricExtract = false
-        canAkiV09TextIndex = false
-        indexerCapability = 'none'
-      }
-      const canNativeExtract =
-        serviceHub.rag().canExtractBinaryDocuments?.() ?? false
-      const canIndexBinaryAttachment =
-        canFabricIndex || (canAkiV09TextIndex && canNativeExtract)
-      const canIndexAnyAttachment = canFabricIndex || canAkiV09TextIndex
+      // The AkiDB/fabric indexing layer is gone (migration matrix §2.2):
+      // documents are always inlined — locally readable text files parse
+      // inline, binaries without a local parser are skipped.
+      const canNativeExtract = false
+      const BINARY_SKIP_MESSAGE =
+        'document indexing is not available in this build'
 
-      // Native desktop extraction handles supported binary files inline and can
-      // feed AkiDB v0.9 memory_write. fabric_extract remains the fallback for
-      // environments that provide the legacy compatibility contract.
       let docsToProcess = docs
-      const BINARY_SKIP_MESSAGE = binaryAttachmentSkipMessage(indexerCapability)
 
       if (docsNeedingPrompt.length > 0) {
-        if (!canIndexBinaryAttachment) {
+        {
           const readable: Attachment[] = []
           const binary: Attachment[] = []
           for (const doc of docsNeedingPrompt) {
@@ -265,7 +228,7 @@ export function useDocumentAttachmentHandler({
               )
             ) {
               readable.push(doc)
-              if (!canAkiV09TextIndex && doc.path) {
+              if (doc.path) {
                 docChoices.set(doc.path, 'inline')
               }
             } else {
@@ -274,20 +237,19 @@ export function useDocumentAttachmentHandler({
           }
 
           const binaryToProcess =
-            canFabricExtract || canNativeExtract ? binary : []
+            canNativeExtract ? binary : []
           for (const doc of binaryToProcess) {
             if (doc.path) docChoices.set(doc.path, 'inline')
           }
 
-          // Only process docs that this capability set can handle. Binary docs
-          // without fabric_extract never enter the embeddings path.
+          // Only process docs that can be read locally.
           const alreadyReady = docs.filter(
             (doc) => doc.processed || doc.injectionMode
           )
           docsToProcess = [...alreadyReady, ...readable, ...binaryToProcess]
 
           const skippedBinary =
-            canFabricExtract || canNativeExtract ? [] : binary
+            canNativeExtract ? [] : binary
           if (skippedBinary.length > 0) {
             setAttachmentsForThread(attachmentsKey, (prev) =>
               prev.map((att) => {
@@ -311,47 +273,11 @@ export function useDocumentAttachmentHandler({
               description: `${readable.length} text file${readable.length === 1 ? '' : 's'} attached. ${skippedBinary.length} binary file${skippedBinary.length === 1 ? '' : 's'} skipped — ${BINARY_SKIP_MESSAGE}`,
             })
           } else if (skippedBinary.length > 0) {
-            toast.warning(
-              indexerCapability === 'aki-v09-only'
-                ? 'AkiDB cannot index these files'
-                : 'Documents need a compatible indexer',
-              {
-                description: BINARY_SKIP_MESSAGE,
-              }
-            )
+            toast.warning('Documents need a compatible parser', {
+              description: BINARY_SKIP_MESSAGE,
+            })
           }
-
-          if (canFabricExtract && !canAkiV09TextIndex) {
-            for (const doc of readable) {
-              if (doc.path) docChoices.set(doc.path, 'inline')
-            }
-          }
-          // Text-only without any indexer: attach quietly inline (no toast).
-        } else {
-          for (let i = 0; i < docsNeedingPrompt.length; i++) {
-            const doc = docsNeedingPrompt[i]
-            const choice = await useAttachmentIngestionPrompt
-              .getState()
-              .showPrompt(
-                doc,
-                ATTACHMENT_AUTO_INLINE_FALLBACK_BYTES,
-                i,
-                docsNeedingPrompt.length
-              )
-
-            if (!choice) {
-              setAttachmentsForThread(attachmentsKey, (prev) =>
-                prev.filter(
-                  (att) =>
-                    !docsNeedingPrompt.some(
-                      (d) => d.path && att.path && d.path === att.path
-                    )
-                )
-              )
-              return
-            }
-            if (doc.path) docChoices.set(doc.path, choice)
-          }
+          // Text-only: attach quietly inline (no toast).
         }
       }
 
@@ -400,7 +326,7 @@ export function useDocumentAttachmentHandler({
       }
 
       try {
-        const { processedAttachments, hasEmbeddedDocuments } =
+        const { processedAttachments } =
           await processAttachmentsForSend({
             attachments: docsToProcess,
             threadId: processingThreadId,
@@ -408,12 +334,8 @@ export function useDocumentAttachmentHandler({
             selectedProvider,
             contextThreshold,
             estimateTokens,
-            // Without fabric ingest/extract, force inline so settings set to
-            // "embeddings" do not route into a failing fabric_ingest_run call.
-            parsePreference: canIndexAnyAttachment ? parsePreference : 'inline',
-            // forceInline wins over any doc-level parseMode (precedence fix).
-            forceInline: !canIndexAnyAttachment,
-            indexerCapability,
+            parsePreference: 'inline',
+            forceInline: true,
             perFileChoices: docChoices.size > 0 ? docChoices : undefined,
             updateAttachmentProcessing,
           })
@@ -429,12 +351,6 @@ export function useDocumentAttachmentHandler({
           )
         }
 
-        if (hasEmbeddedDocuments && effectiveThreadId) {
-          const current = useThreads.getState().threads[effectiveThreadId]
-          useThreads.getState().updateThread(effectiveThreadId, {
-            metadata: { ...(current?.metadata ?? {}), hasDocuments: true },
-          })
-        }
       } catch (e) {
         console.error('Failed to process attachments:', e)
         // Mark any still-processing attachments with error state
@@ -455,7 +371,6 @@ export function useDocumentAttachmentHandler({
       activeModels,
       effectiveThreadId,
       getProviderByName,
-      parsePreference,
       selectedModel,
       selectedProvider,
       serviceHub,
@@ -596,62 +511,11 @@ export function useDocumentAttachmentHandler({
   // ─── handleRemoveAttachment ───────────────────────────────────────────────
   const handleRemoveAttachment = useCallback(
     async (indexToRemove: number) => {
-      const attachmentToRemove = attachments[indexToRemove]
-
-      if (
-        attachmentToRemove?.id &&
-        effectiveThreadId &&
-        attachmentToRemove.type === 'document'
-      ) {
-        const colId = threadCollectionId(effectiveThreadId)
-        const registry = useFileRegistry.getState()
-        const registryEntry =
-          registry.getFile(colId, attachmentToRemove.id) ??
-          registry
-            .listFiles(colId)
-            .find((file) => file.file_path === attachmentToRemove.path)
-        try {
-          await deleteIndexedFileChunks(serviceHub.mcp(), {
-            collectionId: colId,
-            documentId: registryEntry?.file_id ?? attachmentToRemove.id,
-            expectedChunkCount:
-              registryEntry?.chunk_count ?? attachmentToRemove.chunkCount,
-          })
-        } catch (error) {
-          console.warn('Failed to delete chunks from AkiDB:', error)
-          toast.error('Failed to remove indexed attachment', {
-            description: extractErrorMessage(error, String(error)),
-          })
-          return
-        }
-
-        // Remove from the file registry (local tracking)
-        registry.removeFile(
-          colId,
-          registryEntry?.file_id ?? attachmentToRemove.id
-        )
-
-        // If no files left, clear the hasDocuments flag on the thread
-        if (!registry.hasFiles(colId)) {
-          const threadsState = useThreads.getState()
-          const current = threadsState.threads?.[effectiveThreadId]
-          threadsState.updateThread(effectiveThreadId, {
-            metadata: { ...(current?.metadata ?? {}), hasDocuments: false },
-          })
-        }
-      }
-
       setAttachmentsForThread(attachmentsKey, (prev) =>
         prev.filter((_, index) => index !== indexToRemove)
       )
     },
-    [
-      attachments,
-      attachmentsKey,
-      effectiveThreadId,
-      serviceHub,
-      setAttachmentsForThread,
-    ]
+    [attachmentsKey, setAttachmentsForThread]
   )
 
   return {

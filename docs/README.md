@@ -8,7 +8,7 @@ Canonical public documentation for this repository. Prefer linking here from
 | Path | Purpose |
 | --- | --- |
 | [`legal/`](legal/) | Privacy notice and terms of use (user-facing legal) |
-| [`release/`](release/) | Shipping: release runbook, Microsoft Store, minisign public key |
+| [`release/`](release/) | Shipping: electron-builder release runbook, electron-updater feed |
 | [`architecture/`](architecture/) | How the codebase is organized and key subsystems |
 | [`images/`](images/) | Diagrams and media used by docs / README |
 
@@ -16,9 +16,9 @@ Canonical public documentation for this repository. Prefer linking here from
 
 | Audience | Read |
 | --- | --- |
-| End users / installers | Root [`README.md`](../README.md), then [`release/release.md`](release/release.md) for signed artifacts |
+| End users / installers | Root [`README.md`](../README.md), then [`release/release.md`](release/release.md) for packaged artifacts |
 | Contributors | [`../CONTRIBUTING.md`](../CONTRIBUTING.md), [`architecture/conventions.md`](architecture/conventions.md) |
-| Release operators | [`release/release.md`](release/release.md), [`release/microsoft-store.md`](release/microsoft-store.md) |
+| Release operators | [`release/release.md`](release/release.md) |
 | Product / architects | PRDs and ADRs under local **`.internal/prd/`** and **`.internal/adr/`** |
 | Legal / store listing | [`legal/privacy.md`](legal/privacy.md), [`legal/terms.md`](legal/terms.md) |
 
@@ -49,9 +49,9 @@ Neither is published in the public `docs/` tree (local design space, gitignored)
 
 ## Repository root (do not reorganize lightly)
 
-The monorepo root intentionally stays flat for Yarn workspaces + Tauri:
+The monorepo root intentionally stays flat for Yarn workspaces + Electron:
 
-- **Committed:** `package.json`, `yarn.lock`, `vitest.config.ts`, `Makefile`, `mlx.version`, `README.md`, `LICENSE`, `NOTICE`, package dirs (`core/`, `web-app/`, `extensions/`, `src-tauri/`, `scripts/`, `docs/`).
-- **Generated / local (gitignored):** `node_modules/`, `coverage/`, `report/`, `pre-install/`, `src-tauri/target/`, `.internal/`.
+- **Committed:** `package.json`, `yarn.lock`, `vitest.config.ts`, `Makefile`, `mlx.version`, `README.md`, `LICENSE`, `NOTICE`, package dirs (`core/`, `web-app/`, `electron/`, `extensions/`, `scripts/`, `docs/`).
+- **Generated / local (gitignored):** `node_modules/`, `coverage/`, `report/`, `.internal/`.
 
-Moving packages under `apps/` or `packages/` would break CI, Makefile, and Tauri resource paths. Prefer documenting over reshaping.
+Moving packages under `apps/` or `packages/` would break CI, Makefile, and Electron resource paths. Prefer documenting over reshaping.

@@ -3,17 +3,17 @@
  *
  * This hub initializes all platform services once at app startup,
  * then provides synchronous access to service instances throughout the app.
+ *
+ * Electron is the only desktop runtime: the `./<service>/tauri` modules are
+ * the desktop bridge implementations — their `tauri/*` imports resolve
+ * to the permanent shim in `@/lib/tauri-shim` (see
+ * docs/architecture/electron-migration-phase0-matrix.md).
  */
 
 import { isPlatformTauri } from '@/lib/platform/utils'
 
 import { DefaultMessagesService } from './messages/default'
-import { DefaultAssistantsService } from './assistants/default'
-import { DefaultProjectsService } from './projects/default'
-import { DefaultChatOrganizationService } from './chat-organization/default'
 import { DefaultModelsService } from './models/default'
-import { DefaultRAGService } from './rag/default'
-import type { RAGService } from './rag/types'
 import { DefaultUploadsService } from './uploads/default'
 import type { UploadsService } from './uploads/types'
 import { DefaultThreadsService } from './threads/default'
@@ -31,23 +31,13 @@ import type { EventsService } from './events/types'
 import type { HardwareService } from './hardware/types'
 import type { AppService } from './app/types'
 import type { MessagesService } from './messages/types'
-import type { MCPService } from './mcp/types'
 import type { ThreadsService } from './threads/types'
 import type { ProvidersService } from './providers/types'
 import type { ModelsService } from './models/types'
-import type { AssistantsService } from './assistants/types'
 import type { DialogService } from './dialog/types'
 import type { OpenerService } from './opener/types'
-import type { UpdaterService } from './updater/types'
 import type { PathService } from './path/types'
 import type { CoreService } from './core/types'
-import type { DeepLinkService } from './deeplink/types'
-import type { GlobalShortcutService } from './global-shortcut/types'
-import { DefaultGlobalShortcutService } from './global-shortcut/default'
-import type { VoiceService } from './voice/types'
-import { DefaultVoiceService } from './voice/default'
-import type { ProjectsService } from './projects/types'
-import type { ChatOrganizationService } from './chat-organization/types'
 
 class LazyTauriProvidersService implements ProvidersService {
   private servicePromise: Promise<ProvidersService> | null = null
@@ -92,22 +82,13 @@ export interface ServiceHub {
   hardware(): HardwareService
   app(): AppService
   messages(): MessagesService
-  mcp(): MCPService
   threads(): ThreadsService
   providers(): ProvidersService
   models(): ModelsService
-  assistants(): AssistantsService
   dialog(): DialogService
   opener(): OpenerService
-  updater(): UpdaterService
   path(): PathService
   core(): CoreService
-  deeplink(): DeepLinkService
-  globalShortcut(): GlobalShortcutService
-  voice(): VoiceService
-  projects(): ProjectsService
-  chatOrganization(): ChatOrganizationService
-  rag(): RAGService
   uploads(): UploadsService
 }
 
@@ -118,24 +99,13 @@ class PlatformServiceHub implements ServiceHub {
   private hardwareService!: HardwareService
   private appService!: AppService
   private messagesService: MessagesService = new DefaultMessagesService()
-  private mcpService!: MCPService
   private threadsService: ThreadsService = new DefaultThreadsService()
   private providersService!: ProvidersService
   private modelsService: ModelsService = new DefaultModelsService()
-  private assistantsService: AssistantsService = new DefaultAssistantsService()
   private dialogService!: DialogService
   private openerService!: OpenerService
-  private updaterService!: UpdaterService
   private pathService!: PathService
   private coreService!: CoreService
-  private deepLinkService!: DeepLinkService
-  private globalShortcutService: GlobalShortcutService =
-    new DefaultGlobalShortcutService()
-  private voiceService: VoiceService = new DefaultVoiceService()
-  private projectsService: ProjectsService = new DefaultProjectsService()
-  private chatOrganizationService: ChatOrganizationService =
-    new DefaultChatOrganizationService()
-  private ragService: RAGService = new DefaultRAGService()
   private uploadsService: UploadsService = new DefaultUploadsService()
   private initialized = false
 
@@ -211,28 +181,6 @@ class PlatformServiceHub implements ServiceHub {
       },
     }
 
-    const unavailableToolResult: Awaited<ReturnType<MCPService['callTool']>> = {
-      content: [],
-      error: '',
-    }
-
-    this.mcpService = {
-      updateMCPConfig: async () => {},
-      restartMCPServers: async () => {},
-      getMCPConfig: async () => ({}),
-      getTools: async () => [],
-      getConnectedServers: async () => [],
-      callTool: async () => unavailableToolResult,
-      callToolWithCancellation: ({ cancellationToken }) => ({
-        promise: Promise.resolve(unavailableToolResult),
-        cancel: async () => {},
-        token: cancellationToken ?? crypto.randomUUID(),
-      }),
-      cancelToolCall: async () => {},
-      activateMCPServer: async () => {},
-      deactivateMCPServer: async () => {},
-    }
-
     this.providersService = {
       getProviders: async () => [],
       fetchModelsFromProvider: async () => [],
@@ -250,12 +198,6 @@ class PlatformServiceHub implements ServiceHub {
       openUrl: async (url) => {
         openInNewTab(url)
       },
-    }
-
-    this.updaterService = {
-      check: async () => null,
-      getInstallChannel: async () => 'standalone' as const,
-      downloadAndInstallWithProgress: async () => {},
     }
 
     this.pathService = {
@@ -276,11 +218,6 @@ class PlatformServiceHub implements ServiceHub {
       installExtension: async (extensions) => extensions,
       uninstallExtension: async () => false,
     }
-
-    this.deepLinkService = {
-      onOpenUrl: async () => () => {},
-      getCurrent: async () => [],
-    }
   }
 
   async initialize(): Promise<void> {
@@ -294,30 +231,20 @@ class PlatformServiceHub implements ServiceHub {
           eventsModule,
           hardwareModule,
           appModule,
-          mcpModule,
           dialogModule,
           openerModule,
-          updaterModule,
           pathModule,
           coreModule,
-          deepLinkModule,
-          globalShortcutModule,
-          voiceModule,
         ] = await Promise.all([
           import('./theme/tauri'),
           import('./window/tauri'),
           import('./events/tauri'),
           import('./hardware/tauri'),
           import('./app/tauri'),
-          import('./mcp/tauri'),
           import('./dialog/tauri'),
           import('./opener/tauri'),
-          import('./updater/tauri'),
           import('./path/tauri'),
           import('./core/tauri'),
-          import('./deeplink/tauri'),
-          import('./global-shortcut/tauri'),
-          import('./voice/tauri'),
         ])
 
         this.themeService = new themeModule.TauriThemeService()
@@ -325,43 +252,13 @@ class PlatformServiceHub implements ServiceHub {
         this.eventsService = new eventsModule.TauriEventsService()
         this.hardwareService = new hardwareModule.TauriHardwareService()
         this.appService = new appModule.TauriAppService()
-        this.mcpService = new mcpModule.TauriMCPService()
         this.providersService = new LazyTauriProvidersService()
         this.dialogService = new dialogModule.TauriDialogService()
         this.openerService = new openerModule.TauriOpenerService()
-        this.updaterService = new updaterModule.TauriUpdaterService()
         this.pathService = new pathModule.TauriPathService()
         this.coreService = new coreModule.TauriCoreService()
-        this.deepLinkService = new deepLinkModule.TauriDeepLinkService()
-        this.globalShortcutService =
-          new globalShortcutModule.TauriGlobalShortcutService()
-        this.voiceService = new voiceModule.TauriVoiceService()
       } else {
         this.initializeWebFallbacks()
-      }
-
-      if ('setMcpService' in this.ragService) {
-        const svc = this.ragService as { setMcpService: (mcp: MCPService) => void }
-        svc.setMcpService(this.mcpService)
-      }
-      if ('setCoreService' in this.ragService) {
-        const svc = this.ragService as {
-          setCoreService: (
-            core: CoreService,
-            nativeExtractionAvailable: boolean
-          ) => void
-        }
-        svc.setCoreService(this.coreService, isPlatformTauri())
-      }
-      if ('setMcpService' in this.uploadsService) {
-        const svc = this.uploadsService as { setMcpService: (mcp: MCPService) => void }
-        svc.setMcpService(this.mcpService)
-      }
-      if ('setCoreService' in this.uploadsService) {
-        const svc = this.uploadsService as {
-          setCoreService: (core: CoreService) => void
-        }
-        svc.setCoreService(this.coreService)
       }
 
       this.initialized = true
@@ -409,11 +306,6 @@ class PlatformServiceHub implements ServiceHub {
     return this.messagesService
   }
 
-  mcp(): MCPService {
-    this.ensureInitialized()
-    return this.mcpService
-  }
-
   threads(): ThreadsService {
     this.ensureInitialized()
     return this.threadsService
@@ -429,11 +321,6 @@ class PlatformServiceHub implements ServiceHub {
     return this.modelsService
   }
 
-  assistants(): AssistantsService {
-    this.ensureInitialized()
-    return this.assistantsService
-  }
-
   dialog(): DialogService {
     this.ensureInitialized()
     return this.dialogService
@@ -444,11 +331,6 @@ class PlatformServiceHub implements ServiceHub {
     return this.openerService
   }
 
-  updater(): UpdaterService {
-    this.ensureInitialized()
-    return this.updaterService
-  }
-
   path(): PathService {
     this.ensureInitialized()
     return this.pathService
@@ -457,36 +339,6 @@ class PlatformServiceHub implements ServiceHub {
   core(): CoreService {
     this.ensureInitialized()
     return this.coreService
-  }
-
-  deeplink(): DeepLinkService {
-    this.ensureInitialized()
-    return this.deepLinkService
-  }
-
-  globalShortcut(): GlobalShortcutService {
-    this.ensureInitialized()
-    return this.globalShortcutService
-  }
-
-  voice(): VoiceService {
-    this.ensureInitialized()
-    return this.voiceService
-  }
-
-  projects(): ProjectsService {
-    this.ensureInitialized()
-    return this.projectsService
-  }
-
-  chatOrganization(): ChatOrganizationService {
-    this.ensureInitialized()
-    return this.chatOrganizationService
-  }
-
-  rag(): RAGService {
-    this.ensureInitialized()
-    return this.ragService
   }
 
   uploads(): UploadsService {

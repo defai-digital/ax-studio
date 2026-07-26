@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ServiceHub } from '@/services'
 import { runAxBiAuthoringWorkflow } from '../authoring-workflow'
+import { createDirectAxBiAuthoringClient } from '../direct-client'
 
 const readFileBase64 = vi.hoisted(() => vi.fn())
 
 vi.mock('@ax-studio/core', () => ({
   fs: { readFileBase64 },
+}))
+
+vi.mock('../direct-client', () => ({
+  createDirectAxBiAuthoringClient: vi.fn(),
 }))
 
 function createClient() {
@@ -36,8 +40,6 @@ function createClient() {
     },
   }
 }
-
-const serviceHub = {} as ServiceHub
 
 const plan = {
   plan_id: 'plan-1',
@@ -70,14 +72,12 @@ describe('runAxBiAuthoringWorkflow', () => {
     await expect(
       runAxBiAuthoringWorkflow({
         prompt: 'Create a system architecture diagram',
-        serviceHub,
         client,
       })
     ).resolves.toEqual({ handled: false })
     await expect(
       runAxBiAuthoringWorkflow({
         prompt: 'Create a chart',
-        serviceHub,
         client,
       })
     ).resolves.toEqual({ handled: false })
@@ -98,7 +98,6 @@ describe('runAxBiAuthoringWorkflow', () => {
 
     const result = await runAxBiAuthoringWorkflow({
       prompt: 'Use AX BI to create a monthly revenue chart',
-      serviceHub,
       client,
     })
 
@@ -123,7 +122,6 @@ describe('runAxBiAuthoringWorkflow', () => {
 
     const result = await runAxBiAuthoringWorkflow({
       prompt: 'Plan an AX BI dashboard for revenue',
-      serviceHub,
       client,
     })
 
@@ -153,7 +151,6 @@ describe('runAxBiAuthoringWorkflow', () => {
 
     const result = await runAxBiAuthoringWorkflow({
       prompt: 'Use AX BI to create a revenue dashboard',
-      serviceHub,
       client,
     })
 
@@ -193,7 +190,6 @@ describe('runAxBiAuthoringWorkflow', () => {
           path: '/tmp/sales.csv',
         },
       ],
-      serviceHub,
       client,
     })
 
@@ -229,7 +225,6 @@ describe('runAxBiAuthoringWorkflow', () => {
           path: '/tmp/sales.xlsx',
         },
       ],
-      serviceHub,
       client,
     })
 
@@ -266,7 +261,6 @@ describe('runAxBiAuthoringWorkflow', () => {
           path: '/tmp/sales.csv',
         },
       ],
-      serviceHub,
       client,
     })
 
@@ -290,7 +284,6 @@ describe('runAxBiAuthoringWorkflow', () => {
           path: '/tmp/review.pptx',
         },
       ],
-      serviceHub,
       client,
     })
 
@@ -310,7 +303,6 @@ describe('runAxBiAuthoringWorkflow', () => {
 
     await runAxBiAuthoringWorkflow({
       prompt: 'Create a sales chart',
-      serviceHub,
       force: true,
       client,
     })
@@ -327,7 +319,6 @@ describe('runAxBiAuthoringWorkflow', () => {
 
     const result = await runAxBiAuthoringWorkflow({
       prompt: 'Use AX BI to create a sales chart',
-      serviceHub,
       client,
     })
 
@@ -340,69 +331,27 @@ describe('runAxBiAuthoringWorkflow', () => {
     })
   })
 
-  it('uses the configured ServiceHub MCP transport for production calls', async () => {
-    const callTool = vi.fn().mockImplementation(({ toolName }) => {
-      if (toolName === 'get_authoring_capabilities') {
-        return Promise.resolve({
-          error: '',
-          content: [
-            {
-              text: JSON.stringify({
-                contract_version: '1.0',
-                operations: ['create_chart_from_intent'],
-                artifact_types: ['chart'],
-                preview_before_save: true,
-                upload_formats: [],
-                limits: { max_charts_per_dashboard: 6 },
-                async_jobs: false,
-                llm_configured: false,
-              }),
-            },
-          ],
-        })
-      }
-      return Promise.resolve({
-        error: '',
-        content: [
-          {
-            text: JSON.stringify({ success: true, chart_name: 'Revenue' }),
-          },
-        ],
-      })
+  it('defaults to the direct AX BI authoring client when no client is given', async () => {
+    const client = createClient()
+    client.ai.createChartFromIntent.mockResolvedValue({
+      success: true,
+      chart_name: 'Revenue',
     })
-    const configuredServiceHub = {
-      mcp: () => ({
-        getTools: vi.fn().mockResolvedValue([
-          { server: 'ax-bi', name: 'get_authoring_capabilities' },
-          { server: 'ax-bi', name: 'create_chart_from_intent' },
-        ]),
-        callTool,
-      }),
-    }
+    vi.mocked(createDirectAxBiAuthoringClient).mockReturnValueOnce(
+      client as never
+    )
 
     const result = await runAxBiAuthoringWorkflow({
       prompt: 'Use AX BI to create a revenue chart',
-      serviceHub: configuredServiceHub as never,
     })
 
+    expect(createDirectAxBiAuthoringClient).toHaveBeenCalledTimes(1)
     expect(result).toMatchObject({ handled: true, status: 'completed' })
-    expect(callTool).toHaveBeenNthCalledWith(1, {
-      serverName: 'ax-bi',
-      toolName: 'get_authoring_capabilities',
-      arguments: {},
-      retryOnTransportFailure: false,
-    })
-    expect(callTool).toHaveBeenNthCalledWith(2, {
-      serverName: 'ax-bi',
-      toolName: 'create_chart_from_intent',
-      arguments: {
-        request: {
-          prompt: 'Use AX BI to create a revenue chart',
-          dataset_id: undefined,
-          save_chart: true,
-        },
-      },
-      retryOnTransportFailure: false,
+    expect(client.ai.getAuthoringCapabilities).toHaveBeenCalledOnce()
+    expect(client.ai.createChartFromIntent).toHaveBeenCalledWith({
+      prompt: 'Use AX BI to create a revenue chart',
+      dataset_id: undefined,
+      save_chart: true,
     })
   })
 
@@ -421,7 +370,6 @@ describe('runAxBiAuthoringWorkflow', () => {
 
     const result = await runAxBiAuthoringWorkflow({
       prompt: 'Use AX BI to create a revenue chart',
-      serviceHub,
       client,
     })
 
@@ -456,7 +404,6 @@ describe('runAxBiAuthoringWorkflow', () => {
           size: 11,
         },
       ],
-      serviceHub,
       client,
     })
 

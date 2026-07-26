@@ -76,7 +76,7 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => mockNavigate,
 }))
 
-vi.mock('@tauri-apps/api/core', () => ({
+vi.mock('@/lib/tauri-shim/api-core', () => ({
   invoke: vi.fn(),
   convertFileSrc: mockConvertFileSrc,
 }))
@@ -160,6 +160,7 @@ vi.mock('@/hooks/chat/useAttachments', () => ({
 
 vi.mock('@/lib/platform/utils', () => ({
   isPlatformTauri: () => true,
+  isPlatformElectron: () => false,
 }))
 
 vi.mock('@/i18n/react-i18next-compat', () => ({

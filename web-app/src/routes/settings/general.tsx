@@ -16,7 +16,6 @@ import {
   Folder,
   Github,
   MessageCircle,
-  ScrollText,
   Settings,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -24,6 +23,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { fallbackDefaultPrompt } from '@/lib/prompts/system-prompt'
 import { useGeneralSettingsPage } from '@/hooks/settings/useGeneralSettingsPage'
 import { SettingsPageLayout } from '@/components/settings/SettingsPageLayout'
+import { InterfaceSettingsSection } from '@/components/settings/InterfaceSettingsSection'
+import { PrivacySettingsSection } from '@/components/settings/PrivacySettingsSection'
 import { AX_STUDIO_EXTERNAL_LINKS } from '@/constants/external-links'
 
 function ExternalTextLink({ href, label }: { href: string; label: string }) {
@@ -43,6 +44,8 @@ export const Route = createFileRoute(route.settings.general)({
 
 function General() {
   const { t } = useTranslation()
+  // Electron prunes the settings surface to General/Providers (matrix §1);
+  // interface + privacy merge into this page.
   const {
     spellCheckChatInput,
     setSpellCheckChatInput,
@@ -65,35 +68,16 @@ function General() {
     isDialogOpen,
     setIsDialogOpen,
     setSelectedNewPath,
-    isCheckingUpdate,
     isValidatingToken,
     isResetting,
-    installChannel,
     openFileTitle,
     copyToClipboard,
     handleDataFolderChange,
     confirmDataFolderChange,
-    handleCheckForUpdate,
     resetApp,
     validateHuggingFaceToken,
-    handleOpenLogs,
     revealLogsFolder,
   } = useGeneralSettingsPage()
-
-  const installMethodLabel =
-    installChannel === 'homebrew'
-      ? t('settings:general.installMethodHomebrew')
-      : installChannel === 'unknown'
-        ? t('settings:general.installMethodUnknown')
-        : t('settings:general.installMethodStandalone')
-  const installMethodDesc =
-    installChannel === 'homebrew'
-      ? t('settings:general.installMethodHomebrewDesc')
-      : t('settings:general.installMethodStandaloneDesc')
-  const checkForUpdatesDesc =
-    installChannel === 'homebrew'
-      ? t('settings:general.checkForUpdatesHomebrewDesc')
-      : t('settings:general.checkForUpdatesDesc')
 
   return (
     <div className="flex flex-col h-svh w-full">
@@ -123,35 +107,11 @@ function General() {
                     </span>
                   }
                 />
-                <CardItem
-                  title={t('settings:general.installMethod')}
-                  description={installMethodDesc}
-                  actions={
-                    <span className="text-foreground font-medium">
-                      {installMethodLabel}
-                    </span>
-                  }
-                />
-                {!AUTO_UPDATER_DISABLED && (
-                  <CardItem
-                    title={t('settings:general.checkForUpdates')}
-                    description={checkForUpdatesDesc}
-                    className="items-center flex-row gap-y-2"
-                    actions={
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={handleCheckForUpdate}
-                        disabled={isCheckingUpdate}
-                      >
-                        {isCheckingUpdate
-                          ? t('settings:general.checkingForUpdates')
-                          : t('settings:general.checkForUpdates')}
-                      </Button>
-                    }
-                  />
-                )}
               </Card>
+
+              {/* Interface + Privacy merged into General (matrix §1) */}
+              <InterfaceSettingsSection />
+              <PrivacySettingsSection />
 
               <Card title="Custom System Prompts">
                 <div className="border-b border-border/40 px-5 py-4">
@@ -319,18 +279,6 @@ function General() {
                       >
                         <Folder size={12} className="text-muted-foreground" />
                         <span>{openFileTitle()}</span>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleOpenLogs}
-                        title={t('settings:dataFolder.appLogs')}
-                      >
-                        <ScrollText
-                          size={12}
-                          className="text-muted-foreground"
-                        />
-                        <span>{t('settings:general.openLogs')}</span>
                       </Button>
                     </div>
                   }

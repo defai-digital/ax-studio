@@ -147,3 +147,28 @@ export async function clearStoredAxBiMcpToken(): Promise<void> {
   }
   clearLegacyEncryptedToken()
 }
+
+function containsControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0)
+    return code <= 31 || code === 127
+  })
+}
+
+/**
+ * Normalize a user- or keychain-supplied AX BI token.
+ * Strips optional leading `Bearer ` (case-insensitive) and trims whitespace.
+ */
+export function normalizeAxBiToken(token: string): string {
+  let normalized = token.trim()
+  if (/^bearer\s+/i.test(normalized)) {
+    normalized = normalized.replace(/^bearer\s+/i, '').trim()
+  }
+  if (!normalized) {
+    throw new Error('AX BI API key or JWT is required.')
+  }
+  if (containsControlCharacter(normalized)) {
+    throw new Error('AX BI API key or JWT contains invalid characters.')
+  }
+  return normalized
+}

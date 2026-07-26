@@ -1,14 +1,24 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { ModelFactory } from '../model-factory'
 import type { ProviderObject } from '@ax-studio/core'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import {
-  createAxEngineMetadataExtractor,
-  createMlxIpcFetch,
-} from '../mlx-ipc-fetch'
+import { createAxEngineMetadataExtractor } from '../ax-engine-metadata'
+
+// Capture the native fetch before model-factory binds `httpFetch` at module
+// load. The hoisted wrapper lets us observe/short-circuit outbound requests
+// (the deleted mlx-ipc-fetch shim used to be that seam) while still
+// delegating data: URL reads to the real implementation.
+const httpFetchMock = vi.hoisted(() => {
+  const realFetch = globalThis.fetch.bind(globalThis)
+  const mock = vi.fn(
+    (...args: Parameters<typeof fetch>) => realFetch(...args)
+  ) as unknown as typeof fetch
+  globalThis.fetch = mock
+  return vi.mocked(mock)
+})
 
 // Mock the Tauri invoke function
-vi.mock('@tauri-apps/api/core', () => ({
+vi.mock('@/lib/tauri-shim/api-core', () => ({
   invoke: vi.fn(),
 }))
 
@@ -19,12 +29,12 @@ vi.mock('@ai-sdk/openai-compatible', () => ({
   })),
 }))
 
-vi.mock('../mlx-ipc-fetch', () => ({
-  createMlxIpcFetch: vi.fn(() => vi.fn()),
+vi.mock('../ax-engine-metadata', () => ({
   createAxEngineMetadataExtractor: vi.fn(() => ({
     extractMetadata: vi.fn(),
     createStreamExtractor: vi.fn(),
   })),
+  isDiffusionGemmaModelId: vi.fn(() => false),
 }))
 
 vi.mock('@ai-sdk/anthropic', () => ({
@@ -68,6 +78,10 @@ async function readPatchedSseData(
 describe('ModelFactory', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    delete (window as unknown as Record<string, unknown>).axElectron
   })
 
   describe('OpenAI-compatible streaming patch fetch', () => {
@@ -260,7 +274,7 @@ describe('ModelFactory', () => {
       expect(model).toBeDefined()
     })
 
-    it('routes mlx through the in-process AX Engine IPC fetch shim', async () => {
+    it('routes ax-engine through the proxy fetch with its metadata extractor', async () => {
       const provider: ProviderObject = {
         provider: 'ax-engine',
         api_key: '',
@@ -272,7 +286,8 @@ describe('ModelFactory', () => {
 
       await ModelFactory.createModel('mlx-community/Qwen3.6-27B-4bit', provider)
 
-      expect(createMlxIpcFetch).toHaveBeenCalledTimes(1)
+      // The in-process MLX IPC fetch shim is gone: baseFetch is always
+      // createStreamingPatchFetch(native fetch), routed via the local proxy.
       expect(createAxEngineMetadataExtractor).toHaveBeenCalledTimes(1)
       expect(createOpenAICompatible).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -291,11 +306,39 @@ describe('ModelFactory', () => {
       )
     })
 
-    it('preserves top_k for AX Engine so sampled MTP can use its exact route', async () => {
-      const ipcFetch = vi.fn(async () => new Response('{}'))
-      vi.mocked(createMlxIpcFetch).mockReturnValueOnce(
-        ipcFetch as unknown as typeof fetch
+    it('uses the ax-engine sidecar endpoint under Electron', async () => {
+      const { invoke } = await import('@/lib/tauri-shim/api-core')
+      vi.mocked(invoke).mockResolvedValueOnce({
+        baseURL: 'http://127.0.0.1:31418/v1',
+        apiKey: 'sidecar-secret',
+      } as never)
+      ;(window as unknown as Record<string, unknown>).axElectron = {}
+
+      const provider: ProviderObject = {
+        provider: 'ax-engine',
+        api_key: '',
+        base_url: 'http://127.0.0.1:0/v1',
+        models: [],
+        settings: [],
+        active: true,
+      }
+
+      await ModelFactory.createModel('mlx-community/Qwen3.6-27B-4bit', provider)
+
+      expect(invoke).toHaveBeenCalledWith('ax_engine_status')
+      expect(createOpenAICompatible).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'ax-engine',
+          baseURL: 'http://127.0.0.1:31418/v1',
+          // The sidecar enforces its own Bearer key; proxy routing headers
+          // do not apply.
+          headers: { Authorization: 'Bearer sidecar-secret' },
+        })
       )
+    })
+
+    it('preserves top_k for AX Engine so sampled MTP can use its exact route', async () => {
+      httpFetchMock.mockResolvedValueOnce(new Response('{}'))
       const provider: ProviderObject = {
         provider: 'ax-engine',
         api_key: '',
@@ -317,7 +360,8 @@ describe('ModelFactory', () => {
       })
 
       const forwardedBody = JSON.parse(
-        (ipcFetch.mock.calls[0]?.[1] as RequestInit | undefined)?.body as string
+        (httpFetchMock.mock.calls[0]?.[1] as RequestInit | undefined)
+          ?.body as string
       )
       expect(forwardedBody).toMatchObject({
         temperature: 0.7,

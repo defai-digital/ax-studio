@@ -10,7 +10,7 @@ import {
 } from 'react'
 import { withTimeout } from '@/lib/utils/async'
 import { useServiceHub } from '@/hooks/useServiceHub'
-import { isApiOnlyPlatform } from '@/lib/platform/utils'
+import { isApiOnlyPlatform, isPlatformElectron } from '@/lib/platform/utils'
 import { toast } from 'sonner'
 import {
   resetExtensionFailureToastState,
@@ -66,6 +66,39 @@ export function ExtensionProvider({ children }: PropsWithChildren) {
     if (isApiOnlyPlatform()) return
 
     const extensionManager = ExtensionManager.getInstance()
+
+    // Electron shell: the dynamic extension system (extensions.json + tgz
+    // activation) is removed; the three built-in extensions are bundled and
+    // registered statically instead. The `typeof IS_ELECTRON` guard keeps this
+    // module dead-code-eliminated out of Tauri builds and undefined-safe in
+    // tests where the define is absent.
+    if (
+      typeof IS_ELECTRON !== 'undefined' &&
+      IS_ELECTRON &&
+      isPlatformElectron()
+    ) {
+      extensionSetupWork ??= import('@/lib/bootstrap/static-extensions')
+        .then(({ registerStaticExtensions }) => registerStaticExtensions())
+        .then(() => {
+          const failedNames = extensionManager.getFailedExtensionNames()
+          if (failedNames.length > 0) {
+            throw new Error(
+              `Extensions failed to load: ${failedNames.join(', ')}`
+            )
+          }
+        })
+        .finally(() => {
+          extensionSetupWork = null
+        })
+
+      await withTimeout(
+        extensionSetupWork,
+        EXTENSION_START_TIMEOUT_MS,
+        `Extension startup timed out after ${EXTENSION_START_TIMEOUT_MS}ms`
+      )
+      return
+    }
+
     extensionSetupWork ??= extensionManager
       .registerActive()
       .then(() => extensionManager.load())

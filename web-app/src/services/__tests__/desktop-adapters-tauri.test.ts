@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { TauriDeepLinkService } from '../deeplink/tauri'
 import { TauriDialogService } from '../dialog/tauri'
 import { TauriEventsService } from '../events/tauri'
 import { TauriOpenerService } from '../opener/tauri'
@@ -7,76 +6,32 @@ import { TauriThemeService } from '../theme/tauri'
 
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
-  onOpenUrl: vi.fn(),
-  getCurrent: vi.fn(),
   emit: vi.fn(),
   listen: vi.fn(),
   revealItemInDir: vi.fn(),
   getAllWebviewWindows: vi.fn(),
 }))
 
-vi.mock('@tauri-apps/api/core', () => ({
+vi.mock('@/lib/tauri-shim/api-core', () => ({
   invoke: mocks.invoke,
 }))
 
-vi.mock('@tauri-apps/plugin-deep-link', () => ({
-  onOpenUrl: mocks.onOpenUrl,
-  getCurrent: mocks.getCurrent,
-}))
-
-vi.mock('@tauri-apps/api/event', () => ({
+vi.mock('@/lib/tauri-shim/api-event', () => ({
   emit: mocks.emit,
   listen: mocks.listen,
 }))
 
-vi.mock('@tauri-apps/plugin-opener', () => ({
+vi.mock('@/lib/tauri-shim/plugin-opener', () => ({
   revealItemInDir: mocks.revealItemInDir,
 }))
 
-vi.mock('@tauri-apps/api/webviewWindow', () => ({
+vi.mock('@/lib/tauri-shim/api-webview-window', () => ({
   getAllWebviewWindows: mocks.getAllWebviewWindows,
 }))
 
 describe('small Tauri desktop service adapters', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-  })
-
-  describe('TauriDeepLinkService', () => {
-    it('registers deep link handlers and returns the Tauri unlisten function', async () => {
-      const service = new TauriDeepLinkService()
-      const handler = vi.fn()
-      const unlisten = vi.fn()
-      mocks.onOpenUrl.mockResolvedValue(unlisten)
-
-      await expect(service.onOpenUrl(handler)).resolves.toBe(unlisten)
-
-      expect(mocks.onOpenUrl).toHaveBeenCalledWith(handler)
-    })
-
-    it('returns a no-op unlisten function when deep link registration fails', async () => {
-      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-      const service = new TauriDeepLinkService()
-      mocks.onOpenUrl.mockRejectedValue(new Error('plugin unavailable'))
-
-      const unlisten = await service.onOpenUrl(vi.fn())
-
-      expect(() => unlisten()).not.toThrow()
-      expect(errorSpy).toHaveBeenCalledWith(
-        'Error setting up deep link handler in Tauri:',
-        expect.any(Error)
-      )
-      errorSpy.mockRestore()
-    })
-
-    it('normalizes current deep links to an array', async () => {
-      const service = new TauriDeepLinkService()
-      mocks.getCurrent.mockResolvedValueOnce(['ax://open'])
-      await expect(service.getCurrent()).resolves.toEqual(['ax://open'])
-
-      mocks.getCurrent.mockResolvedValueOnce(null)
-      await expect(service.getCurrent()).resolves.toEqual([])
-    })
   })
 
   describe('TauriDialogService', () => {

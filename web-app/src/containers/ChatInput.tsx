@@ -7,14 +7,8 @@ import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useAppState } from '@/hooks/settings/useAppState'
 import type { ChatStatus } from 'ai'
-import { useAssistant } from '@/hooks/chat/useAssistant'
-import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
-import { useAkidbConfig } from '@/hooks/research/useAkidbConfig'
-import { useTools } from '@/hooks/tools/useTools'
 import { useMessages } from '@/hooks/chat/useMessages'
 import { useShallow } from 'zustand/react/shallow'
-import { ExtensionTypeEnum, MCPExtension } from '@ax-studio/core'
-import { ExtensionManager } from '@/lib/extension'
 import { useChatSendHandler } from '@/hooks/chat/use-chat-send-handler'
 import {
   useChatAttachments,
@@ -24,7 +18,6 @@ import { useDocumentAttachmentHandler } from '@/hooks/chat/use-document-attachme
 import { useImageAttachmentHandler } from '@/hooks/chat/use-image-attachment-handler'
 import { ChatInputToolbar } from '@/components/chat/ChatInputToolbar'
 import { TemporaryChatNotice } from '@/components/chat/TemporaryChatNotice'
-import { useVoiceInput } from '@/hooks/voice/useVoiceInput'
 import { useTemporaryChat } from '@/hooks/chat/useTemporaryChat'
 import { TEMPORARY_CHAT_ID } from '@/constants/chat'
 import { DropdownModelProvider } from '@/containers/DropdownModelProvider'
@@ -32,12 +25,10 @@ import { ChatInputAttachments } from '@/components/ChatInputAttachments'
 import { TokenCounter } from '@/components/TokenCounter'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { X } from 'lucide-react'
-import { useNavigate } from '@tanstack/react-router'
-import { toast } from 'sonner'
-import { route } from '@/constants/routes'
 import { COMPOSER_FOCUS_EVENT } from '@/types/events'
 import { resolveEffectiveSelectedModel } from '@/lib/chat/selected-model'
 import { hasSendableAttachment } from '@/lib/attachments/sendable'
+import { AxBiStatusIndicator } from '@/containers/AxBiStatusIndicator'
 
 type ChatInputProps = {
   className?: string
@@ -60,86 +51,21 @@ const ChatInput = memo(function ChatInput({
   onStop,
   chatStatus,
 }: ChatInputProps) {
-  const navigate = useNavigate()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isFocused, setIsFocused] = useState(false)
   const [rows, setRows] = useState(1)
   const [message, setMessage] = useState('')
-  const [dropdownToolsAvailable, setDropdownToolsAvailable] = useState(false)
-  const [tooltipToolsAvailable, setTooltipToolsAvailable] = useState(false)
-  const [selectedAssistant, setSelectedAssistant] = useState<
-    Assistant | undefined
-  >(undefined)
 
   // Don't subscribe to the whole `abortControllers` record — every
   // streaming token on any thread would re-render ChatInput. We only
   // need the current thread's controller at stop-time, so read from the
   // store snapshot inside `stopStreaming` below.
-  const cancelToolCall = useAppState((state) => state.cancelToolCall)
-  const tools = useAppState((state) => state.tools)
   const globalPrompt = usePrompt((state) => state.prompt)
   const setGlobalPrompt = usePrompt((state) => state.setPrompt)
   const currentThreadId = useThreads((state) => state.currentThreadId)
   const effectiveThreadId = threadId ?? currentThreadId
 
-  const globalLocalKnowledgeEnabled = useLocalKnowledge(
-    (state) => state.localKnowledgeEnabled
-  )
-  const localKnowledgeEnabledPerThread = useLocalKnowledge(
-    (state) => state.localKnowledgeEnabledPerThread
-  )
-  const toggleLocalKnowledgeGlobal = useLocalKnowledge(
-    (state) => state.toggleLocalKnowledge
-  )
-  const toggleLocalKnowledgeForThread = useLocalKnowledge(
-    (state) => state.toggleLocalKnowledgeForThread
-  )
-
-  const isLocalKnowledgeEnabled = effectiveThreadId
-    ? Object.prototype.hasOwnProperty.call(
-        localKnowledgeEnabledPerThread,
-        effectiveThreadId
-      )
-      ? localKnowledgeEnabledPerThread[effectiveThreadId]
-      : globalLocalKnowledgeEnabled
-    : globalLocalKnowledgeEnabled
-  const toggleLocalKnowledge = useCallback(() => {
-    const enabling = !isLocalKnowledgeEnabled
-    if (effectiveThreadId) {
-      toggleLocalKnowledgeForThread(effectiveThreadId)
-    } else {
-      toggleLocalKnowledgeGlobal()
-    }
-    // When turning Local Knowledge on without a synced folder, point the user to
-    // setup — otherwise the toggle silently does nothing. Non-blocking nudge.
-    if (enabling) {
-      void (async () => {
-        try {
-          const store = useAkidbConfig.getState()
-          if (!store.config) await store.load()
-          const cfg = useAkidbConfig.getState().config
-          const configured = Boolean(cfg?.ingest?.sources?.[0]?.path?.trim())
-          if (!configured) {
-            toast('Set up a knowledge folder to use Local Knowledge', {
-              action: {
-                label: 'Set up',
-                onClick: () => navigate({ to: route.settings.knowledge_base }),
-              },
-            })
-          }
-        } catch {
-          // Ignore — never block toggling on a config read failure.
-        }
-      })()
-    }
-  }, [
-    isLocalKnowledgeEnabled,
-    effectiveThreadId,
-    toggleLocalKnowledgeForThread,
-    toggleLocalKnowledgeGlobal,
-    navigate,
-  ])
   const currentThread = useThreads((state) =>
     effectiveThreadId
       ? state.threads[effectiveThreadId]
@@ -156,9 +82,6 @@ const ChatInput = memo(function ChatInput({
   const isTemporaryThread =
     effectiveThreadId === TEMPORARY_CHAT_ID ||
     Boolean(currentThread?.metadata?.isTemporary)
-  const updateCurrentThreadAssistant = useThreads(
-    (state) => state.updateCurrentThreadAssistant
-  )
   const spellCheckChatInput = useGeneralSetting(
     (state) => state.spellCheckChatInput
   )
@@ -166,8 +89,6 @@ const ChatInput = memo(function ChatInput({
     (state) => state.tokenCounterCompact
   )
   const { t } = useTranslation()
-
-  useTools()
 
   // ─── Document attachments ──────────────────────────────────────────────
   const attachmentsKey = effectiveThreadId || NEW_THREAD_ATTACHMENT_KEY
@@ -228,8 +149,6 @@ const ChatInput = memo(function ChatInput({
     hasMmproj: hasVisionSupport,
     setMessage,
   })
-  const assistants = useAssistant((state) => state.assistants)
-
   const threadMessages = useMessages(
     useShallow((state) =>
       effectiveThreadId ? state.messages[effectiveThreadId] : []
@@ -289,19 +208,11 @@ const ChatInput = memo(function ChatInput({
     }
   }, [])
 
-  useEffect(() => {
-    if (tooltipToolsAvailable && dropdownToolsAvailable)
-      setTooltipToolsAvailable(false)
-  }, [dropdownToolsAvailable, tooltipToolsAvailable])
-
   const { handleSendMessage } = useChatSendHandler({
     onSubmit,
     projectId,
     selectedModel,
     attachmentsKey,
-    assistants,
-    selectedAssistant,
-    setSelectedAssistant,
     setMessage,
     setPrompt,
   })
@@ -315,10 +226,6 @@ const ChatInput = memo(function ChatInput({
     void handleSendMessage(currentPrompt)
   }, [canSubmitAttachments, handleSendMessage, ingestingDocs, prompt])
 
-  // Voice input (on-device whisper.cpp STT) — mic button in the toolbar,
-  // transcript inserted at the textarea cursor.
-  const voiceInput = useVoiceInput({ textareaRef, prompt, setPrompt })
-
   const stopStreaming = useCallback(
     (tid: string) => {
       if (onStop) onStop()
@@ -328,15 +235,10 @@ const ChatInput = memo(function ChatInput({
           abortControllers[tid]?.abort()
         }
       }
-      cancelToolCall(tid)
     },
-    [cancelToolCall, onStop]
+    [onStop]
   )
 
-  const hasActiveMCPServers = tools.length > 0
-  const extensionManager = ExtensionManager.getInstance()
-  const mcpExtension = extensionManager.get<MCPExtension>(ExtensionTypeEnum.MCP)
-  const MCPToolComponent = mcpExtension?.getToolComponent?.()
   const isStreaming = chatStatus === 'submitted' || chatStatus === 'streaming'
 
   // Model selector, rendered inside the composer toolbar. `useLastUsedModel`
@@ -455,21 +357,7 @@ const ChatInput = memo(function ChatInput({
           selectedModel={selectedModel}
           projectId={projectId}
           initialMessage={initialMessage}
-          selectedAssistant={selectedAssistant}
-          setSelectedAssistant={setSelectedAssistant}
-          currentThread={currentThread}
-          updateCurrentThreadAssistant={updateCurrentThreadAssistant}
           effectiveThreadId={effectiveThreadId}
-          assistants={assistants}
-          tools={tools}
-          hasActiveMCPServers={hasActiveMCPServers}
-          MCPToolComponent={MCPToolComponent}
-          dropdownToolsAvailable={dropdownToolsAvailable}
-          setDropdownToolsAvailable={setDropdownToolsAvailable}
-          tooltipToolsAvailable={tooltipToolsAvailable}
-          setTooltipToolsAvailable={setTooltipToolsAvailable}
-          isLocalKnowledgeEnabled={isLocalKnowledgeEnabled}
-          toggleLocalKnowledge={toggleLocalKnowledge}
           temporaryChatEnabled={temporaryChatEnabled}
           onToggleTemporaryChat={toggleTemporaryChat}
           tokenCounterCompact={tokenCounterCompact}
@@ -480,12 +368,6 @@ const ChatInput = memo(function ChatInput({
           onAttachDocuments={handleAttachDocsIngest}
           onAttachImages={handleImagePickerClick}
           ingestingDocs={ingestingDocs}
-          voiceVisible={voiceInput.visible}
-          voiceState={voiceInput.state}
-          voiceLevel={voiceInput.level}
-          voiceElapsedSeconds={voiceInput.elapsedSeconds}
-          onToggleVoice={voiceInput.toggle}
-          onCancelVoice={voiceInput.cancel}
         />
       </div>
 
@@ -507,6 +389,9 @@ const ChatInput = memo(function ChatInput({
           </div>
         </div>
       )}
+
+      {/* Inline AX BI connection status (migration matrix §4). */}
+      <AxBiStatusIndicator />
 
       {!tokenCounterCompact &&
         !initialMessage &&

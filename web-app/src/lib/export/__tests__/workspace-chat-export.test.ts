@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ContentType, MessageStatus, type ThreadMessage } from '@ax-studio/core'
-import type { ThreadFolder } from '@/services/projects/types'
+import type { WorkspaceExportInfo as ThreadFolder } from '@/lib/export/workspace-chat-export'
 import {
   buildWorkspaceChatsExportData,
   workspaceChatsToAlpacaJson,

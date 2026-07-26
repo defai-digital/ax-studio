@@ -4,7 +4,7 @@
  * Written from scratch for Ax-Studio (UNLICENSED).
  */
 
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '../../../web-app/src/lib/tauri-shim/api-core'
 
 export interface ProxyConfig {
   host: string

@@ -1,10 +1,10 @@
 /**
  * ChatInputToolbar — the bottom action bar of ChatInput.
  *
- * Renders: attachment dropdown, capability toggles (tools, reasoning),
- * token counter, and the send/stop button. Pure UI — no data fetching.
+ * Renders: attachment dropdown, capability indicators, token counter, and the
+ * send/stop button. Pure UI — no data fetching.
  */
-import { memo, type ComponentType, type ReactNode } from 'react'
+import { memo, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -17,15 +17,11 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
   ArrowUp,
   Atom,
   Binary,
-  Database,
   EyeOff,
   ImagePlus,
   Loader2,
@@ -33,18 +29,10 @@ import {
   PlusIcon,
   Square,
   type LucideIcon,
-  User,
-  Wrench,
 } from 'lucide-react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { TokenCounter } from '@/components/TokenCounter'
-import { AvatarEmoji } from '@/components/common/AvatarEmoji'
-import { DropdownToolsAvailable } from '@/containers/DropdownToolsAvailable'
-import { McpExtensionToolLoader } from '@/containers/McpExtensionToolLoader'
-import { VoiceMicButton } from '@/components/chat/VoiceMicButton'
-import type { VoiceRecordingState } from '@/services/voice/types'
-import type { MCPToolComponentProps, ThreadMessage } from '@ax-studio/core'
-import type { MCPTool } from '@/types/mcp'
+import type { ThreadMessage } from '@ax-studio/core'
 
 type ToolbarIndicatorProps = {
   icon: LucideIcon
@@ -80,26 +68,9 @@ type Props = {
   modelSelector?: ReactNode
   // Model capabilities
   selectedModel: Model | undefined
-  // Assistant selector
   projectId?: string
   initialMessage?: boolean
-  selectedAssistant: Assistant | undefined
-  setSelectedAssistant: (a: Assistant | undefined) => void
-  currentThread: Thread | undefined | null
-  updateCurrentThreadAssistant: (a: Assistant | undefined) => void
   effectiveThreadId?: string
-  assistants: Assistant[]
-  // MCP tools
-  tools: MCPTool[]
-  hasActiveMCPServers: boolean
-  MCPToolComponent?: ComponentType<MCPToolComponentProps> | null
-  dropdownToolsAvailable: boolean
-  setDropdownToolsAvailable: (v: boolean) => void
-  tooltipToolsAvailable: boolean
-  setTooltipToolsAvailable: (v: boolean) => void
-  // Local knowledge
-  isLocalKnowledgeEnabled: boolean
-  toggleLocalKnowledge: () => void
   // Temporary chat (new-chat composer only)
   temporaryChatEnabled?: boolean
   onToggleTemporaryChat?: () => void
@@ -113,14 +84,6 @@ type Props = {
   onAttachDocuments?: () => void
   onAttachImages?: () => void
   ingestingDocs?: boolean
-  // Voice input (local whisper.cpp STT) — rendered before the send button
-  // when `voiceVisible` is set (desktop shell + feature enabled).
-  voiceVisible?: boolean
-  voiceState?: VoiceRecordingState
-  voiceLevel?: number
-  voiceElapsedSeconds?: number
-  onToggleVoice?: () => void
-  onCancelVoice?: () => void
 }
 
 export const ChatInputToolbar = memo(function ChatInputToolbar({
@@ -130,21 +93,7 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
   selectedModel,
   projectId,
   initialMessage,
-  selectedAssistant,
-  setSelectedAssistant,
-  currentThread,
-  updateCurrentThreadAssistant,
   effectiveThreadId,
-  assistants,
-  tools,
-  hasActiveMCPServers,
-  MCPToolComponent,
-  dropdownToolsAvailable,
-  setDropdownToolsAvailable,
-  tooltipToolsAvailable,
-  setTooltipToolsAvailable,
-  isLocalKnowledgeEnabled,
-  toggleLocalKnowledge,
   temporaryChatEnabled = false,
   onToggleTemporaryChat,
   tokenCounterCompact,
@@ -155,16 +104,8 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
   onAttachDocuments,
   onAttachImages,
   ingestingDocs,
-  voiceVisible = false,
-  voiceState = 'idle',
-  voiceLevel = 0,
-  voiceElapsedSeconds = 0,
-  onToggleVoice,
-  onCancelVoice,
 }: Props) {
   const { t } = useTranslation()
-  const selectedModelHasTools =
-    selectedModel?.capabilities?.includes('tools') ?? false
 
   return (
     <div className="absolute z-20 bg-transparent bottom-0 w-full px-2 pb-2 pt-1">
@@ -220,84 +161,6 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                     <span>Attach Image</span>
                   </DropdownMenuItem>
                 )}
-                {!projectId && (
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger>
-                      <User size={18} className="text-muted-foreground" />
-                      <span>Use Assistant</span>
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent>
-                      <DropdownMenuItem
-                        className={
-                          !selectedAssistant &&
-                          !currentThread?.assistants?.length
-                            ? 'bg-accent'
-                            : ''
-                        }
-                        onClick={() => {
-                          setSelectedAssistant(undefined)
-                          if (effectiveThreadId)
-                            updateCurrentThreadAssistant(undefined)
-                        }}
-                      >
-                        <div className="flex items-center gap-2 w-full">
-                          <span className="text-muted-foreground">—</span>
-                          <span>None</span>
-                          {!selectedAssistant &&
-                            !currentThread?.assistants?.length && (
-                              <span className="ml-auto text-xs text-muted-foreground">
-                                ✓
-                              </span>
-                            )}
-                        </div>
-                      </DropdownMenuItem>
-                      {assistants.length > 0 ? (
-                        assistants.map((assistant) => {
-                          const isSelected =
-                            (initialMessage &&
-                              selectedAssistant?.id === assistant.id) ||
-                            (assistant &&
-                              currentThread?.assistants?.some(
-                                (a) => a.id === assistant.id
-                              ))
-                          return (
-                            <DropdownMenuItem
-                              key={assistant.id}
-                              className={isSelected ? 'bg-accent' : ''}
-                              onClick={() => {
-                                setSelectedAssistant(assistant)
-                                if (effectiveThreadId)
-                                  updateCurrentThreadAssistant(assistant)
-                              }}
-                            >
-                              <div className="flex items-center gap-2 w-full">
-                                <AvatarEmoji
-                                  avatar={assistant.avatar}
-                                  imageClassName="w-4 h-4 object-contain"
-                                  textClassName="text-sm"
-                                />
-                                <span>
-                                  {assistant.name || 'Unnamed Assistant'}
-                                </span>
-                                {isSelected && (
-                                  <span className="ml-auto text-xs text-muted-foreground">
-                                    ✓
-                                  </span>
-                                )}
-                              </div>
-                            </DropdownMenuItem>
-                          )
-                        })
-                      ) : (
-                        <DropdownMenuItem disabled>
-                          <span className="text-muted-foreground">
-                            No assistants available
-                          </span>
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                )}
               </DropdownMenuContent>
             </DropdownMenu>
 
@@ -308,98 +171,6 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                 tooltip={<p>{t('embeddings')}</p>}
               />
             )}
-
-            {hasActiveMCPServers &&
-              (selectedModelHasTools && MCPToolComponent ? (
-                <McpExtensionToolLoader
-                  tools={tools}
-                  hasActiveMCPServers={hasActiveMCPServers}
-                  selectedModelHasTools={selectedModelHasTools}
-                  initialMessage={initialMessage}
-                  threadId={effectiveThreadId}
-                  MCPToolComponent={MCPToolComponent}
-                />
-              ) : (
-                <Tooltip
-                  open={tooltipToolsAvailable}
-                  onOpenChange={setTooltipToolsAvailable}
-                >
-                  <TooltipTrigger asChild disabled={dropdownToolsAvailable}>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      aria-label={t('tools')}
-                      title={t('tools')}
-                      onClick={(e) => {
-                        setDropdownToolsAvailable(false)
-                        e.stopPropagation()
-                      }}
-                    >
-                      <DropdownToolsAvailable
-                        initialMessage={initialMessage}
-                        threadId={effectiveThreadId}
-                        onOpenChange={(isOpen) => {
-                          setDropdownToolsAvailable(isOpen)
-                          if (isOpen) setTooltipToolsAvailable(false)
-                        }}
-                      >
-                        {() => (
-                          <div className="p-1 flex items-center justify-center rounded-sm transition-all duration-200 ease-in-out gap-1 cursor-pointer">
-                            <Wrench
-                              size={18}
-                              className="text-muted-foreground"
-                            />
-                          </div>
-                        )}
-                      </DropdownToolsAvailable>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>
-                      {selectedModelHasTools
-                        ? t('tools')
-                        : 'Tools available, but the selected model is not marked as tool-capable'}
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              ))}
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={
-                    isLocalKnowledgeEnabled
-                      ? t('common:localKnowledgeActive')
-                      : t('common:localKnowledge')
-                  }
-                  aria-pressed={isLocalKnowledgeEnabled}
-                  title={
-                    isLocalKnowledgeEnabled
-                      ? t('common:localKnowledgeActive')
-                      : t('common:localKnowledge')
-                  }
-                  onClick={toggleLocalKnowledge}
-                >
-                  <Database
-                    size={18}
-                    className={cn(
-                      isLocalKnowledgeEnabled
-                        ? 'text-primary'
-                        : 'text-muted-foreground'
-                    )}
-                  />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>
-                  {isLocalKnowledgeEnabled
-                    ? t('common:localKnowledgeActive')
-                    : t('common:localKnowledge')}
-                </p>
-              </TooltipContent>
-            </Tooltip>
 
             {/* Temporary chat toggle — only on the new-chat composer. While
                 viewing an existing thread there is no mid-thread mode switch;
@@ -460,16 +231,6 @@ export const ChatInputToolbar = memo(function ChatInputToolbar({
                 <TokenCounter messages={threadMessages || []} />
               </div>
             )}
-
-          {voiceVisible && (
-            <VoiceMicButton
-              state={voiceState}
-              level={voiceLevel}
-              elapsedSeconds={voiceElapsedSeconds}
-              onToggle={onToggleVoice ?? (() => {})}
-              onCancel={onCancelVoice ?? (() => {})}
-            />
-          )}
 
           {isStreaming ? (
             <Button

@@ -18,10 +18,6 @@ fi
 echo "=== AX Studio Quality Gates ==="
 echo ""
 
-# 0. App version lockstep (tauri.conf / package.json / Cargo manifests)
-echo "--- Step 0: App version sync ---"
-node scripts/release/check-version-sync.mjs
-
 # 1. Run tests with coverage
 echo "--- Step 1: Run tests with coverage ---"
 "$VITEST_BIN" run --coverage

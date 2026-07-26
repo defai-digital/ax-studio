@@ -1,0 +1,31 @@
+{
+  "name": "@ax-studio/tauri-plugin-llamacpp-api",
+  "version": "2.2.2",
+  "private": true,
+  "description": "Guest JS API surface of the former tauri-plugin-llamacpp (invoke wrappers + types), consumed by @ax-studio/llamacpp-extension. Only @tauri-apps/api/core is used, which the Electron renderer shim provides.",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/defai-digital/ax-studio",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/defai-digital/ax-studio.git",
+    "directory": "extensions/llamacpp-api"
+  },
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "test": "vitest",
+    "test:run": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "5.9.2",
+    "vitest": "3.2.6"
+  },
+  "installConfig": {
+    "hoistingLimits": "workspaces"
+  },
+  "packageManager": "yarn@4.5.3"
+}

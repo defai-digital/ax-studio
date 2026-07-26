@@ -1,7 +1,7 @@
 import { create } from 'zustand'
-import { getServiceHub, useServiceHub } from '@/hooks/useServiceHub'
 import { useThreads } from '@/hooks/threads/useThreads'
-import type { ChatFolder, ChatTag } from '@/services/chat-organization/types'
+import * as persistence from '@/lib/chat-organization'
+import type { ChatFolder, ChatTag } from '@/lib/chat-organization'
 import { useEffect } from 'react'
 
 type ChatOrganizationState = {
@@ -42,17 +42,15 @@ const useChatOrganizationStore = create<ChatOrganizationState>()((set) => ({
   },
 
   addFolder: async (name) => {
-    const service = getServiceHub().chatOrganization()
-    const newFolder = await service.addFolder(name)
-    const { folders, tags } = await service.getOrganization()
+    const newFolder = await persistence.addFolder(name)
+    const { folders, tags } = await persistence.getOrganization()
     set({ folders, tags })
     return newFolder
   },
 
   renameFolder: async (id, name) => {
-    const service = getServiceHub().chatOrganization()
-    await service.renameFolder(id, name)
-    const { folders, tags } = await service.getOrganization()
+    await persistence.renameFolder(id, name)
+    const { folders, tags } = await persistence.getOrganization()
     set({ folders, tags })
   },
 
@@ -60,8 +58,7 @@ const useChatOrganizationStore = create<ChatOrganizationState>()((set) => ({
     // Delete the folder first. If persistence fails, member threads must keep
     // their assignment rather than being silently unfiled from a folder that
     // still exists on disk.
-    const service = getServiceHub().chatOrganization()
-    await service.deleteFolder(id)
+    await persistence.deleteFolder(id)
 
     // Clear membership on member threads — never delete the threads.
     const threadsState = useThreads.getState()
@@ -73,7 +70,7 @@ const useChatOrganizationStore = create<ChatOrganizationState>()((set) => ({
         })
       })
 
-    const { folders, tags } = await service.getOrganization()
+    const { folders, tags } = await persistence.getOrganization()
     set((state) => ({
       folders,
       tags,
@@ -84,25 +81,22 @@ const useChatOrganizationStore = create<ChatOrganizationState>()((set) => ({
   },
 
   addTag: async (name) => {
-    const service = getServiceHub().chatOrganization()
-    const newTag = await service.addTag(name)
-    const { folders, tags } = await service.getOrganization()
+    const newTag = await persistence.addTag(name)
+    const { folders, tags } = await persistence.getOrganization()
     set({ folders, tags })
     return newTag
   },
 
   renameTag: async (id, name) => {
-    const service = getServiceHub().chatOrganization()
-    await service.renameTag(id, name)
-    const { folders, tags } = await service.getOrganization()
+    await persistence.renameTag(id, name)
+    const { folders, tags } = await persistence.getOrganization()
     set({ folders, tags })
   },
 
   deleteTag: async (id) => {
     // Preserve thread metadata if the tag itself could not be persisted as
     // deleted; otherwise the UI and storage disagree after a reload.
-    const service = getServiceHub().chatOrganization()
-    await service.deleteTag(id)
+    await persistence.deleteTag(id)
 
     // Clear membership on member threads — never delete the threads.
     const threadsState = useThreads.getState()
@@ -120,7 +114,7 @@ const useChatOrganizationStore = create<ChatOrganizationState>()((set) => ({
         })
       })
 
-    const { folders, tags } = await service.getOrganization()
+    const { folders, tags } = await persistence.getOrganization()
     set((state) => ({
       folders,
       tags,
@@ -151,19 +145,16 @@ const useChatOrganizationStore = create<ChatOrganizationState>()((set) => ({
 }))
 
 export const useChatOrganization = () => {
-  const serviceHub = useServiceHub()
   const store = useChatOrganizationStore()
 
-  // Load folders/tags from the service on mount (mirrors useThreadManagement).
+  // Load folders/tags from localStorage on mount (mirrors useThreadManagement).
   // A cancelled flag keeps a slow load from overwriting the store with stale
   // data after unmount.
   useEffect(() => {
     let cancelled = false
     const syncOrganization = async () => {
       try {
-        const { folders, tags } = await serviceHub
-          .chatOrganization()
-          .getOrganization()
+        const { folders, tags } = await persistence.getOrganization()
         if (cancelled) return
         useChatOrganizationStore.setState({ folders, tags })
       } catch (error) {
@@ -175,7 +166,7 @@ export const useChatOrganization = () => {
     return () => {
       cancelled = true
     }
-  }, [serviceHub])
+  }, [])
 
   return store
 }

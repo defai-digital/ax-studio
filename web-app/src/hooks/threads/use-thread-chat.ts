@@ -29,6 +29,8 @@ import {
 } from '@/lib/messages'
 import { getVersionMeta, selectVisibleMessages } from '@/lib/messages/versions'
 import { runAxBiAuthoringWorkflow } from '@/lib/ax-bi/authoring-workflow'
+import { recordAxBiChatRun } from '@/lib/ax-bi/run-history'
+import { isPlatformElectron } from '@/lib/platform/utils'
 import {
   ThreadMessage,
   MessageStatus,
@@ -123,17 +125,6 @@ export type ThreadChatParams = {
   sendMessage: SendMessageFn
   regenerate: RegenerateFn
   setChatMessages: (msgs: UIMessage[]) => void
-  resetTurnState?: () => void
-
-  prepareLocalKnowledge?: (text: string) => Promise<{
-    context: string
-    retrieval?: {
-      searched: boolean
-      extracted: boolean
-      source?: string
-      error?: string
-    }
-  }>
 }
 
 type ThreadChatResult = {
@@ -156,8 +147,6 @@ export function useThreadChat({
   sendMessage,
   regenerate,
   setChatMessages,
-  resetTurnState,
-  prepareLocalKnowledge,
 }: ThreadChatParams): ThreadChatResult {
   const serviceHub = useServiceHub()
   const addMessage = useMessages((state) => state.addMessage)
@@ -370,11 +359,6 @@ export function useThreadChat({
       const attachments =
         readyAttachments.length > 0 ? readyAttachments : undefined
 
-      const localKnowledge = prepareLocalKnowledge
-        ? await prepareLocalKnowledge(normalizedText)
-        : { context: '' }
-      const knowledgeContext = localKnowledge.context
-      
       // Add file path information for document attachments so the LLM can reference them
       const docAttachments = attachments?.filter(
         (att) => att.type === 'document' && att.path
@@ -383,9 +367,7 @@ export function useThreadChat({
         ? `\n\n[Attached files: ${docAttachments.map((a) => `${a.name} at ${a.path}`).join(', ')}]`
         : ''
       
-      const modelText = knowledgeContext
-        ? `${text}${knowledgeContext}${filePathInfo}`
-        : `${text}${filePathInfo}`
+      const modelText = `${text}${filePathInfo}`
 
       const userMessage = newUserThreadContent(
         threadId,
@@ -403,22 +385,29 @@ export function useThreadChat({
           })),
         } as ThreadMessage['metadata']
       }
-      if (localKnowledge.retrieval) {
-        userMessage.metadata = {
-          ...(userMessage.metadata as Record<string, unknown> | undefined),
-          localKnowledgeRetrieval: localKnowledge.retrieval,
-        } as ThreadMessage['metadata']
-      }
       addMessage(userMessage)
       updateThreadTimestamp(threadId)
 
       const directAxBiResult = await runAxBiAuthoringWorkflow({
         prompt: normalizedText,
         attachments: pendingAttachments,
-        serviceHub,
       })
 
       if (directAxBiResult.handled) {
+        // Electron: mirror the delegation into the slim `/ax-bi` run history
+        // (migration matrix §4). Tauri records runs from its workspace only.
+        if (isPlatformElectron()) {
+          recordAxBiChatRun({
+            prompt: normalizedText,
+            message: directAxBiResult.message,
+            status:
+              directAxBiResult.status === 'failed' ||
+              directAxBiResult.status === 'blocked'
+                ? 'error'
+                : 'ready',
+            url: directAxBiResult.artifactUrl,
+          })
+        }
         const assistantMessage = newAssistantThreadContent(
           threadId,
           directAxBiResult.message,
@@ -450,18 +439,10 @@ export function useThreadChat({
         return
       }
 
-      // Request parts include hidden local-knowledge context for the model.
-      // Visible parts keep the user's chat bubble clean.
       const requestParts: MessagePart[] = [
         {
           type: 'text',
           text: modelText,
-        },
-      ]
-      const visibleParts: MessagePart[] = [
-        {
-          type: 'text',
-          text: userMessage.content[0].text?.value ?? text,
         },
       ]
 
@@ -475,7 +456,6 @@ export function useThreadChat({
               url: `data:${att.mimeType};base64,${att.base64}`,
             }
             requestParts.push(filePart)
-            visibleParts.push(filePart)
           }
         }
       }
@@ -492,27 +472,6 @@ export function useThreadChat({
         metadata: messageMeta,
       })
 
-      if (knowledgeContext) {
-        queueMicrotask(() => {
-          // Read live session store inside the microtask so this callback does
-          // not depend on `chatMessages` identity (which changes every streamed
-          // token and would re-render the memoized composer).
-          const liveMessages =
-            useChatSessions.getState().sessions[threadId]?.chat?.messages ?? []
-          setChatMessages(
-            liveMessages.map((message) =>
-              message.id === messageId
-                ? {
-                    ...message,
-                    metadata: userMessage.metadata as Record<string, unknown>,
-                    parts: visibleParts,
-                  }
-                : message
-            )
-          )
-        })
-      }
-
       // Clear attachments after sending
       if (pendingAttachments.length > 0) {
         useChatAttachments.getState().clearAttachments(attachmentsKey)
@@ -525,8 +484,6 @@ export function useThreadChat({
       renameThread,
       sendMessage,
       setChatMessages,
-      prepareLocalKnowledge,
-      serviceHub,
     ]
   )
 
@@ -584,7 +541,6 @@ export function useThreadChat({
 
   const handleRegenerate = useCallback(
     (messageId?: string) => {
-      resetTurnState?.()
       const allMessages = useMessages.getState().getMessages(threadId)
       const visibleMessages = selectVisibleMessages(allMessages)
 
@@ -645,7 +601,7 @@ export function useThreadChat({
 
       regenerate(messageId ? { messageId } : undefined)
     },
-    [threadId, updateMessages, regenerate, resetTurnState]
+    [threadId, updateMessages, regenerate]
   )
 
   // ─── Switch version ─────────────────────────────────────────────────────────

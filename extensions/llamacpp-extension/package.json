@@ -15,7 +15,7 @@
   },
   "scripts": {
     "build": "rolldown -c rolldown.config.mjs",
-    "build:publish": "rimraf *.tgz --glob || true && yarn build && npm pack && mkdir -p ../../pre-install && cp *.tgz ../../pre-install/",
+    "build:publish": "rimraf *.tgz --glob || true && yarn build && npm pack",
     "test": "vitest",
     "test:run": "vitest run"
   },
@@ -28,10 +28,7 @@
   },
   "dependencies": {
     "@ax-studio/core": "../../core/package.tgz",
-    "@ax-studio/tauri-plugin-llamacpp-api": "link:../../src-tauri/plugins/tauri-plugin-llamacpp",
-    "@tauri-apps/api": "2.8.0",
-    "@tauri-apps/plugin-http": "2.5.0",
-    "@tauri-apps/plugin-log": "^2.6.0"
+    "@ax-studio/tauri-plugin-llamacpp-api": "link:../llamacpp-api"
   },
   "peerDependencies": {
     "react": "19.0.1"

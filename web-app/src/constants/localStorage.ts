@@ -9,6 +9,10 @@ export const localStorageKey = {
   settingGeneral: 'setting-general',
   axBiSessions: 'ax-bi-sessions',
   axBiMcpToken: 'ax-bi-mcp-token',
+  /** Electron-only dev/smoke override for the AX BI MCP endpoint. */
+  axBiMcpUrlOverride: 'ax-bi-mcp-url-override',
+  /** Electron slim AX BI view: last dataset picked in the dataset selector. */
+  axBiLastDataset: 'ax-bi-last-dataset',
 
   settingCodeBlock: 'setting-code-block',
   settingLocalApiServer: 'setting-local-api-server',

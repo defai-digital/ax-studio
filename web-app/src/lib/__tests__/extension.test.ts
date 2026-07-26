@@ -19,7 +19,7 @@ vi.mock('@ax-studio/core', () => ({
   AppRoutes: [],
 }))
 
-vi.mock('@tauri-apps/api/core', () => ({
+vi.mock('@/lib/tauri-shim/api-core', () => ({
   convertFileSrc: vi.fn((path) => `asset://${path}`),
   invoke: vi.fn(),
 }))
@@ -169,14 +169,14 @@ describe('extension.ts', () => {
     })
 
     it('should convert file source correctly', async () => {
-      const { convertFileSrc } = await import('@tauri-apps/api/core')
+      const { convertFileSrc } = await import('@/lib/tauri-shim/api-core')
       convertFileSrc('/path/to/extension.js')
 
       expect(convertFileSrc).toHaveBeenCalledWith('/path/to/extension.js')
     })
 
     it('should invoke tauri commands', async () => {
-      const { invoke } = await import('@tauri-apps/api/core')
+      const { invoke } = await import('@/lib/tauri-shim/api-core')
       vi.mocked(invoke).mockResolvedValue('success')
 
       await invoke('test_command', { param: 'value' })

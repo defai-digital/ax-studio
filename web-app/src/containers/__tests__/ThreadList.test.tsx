@@ -345,43 +345,6 @@ describe('ThreadList', () => {
   })
 })
 
-describe('formatRelativeTime (via ThreadItem)', () => {
-  it('shows "Just now" for very recent threads', () => {
-    const threads = [
-      makeThread({ id: 't1', title: 'Recent', updated: Date.now() / 1000 }),
-    ]
-    render(<ThreadList threads={threads} currentProjectId="proj1" />)
-    expect(screen.getByText('common:time.justNow')).toBeInTheDocument()
-  })
-
-  it('shows minutes ago for threads updated minutes ago', () => {
-    const fiveMinAgo = Date.now() / 1000 - 300
-    const threads = [
-      makeThread({ id: 't1', title: 'Minutes', updated: fiveMinAgo }),
-    ]
-    render(<ThreadList threads={threads} currentProjectId="proj1" />)
-    expect(screen.getByText('common:time.minutesAgo')).toBeInTheDocument()
-  })
-
-  it('shows hours ago for threads updated hours ago', () => {
-    const twoHoursAgo = Date.now() / 1000 - 7200
-    const threads = [
-      makeThread({ id: 't1', title: 'Hours', updated: twoHoursAgo }),
-    ]
-    render(<ThreadList threads={threads} currentProjectId="proj1" />)
-    expect(screen.getByText('common:time.hoursAgo')).toBeInTheDocument()
-  })
-
-  it('shows days ago for threads updated days ago', () => {
-    const threeDaysAgo = Date.now() / 1000 - 259200
-    const threads = [
-      makeThread({ id: 't1', title: 'Days', updated: threeDaysAgo }),
-    ]
-    render(<ThreadList threads={threads} currentProjectId="proj1" />)
-    expect(screen.getByText('common:time.daysAgo')).toBeInTheDocument()
-  })
-})
-
 describe('ThreadItem folder and tag menus', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -449,21 +412,12 @@ describe('ThreadItem folder and tag menus', () => {
     expect(mockChatOrganization.assignFolder).not.toHaveBeenCalled()
   })
 
-  it('hides Move to folder for project threads but keeps Edit tags', () => {
-    render(
-      <ThreadList
-        threads={[
-          makeThread({
-            id: 't1',
-            metadata: { project: { id: 'p1', name: 'Proj' } },
-          }),
-        ]}
-      />
-    )
+  it('renders Move to folder and Edit tags unconditionally', () => {
+    render(<ThreadList threads={[makeThread({ id: 't1' })]} />)
 
     expect(
-      screen.queryByText('common:chatOrganization.moveToFolder')
-    ).toBeNull()
+      screen.getAllByText('common:chatOrganization.moveToFolder').length
+    ).toBeGreaterThan(0)
     expect(
       screen.getAllByText('common:chatOrganization.editTags').length
     ).toBeGreaterThan(0)

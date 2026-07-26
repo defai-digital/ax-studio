@@ -1,0 +1,16 @@
+{
+  "name": "@ax-studio/electron-example-host",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Minimal example: embedding AX Studio in a host Electron app (Phase 5)",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "start": "node run.mjs",
+    "smoke": "node run.mjs --smoke"
+  },
+  "dependencies": {
+    "@ax-studio/electron": "workspace:*"
+  }
+}

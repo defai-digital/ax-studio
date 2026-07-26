@@ -2,14 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { TauriPathService } from '../path/tauri'
 import { dirnameFallback } from '../path/fallback'
 
-// Mock the @tauri-apps/api/path module
+// Mock the tauri/api/path module
 const mockBasename = vi.fn()
 const mockDirname = vi.fn()
 const mockExtname = vi.fn()
 const mockJoin = vi.fn()
 const mockSep = vi.fn()
 
-vi.mock('@tauri-apps/api/path', () => ({
+vi.mock('@/lib/tauri-shim/api-path', () => ({
   basename: (...args: any[]) => mockBasename(...args),
   dirname: (...args: any[]) => mockDirname(...args),
   extname: (...args: any[]) => mockExtname(...args),

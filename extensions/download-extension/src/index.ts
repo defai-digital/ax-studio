@@ -1,5 +1,5 @@
-import { invoke } from '@tauri-apps/api/core'
-import { listen } from '@tauri-apps/api/event'
+import { invoke } from '../../../web-app/src/lib/tauri-shim/api-core'
+import { listen } from '../../../web-app/src/lib/tauri-shim/api-event'
 import { BaseExtension, validateUrlProtocol } from '@ax-studio/core'
 
 interface DownloadItem {

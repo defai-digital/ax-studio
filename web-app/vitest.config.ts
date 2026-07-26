@@ -12,12 +12,27 @@ export default mergeConfig(
     plugins: [react()],
     resolve: {
       alias: {
+        // @tauri-apps/* imports resolve to the permanent Electron shim so
+        // tests that vi.mock('@tauri-apps/api/core', ...) keep resolving.
+        '@tauri-apps/api/core': path.resolve(__dirname, './src/lib/tauri-shim/api-core.ts'),
+        '@tauri-apps/api/event': path.resolve(__dirname, './src/lib/tauri-shim/api-event.ts'),
+        '@tauri-apps/api/window': path.resolve(__dirname, './src/lib/tauri-shim/api-window.ts'),
+        '@tauri-apps/api/webviewWindow': path.resolve(__dirname, './src/lib/tauri-shim/api-webview-window.ts'),
+        '@tauri-apps/api/path': path.resolve(__dirname, './src/lib/tauri-shim/api-path.ts'),
+        '@tauri-apps/plugin-opener': path.resolve(__dirname, './src/lib/tauri-shim/plugin-opener.ts'),
+        '@tauri-apps/plugin-store': path.resolve(__dirname, './src/lib/tauri-shim/plugin-store.ts'),
+        '@tauri-apps/plugin-http': path.resolve(__dirname, './src/lib/tauri-shim/plugin-http.ts'),
+        '@tauri-apps/plugin-updater': path.resolve(__dirname, './src/lib/tauri-shim/plugin-updater.ts'),
+        '@tauri-apps/plugin-deep-link': path.resolve(__dirname, './src/lib/tauri-shim/plugin-deep-link.ts'),
+        '@tauri-apps/plugin-global-shortcut': path.resolve(__dirname, './src/lib/tauri-shim/plugin-global-shortcut.ts'),
+        '@tauri-apps/plugin-log': path.resolve(__dirname, './src/lib/tauri-shim/plugin-log.ts'),
+        '@tauri-apps/api': path.resolve(__dirname, './src/lib/tauri-shim/api.ts'),
         '@': path.resolve(__dirname, './src'),
         '@ax-studio/core': path.resolve(__dirname, '../core/src/index.ts'),
       },
     },
     define: {
-      IS_TAURI: false,
+      IS_ELECTRON: false,
       IS_WEB_APP: false,
       IS_MACOS: false,
       IS_WINDOWS: false,

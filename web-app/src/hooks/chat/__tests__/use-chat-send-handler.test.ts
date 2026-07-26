@@ -5,13 +5,13 @@ import { renderHook, act } from '@testing-library/react'
 
 // All mock variables used inside vi.mock must use vi.hoisted to avoid
 // "Cannot access before initialization" errors due to vi.mock hoisting.
-const { mockNavigate, mockCreateThread, mockUpdateThread, mockGetProjectById } =
-  vi.hoisted(() => ({
+const { mockNavigate, mockCreateThread, mockUpdateThread } = vi.hoisted(
+  () => ({
     mockNavigate: vi.fn(),
     mockCreateThread: vi.fn(),
     mockUpdateThread: vi.fn(),
-    mockGetProjectById: vi.fn(),
-  }))
+  })
+)
 
 // Mutable state for model provider — cannot use vi.hoisted for these
 // because they need reassignment in tests. We use a shared object instead.
@@ -67,9 +67,7 @@ vi.mock('@/hooks/models/useModelProvider', () => ({
 }))
 
 vi.mock('@/hooks/useServiceHub', () => ({
-  useServiceHub: () => ({
-    projects: () => ({ getProjectById: mockGetProjectById }),
-  }),
+  useServiceHub: () => ({}),
   getServiceHub: () => ({}),
   initializeServiceHubStore: vi.fn(),
 }))
@@ -89,9 +87,8 @@ function defaultInput() {
   return {
     onSubmit: undefined as ((text: string) => void) | undefined,
     projectId: undefined as string | undefined,
-    assistants: [] as Assistant[],
-    selectedAssistant: undefined as Assistant | undefined,
-    setSelectedAssistant: vi.fn(),
+    attachmentsKey: undefined as string | undefined,
+    selectedModel: undefined as { id: string } | undefined,
     setMessage: vi.fn(),
     setPrompt: vi.fn(),
   }
@@ -140,9 +137,7 @@ describe('useChatSendHandler', () => {
 
     expect(mockCreateThread).toHaveBeenCalledWith(
       { id: 'default-model-id', provider: 'openai' },
-      'hello',
-      undefined,
-      undefined
+      'hello'
     )
     expect(input.setMessage).not.toHaveBeenCalledWith(
       'Please select a model to start chatting.'
@@ -294,9 +289,7 @@ describe('useChatSendHandler', () => {
     // isTemporary is not set → persisted thread path
     expect(mockCreateThread).toHaveBeenCalledWith(
       { id: 'model-1', provider: 'openai' },
-      'regular prompt',
-      undefined,
-      undefined
+      'regular prompt'
     )
     expect(mockNavigate).toHaveBeenCalledWith({
       to: '/threads/$threadId',
@@ -319,9 +312,7 @@ describe('useChatSendHandler', () => {
 
     expect(mockCreateThread).toHaveBeenCalledWith(
       { id: 'model-1', provider: 'openai' },
-      'hello world',
-      undefined,
-      undefined
+      'hello world'
     )
 
     expect(sessionStorage.getItem('initial-message-new-thread-1')).toBe(
@@ -331,85 +322,10 @@ describe('useChatSendHandler', () => {
     expect(mockUpdateThread).toHaveBeenCalledWith('new-thread-1', {
       metadata: { pendingInitialMessage: 'hello world' },
     })
-    expect(input.setSelectedAssistant).toHaveBeenCalledWith(undefined)
     expect(mockNavigate).toHaveBeenCalledWith({
       to: '/threads/$threadId',
       params: { threadId: 'new-thread-1' },
     })
     expect(input.setPrompt).toHaveBeenCalledWith('')
-  })
-
-  // ── Phase 5: New thread with project ─────────────────────────────────────
-
-  it('fetches project metadata and uses project assistant when projectId is given', async () => {
-    const project = {
-      id: 'proj-1',
-      name: 'My Project',
-      updated_at: 1000,
-      logo: 'logo.png',
-      projectPrompt: 'Be helpful',
-      assistantId: 'assistant-1',
-    }
-    mockGetProjectById.mockResolvedValue(project)
-
-    const projectAssistant = {
-      id: 'assistant-1',
-      name: 'Project Assistant',
-    } as Assistant
-    const otherAssistant = { id: 'assistant-2', name: 'Other' } as Assistant
-
-    const newThread = { id: 'thread-proj', metadata: {} }
-    mockCreateThread.mockResolvedValue(newThread)
-
-    const input = {
-      ...defaultInput(),
-      projectId: 'proj-1',
-      assistants: [projectAssistant, otherAssistant],
-      selectedAssistant: otherAssistant,
-    }
-    const { result } = renderHook(() => useChatSendHandler(input))
-
-    await act(async () => {
-      await result.current.handleSendMessage('project prompt')
-    })
-
-    // Should use project assistant, not selectedAssistant
-    expect(mockCreateThread).toHaveBeenCalledWith(
-      { id: 'model-1', provider: 'openai' },
-      'project prompt',
-      projectAssistant,
-      {
-        id: 'proj-1',
-        name: 'My Project',
-        updated_at: 1000,
-        logo: 'logo.png',
-        projectPrompt: 'Be helpful',
-      }
-    )
-  })
-
-  it('gracefully handles project fetch failure', async () => {
-    mockGetProjectById.mockRejectedValue(new Error('Network error'))
-    const newThread = { id: 'thread-fallback', metadata: {} }
-    mockCreateThread.mockResolvedValue(newThread)
-
-    const input = {
-      ...defaultInput(),
-      projectId: 'proj-fail',
-      selectedAssistant: { id: 'a1', name: 'A1' } as Assistant,
-    }
-    const { result } = renderHook(() => useChatSendHandler(input))
-
-    await act(async () => {
-      await result.current.handleSendMessage('test')
-    })
-
-    // Should still create thread with selectedAssistant (no project assistant)
-    expect(mockCreateThread).toHaveBeenCalledWith(
-      { id: 'model-1', provider: 'openai' },
-      'test',
-      input.selectedAssistant,
-      undefined
-    )
   })
 })

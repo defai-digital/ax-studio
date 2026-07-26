@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useChatOrganizationStore } from '@/hooks/threads/useChatOrganization'
-import type { ChatFolder } from '@/services/chat-organization/types'
+import type { ChatFolder } from '@/lib/chat-organization'
 
 interface DeleteChatFolderDialogProps {
   open: boolean

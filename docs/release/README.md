@@ -2,20 +2,18 @@
 
 | Document | Description |
 | --- | --- |
-| [release.md](release.md) | Public desktop release pipeline (signing, updater, Homebrew, optional winget) |
-| [windows-signing.md](windows-signing.md) | Windows Authenticode, Key Vault, verify policy, cert lifecycle |
-| [windows-cert.json](windows-cert.json) | Public Windows code-signing certificate pin / metadata |
-| [microsoft-store.md](microsoft-store.md) | Microsoft Store NSIS submission runbook |
-| [ax-minisign.pub](ax-minisign.pub) | Minisign public key for verifying release assets |
-| [`../../packaging/winget/README.md`](../../packaging/winget/README.md) | winget manifests + optional winget-pkgs PR automation |
-| [`../../.github/workflows/windows-cert-expiry.yml`](../../.github/workflows/windows-cert-expiry.yml) | Weekly Windows signing-cert expiry check |
+| [release.md](release.md) | Public desktop release pipeline (electron-builder packaging, electron-updater, signing/notarization, Homebrew) |
 
-Scripts that implement these flows live under [`../../scripts/release/`](../../scripts/release/).
+The Tauri-era runbooks (Microsoft Store submission, Windows Key Vault
+signing, minisign verification) were retired with the Tauri toolchain in the
+Electron migration (see
+[`../architecture/electron-migration-phase0-matrix.md`](../architecture/electron-migration-phase0-matrix.md)).
+Windows Authenticode policy for the electron-builder NSIS installer is
+summarized in [release.md](release.md).
 
 Useful local commands:
 
 ```bash
-yarn validate:release
-yarn prepare:windows-distribution -- --version <ver> --artifacts-dir <dir> --out-dir <dir>
-yarn generate:winget -- --version <ver> --x64-sha256 <hex> --arm64-sha256 <hex> --out-dir <dir>
+yarn dist:electron:mac   # unsigned local DMG (CSC_IDENTITY_AUTO_DISCOVERY=false)
+yarn dist:electron:win   # NSIS x64 + arm64
 ```

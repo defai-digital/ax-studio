@@ -1,3 +1,9 @@
+/**
+ * Desktop-bridge guard helpers. Historical name: these wrapped Tauri IPC
+ * calls with a fallback; they now guard Electron bridge calls the same way
+ * (the `tauri/*` imports below them resolve to `@/lib/tauri-shim`).
+ */
+
 export async function withTauriFallback<T>(
   operation: () => Promise<T>,
   failureMessage: string,

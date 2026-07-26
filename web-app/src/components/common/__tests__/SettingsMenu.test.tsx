@@ -3,9 +3,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { SettingsMenu } from '../SettingsMenu'
 import { useMatches } from '@tanstack/react-router'
 
-// Mock global platform constants - simulate desktop (Tauri) environment
-Object.defineProperty(global, 'IS_WEB_APP', { value: false, writable: true })
-
 // Mock dependencies
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to, className }: any) => (
@@ -18,7 +15,8 @@ vi.mock('@tanstack/react-router', () => ({
 
 vi.mock('@/i18n/react-i18next-compat', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, opts?: { defaultValue?: string }) =>
+      opts?.defaultValue ?? key,
   }),
 }))
 
@@ -37,70 +35,49 @@ describe('SettingsMenu', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    localStorage.clear()
     vi.mocked(useMatches).mockReturnValue(mockMatches)
   })
 
-  it('renders all settings page links', () => {
+  it('renders exactly two settings links', () => {
     render(<SettingsMenu />)
 
     const links = screen.getAllByRole('link')
-    // Should have at least the main settings pages
-    expect(links.length).toBeGreaterThanOrEqual(10)
+    expect(links).toHaveLength(2)
   })
 
-  it('renders text labels for menu items', () => {
+  it('renders only the General and Model Providers entries', () => {
     render(<SettingsMenu />)
 
     expect(screen.getByText('common:general')).toBeInTheDocument()
-    expect(screen.getByText('common:interface')).toBeInTheDocument()
-    expect(screen.getByText('common:privacy')).toBeInTheDocument()
     expect(screen.getByText('common:modelProviders')).toBeInTheDocument()
-  })
 
-  it('renders all settings labels', () => {
-    render(<SettingsMenu />)
-    expect(screen.getByText('common:keyboardShortcuts')).toBeInTheDocument()
-    expect(screen.getByText('common:hardware')).toBeInTheDocument()
-    expect(screen.getByText('common:engineSettings')).toBeInTheDocument()
-    expect(screen.getByText('common:local_api_server')).toBeInTheDocument()
-    expect(screen.getByText('common:https_proxy')).toBeInTheDocument()
-    expect(screen.getByText('common:mcp-servers')).toBeInTheDocument()
-  })
-
-  it('renders correct link hrefs for each settings page', () => {
-    render(<SettingsMenu />)
-
-    const links = screen.getAllByRole('link')
-    const hrefs = links.map((link) => link.getAttribute('href'))
-
-    expect(hrefs).toContain('/settings/general')
-    expect(hrefs).toContain('/settings/interface')
-    expect(hrefs).toContain('/settings/privacy')
-    expect(hrefs).toContain('/settings/providers/')
-    expect(hrefs).toContain('/settings/engine-settings')
-  })
-
-  it('keeps engine settings visible when advanced settings start collapsed', () => {
-    localStorage.setItem('workspace-mode', 'simple-chat')
-    localStorage.setItem('settings-show-advanced', 'false')
-
-    render(<SettingsMenu />)
-
-    expect(screen.getByText('common:engineSettings')).toBeInTheDocument()
+    // Everything else was removed or merged into General.
+    expect(screen.queryByText('common:interface')).not.toBeInTheDocument()
+    expect(screen.queryByText('common:privacy')).not.toBeInTheDocument()
     expect(screen.queryByText('common:hardware')).not.toBeInTheDocument()
+    expect(screen.queryByText('common:extensions')).not.toBeInTheDocument()
+    expect(screen.queryByText('common:mcp-servers')).not.toBeInTheDocument()
+    expect(screen.queryByText('common:engineSettings')).not.toBeInTheDocument()
   })
 
-  it('renders group headers', () => {
+  it('links only the kept routes', () => {
     render(<SettingsMenu />)
 
-    expect(screen.getByText('common:settingsGroupApp')).toBeInTheDocument()
-    expect(screen.getByText('common:settingsGroupAi')).toBeInTheDocument()
-    expect(screen.getByText('common:settingsGroupAdvanced')).toBeInTheDocument()
-    expect(screen.getByText('common:settingsGroupOther')).toBeInTheDocument()
+    const hrefs = screen
+      .getAllByRole('link')
+      .map((link) => link.getAttribute('href'))
+
+    expect(hrefs).toEqual(['/settings/general', '/settings/providers/'])
   })
 
-  it('highlights active menu item', () => {
+  it('renders the App and AI group headers', () => {
+    render(<SettingsMenu />)
+
+    expect(screen.getByText('App')).toBeInTheDocument()
+    expect(screen.getByText('AI')).toBeInTheDocument()
+  })
+
+  it('highlights the active menu item', () => {
     render(<SettingsMenu />)
 
     const generalLink = screen.getByText('common:general').closest('a')
@@ -111,42 +88,12 @@ describe('SettingsMenu', () => {
   it('does not highlight inactive menu items', () => {
     render(<SettingsMenu />)
 
-    const interfaceLink = screen.getByText('common:interface').closest('a')
-    expect(interfaceLink?.className).toContain('text-muted-foreground')
-    expect(interfaceLink?.className).not.toContain('bg-primary/10')
+    const providersLink = screen.getByText('common:modelProviders').closest('a')
+    expect(providersLink?.className).toContain('text-muted-foreground')
+    expect(providersLink?.className).not.toContain('bg-primary/10')
   })
 
-  // TDD: Extensions settings page exists at /settings/extensions but the menu
-  // entry was missing. These tests should fail until the entry is added.
-  it('renders extensions menu item label', () => {
-    render(<SettingsMenu />)
-    expect(screen.getByText('common:extensions')).toBeInTheDocument()
-  })
-
-  it('renders extensions link with correct href', () => {
-    render(<SettingsMenu />)
-    const links = screen.getAllByRole('link')
-    const hrefs = links.map((link) => link.getAttribute('href'))
-    expect(hrefs).toContain('/settings/extensions')
-  })
-
-  it('highlights extensions link when on extensions route', () => {
-    vi.mocked(useMatches).mockReturnValue([
-      {
-        routeId: '/settings/extensions',
-        pathname: '/settings/extensions',
-        params: {},
-      },
-    ])
-
-    render(<SettingsMenu />)
-
-    const extensionsLink = screen.getByText('common:extensions').closest('a')
-    expect(extensionsLink?.className).toContain('bg-primary/10')
-    expect(extensionsLink?.className).toContain('text-primary')
-  })
-
-  it('highlights model providers when on provider sub-route', () => {
+  it('highlights model providers when on a provider sub-route', () => {
     vi.mocked(useMatches).mockReturnValue([
       {
         routeId: '/settings/providers/$providerName',
@@ -160,5 +107,23 @@ describe('SettingsMenu', () => {
     const providersLink = screen.getByText('common:modelProviders').closest('a')
     expect(providersLink?.className).toContain('bg-primary/10')
     expect(providersLink?.className).toContain('text-primary')
+
+    const generalLink = screen.getByText('common:general').closest('a')
+    expect(generalLink?.className).not.toContain('bg-primary/10')
+  })
+
+  it('has no workspace-mode or advanced-toggle logic', () => {
+    localStorage.setItem('workspace-mode', 'simple-chat')
+    localStorage.setItem('settings-show-advanced', 'false')
+
+    render(<SettingsMenu />)
+
+    // Still exactly two links regardless of legacy localStorage flags.
+    expect(screen.getAllByRole('link')).toHaveLength(2)
+    expect(
+      screen.queryByText('common:showAdvancedSettings')
+    ).not.toBeInTheDocument()
+
+    localStorage.clear()
   })
 })

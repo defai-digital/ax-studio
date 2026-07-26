@@ -4,7 +4,6 @@ import { KeyboardShortcutsProvider } from '../KeyboardShortcuts'
 
 const mockSetLeftPanel = vi.fn()
 const mockSetSearchOpen = vi.fn()
-const mockSetProjectDialogOpen = vi.fn()
 const mockNavigate = vi.fn()
 
 vi.mock('@/hooks/ui/useHotkeys', () => ({
@@ -21,12 +20,6 @@ vi.mock('@/hooks/ui/useLeftPanel', () => ({
 vi.mock('@/hooks/ui/useSearchDialog', () => ({
   useSearchDialog: vi.fn(() => ({
     setOpen: mockSetSearchOpen,
-  })),
-}))
-
-vi.mock('@/hooks/ui/useProjectDialog', () => ({
-  useProjectDialog: vi.fn(() => ({
-    setOpen: mockSetProjectDialogOpen,
   })),
 }))
 
@@ -47,14 +40,12 @@ vi.mock('@/lib/shortcuts', () => ({
   PlatformShortcuts: {
     TOGGLE_SIDEBAR: { key: 'b', meta: true },
     NEW_CHAT: { key: 'n', meta: true },
-    NEW_PROJECT: { key: 'p', meta: true, shift: true },
     GO_TO_SETTINGS: { key: ',', meta: true },
     SEARCH: { key: 'k', meta: true },
   },
   ShortcutAction: {
     TOGGLE_SIDEBAR: 'TOGGLE_SIDEBAR',
     NEW_CHAT: 'NEW_CHAT',
-    NEW_PROJECT: 'NEW_PROJECT',
     GO_TO_SETTINGS: 'GO_TO_SETTINGS',
     SEARCH: 'SEARCH',
   },
@@ -70,13 +61,13 @@ describe('KeyboardShortcutsProvider', () => {
     expect(container.innerHTML).toBe('')
   })
 
-  it('registers five keyboard shortcuts via useKeyboardShortcut', async () => {
+  it('registers four keyboard shortcuts via useKeyboardShortcut', async () => {
     const { useKeyboardShortcut } = await import('@/hooks/ui/useHotkeys')
 
     render(<KeyboardShortcutsProvider />)
 
-    // 5 shortcuts: sidebar, new chat, new project, settings, search
-    expect(useKeyboardShortcut).toHaveBeenCalledTimes(5)
+    // 4 shortcuts: sidebar, new chat, settings, search
+    expect(useKeyboardShortcut).toHaveBeenCalledTimes(4)
   })
 
   it('passes shortcut specs with callback functions', async () => {
@@ -115,23 +106,12 @@ describe('KeyboardShortcutsProvider', () => {
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/' })
   })
 
-  it('new project shortcut callback opens project dialog', async () => {
-    const { useKeyboardShortcut } = await import('@/hooks/ui/useHotkeys')
-
-    render(<KeyboardShortcutsProvider />)
-
-    const newProjectCallback = vi.mocked(useKeyboardShortcut).mock.calls[2][0].callback
-    newProjectCallback()
-
-    expect(mockSetProjectDialogOpen).toHaveBeenCalledWith(true)
-  })
-
   it('settings shortcut callback navigates to settings page', async () => {
     const { useKeyboardShortcut } = await import('@/hooks/ui/useHotkeys')
 
     render(<KeyboardShortcutsProvider />)
 
-    const settingsCallback = vi.mocked(useKeyboardShortcut).mock.calls[3][0].callback
+    const settingsCallback = vi.mocked(useKeyboardShortcut).mock.calls[2][0].callback
     settingsCallback()
 
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/settings/general' })
@@ -142,7 +122,7 @@ describe('KeyboardShortcutsProvider', () => {
 
     render(<KeyboardShortcutsProvider />)
 
-    const searchCallback = vi.mocked(useKeyboardShortcut).mock.calls[4][0].callback
+    const searchCallback = vi.mocked(useKeyboardShortcut).mock.calls[3][0].callback
     searchCallback()
 
     expect(mockSetSearchOpen).toHaveBeenCalledWith(true)

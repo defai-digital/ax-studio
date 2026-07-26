@@ -2,7 +2,7 @@
  * Tauri Opener Service - Desktop implementation
  */
 
-import { revealItemInDir, openUrl } from '@tauri-apps/plugin-opener'
+import { revealItemInDir, openUrl } from '@/lib/tauri-shim/plugin-opener'
 import type { OpenerService } from './types'
 import { assertSafeExternalUrl } from '@/lib/utils/safe-url'
 

@@ -51,7 +51,7 @@ const {
 })
 
 // Mock Tauri deep link
-vi.mock('@tauri-apps/plugin-deep-link', () => ({
+vi.mock('@/lib/tauri-shim/plugin-deep-link', () => ({
   onOpenUrl: vi.fn(),
   getCurrent: vi.fn().mockResolvedValue([]),
 }))

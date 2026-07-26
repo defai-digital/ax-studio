@@ -1,7 +1,6 @@
 import { DownloadManagement } from '@/containers/DownloadManagement'
 import { NavChats } from './NavChats'
 import { NavMain } from './NavMain'
-import { NavProjects } from './NavProjects'
 import { PerformanceMonitor } from '@/components/PerformanceMonitor'
 import { ThemeToggle } from '@/components/ThemeToggle'
 
@@ -78,7 +77,6 @@ export function LeftSidebar() {
 
         {/* Scrollable content — matches Figma: flex-1 overflow-y-auto */}
         <SidebarContent className="mask-b-from-95% mask-t-from-98%">
-          <NavProjects />
           <NavChats />
         </SidebarContent>
 

@@ -31,7 +31,7 @@ import {
   getHuggingFaceModelFileUrl,
   getHuggingFaceModelUrl,
 } from '@/lib/huggingface'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '@/lib/tauri-shim/api-core'
 import { isAxEngineProvider } from '@/constants/providers'
 
 // Default provider for local inference

@@ -4,8 +4,8 @@
  * Reuses the same extracted hooks as the main ThreadDetail route ($threadId.tsx),
  * then delegates all rendering to MainThreadPane with isSplitView=true.
  *
- * This ensures feature parity: editing, memory, research, animations,
- * context-size increase, local knowledge, etc. all work identically in both panes.
+ * This ensures feature parity: editing, animations, context-size increase,
+ * etc. all work identically in both panes.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -16,18 +16,12 @@ import { useAssistant } from '@/hooks/chat/useAssistant'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useMessages } from '@/hooks/chat/useMessages'
-import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
 import { type ThreadMessage } from '@ax-studio/core'
 import { useChat } from '@/hooks/chat/use-chat'
 import { useThreadConfig } from '@/hooks/threads/use-thread-config'
 import { useThreadChat } from '@/hooks/threads/use-thread-chat'
-import { useThreadTools, type AddToolOutputFn } from '@/hooks/threads/use-thread-tools'
 import { extractContentPartsFromUIMessage } from '@/lib/messages'
-import {
-  CODE_EXECUTION_INSTRUCTION,
-  LOCAL_KNOWLEDGE_INSTRUCTION,
-  CITATION_FORMAT_INSTRUCTION,
-} from '@/lib/prompts/system-prompt'
+import { CODE_EXECUTION_INSTRUCTION } from '@/lib/prompts/system-prompt'
 import { MainThreadPane } from '@/containers/threads/MainThreadPane'
 
 export function SplitThreadContainer({
@@ -62,12 +56,7 @@ export function SplitThreadContainer({
   const threadMessageCount = useMessages(
     (state) => state.messages[threadId]?.length ?? 0,
   )
-  const localKnowledgeActive = useLocalKnowledge((state) =>
-    state.isLocalKnowledgeEnabledForThread(threadId),
-  )
-
   // ─── Domain hooks (same as $threadId.tsx) ─────────────────────────────────
-  const projectId = thread?.metadata?.project?.id
   const { promptResolution, optimizedModelConfig } = useThreadConfig({
     thread,
     selectedModel,
@@ -75,13 +64,6 @@ export function SplitThreadContainer({
     autoTuningEnabled,
     threadMessageCount,
   })
-  const {
-    followUpMessage,
-    onToolCall,
-    startToolExecution,
-    resetTurnState,
-  } = useThreadTools({ threadId, projectId })
-
   // ─── UI state ─────────────────────────────────────────────────────────────
   const [threadPromptDraft, setThreadPromptDraft] = useState('')
   const [showThreadPromptEditor, setShowThreadPromptEditor] = useState(false)
@@ -101,7 +83,6 @@ export function SplitThreadContainer({
     regenerate,
     setMessages: setChatMessages,
     stop,
-    addToolOutput,
     getLastRouterResult,
   } = useChat({
     sessionId: threadId,
@@ -111,9 +92,7 @@ export function SplitThreadContainer({
       (currentAssistant?.instructions && currentAssistant.id !== 'ax-studio'
         ? '\n\n' + currentAssistant.instructions
         : '') +
-      CODE_EXECUTION_INSTRUCTION +
-      (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : '') +
-      (localKnowledgeActive ? CITATION_FORMAT_INSTRUCTION : ''),
+      CODE_EXECUTION_INSTRUCTION,
     modelOverrideId: optimizedModelConfig.modelId,
     // Bind the pane to the thread's own provider (same as $threadId.tsx) so
     // compare mode can pin each pane to a model from a different provider.
@@ -162,12 +141,7 @@ export function SplitThreadContainer({
           extractContentPartsFromUIMessage(messageForPersistence)
         persistMessageOnFinishRef.current?.(messageForPersistence, contentParts)
       }
-      if (!isAbort) {
-        startToolExecution(addToolOutput as unknown as AddToolOutputFn)
-      }
     },
-    onToolCall,
-    sendAutomaticallyWhen: followUpMessage,
   })
 
   const {
@@ -210,10 +184,9 @@ export function SplitThreadContainer({
   // ─── Submit handler ───────────────────────────────────────────────────────
   const handleSubmit = useCallback(
     async (text: string) => {
-      resetTurnState()
       await processAndSendMessage(text)
     },
-    [processAndSendMessage, resetTurnState],
+    [processAndSendMessage],
   )
 
   // ─── Compare-mode wiring ──────────────────────────────────────────────────
@@ -234,16 +207,9 @@ export function SplitThreadContainer({
   // ─── Derived values ──────────────────────────────────────────────────────
   const threadModel = useMemo(() => thread?.model, [thread])
   const threadLogo = useMemo(() => {
-    const chatLogo =
-      typeof thread?.metadata?.chatLogo === 'string'
-        ? thread.metadata.chatLogo.trim()
-        : ''
-    if (chatLogo) return chatLogo
-    const projectLogo =
-      typeof thread?.metadata?.project?.logo === 'string'
-        ? thread.metadata.project.logo.trim()
-        : ''
-    return projectLogo || ''
+    return typeof thread?.metadata?.chatLogo === 'string'
+      ? thread.metadata.chatLogo.trim()
+      : ''
   }, [thread?.metadata])
 
   // ─── Render ───────────────────────────────────────────────────────────────

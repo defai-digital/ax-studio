@@ -1,5 +1,4 @@
 import { fs } from '@ax-studio/core'
-import type { ServiceHub } from '@/services'
 import type { Attachment } from '@/types/attachment'
 import {
   type AuthoringCapabilities,
@@ -9,9 +8,9 @@ import {
   type UploadAndPlanResult,
 } from './sdk'
 import {
-  createServiceHubAxBiAuthoringClient,
+  createDirectAxBiAuthoringClient,
   type AxBiAuthoringClient,
-} from './authoring-client'
+} from './direct-client'
 import { normalizeAxBiResultUrl } from './tool-navigation'
 
 const SUPPORTED_DATA_TYPES = new Set([
@@ -48,7 +47,6 @@ export type AxBiAuthoringWorkflowResult =
 
 export type RunAxBiAuthoringWorkflowOptions = {
   prompt: string
-  serviceHub: ServiceHub
   attachments?: Attachment[]
   /** Dedicated AX BI surfaces may delegate without requiring “AX BI” in the prompt. */
   force?: boolean
@@ -91,8 +89,10 @@ function isDelegationRequest({
   return AX_BI_REFERENCE.test(prompt) || pickDataAttachment(attachments ?? []) != null
 }
 
-function createClient(serviceHub: ServiceHub): AxBiAuthoringClient {
-  return createServiceHubAxBiAuthoringClient(serviceHub)
+// There is no MCP layer: AX BI talks to the user's external AX BI stack
+// directly over fetch (migration matrix §4).
+function createClient(): AxBiAuthoringClient {
+  return createDirectAxBiAuthoringClient()
 }
 
 type AuthoringOperation = AuthoringCapabilities['operations'][number]
@@ -338,7 +338,6 @@ async function uploadAttachment(
  */
 export async function runAxBiAuthoringWorkflow({
   prompt,
-  serviceHub,
   attachments = [],
   force = false,
   client,
@@ -367,7 +366,7 @@ export async function runAxBiAuthoringWorkflow({
   const planOnly =
     PLAN_ACTION.test(normalizedPrompt) && !MUTATING_ACTION.test(normalizedPrompt)
   try {
-    const axbi = client ?? createClient(serviceHub)
+    const axbi = client ?? createClient()
     const capabilities = validateCapabilities(
       await axbi.ai.getAuthoringCapabilities()
     )

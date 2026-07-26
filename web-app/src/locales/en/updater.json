@@ -9,5 +9,6 @@
   "updateNow": "Update Now",
   "homebrewUpdateAvailable": "You installed AX Studio with Homebrew. Upgrade with Homebrew so the cask stays in sync:",
   "homebrewUpgradeCommand": "brew upgrade --cask ax-studio",
-  "homebrewDismiss": "Remind Me Later"
+  "homebrewDismiss": "Remind Me Later",
+  "restartToUpdate": "Restart to Update"
 }

@@ -135,4 +135,19 @@ describe('NavMain', () => {
       screen.getByText((_, element) => element?.textContent === `${modifier}K`)
     ).toBeInTheDocument()
   })
+
+  it('hides assistants and tools entries under Electron', () => {
+    ;(window as unknown as Record<string, unknown>).axElectron = {}
+    try {
+      render(<NavMain />)
+
+      expect(screen.queryByText('common:assistants')).not.toBeInTheDocument()
+      expect(screen.queryByText('common:tools')).not.toBeInTheDocument()
+      // Kept entries stay.
+      expect(screen.getByText('Hub')).toBeInTheDocument()
+      expect(screen.getByText('AX BI')).toBeInTheDocument()
+    } finally {
+      delete (window as unknown as Record<string, unknown>).axElectron
+    }
+  })
 })

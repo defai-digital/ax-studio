@@ -15,7 +15,7 @@ import { EngineManager } from '@ax-studio/core'
 import { ModelCapabilities } from '@/types/models'
 import { modelSettings } from '@/lib/predefined'
 import { ExtensionManager } from '@/lib/extension'
-import { fetch as fetchTauri } from '@tauri-apps/plugin-http'
+import { fetch as fetchTauri } from '@/lib/tauri-shim/plugin-http'
 import type { ProvidersService } from './types'
 import { getModelCapabilities } from '@/lib/models'
 import { providerModelsResponseSchema } from '@/schemas/providers.schema'
@@ -64,7 +64,7 @@ function isInProcessMlxProvider(provider: ModelProvider): boolean {
  */
 async function fetchInProcessMlxModels(): Promise<string[]> {
   try {
-    const { invoke } = await import('@tauri-apps/api/core')
+    const { invoke } = await import('@/lib/tauri-shim/api-core')
     const probe = (await invoke('mlx_runtime_probe')) as {
       host?: { supported_mlx_runtime?: boolean; detection_error?: string | null }
       metal?: { fully_available?: boolean }

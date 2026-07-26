@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '@/lib/tauri-shim/api-core'
 import { isPlatformTauri } from '@/lib/platform/utils'
 
 export const PROXY_PASSWORD_SECRET = 'proxy-password'

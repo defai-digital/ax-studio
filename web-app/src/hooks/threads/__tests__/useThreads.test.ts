@@ -3,7 +3,6 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { useThreads } from '../useThreads'
 import { useChatSessions } from '@/stores/chat-session-store'
 import { useMessages } from '@/hooks/chat/useMessages'
-import { useAppState } from '@/hooks/settings/useAppState'
 
 // Mock the services
 vi.mock('@/services/threads', () => ({
@@ -38,7 +37,6 @@ describe('useThreads', () => {
     act(() => {
       useChatSessions.getState().clearSessions()
       useMessages.getState().clearAllMessages()
-      useAppState.setState({ toolCallCancellations: {} })
       useThreads.setState({
         threads: {},
         currentThreadId: undefined,
@@ -152,7 +150,6 @@ describe('useThreads', () => {
 
   it('evicts renderer resources before deleting a thread', () => {
     const { result } = renderHook(() => useThreads())
-    const cancelToolCall = vi.fn()
 
     act(() => {
       result.current.setThreads([
@@ -167,23 +164,16 @@ describe('useThreads', () => {
           content: [],
         } as never,
       ])
-      useAppState
-        .getState()
-        .setToolCallCancellation('thread1', cancelToolCall)
       result.current.deleteThread('thread1')
     })
 
-    expect(cancelToolCall).toHaveBeenCalledOnce()
+    // Chat sessions and thread messages are still evicted. (Tool-call
+    // cancellation and the MCP akidb collection cleanup are gone with the
+    // MCP/tooling services.)
     expect(useChatSessions.getState().getSessionData('thread1')).toBeNull()
     expect(
       Object.prototype.hasOwnProperty.call(
         useMessages.getState().messages,
-        'thread1'
-      )
-    ).toBe(false)
-    expect(
-      Object.prototype.hasOwnProperty.call(
-        useAppState.getState().toolCallCancellations,
         'thread1'
       )
     ).toBe(false)

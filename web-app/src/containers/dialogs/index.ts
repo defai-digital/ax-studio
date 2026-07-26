@@ -13,7 +13,5 @@ export { DeleteChatFolderDialog } from './chat-organization/DeleteChatFolderDial
 
 // System / app-level dialogs (still top-level)
 export { FactoryResetDialog } from './FactoryResetDialog'
-export { DeleteAssistantDialog } from './DeleteAssistantDialog'
-export { DeleteProjectDialog } from './DeleteProjectDialog'
 export { AddProviderDialog } from './AddProviderDialog'
 export { SearchDialog } from './SearchDialog'

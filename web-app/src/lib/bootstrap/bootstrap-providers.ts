@@ -1,28 +1,19 @@
 /**
- * bootstrap-providers — loads providers, MCP config, assistants, and sets up deep link handling.
+ * bootstrap-providers — loads providers and warms the AX BI direct connection.
  * Pure async function; no React, no Zustand imports.
  *
- * Returns an unsubscribe function for the deep-link event listener.
+ * Electron-only (migration matrix §2.2/§3): there is no MCP config to
+ * bootstrap (AX BI connects directly via sdk.ts), no assistant extension
+ * (a single built-in default assistant), and no deep links.
  */
 import type { ServiceHub } from '@/services/index'
-import type { MCPServerConfig, MCPSettings } from '@/services/mcp/types'
-import { deepLinkPayloadSchema } from '@/schemas/events.schema'
-import { assistantsSchema } from '@/schemas/assistants.schema'
-import { SystemEvent } from '@/types/events'
 import { type BootstrapResult, ok, fail } from './bootstrap-result'
 import { syncRemoteProviders } from '@/lib/providers/provider-sync'
 import { withTimeout } from '@/lib/utils/async'
 
 const PROVIDER_BOOTSTRAP_TIMEOUT_MS = 10_000
-const MCP_BOOTSTRAP_TIMEOUT_MS = 8_000
-const ASSISTANTS_BOOTSTRAP_TIMEOUT_MS = 8_000
 
 let providersWork: Promise<ModelProvider[]> | null = null
-let mcpConfigWork: Promise<{
-  mcpServers?: Record<string, MCPServerConfig>
-  mcpSettings?: MCPSettings | null
-}> | null = null
-let assistantsWork: Promise<unknown> | null = null
 
 function getProvidersOnce(serviceHub: ServiceHub): Promise<ModelProvider[]> {
   providersWork ??= serviceHub
@@ -34,232 +25,55 @@ function getProvidersOnce(serviceHub: ServiceHub): Promise<ModelProvider[]> {
   return providersWork
 }
 
-function getMCPConfigOnce(serviceHub: ServiceHub) {
-  mcpConfigWork ??= serviceHub
-    .mcp()
-    .getMCPConfig()
-    .finally(() => {
-      mcpConfigWork = null
-    })
-  return mcpConfigWork
-}
-
-function getAssistantsOnce(serviceHub: ServiceHub): Promise<unknown> {
-  assistantsWork ??= serviceHub
-    .assistants()
-    .getAssistants()
-    .finally(() => {
-      assistantsWork = null
-    })
-  return assistantsWork
-}
-
 export type BootstrapProvidersInput = {
   serviceHub: ServiceHub
   setProviders: (
     providers: ModelProvider[],
     pathSep: string
   ) => boolean | void
-  setServers: (servers: Record<string, MCPServerConfig>) => void
-  setSettings: (settings: MCPSettings | null) => void
-  setAssistants: (assistants: Assistant[]) => void
-  initializeWithLastUsed: () => void
-  onDeepLink: (urls: string[] | null) => void
   isCancelled?: () => boolean
 }
 
-/**
- * Loads providers, MCP config, and assistants concurrently.
- * Sets up deep link listener and returns its unsubscribe function.
- *
- * @returns { result, unsubscribeDeepLink }
- */
 export async function bootstrapProviders(
   input: BootstrapProvidersInput
 ): Promise<{
   result: BootstrapResult
-  unsubscribeDeepLink: () => void
 }> {
-  const {
-    serviceHub,
-    setProviders,
-    setServers,
-    setSettings,
-    setAssistants,
-    initializeWithLastUsed,
-    onDeepLink,
-    isCancelled: isExternallyCancelled = () => false,
-  } = input
-
-  let disposed = false
-  let cleanedUp = false
-  let unsubscribeDeepLink: () => void = () => {}
-  let unsubscribeOnOpenUrl: (() => void) | undefined
-  const isCancelled = () => disposed || isExternallyCancelled()
-  const handleDeepLink = (urls: string[] | null) => {
-    if (!isCancelled()) onDeepLink(urls)
-  }
-
-  const keepOrDispose = (
-    unsubscribe: () => void,
-    keep: (unsubscribe: () => void) => void
-  ) => {
-    if (isCancelled()) {
-      unsubscribe()
-    } else {
-      keep(unsubscribe)
-    }
-  }
-  const unsubscribeAll = () => {
-    if (cleanedUp) return
-    cleanedUp = true
-    disposed = true
-    const cleanups = [unsubscribeDeepLink, unsubscribeOnOpenUrl].filter(
-      (cleanup): cleanup is () => void => cleanup != null
-    )
-    unsubscribeDeepLink = () => {}
-    unsubscribeOnOpenUrl = undefined
-    for (const cleanup of cleanups) {
-      try {
-        cleanup()
-      } catch (error) {
-        console.error('Failed to remove deep link listener:', error)
-      }
-    }
-  }
+  const { serviceHub, setProviders, isCancelled = () => false } = input
 
   try {
-    // Load providers, MCP config, and assistants concurrently with bounded waits.
-    const [, mcpBootstrapData] = await Promise.all([
-      withTimeout(
-        getProvidersOnce(serviceHub).then((providers) => {
-          if (isCancelled()) return
-          const applied = setProviders(providers, serviceHub.path().sep())
-          if (applied === false) return
-          return syncRemoteProviders(providers).catch((err) =>
-            console.error('Failed to batch-register providers:', err)
-          )
-        }),
-        PROVIDER_BOOTSTRAP_TIMEOUT_MS,
-        `Provider bootstrap timed out after ${PROVIDER_BOOTSTRAP_TIMEOUT_MS}ms`
-      ).catch((error) => {
-        console.error('[bootstrap-providers] Provider bootstrap failed:', error)
-      }),
-
-      withTimeout(
-        getMCPConfigOnce(serviceHub).then((data) => {
-          if (isCancelled()) return undefined
-          setServers(data.mcpServers ?? {})
-          setSettings(data.mcpSettings ?? null)
-          return data
-        }),
-        MCP_BOOTSTRAP_TIMEOUT_MS,
-        `MCP bootstrap timed out after ${MCP_BOOTSTRAP_TIMEOUT_MS}ms`
-      ).catch((error) => {
-        console.error('[bootstrap-providers] MCP bootstrap failed:', error)
-        return undefined
-      }),
-
-      withTimeout(
-        getAssistantsOnce(serviceHub).then((data) => {
-          if (isCancelled()) return
-          if (data == null) {
-            setAssistants([])
-            return
-          }
-          const parsed = assistantsSchema.safeParse(data)
-          if (parsed.success && parsed.data.length > 0) {
-            setAssistants(parsed.data as Assistant[])
-            initializeWithLastUsed()
-          } else if (!parsed.success) {
-            console.warn(
-              'Assistants data did not match expected schema:',
-              parsed.error.message
-            )
-          }
-        }),
-        ASSISTANTS_BOOTSTRAP_TIMEOUT_MS,
-        `Assistants bootstrap timed out after ${ASSISTANTS_BOOTSTRAP_TIMEOUT_MS}ms`
-      ).catch((error) => {
-        console.warn(
-          '[bootstrap-providers] Assistants bootstrap failed:',
-          error
-        )
-      }),
-    ])
-
-    if (isCancelled()) {
-      disposed = true
-      return { result: ok(), unsubscribeDeepLink: () => {} }
-    }
-
-    // ADR-003: boot auto-start may have launched ax-bi without the keychain
-    // token. After store load, if ax-bi is active but not running, inject the
-    // token and activate once (outside the MCP config timeout).
-    const axBi = mcpBootstrapData?.mcpServers?.['ax-bi']
-    if (axBi?.active) {
-      try {
-        const connected = await serviceHub.mcp().getConnectedServers()
-        if (!connected.includes('ax-bi')) {
-          const { activateAxBiWithStoredToken } = await import(
-            '@/lib/ax-bi/activation'
-          )
-          if (!isCancelled()) {
-            await activateAxBiWithStoredToken(serviceHub)
-          }
-        }
-      } catch (error) {
-        console.warn(
-          '[bootstrap-providers] AX BI auth compensation failed:',
-          error
-        )
-      }
-    }
-
-    // Deep link: fetch current and register listener
-    serviceHub
-      .deeplink()
-      .getCurrent()
-      .then(handleDeepLink)
-      .catch((error) => {
-        console.error('Failed to get current deep link:', error)
-      })
-    serviceHub
-      .deeplink()
-      .onOpenUrl(handleDeepLink)
-      .then((unsub) => {
-        keepOrDispose(unsub, (cleanup) => {
-          unsubscribeOnOpenUrl = cleanup
-        })
-      })
-      .catch((error) => {
-        console.error('Failed to register deep link listener:', error)
-      })
-
-    serviceHub
-      .events()
-      ?.listen(SystemEvent.DEEP_LINK, (event) => {
+    await withTimeout(
+      getProvidersOnce(serviceHub).then((providers) => {
         if (isCancelled()) return
-        const parsed = deepLinkPayloadSchema.safeParse(event.payload)
-        if (!parsed.success) {
-          console.error('Invalid deep link payload:', event.payload)
-          return
-        }
-        onDeepLink([parsed.data])
-      })
-      .then((unsub) => {
-        keepOrDispose(unsub, (cleanup) => {
-          unsubscribeDeepLink = cleanup
-        })
-      })
-      .catch((error) => {
-        console.error('Failed to register deep link event listener:', error)
-      })
+        const applied = setProviders(providers, serviceHub.path().sep())
+        if (applied === false) return
+        return syncRemoteProviders(providers).catch((err) =>
+          console.error('Failed to batch-register providers:', err)
+        )
+      }),
+      PROVIDER_BOOTSTRAP_TIMEOUT_MS,
+      `Provider bootstrap timed out after ${PROVIDER_BOOTSTRAP_TIMEOUT_MS}ms`
+    ).catch((error) => {
+      console.error('[bootstrap-providers] Provider bootstrap failed:', error)
+    })
 
-    return { result: ok(), unsubscribeDeepLink: unsubscribeAll }
+    if (isCancelled()) return { result: ok() }
+
+    // AX BI auto-reconnect — when a token exists, warm the direct client
+    // (handshake + capabilities) in the background and update the connection
+    // status store.
+    try {
+      const { probeAxBiDirectConnection } = await import(
+        '@/lib/ax-bi/direct-client'
+      )
+      if (!isCancelled()) void probeAxBiDirectConnection()
+    } catch (error) {
+      console.warn('[bootstrap-providers] AX BI direct probe failed:', error)
+    }
+
+    return { result: ok() }
   } catch (error) {
     console.error('bootstrapProviders failed:', error)
-    unsubscribeAll()
-    return { result: fail(error), unsubscribeDeepLink: unsubscribeAll }
+    return { result: fail(error) }
   }
 }

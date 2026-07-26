@@ -8,7 +8,6 @@ import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useFileRegistry, threadCollectionId } from '@/lib/file-registry'
 import { useChatSessions } from '@/stores/chat-session-store'
 import { useMessages } from '@/hooks/chat/useMessages'
-import { useAppState } from '@/hooks/settings/useAppState'
 
 const buildSearchIndex = (threads: Record<string, Thread>): Fuse<Thread> => {
   const entries = Object.values(threads).filter((t) => t.id !== TEMPORARY_CHAT_ID)
@@ -63,17 +62,11 @@ function persistThreadUpdate(
 }
 
 function cleanupThreadResources(threadId: string) {
-  useAppState.getState().cancelToolCall(threadId)
-  useAppState.getState().clearToolCallCancellation(threadId)
   useChatSessions.getState().removeSession(threadId)
   useMessages.getState().removeThreadMessages(threadId)
   getServiceHub().threads().deleteThread(threadId).catch(console.error)
   const colId = threadCollectionId(threadId)
   useFileRegistry.getState().clearCollection(colId)
-  getServiceHub().mcp().callTool({
-    toolName: 'akidb_delete_collection',
-    arguments: { collection_id: colId },
-  }).catch(() => {})
 }
 
 /** Deduplicate only genuinely identical concurrent creates. */

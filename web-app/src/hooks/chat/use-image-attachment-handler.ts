@@ -252,7 +252,7 @@ export function useImageAttachmentHandler({
                   'Selected file path is not a supported image path'
                 )
               }
-              const { convertFileSrc } = await import('@tauri-apps/api/core')
+              const { convertFileSrc } = await import('@/lib/tauri-shim/api-core')
               const fileUrl = convertFileSrc(path)
               const response = await fetch(fileUrl)
               if (!response.ok) {

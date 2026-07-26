@@ -15,7 +15,6 @@ core/lib/**
 .yarnrc
 *.tsbuildinfo
 test_results.html
-pre-install
 *.md
 # Public docs that must stay trackable (global *.md ignore)
 !docs/README.md
@@ -23,17 +22,7 @@ pre-install
 !docs/legal/**
 !docs/release/**
 !docs/architecture/**
-!packaging/winget/README.md
-
-# Generated winget manifests (regenerate with prepare-windows-distribution)
-packaging/winget/manifests/
-src-tauri/resources/lib
-src-tauri/icons
-!src-tauri/icons/icon.png
-src-tauri/gen/apple
-src-tauri/gen/android
-src-tauri/resources/bin
-src-tauri/tauri.bundle.windows.nsis.template
+!examples/**/README.md
 
 # Helper tools
 .gitleaks.toml
@@ -77,10 +66,6 @@ docs/.next/
 **/yarn-error.log*
 **/pnpm-debug.log*
 
-## cargo
-target
-src-tauri/resources/
-
 ## test
 test-data
 llm-docs
@@ -117,5 +102,8 @@ outputs/
 *.orig
 *.rej
 
-# Local Tauri runtime data (rocksdb, caches) — never commit
-src-tauri/data/
+# Electron build output
+electron/dist-preload/
+electron/dist-renderer/
+electron/dist-installer/
+!electron/build/

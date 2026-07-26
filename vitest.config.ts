@@ -14,7 +14,7 @@ export default defineConfig({
       './extensions/conversational-extension',
       './extensions/download-extension',
       './extensions/llamacpp-extension',
-      './src-tauri/plugins/tauri-plugin-llamacpp',
+      './extensions/llamacpp-api',
 
       // Test infrastructure guardrails
       './scripts/testing',
@@ -36,7 +36,6 @@ export default defineConfig({
         'src/**/*.test.ts',
         'src/**/*.test.tsx',
         'src/test/**/*',
-        'src-tauri',
         'extensions',
       ],
     },

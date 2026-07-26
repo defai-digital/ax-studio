@@ -27,7 +27,7 @@ vi.mock('@ax-studio/core', () => ({
   },
 }))
 
-vi.mock('@tauri-apps/api/core', () => ({
+vi.mock('@/lib/tauri-shim/api-core', () => ({
   invoke: mockInvoke,
 }))
 

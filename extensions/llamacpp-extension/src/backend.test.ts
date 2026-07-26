@@ -33,13 +33,13 @@ function ensureLocalStorage() {
   })
 }
 
-vi.mock('@tauri-apps/api/core', () => ({
+vi.mock('../../../web-app/src/lib/tauri-shim/api-core', () => ({
   invoke: vi.fn(),
 }))
 
 // Mock the Tauri HTTP plugin — the mock delegates to globalThis.fetch
 // so existing test assertions on `fetch` still work.
-vi.mock('@tauri-apps/plugin-http', () => ({
+vi.mock('../../../web-app/src/lib/tauri-shim/plugin-http', () => ({
   fetch: mocks.tauriFetchMock,
 }))
 
@@ -84,7 +84,7 @@ import {
   getAxServingBinaryPath,
   installBackendFromFile,
 } from './backend'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '../../../web-app/src/lib/tauri-shim/api-core'
 import {
   checkBackendForUpdates,
   getLocalInstalledBackendsInternal,

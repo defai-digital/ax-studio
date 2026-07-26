@@ -51,12 +51,6 @@ const mocks = vi.hoisted(() => {
       providers.find((provider) => provider.provider === providerId)
     ),
     providers,
-    mcpTools: [] as Array<{
-      name: string
-      description: string
-      inputSchema: Record<string, unknown>
-      server?: string
-    }>,
     routerModelId: null as string | null,
     routerProviderId: null as string | null,
     selectedModel: { id: 'test-model', capabilities: [] },
@@ -68,34 +62,10 @@ const mocks = vi.hoisted(() => {
 vi.mock('@/hooks/useServiceHub', () => ({
   useServiceStore: {
     getState: () => ({
-      serviceHub: {
-        mcp: () => ({ getTools: () => Promise.resolve(mocks.mcpTools) }),
-        rag: () => ({ getTools: () => Promise.resolve([]) }),
-      },
+      serviceHub: {},
     }),
   },
-  getServiceHub: () => ({
-    mcp: () => ({ getTools: () => Promise.resolve(mocks.mcpTools) }),
-    rag: () => ({ getTools: () => Promise.resolve([]) }),
-  }),
-}))
-
-vi.mock('@/hooks/tools/useToolAvailable', () => ({
-  useToolAvailable: {
-    getState: () => ({
-      getDisabledToolsForThread: () => [],
-      getDefaultDisabledTools: () => [],
-    }),
-  },
-}))
-
-vi.mock('@/hooks/research/useLocalKnowledge', () => ({
-  useLocalKnowledge: {
-    getState: () => ({
-      isLocalKnowledgeEnabledForThread: () => false,
-      localKnowledgeEnabled: false,
-    }),
-  },
+  getServiceHub: () => ({}),
 }))
 
 vi.mock('@/hooks/models/useModelProvider', () => ({
@@ -111,14 +81,6 @@ vi.mock('@/hooks/models/useModelProvider', () => ({
 
 vi.mock('@/hooks/chat/useAssistant', () => ({
   useAssistant: { getState: () => ({ currentAssistant: null }) },
-}))
-
-vi.mock('@/hooks/threads/useThreads', () => ({
-  useThreads: {
-    getState: () => ({
-      getThreadById: () => null,
-    }),
-  },
 }))
 
 vi.mock('@/hooks/settings/useRouterSettings', () => ({
@@ -141,16 +103,6 @@ vi.mock('@/hooks/settings/useLocalApiServer', () => ({
       apiKey: '',
     }),
   },
-}))
-
-vi.mock('@/lib/file-registry', () => ({
-  useFileRegistry: {
-    getState: () => ({
-      hasFiles: () => false,
-    }),
-  },
-  threadCollectionId: () => 'thread-docs',
-  projectCollectionId: () => 'project-docs',
 }))
 
 vi.mock('@/lib/llm-router', () => ({
@@ -215,7 +167,6 @@ beforeEach(() => {
   consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
   consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
   mocks.autoRouteEnabled = false
-  mocks.mcpTools = []
   mocks.routerModelId = null
   mocks.routerProviderId = null
   mocks.selectedModel = { id: 'test-model', capabilities: [] }
@@ -297,29 +248,37 @@ describe('CustomChatTransport — setOnTokenUsage', () => {
   })
 })
 
-describe('CustomChatTransport — getTools', () => {
-  it('returns empty tools initially', () => {
+describe('CustomChatTransport — refreshTools', () => {
+  it('keeps tools empty (MCP/RAG tool loading was removed)', async () => {
     const transport = makeTransport()
-    expect(transport.getTools()).toEqual({})
+    await transport.refreshTools()
+    expect(
+      (transport as unknown as { tools: Record<string, unknown> }).tools
+    ).toEqual({})
   })
 
-  it('retains MCP tools whose names match object prototype properties', async () => {
-    mocks.mcpTools = [
-      {
-        name: '__proto__',
-        description: 'Special tool name',
-        inputSchema: { type: 'object', properties: {} },
-        server: 'test-server',
-      },
-    ]
-    const transport = makeTransport()
+  it('streams with an empty tool set', async () => {
+    const transport = makeTransport({ threadId: 'thread-1' })
+    await transport.sendMessages({
+      chatId: 'chat-1',
+      messages: [
+        {
+          id: 'message-1',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Hello' }],
+        } as UIMessage,
+      ],
+      abortSignal: undefined,
+      trigger: 'submit-message',
+      messageId: 'message-1',
+    })
 
-    await transport.refreshTools()
-
-    expect(
-      Object.prototype.hasOwnProperty.call(transport.getTools(), '__proto__')
-    ).toBe(true)
-    expect(transport.getTools()['__proto__']).toBeDefined()
+    expect(executeSingleAgentStream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tools: {},
+        modelSupportsTools: true,
+      })
+    )
   })
 })
 

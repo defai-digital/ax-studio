@@ -67,12 +67,6 @@ vi.mock('../app/tauri', () => ({
   }),
 }))
 
-vi.mock('../mcp/tauri', () => ({
-  TauriMCPService: vi.fn().mockImplementation(function () {
-    return {}
-  }),
-}))
-
 vi.mock('../providers/tauri', () => ({
   TauriProvidersService: vi.fn().mockImplementation(function () {
     return {}
@@ -91,16 +85,6 @@ vi.mock('../opener/tauri', () => ({
   }),
 }))
 
-vi.mock('../updater/tauri', () => ({
-  TauriUpdaterService: vi.fn().mockImplementation(function () {
-    return {
-      check: async () => null,
-      getInstallChannel: async () => 'standalone' as const,
-      downloadAndInstallWithProgress: async () => {},
-    }
-  }),
-}))
-
 vi.mock('../path/tauri', () => ({
   TauriPathService: vi.fn().mockImplementation(function () {
     return {}
@@ -109,12 +93,6 @@ vi.mock('../path/tauri', () => ({
 
 vi.mock('../core/tauri', () => ({
   TauriCoreService: vi.fn().mockImplementation(function () {
-    return {}
-  }),
-}))
-
-vi.mock('../deeplink/tauri', () => ({
-  TauriDeepLinkService: vi.fn().mockImplementation(function () {
     return {}
   }),
 }))
@@ -163,19 +141,13 @@ describe('ServiceHub Integration Tests', () => {
         'hardware',
         'app',
         'messages',
-        'mcp',
         'threads',
         'providers',
         'models',
-        'assistants',
         'dialog',
         'opener',
-        'updater',
         'path',
         'core',
-        'deeplink',
-        'projects',
-        'rag',
         'uploads',
       ]
 
@@ -194,11 +166,11 @@ describe('ServiceHub Integration Tests', () => {
       expect(themeService1).toBe(themeService2)
     })
 
-    it('should return same projects service instance on multiple calls', () => {
-      const projects1 = serviceHub.projects()
-      const projects2 = serviceHub.projects()
+    it('should return same uploads service instance on multiple calls', () => {
+      const uploads1 = serviceHub.uploads()
+      const uploads2 = serviceHub.uploads()
 
-      expect(projects1).toBe(projects2)
+      expect(uploads1).toBe(uploads2)
     })
   })
 
@@ -207,11 +179,11 @@ describe('ServiceHub Integration Tests', () => {
       // PlatformServiceHub is not exported, so we verify that after
       // initializeServiceHub() all service getters work without throwing
       expect(() => serviceHub.theme()).not.toThrow()
-      expect(() => serviceHub.projects()).not.toThrow()
-      expect(() => serviceHub.rag()).not.toThrow()
+      expect(() => serviceHub.threads()).not.toThrow()
+      expect(() => serviceHub.models()).not.toThrow()
       expect(() => serviceHub.uploads()).not.toThrow()
       expect(() => serviceHub.messages()).not.toThrow()
-      expect(() => serviceHub.deeplink()).not.toThrow()
+      expect(() => serviceHub.core()).not.toThrow()
     })
   })
 
@@ -311,35 +283,6 @@ describe('ServiceHub Integration Tests', () => {
       ).rejects.toThrow('YAML file access is not available in web mode')
     })
 
-    it('should expose safe web fallback MCP behavior', async () => {
-      await serviceHub.mcp().updateMCPConfig({})
-      await serviceHub.mcp().restartMCPServers()
-      await expect(serviceHub.mcp().getMCPConfig()).resolves.toEqual({})
-      await expect(serviceHub.mcp().getTools()).resolves.toEqual([])
-      await expect(serviceHub.mcp().getConnectedServers()).resolves.toEqual([])
-      await expect(
-        serviceHub
-          .mcp()
-          .callTool({ server: 'missing', name: 'noop', arguments: {} })
-      ).resolves.toEqual({ content: [], error: '' })
-
-      const cancellable = serviceHub.mcp().callToolWithCancellation({
-        server: 'missing',
-        name: 'noop',
-        arguments: {},
-        cancellationToken: 'token-1',
-      })
-      await expect(cancellable.promise).resolves.toEqual({
-        content: [],
-        error: '',
-      })
-      await expect(cancellable.cancel()).resolves.toBeUndefined()
-      expect(cancellable.token).toBe('token-1')
-      await serviceHub.mcp().cancelToolCall('token-1')
-      await serviceHub.mcp().activateMCPServer('server-1')
-      await serviceHub.mcp().deactivateMCPServer('server-1')
-    })
-
     it('should expose safe web fallback provider and desktop utility services', async () => {
       await expect(serviceHub.providers().getProviders()).resolves.toEqual([])
       await expect(
@@ -355,10 +298,6 @@ describe('ServiceHub Integration Tests', () => {
       await expect(
         serviceHub.opener().revealItemInDir('/tmp/file.txt')
       ).resolves.toBeUndefined()
-      await expect(serviceHub.updater().check()).resolves.toBeNull()
-      await expect(
-        serviceHub.updater().downloadAndInstallWithProgress(vi.fn())
-      ).resolves.toBeUndefined()
       await expect(serviceHub.hardware().getHardwareInfo()).resolves.toBeNull()
       await expect(serviceHub.hardware().getSystemUsage()).resolves.toBeNull()
       await expect(serviceHub.hardware().getLlamacppDevices()).resolves.toEqual(
@@ -366,7 +305,7 @@ describe('ServiceHub Integration Tests', () => {
       )
     })
 
-    it('should expose web fallback path, core, and deeplink helpers', async () => {
+    it('should expose web fallback path and core helpers', async () => {
       await expect(serviceHub.path().join('/tmp', '', 'models')).resolves.toBe(
         '/tmp/models'
       )
@@ -399,10 +338,6 @@ describe('ServiceHub Integration Tests', () => {
       await expect(
         serviceHub.core().uninstallExtension(['extension-a'])
       ).resolves.toBe(false)
-
-      const unlisten = await serviceHub.deeplink().onOpenUrl(vi.fn())
-      expect(() => unlisten()).not.toThrow()
-      await expect(serviceHub.deeplink().getCurrent()).resolves.toEqual([])
     })
   })
 })

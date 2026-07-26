@@ -2,7 +2,7 @@
  * Tauri Path Service - Desktop implementation
  */
 
-import { sep as getSep, join, dirname, basename, extname } from '@tauri-apps/api/path'
+import { sep as getSep, join, dirname, basename, extname } from '@/lib/tauri-shim/api-path'
 import type { PathService } from './types'
 import {
   joinPathSegments,

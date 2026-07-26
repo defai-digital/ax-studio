@@ -1,18 +1,49 @@
 declare const IS_WEB_APP: boolean
 
+/**
+ * @deprecated Electron is the only desktop runtime. This historical name now
+ * means "a desktop bridge is present": the Electron preload injects both
+ * `window.axElectron` and the legacy `__TAURI_INTERNALS__` marker (see
+ * electron/src/preload.ts). Prefer isPlatformElectron() for Electron-specific
+ * checks; this alias stays so existing call sites and tests keep working.
+ */
 export const isPlatformTauri = (): boolean => {
-  // __TAURI_INTERNALS__ is injected exclusively by the Tauri WebView before any JS runs.
-  // It is never present when the app is opened in a regular browser (e.g. Vite dev server).
-  // vite.config.ts always sets IS_WEB_APP=false so we cannot rely on it to distinguish
-  // Tauri from browser; the runtime check is authoritative.
   if (typeof window !== 'undefined') {
-    return (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ != null
+    const w = window as unknown as Record<string, unknown>
+    return w.axElectron != null || w.__TAURI_INTERNALS__ != null
   }
   // Non-browser environment (SSR / test) — fall back to the build-time constant
   if (typeof IS_WEB_APP === 'undefined') {
     return false
   }
   return !(IS_WEB_APP === true || (IS_WEB_APP as unknown as string) === 'true')
+}
+
+/**
+ * True when running inside the Electron shell. The Electron preload injects
+ * `window.axElectron` (and a `__TAURI_INTERNALS__` marker so the service layer
+ * keeps taking the desktop bridge path — see electron/src/preload.ts), so this
+ * check is orthogonal to isPlatformTauri().
+ */
+export const isPlatformElectron = (): boolean => {
+  if (typeof window !== 'undefined') {
+    return (window as unknown as Record<string, unknown>).axElectron != null
+  }
+  return false
+}
+
+/**
+ * True only inside the Electron smoke suite (`electron . --smoke`); the
+ * preload marks the bridge (electron/src/preload.ts). Boot behaviors that
+ * would race the suite's fixtures (e.g. the local-API-server auto-start on
+ * port 31419) gate on this.
+ */
+export const isElectronSmokeMode = (): boolean => {
+  if (typeof window === 'undefined') return false
+  const bridge = (window as unknown as Record<string, unknown>).axElectron as
+    | { smoke?: boolean }
+    | undefined
+  return bridge?.smoke === true
 }
 
 export type InferenceProfile =

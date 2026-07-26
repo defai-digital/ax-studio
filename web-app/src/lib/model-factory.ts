@@ -33,12 +33,16 @@ export interface ModelParameters {
 
 import { type LanguageModel } from 'ai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
+import { invoke } from '@/lib/tauri-shim/api-core'
 import { isAxEngineProvider } from '@/constants/providers'
+import { isPlatformElectron } from '@/lib/platform/utils'
 import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
+// Pure (IPC-free) AX Engine helpers.
+import { createAxEngineMetadataExtractor } from './ax-engine-metadata'
 import {
-  createAxEngineMetadataExtractor,
-  createMlxIpcFetch,
-} from './mlx-ipc-fetch'
+  AX_ENGINE_SIDECAR_DEFAULT_API_KEY,
+  AX_ENGINE_SIDECAR_DEFAULT_BASE_URL,
+} from './local-engine/sidecar-backend'
 
 // Use the webview's native fetch for AI requests to the local proxy.
 // Tauri's HTTP plugin (tauriFetch) bypasses CORS but its Response.body
@@ -508,6 +512,33 @@ function createCustomFetch(
 }
 
 /**
+ * Electron sidecar path: the ax-engine server is managed by the main process;
+ * chat goes straight to its OpenAI-compatible HTTP endpoint with the local
+ * Bearer key (no proxy hop, no in-process IPC).
+ */
+async function resolveAxEngineSidecarEndpoint(): Promise<{
+  baseURL: string
+  apiKey: string
+}> {
+  const fallback = {
+    baseURL: AX_ENGINE_SIDECAR_DEFAULT_BASE_URL,
+    apiKey: AX_ENGINE_SIDECAR_DEFAULT_API_KEY,
+  }
+  try {
+    const status = (await invoke('ax_engine_status')) as {
+      baseURL?: string | null
+      apiKey?: string | null
+    }
+    if (status?.baseURL) {
+      return { baseURL: status.baseURL, apiKey: status.apiKey || fallback.apiKey }
+    }
+  } catch {
+    // Sidecar not up yet — the ensure flow surfaces the lifecycle separately.
+  }
+  return fallback
+}
+
+/**
  * Factory for creating language models.
  *
  * All providers (cloud and local) are routed through the AX Studio local proxy
@@ -534,10 +565,10 @@ export class ModelFactory {
     const proxyUrl = getProxyBaseUrl()
     const providerName = provider.provider.toLowerCase()
 
-    // AX Engine runs in-process via ax-engine-sdk. Do not route it through the
-    // local proxy/ax-serving, because the installed ax-serving worker only
-    // preloads GGUF models in this build.
+    // AX Engine runs as an `ax-engine serve` sidecar managed by the Electron
+    // main process — chat goes directly to its OpenAI-compatible endpoint.
     const isAxEngine = isAxEngineProvider(provider.provider)
+    const useAxEngineSidecar = isAxEngine && isPlatformElectron()
     const openAIParams = toOpenAIParams(parameters)
     if (isAxEngine) {
       // top_k is not part of OpenAI's public schema, but the in-process fetch
@@ -550,9 +581,7 @@ export class ModelFactory {
 
     // Normalize non-standard streaming SSE responses from various providers.
     // Applied to proxy providers since the proxy passes streaming bytes through unchanged.
-    const baseFetch = isAxEngine
-      ? createMlxIpcFetch()
-      : createStreamingPatchFetch(httpFetch)
+    const baseFetch = createStreamingPatchFetch(httpFetch)
     const fetchFn = createCustomFetch(baseFetch, openAIParams)
 
     // All providers go through the proxy using the OpenAI-compatible format.
@@ -575,13 +604,23 @@ export class ModelFactory {
       proxyHeaders.Authorization = `Bearer ${localProxyKey}`
     }
 
+    let modelBaseURL = proxyUrl
+    let modelHeaders = proxyHeaders
+    if (useAxEngineSidecar) {
+      const sidecar = await resolveAxEngineSidecarEndpoint()
+      modelBaseURL = sidecar.baseURL
+      // The sidecar enforces its own Bearer key (AX_ENGINE_API_KEY, default
+      // "local"); the proxy's X-Ax-Provider routing does not apply.
+      modelHeaders = { Authorization: `Bearer ${sidecar.apiKey}` }
+    }
+
     const proxyModel = createOpenAICompatible({
       name: providerName,
-      baseURL: proxyUrl,
+      baseURL: modelBaseURL,
       // Passing a headers object prevents the SDK from looking up env vars.
       // X-Ax-Provider tells the proxy which registered provider to route to,
       // avoiding ambiguity when the same model ID exists in multiple providers.
-      headers: proxyHeaders,
+      headers: modelHeaders,
       includeUsage: true,
       fetch: fetchFn,
       metadataExtractor: isAxEngine

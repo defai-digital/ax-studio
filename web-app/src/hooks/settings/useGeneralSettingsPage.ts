@@ -1,13 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useServiceHub } from '@/hooks/useServiceHub'
-import { useAppUpdater } from '@/hooks/updater/useAppUpdater'
 import { useHardware } from '@/hooks/settings/useHardware'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
 import { useClipboardCopy } from '@/hooks/ui/useClipboardCopy'
 import { SystemEvent } from '@/types/events'
 import { isRootDir } from '@/lib/utils/path'
-import { isDev } from '@/lib/utils'
 import { toast } from 'sonner'
 
 const TOKEN_VALIDATION_TIMEOUT_MS = 10_000
@@ -15,7 +13,6 @@ const TOKEN_VALIDATION_TIMEOUT_MS = 10_000
 export function useGeneralSettingsPage() {
   const { t } = useTranslation()
   const serviceHub = useServiceHub()
-  const { checkForUpdate, updateState } = useAppUpdater()
   const { pausePolling } = useHardware()
   const { huggingfaceToken } = useGeneralSetting()
 
@@ -23,7 +20,6 @@ export function useGeneralSettingsPage() {
   const { isCopied, copyToClipboard } = useClipboardCopy()
   const [selectedNewPath, setSelectedNewPath] = useState<string | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
   const [isValidatingToken, setIsValidatingToken] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
   const mountedRef = useRef(true)
@@ -38,33 +34,6 @@ export function useGeneralSettingsPage() {
       tokenValidationAbortRef.current = null
     }
   }, [])
-
-  const [installChannel, setInstallChannel] = useState(
-    updateState.installChannel
-  )
-
-  // Resolve install channel early so Settings can show Homebrew vs standalone
-  // without running a full update check.
-  useEffect(() => {
-    if (isDev()) return
-    let cancelled = false
-    void serviceHub
-      .updater()
-      .getInstallChannel()
-      .then((channel) => {
-        if (!cancelled) setInstallChannel(channel)
-      })
-      .catch(() => {
-        // Non-fatal; UI falls back to standalone copy.
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [serviceHub])
-
-  useEffect(() => {
-    setInstallChannel(updateState.installChannel)
-  }, [updateState.installChannel])
 
   useEffect(() => {
     let cancelled = false
@@ -147,44 +116,6 @@ export function useGeneralSettingsPage() {
       toast.error(t('settings:general.failedToRelocateDataFolderDesc'))
     }
   }
-
-  const handleCheckForUpdate = useCallback(async () => {
-    if (!mountedRef.current) return
-
-    setIsCheckingUpdate(true)
-    try {
-      if (isDev()) return toast.info(t('settings:general.devVersion'))
-      const update = await checkForUpdate(true)
-      if (!mountedRef.current) return
-
-      if (!update) {
-        toast.info(t('settings:general.noUpdateAvailable'))
-        return
-      }
-
-      // Homebrew installs must not use in-app binary replace; surface CLI path.
-      let channel = updateState.installChannel
-      try {
-        channel = await serviceHub.updater().getInstallChannel()
-      } catch {
-        // keep state
-      }
-      if (channel === 'homebrew') {
-        toast.info(t('settings:general.homebrewUpdateAvailable'), {
-          description: t('settings:general.homebrewUpdateAvailableDesc'),
-        })
-      }
-    } catch (error) {
-      if (!mountedRef.current) return
-
-      console.error('Failed to check for updates:', error)
-      toast.error(t('settings:general.updateError'))
-    } finally {
-      if (mountedRef.current) {
-        setIsCheckingUpdate(false)
-      }
-    }
-  }, [t, checkForUpdate, serviceHub, updateState.installChannel])
 
   const resetApp = async () => {
     if (isRootDir(appDataFolder ?? '/')) {
@@ -273,14 +204,6 @@ export function useGeneralSettingsPage() {
     }
   }
 
-  const handleOpenLogs = async () => {
-    try {
-      await serviceHub.window().openLogsWindow()
-    } catch (error) {
-      console.error('Failed to open logs window:', error)
-    }
-  }
-
   const revealLogsFolder = async () => {
     if (!appDataFolder) return
     try {
@@ -298,17 +221,13 @@ export function useGeneralSettingsPage() {
     isDialogOpen,
     setIsDialogOpen,
     setSelectedNewPath,
-    isCheckingUpdate,
     isValidatingToken,
     isResetting,
-    installChannel,
     openFileTitle,
     copyToClipboard,
     handleDataFolderChange,
     confirmDataFolderChange,
-    handleCheckForUpdate,
     resetApp,
     validateHuggingFaceToken,
-    handleOpenLogs,
   }
 }

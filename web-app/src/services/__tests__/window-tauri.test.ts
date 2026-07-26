@@ -27,11 +27,11 @@ class MockWebviewWindow {
   }
 }
 
-vi.mock('@tauri-apps/api/webviewWindow', () => ({
+vi.mock('@/lib/tauri-shim/api-webview-window', () => ({
   WebviewWindow: MockWebviewWindow,
 }))
 
-vi.mock('@tauri-apps/api/event', () => ({
+vi.mock('@/lib/tauri-shim/api-event', () => ({
   listen: mocks.listen,
 }))
 

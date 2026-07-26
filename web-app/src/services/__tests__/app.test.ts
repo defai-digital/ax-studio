@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 // Mock dependencies
-vi.mock('@tauri-apps/api/core', () => ({
+vi.mock('@/lib/tauri-shim/api-core', () => ({
   invoke: mocks.invoke,
 }))
 

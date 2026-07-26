@@ -9,48 +9,53 @@ vi.mock('sonner', () => ({
   },
 }))
 
+const extractDocumentText = vi.hoisted(() => vi.fn())
+
+vi.mock('@/lib/attachments/document-extraction', () => ({
+  extractDocumentText,
+}))
+
 import {
   processAttachmentsForSend,
   type AttachmentProcessingResult,
 } from '../attachmentProcessing'
 import type { Attachment } from '@/types/attachment'
 
-// Helper to create a minimal mock ServiceHub
+// Helper to create a minimal mock ServiceHub: images go through
+// uploads().ingestImage, documents are extracted via core (passed to
+// extractDocumentText). There is no embeddings/indexing path anymore.
 function createMockServiceHub(overrides: Record<string, unknown> = {}) {
   return {
     uploads: () => ({
       ingestImage: vi.fn().mockResolvedValue({ id: 'img-1' }),
-      ingestFileAttachment: vi
-        .fn()
-        .mockResolvedValue({ id: 'doc-1', size: 100, chunkCount: 5 }),
-      ingestFileAttachmentForProject: vi
-        .fn()
-        .mockResolvedValue({ id: 'proj-doc-1', size: 200, chunkCount: 10 }),
       ...(overrides.uploads as object),
     }),
-    rag: () => ({
-      parseDocument: vi.fn().mockResolvedValue('parsed content here'),
-      ...(overrides.rag as object),
-    }),
+    core: () => overrides.core ?? { invoke: vi.fn() },
   } as never
+}
+
+function extractedText(text: string) {
+  return {
+    text,
+    metadata: { format: 'txt', unitCount: 1, truncated: false },
+    warnings: [],
+  }
 }
 
 describe('processAttachmentsForSend', () => {
   let consoleWarnSpy: ReturnType<typeof vi.spyOn>
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>
-  let consoleDebugSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
     vi.clearAllMocks()
     consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {})
+    extractDocumentText.mockResolvedValue(extractedText('parsed content here'))
   })
 
   afterEach(() => {
     consoleWarnSpy.mockRestore()
     consoleErrorSpy.mockRestore()
-    consoleDebugSpy.mockRestore()
   })
 
   it('returns empty arrays when no attachments are provided', async () => {
@@ -65,43 +70,22 @@ describe('processAttachmentsForSend', () => {
     expect(result.hasEmbeddedDocuments).toBe(false)
   })
 
-  it('falls back to inline when embeddings ingest fails but text parse succeeds', async () => {
-    const parseDocument = vi.fn().mockResolvedValue('local file body')
-    const ingestFileAttachment = vi
-      .fn()
-      .mockRejectedValue(
-        new Error(
-          'AkiDB is not configured. Enable or add the ax-studio AkiDB MCP server'
-        )
-      )
-    const hub = createMockServiceHub({
-      uploads: { ingestFileAttachment },
-      rag: { parseDocument },
-    })
+  it('always reports hasEmbeddedDocuments false (no embeddings path)', async () => {
     const doc: Attachment = {
-      name: 'notes.md',
+      name: 'doc.txt',
       type: 'document',
-      path: '/docs/notes.md',
-      fileType: 'md',
+      processed: true,
+      id: 'doc-existing',
+      injectionMode: 'embeddings',
     }
 
-    const result = await processAttachmentsForSend({
+    const result: AttachmentProcessingResult = await processAttachmentsForSend({
       attachments: [doc],
       threadId: 'thread-1',
-      serviceHub: hub,
-      parsePreference: 'embeddings',
+      serviceHub: createMockServiceHub(),
+      parsePreference: 'auto',
     })
 
-    expect(ingestFileAttachment).toHaveBeenCalled()
-    expect(parseDocument).toHaveBeenCalledWith('/docs/notes.md', 'md')
-    expect(result.processedAttachments).toHaveLength(1)
-    expect(result.processedAttachments[0]).toEqual(
-      expect.objectContaining({
-        injectionMode: 'inline',
-        inlineContent: 'local file body',
-        processed: true,
-      })
-    )
     expect(result.hasEmbeddedDocuments).toBe(false)
   })
 
@@ -112,16 +96,18 @@ describe('processAttachmentsForSend', () => {
       processed: true,
       id: 'existing-id',
     }
+    const hub = createMockServiceHub()
 
     const result = await processAttachmentsForSend({
       attachments: [img],
       threadId: 'thread-1',
-      serviceHub: createMockServiceHub(),
+      serviceHub: hub,
       parsePreference: 'auto',
     })
 
     expect(result.processedAttachments).toHaveLength(1)
     expect(result.processedAttachments[0].id).toBe('existing-id')
+    expect(hub.uploads().ingestImage).not.toHaveBeenCalled()
   })
 
   it('ingests new images and marks them processed', async () => {
@@ -200,227 +186,10 @@ describe('processAttachmentsForSend', () => {
 
     expect(result.processedAttachments).toHaveLength(1)
     expect(result.hasEmbeddedDocuments).toBe(false)
+    expect(extractDocumentText).not.toHaveBeenCalled()
   })
 
-  it('marks hasEmbeddedDocuments true for processed docs with embeddings', async () => {
-    const doc: Attachment = {
-      name: 'doc.txt',
-      type: 'document',
-      processed: true,
-      id: 'doc-existing',
-      injectionMode: 'embeddings',
-    }
-
-    const result = await processAttachmentsForSend({
-      attachments: [doc],
-      threadId: 'thread-1',
-      serviceHub: createMockServiceHub(),
-      parsePreference: 'auto',
-    })
-
-    expect(result.hasEmbeddedDocuments).toBe(true)
-  })
-
-  it('forces embeddings mode for project files', async () => {
-    const doc: Attachment = {
-      name: 'project-doc.txt',
-      type: 'document',
-      path: '/path/to/doc.txt',
-    }
-
-    const hub = createMockServiceHub()
-    const result = await processAttachmentsForSend({
-      attachments: [doc],
-      threadId: 'thread-1',
-      projectId: 'proj-1',
-      serviceHub: hub,
-      parsePreference: 'inline',
-    })
-
-    expect(result.processedAttachments).toHaveLength(1)
-    expect(result.processedAttachments[0].injectionMode).toBe('embeddings')
-    expect(result.hasEmbeddedDocuments).toBe(true)
-  })
-
-  it('uses inline mode when parsePreference is inline and content is available', async () => {
-    const doc: Attachment = {
-      name: 'inline-doc.txt',
-      type: 'document',
-      path: '/path/to/doc.txt',
-    }
-
-    const hub = createMockServiceHub()
-    const result = await processAttachmentsForSend({
-      attachments: [doc],
-      threadId: 'thread-1',
-      serviceHub: hub,
-      parsePreference: 'inline',
-    })
-
-    expect(result.processedAttachments).toHaveLength(1)
-    expect(result.processedAttachments[0].injectionMode).toBe('inline')
-    expect(result.processedAttachments[0].inlineContent).toBe(
-      'parsed content here'
-    )
-    expect(result.hasEmbeddedDocuments).toBe(false)
-  })
-
-  it('forceInline overrides doc-level parseMode embeddings', async () => {
-    const doc: Attachment = {
-      name: 'forced.txt',
-      type: 'document',
-      path: '/path/to/forced.txt',
-      parseMode: 'embeddings',
-    }
-
-    const hub = createMockServiceHub()
-    const result = await processAttachmentsForSend({
-      attachments: [doc],
-      threadId: 'thread-1',
-      serviceHub: hub,
-      parsePreference: 'embeddings',
-      forceInline: true,
-    })
-
-    expect(result.processedAttachments).toHaveLength(1)
-    expect(result.processedAttachments[0].injectionMode).toBe('inline')
-    expect(hub.uploads().ingestFileAttachment).not.toHaveBeenCalled()
-  })
-
-  it('forceInline never calls uploads when local parse is empty (no ensureAkidb toast)', async () => {
-    const { toast } = await import('sonner')
-    const parseDocument = vi.fn().mockResolvedValue('')
-    const ingestFileAttachment = vi
-      .fn()
-      .mockRejectedValue(
-        new Error(
-          'AkiDB is not configured. Enable or add the ax-studio AkiDB MCP server in Settings → MCP Servers. AX BI MCP and tool toggles do not provide document indexing.'
-        )
-      )
-    const hub = createMockServiceHub({
-      uploads: { ingestFileAttachment },
-      rag: { parseDocument },
-    })
-    const doc: Attachment = {
-      name: 'report.pdf',
-      type: 'document',
-      path: '/docs/report.pdf',
-      fileType: 'pdf',
-      parseMode: 'embeddings',
-    }
-    const updateAttachmentProcessing = vi.fn()
-
-    const result = await processAttachmentsForSend({
-      attachments: [doc],
-      threadId: 'thread-1',
-      serviceHub: hub,
-      parsePreference: 'embeddings',
-      forceInline: true,
-      updateAttachmentProcessing,
-    })
-
-    expect(ingestFileAttachment).not.toHaveBeenCalled()
-    expect(result.processedAttachments).toHaveLength(0)
-    expect(toast.error).not.toHaveBeenCalledWith(
-      'Failed to index attachments',
-      expect.anything()
-    )
-    expect(updateAttachmentProcessing).toHaveBeenCalledWith(
-      doc,
-      'error',
-      expect.objectContaining({
-        error: expect.stringMatching(
-          /fabric-compatible|Settings → MCP Servers|document-indexing/i
-        ),
-      })
-    )
-    expect(updateAttachmentProcessing).toHaveBeenCalledWith(
-      doc,
-      'error',
-      expect.objectContaining({
-        error: expect.not.stringMatching(/AX BI|tool toggles/i),
-      })
-    )
-  })
-
-  it('preserves native extraction errors for force-inline binary files', async () => {
-    const extractionError = new Error(
-      'PDF contains no extractable text; scanned PDFs require OCR'
-    )
-    const parseDocument = vi.fn().mockRejectedValue(extractionError)
-    const ingestFileAttachment = vi.fn()
-    const updateAttachmentProcessing = vi.fn()
-    const hub = createMockServiceHub({
-      uploads: { ingestFileAttachment },
-      rag: { parseDocument },
-    })
-    const doc: Attachment = {
-      name: 'scan.pdf',
-      type: 'document',
-      path: '/docs/scan.pdf',
-      fileType: 'pdf',
-    }
-
-    const result = await processAttachmentsForSend({
-      attachments: [doc],
-      threadId: 'thread-1',
-      serviceHub: hub,
-      parsePreference: 'inline',
-      forceInline: true,
-      updateAttachmentProcessing,
-    })
-
-    expect(result.processedAttachments).toHaveLength(0)
-    expect(ingestFileAttachment).not.toHaveBeenCalled()
-    expect(updateAttachmentProcessing).toHaveBeenCalledWith(
-      doc,
-      'error',
-      expect.objectContaining({
-        error: expect.stringMatching(/scanned PDFs require OCR/i),
-      })
-    )
-  })
-
-  it('forceInline with aki-v09-only capability never calls uploads', async () => {
-    const { toast } = await import('sonner')
-    const parseDocument = vi.fn().mockResolvedValue('')
-    const ingestFileAttachment = vi.fn()
-    const hub = createMockServiceHub({
-      uploads: { ingestFileAttachment },
-      rag: { parseDocument },
-    })
-    const doc: Attachment = {
-      name: 'deck.pptx',
-      type: 'document',
-      path: '/docs/deck.pptx',
-      fileType: 'pptx',
-    }
-
-    await processAttachmentsForSend({
-      attachments: [doc],
-      threadId: 'thread-1',
-      serviceHub: hub,
-      parsePreference: 'embeddings',
-      forceInline: true,
-      indexerCapability: 'aki-v09-only',
-      updateAttachmentProcessing: vi.fn(),
-    })
-
-    expect(ingestFileAttachment).not.toHaveBeenCalled()
-    expect(toast.error).not.toHaveBeenCalledWith(
-      'Failed to index attachments',
-      expect.anything()
-    )
-  })
-
-  it('forceInline attaches text without ingest when parse succeeds', async () => {
-    const { toast } = await import('sonner')
-    const parseDocument = vi.fn().mockResolvedValue('# notes')
-    const ingestFileAttachment = vi.fn()
-    const hub = createMockServiceHub({
-      uploads: { ingestFileAttachment },
-      rag: { parseDocument },
-    })
+  it('always inlines documents via extractDocumentText regardless of parsePreference', async () => {
     const doc: Attachment = {
       name: 'notes.md',
       type: 'document',
@@ -428,195 +197,132 @@ describe('processAttachmentsForSend', () => {
       fileType: 'md',
       parseMode: 'embeddings',
     }
+    const core = { invoke: vi.fn() }
 
-    const result = await processAttachmentsForSend({
-      attachments: [doc],
-      threadId: 'thread-1',
-      serviceHub: hub,
-      parsePreference: 'embeddings',
-      forceInline: true,
-    })
-
-    expect(ingestFileAttachment).not.toHaveBeenCalled()
-    expect(toast.error).not.toHaveBeenCalled()
-    expect(result.processedAttachments[0]).toEqual(
-      expect.objectContaining({
-        injectionMode: 'inline',
-        inlineContent: '# notes',
+    for (const parsePreference of ['auto', 'inline', 'embeddings'] as const) {
+      extractDocumentText.mockClear()
+      const result = await processAttachmentsForSend({
+        attachments: [doc],
+        threadId: 'thread-1',
+        serviceHub: createMockServiceHub({ core }),
+        parsePreference,
       })
-    )
-  })
 
-  it('falls back to embeddings when inline parsing fails', async () => {
-    const doc: Attachment = {
-      name: 'fallback-doc.txt',
-      type: 'document',
-      path: '/path/to/doc.txt',
+      expect(extractDocumentText).toHaveBeenCalledWith({
+        path: '/docs/notes.md',
+        fileType: 'md',
+        core,
+      })
+      expect(result.processedAttachments).toHaveLength(1)
+      expect(result.processedAttachments[0]).toEqual(
+        expect.objectContaining({
+          injectionMode: 'inline',
+          inlineContent: 'parsed content here',
+          processed: true,
+          processing: false,
+        })
+      )
+      expect(result.hasEmbeddedDocuments).toBe(false)
     }
-
-    const hub = createMockServiceHub({
-      rag: {
-        parseDocument: vi.fn().mockRejectedValue(new Error('parse error')),
-      },
-    })
-    const result = await processAttachmentsForSend({
-      attachments: [doc],
-      threadId: 'thread-1',
-      serviceHub: hub,
-      parsePreference: 'inline',
-    })
-
-    // Falls back to embeddings since parsedContent is undefined
-    expect(result.processedAttachments).toHaveLength(1)
-    expect(result.processedAttachments[0].injectionMode).toBe('embeddings')
-    expect(result.hasEmbeddedDocuments).toBe(true)
   })
 
-  it('uses auto mode with token estimation to decide inline vs embeddings', async () => {
-    const doc: Attachment = {
-      name: 'auto-doc.txt',
-      type: 'document',
-      path: '/path/to/doc.txt',
-    }
-
-    const hub = createMockServiceHub()
-    const estimateTokens = vi.fn().mockResolvedValue(50)
-
-    const result = await processAttachmentsForSend({
-      attachments: [doc],
-      threadId: 'thread-1',
-      serviceHub: hub,
-      parsePreference: 'auto',
-      contextThreshold: 1000,
-      estimateTokens,
-    })
-
-    // 50 tokens < 1000 threshold => inline
-    expect(result.processedAttachments[0].injectionMode).toBe('inline')
-  })
-
-  it('uses embeddings when token count exceeds threshold in auto mode', async () => {
-    const doc: Attachment = {
-      name: 'large-doc.txt',
-      type: 'document',
-      path: '/path/to/doc.txt',
-    }
-
-    const hub = createMockServiceHub()
-    const estimateTokens = vi.fn().mockResolvedValue(5000)
-
-    const result = await processAttachmentsForSend({
-      attachments: [doc],
-      threadId: 'thread-1',
-      serviceHub: hub,
-      parsePreference: 'auto',
-      contextThreshold: 1000,
-      estimateTokens,
-    })
-
-    expect(result.processedAttachments[0].injectionMode).toBe('embeddings')
-    expect(result.hasEmbeddedDocuments).toBe(true)
-  })
-
-  it('respects perFileChoices in auto mode', async () => {
-    const doc: Attachment = {
-      name: 'choice-doc.txt',
-      type: 'document',
-      path: '/path/to/doc.txt',
-    }
-
-    const hub = createMockServiceHub()
-    const perFileChoices = new Map<string, 'inline' | 'embeddings'>()
-    perFileChoices.set('/path/to/doc.txt', 'inline')
-
-    const result = await processAttachmentsForSend({
-      attachments: [doc],
-      threadId: 'thread-1',
-      serviceHub: hub,
-      parsePreference: 'auto',
-      perFileChoices,
-    })
-
-    expect(result.processedAttachments[0].injectionMode).toBe('inline')
-  })
-
-  it('handles invalid contextThreshold by treating it as undefined', async () => {
+  it('notifies done with the inline content when extraction succeeds', async () => {
     const doc: Attachment = {
       name: 'doc.txt',
       type: 'document',
       path: '/path/to/doc.txt',
     }
-
-    const hub = createMockServiceHub()
-    const estimateTokens = vi.fn().mockResolvedValue(50)
-
-    // contextThreshold = -1 is invalid, should be treated as undefined
-    const result = await processAttachmentsForSend({
-      attachments: [doc],
-      threadId: 'thread-1',
-      serviceHub: hub,
-      parsePreference: 'auto',
-      contextThreshold: -1,
-      estimateTokens,
-      autoFallbackMode: 'embeddings',
-    })
-
-    // Without valid threshold, defaults to autoFallbackMode
-    expect(result.processedAttachments[0].injectionMode).toBe('embeddings')
-  })
-
-  it('handles prompt parsePreference with perFileChoices', async () => {
-    const doc: Attachment = {
-      name: 'prompt-doc.txt',
-      type: 'document',
-      path: '/path/to/doc.txt',
-    }
-
-    const hub = createMockServiceHub()
-    const perFileChoices = new Map<string, 'inline' | 'embeddings'>()
-    perFileChoices.set('/path/to/doc.txt', 'inline')
-
-    const result = await processAttachmentsForSend({
-      attachments: [doc],
-      threadId: 'thread-1',
-      serviceHub: hub,
-      parsePreference: 'prompt',
-      perFileChoices,
-    })
-
-    expect(result.processedAttachments[0].injectionMode).toBe('inline')
-  })
-
-  it('throws when document ingestion fails', async () => {
-    const doc: Attachment = {
-      name: 'fail-doc.txt',
-      type: 'document',
-      path: '/path/to/doc.txt',
-    }
-
     const updateFn = vi.fn()
-    const failHub = createMockServiceHub({
-      uploads: {
-        ingestFileAttachment: vi
-          .fn()
-          .mockRejectedValue(new Error('ingest failed')),
-      },
-      rag: {
-        parseDocument: vi.fn().mockRejectedValue(new Error('parse error')),
-      },
+
+    await processAttachmentsForSend({
+      attachments: [doc],
+      threadId: 'thread-1',
+      serviceHub: createMockServiceHub(),
+      parsePreference: 'auto',
+      updateAttachmentProcessing: updateFn,
     })
 
-    await expect(
-      processAttachmentsForSend({
-        attachments: [doc],
-        threadId: 'thread-1',
-        serviceHub: failHub,
-        parsePreference: 'embeddings',
-        updateAttachmentProcessing: updateFn,
+    expect(updateFn).toHaveBeenCalledWith(doc, 'processing')
+    expect(updateFn).toHaveBeenCalledWith(
+      doc,
+      'done',
+      expect.objectContaining({
+        inlineContent: 'parsed content here',
+        injectionMode: 'inline',
+        processed: true,
       })
-    ).rejects.toThrow('ingest failed')
+    )
+  })
 
-    expect(updateFn).toHaveBeenCalledWith(doc, 'error')
+  it('marks unreadable documents as error and skips them WITHOUT throwing', async () => {
+    extractDocumentText.mockRejectedValue(
+      new Error('PDF contains no extractable text; scanned PDFs require OCR')
+    )
+    const badDoc: Attachment = {
+      name: 'scan.pdf',
+      type: 'document',
+      path: '/docs/scan.pdf',
+      fileType: 'pdf',
+    }
+    const goodDoc: Attachment = {
+      name: 'notes.md',
+      type: 'document',
+      path: '/docs/notes.md',
+      fileType: 'md',
+    }
+    const updateFn = vi.fn()
+
+    // The batch continues: the good document after the bad one still processes.
+    extractDocumentText.mockImplementation(({ path }: { path: string }) =>
+      path.endsWith('.pdf')
+        ? Promise.reject(new Error('scanned PDFs require OCR'))
+        : Promise.resolve(extractedText('md body'))
+    )
+
+    const result = await processAttachmentsForSend({
+      attachments: [badDoc, goodDoc],
+      threadId: 'thread-1',
+      serviceHub: createMockServiceHub(),
+      parsePreference: 'auto',
+      updateAttachmentProcessing: updateFn,
+    })
+
+    expect(result.processedAttachments).toHaveLength(1)
+    expect(result.processedAttachments[0].name).toBe('notes.md')
+    expect(updateFn).toHaveBeenCalledWith(
+      badDoc,
+      'error',
+      expect.objectContaining({
+        processing: false,
+        error: expect.stringMatching(/scanned PDFs require OCR/i),
+      })
+    )
+    expect(result.hasEmbeddedDocuments).toBe(false)
+  })
+
+  it('marks documents without a readable path as error and skips them', async () => {
+    extractDocumentText.mockResolvedValue(extractedText(''))
+    const doc: Attachment = {
+      name: 'empty.txt',
+      type: 'document',
+      path: '/docs/empty.txt',
+    }
+    const updateFn = vi.fn()
+
+    const result = await processAttachmentsForSend({
+      attachments: [doc],
+      threadId: 'thread-1',
+      serviceHub: createMockServiceHub(),
+      parsePreference: 'auto',
+      updateAttachmentProcessing: updateFn,
+    })
+
+    expect(result.processedAttachments).toHaveLength(0)
+    expect(updateFn).toHaveBeenCalledWith(
+      doc,
+      'error',
+      expect.objectContaining({ processing: false })
+    )
   })
 
   it('processes mixed images and documents together', async () => {
@@ -627,16 +333,16 @@ describe('processAttachmentsForSend', () => {
       path: '/file.txt',
     }
 
-    const hub = createMockServiceHub()
     const result = await processAttachmentsForSend({
       attachments: [img, doc],
       threadId: 'thread-1',
-      serviceHub: hub,
-      parsePreference: 'embeddings',
+      serviceHub: createMockServiceHub(),
+      parsePreference: 'auto',
     })
 
     expect(result.processedAttachments).toHaveLength(2)
     expect(result.processedAttachments[0].type).toBe('image')
     expect(result.processedAttachments[1].type).toBe('document')
+    expect(result.processedAttachments[1].injectionMode).toBe('inline')
   })
 })

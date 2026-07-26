@@ -50,7 +50,7 @@ export function ThemeProvider() {
     if (isPlatformTauri()) {
       let isActive = true
 
-      import('@tauri-apps/api/event')
+      import('@/lib/tauri-shim/api-event')
         .then(({ listen }) => {
           return listen<string>('theme-changed', (event) => {
             // Read from the ref, not from the closure snapshot, so a

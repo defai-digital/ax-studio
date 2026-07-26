@@ -1,36 +1,42 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ChatFolder, ChatTag } from '@/services/chat-organization/types'
+import type { ChatFolder, ChatTag } from '@/lib/chat-organization'
 
 const mockFolder: ChatFolder = { id: 'folder-1', name: 'Work', updatedAt: 100 }
 const mockTag: ChatTag = { id: 'tag-1', name: 'urgent' }
 
-const mockGetOrganization = vi.fn()
-const mockAddFolder = vi.fn()
-const mockRenameFolder = vi.fn()
-const mockDeleteFolder = vi.fn()
-const mockAddTag = vi.fn()
-const mockRenameTag = vi.fn()
-const mockDeleteTag = vi.fn()
-const mockUpdateThread = vi.fn()
+const {
+  mockGetOrganization,
+  mockAddFolder,
+  mockRenameFolder,
+  mockDeleteFolder,
+  mockAddTag,
+  mockRenameTag,
+  mockDeleteTag,
+  mockUpdateThread,
+} = vi.hoisted(() => ({
+  mockGetOrganization: vi.fn(),
+  mockAddFolder: vi.fn(),
+  mockRenameFolder: vi.fn(),
+  mockDeleteFolder: vi.fn(),
+  mockAddTag: vi.fn(),
+  mockRenameTag: vi.fn(),
+  mockDeleteTag: vi.fn(),
+  mockUpdateThread: vi.fn(),
+}))
 
 let mockThreads: Record<string, Thread> = {}
 
-const mockServiceHub = {
-  chatOrganization: () => ({
-    getOrganization: mockGetOrganization,
-    addFolder: mockAddFolder,
-    renameFolder: mockRenameFolder,
-    deleteFolder: mockDeleteFolder,
-    addTag: mockAddTag,
-    renameTag: mockRenameTag,
-    deleteTag: mockDeleteTag,
-  }),
-}
-
-vi.mock('@/hooks/useServiceHub', () => ({
-  useServiceHub: () => mockServiceHub,
-  getServiceHub: () => mockServiceHub,
+// The store now calls the @/lib/chat-organization persistence functions
+// directly instead of going through getServiceHub().chatOrganization().
+vi.mock('@/lib/chat-organization', () => ({
+  getOrganization: mockGetOrganization,
+  addFolder: mockAddFolder,
+  renameFolder: mockRenameFolder,
+  deleteFolder: mockDeleteFolder,
+  addTag: mockAddTag,
+  renameTag: mockRenameTag,
+  deleteTag: mockDeleteTag,
 }))
 
 vi.mock('@/hooks/threads/useThreads', () => ({

@@ -8,7 +8,19 @@
     "paths": {
       "@/*": ["./src/*"],
       "@ax-studio/core": ["../core/dist/types/index.d.ts"],
-      "@ax-studio/conversational-extension": ["../extensions/conversational-extension/src/index.ts"]
+      "@tauri-apps/api/core": ["./src/lib/tauri-shim/api-core.ts"],
+      "@tauri-apps/api/event": ["./src/lib/tauri-shim/api-event.ts"],
+      "@tauri-apps/api/window": ["./src/lib/tauri-shim/api-window.ts"],
+      "@tauri-apps/api/webviewWindow": ["./src/lib/tauri-shim/api-webview-window.ts"],
+      "@tauri-apps/api/path": ["./src/lib/tauri-shim/api-path.ts"],
+      "@tauri-apps/api": ["./src/lib/tauri-shim/api.ts"],
+      "@tauri-apps/plugin-opener": ["./src/lib/tauri-shim/plugin-opener.ts"],
+      "@tauri-apps/plugin-store": ["./src/lib/tauri-shim/plugin-store.ts"],
+      "@tauri-apps/plugin-http": ["./src/lib/tauri-shim/plugin-http.ts"],
+      "@tauri-apps/plugin-updater": ["./src/lib/tauri-shim/plugin-updater.ts"],
+      "@tauri-apps/plugin-deep-link": ["./src/lib/tauri-shim/plugin-deep-link.ts"],
+      "@tauri-apps/plugin-global-shortcut": ["./src/lib/tauri-shim/plugin-global-shortcut.ts"],
+      "@tauri-apps/plugin-log": ["./src/lib/tauri-shim/plugin-log.ts"]
     }
   }
 }

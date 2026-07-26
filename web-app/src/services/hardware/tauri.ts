@@ -2,7 +2,7 @@
  * Tauri Hardware Service - Desktop implementation
  */
 
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '@/lib/tauri-shim/api-core'
 import type { HardwareData, SystemUsage, DeviceList, HardwareService } from './types'
 
 type LlamacppDeviceExtension = {

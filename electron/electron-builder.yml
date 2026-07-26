@@ -1,0 +1,88 @@
+# electron-builder config for the AX Studio Electron shell (Phase 4).
+# Version is injected at build time by scripts/dist-electron.mjs from the root
+# package.json (single source of truth) via -c.extraMetadata.version.
+appId: ai.axstudio.app
+productName: AX Studio
+copyright: Copyright © 2026 DEFAI Private Limited
+
+directories:
+  output: dist-installer
+  buildResources: build
+
+# App payload: compiled main (dist/), CommonJS preload (dist-preload/), the
+# package manifest, and the built renderer SPA staged as web-dist/ inside the
+# asar (embed.ts resolves web-dist/ first when app.isPackaged). dist-renderer/
+# is a copy of web-app/dist made by scripts/copy-renderer.mjs during
+# `yarn workspace @ax-studio/electron build` (Phase 5 — same directory is what
+# npm pack ships to embedders).
+# ax-file:// only serves user-data files, and Vite worker/asset URLs resolve
+# fine through Chromium's asar mapping, so nothing needs asarUnpack.
+files:
+  - dist/**
+  - dist-preload/**
+  - package.json
+  - from: dist-renderer
+    to: web-dist
+    filter:
+      - '**/*'
+
+asar: true
+npmRebuild: false
+
+# Same file associations as src-tauri/tauri.conf.json so macOS "Open With"
+# routes through the existing open-file / take_pending_open_files bridge.
+fileAssociations:
+  - ext: [png, jpg, jpeg]
+    name: Image
+    role: Viewer
+  - ext: [pdf]
+    name: PDF Document
+    role: Viewer
+  - ext: [txt, md, csv]
+    name: Text Document
+    role: Viewer
+  - ext: [docx, pptx, xlsx, xls, ods, html, htm]
+    name: Document
+    role: Viewer
+
+mac:
+  category: public.app-category.productivity
+  minimumSystemVersion: '15.0'
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize: false
+  target:
+    - target: dmg
+      arch: [arm64]
+    - target: zip
+      arch: [arm64]
+
+dmg:
+  window:
+    width: 540
+    height: 380
+
+win:
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+
+# Mirrors src-tauri/tauri.windows.conf.json: per-machine assisted installer,
+# no language selector.
+nsis:
+  oneClick: false
+  perMachine: true
+  allowToChangeInstallationDirectory: true
+  displayLanguageSelector: false
+
+# electron-updater feed (replaces tauri-plugin-updater's latest.json endpoint
+# at the same GitHub releases repo). Written into app-update.yml inside the
+# packaged app; electron-updater fetches latest-mac.yml / latest.yml from the
+# latest release.
+publish:
+  - provider: github
+    owner: defai-digital
+    repo: ax-studio
+    releaseType: release

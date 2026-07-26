@@ -9,7 +9,6 @@ import { type ChatInit, type LanguageModelUsage } from 'ai'
 import { useEffect, useMemo, useRef, useCallback } from 'react'
 import { useChatSessions } from '@/stores/chat-session-store'
 import { useAppState } from '@/hooks/settings/useAppState'
-import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
 
 type CustomChatOptions = Omit<ChatInit<UIMessage>, 'transport'> &
   Pick<UseChatOptions<UIMessage>, 'experimental_throttle' | 'resume'> & {
@@ -52,16 +51,6 @@ export function useChat(options?: CustomChatOptions) {
   const ensureSession = useChatSessions((state) => state.ensureSession)
   const setSessionTitle = useChatSessions((state) => state.setSessionTitle)
   const updateStatus = useChatSessions((state) => state.updateStatus)
-
-  // Get serviceHub and model metadata from app state
-  const mcpToolNames = useAppState((state) => state.mcpToolNames)
-
-  // Subscribe to local knowledge toggle — refresh tools when it changes
-  const localKnowledgeEnabled = useLocalKnowledge((state) =>
-    sessionId
-      ? state.isLocalKnowledgeEnabledForThread(sessionId)
-      : state.localKnowledgeEnabled
-  )
 
   const existingSessionTransport = sessionId
     ? useChatSessions.getState().sessions[sessionId]?.transport
@@ -178,34 +167,10 @@ export function useChat(options?: CustomChatOptions) {
     }
   }, [chatResult.status, resetTokenSpeed])
 
-  useEffect(() => {
-    if (transportRef.current) {
-      transportRef.current.refreshTools()
-    }
-  }, [mcpToolNames, localKnowledgeEnabled])
-
   // Expose method to push a system message directly to the transport (bypasses React render cycle)
   const updateSystemMessageDirect = useCallback((msg: string | undefined) => {
     transportRef.current?.updateSystemMessage(msg)
   }, [])
-
-  // Expose method to update RAG tools availability
-  const updateRagToolsAvailability = useCallback(
-    async (
-      hasDocuments: boolean,
-      modelSupportsTools: boolean,
-      ragFeatureAvailable: boolean
-    ) => {
-      if (transportRef.current) {
-        await transportRef.current.updateRagToolsAvailability(
-          hasDocuments,
-          modelSupportsTools,
-          ragFeatureAvailable
-        )
-      }
-    },
-    []
-  )
 
   const getLastRouterResult = useCallback(() => {
     return transportRef.current?.lastRouterResult ?? null
@@ -213,7 +178,6 @@ export function useChat(options?: CustomChatOptions) {
 
   return {
     ...chatResult,
-    updateRagToolsAvailability,
     updateSystemMessageDirect,
     getLastRouterResult,
   }

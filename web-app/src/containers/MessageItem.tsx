@@ -12,7 +12,6 @@ import { RenderMarkdown } from './RenderMarkdown'
 import { cn } from '@/lib/utils'
 import { SourcesFooter } from '@/components/citations/SourcesFooter'
 import { useCitations } from '@/hooks/citations/use-citations'
-import { useGuardrails } from '@/hooks/settings/useGuardrails'
 import {
   Reasoning,
   ReasoningContent,
@@ -178,7 +177,6 @@ export const MessageItem = memo(
       }
     }, [hydrateCitations, message.id, message.role, metadataCitationData])
     const citationData = useCitations((s) => s.getCitations(message.id))
-    const flagLowConfidence = useGuardrails((s) => s.flagLowConfidence)
 
     const persistRating = useCallback(
       (
@@ -708,7 +706,7 @@ export const MessageItem = memo(
             {message.role === 'assistant' && citationData && (
               <SourcesFooter
                 citationData={citationData}
-                showConfidence={flagLowConfidence}
+                showConfidence={false}
               />
             )}
 

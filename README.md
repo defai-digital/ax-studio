@@ -3,11 +3,11 @@
 **A local-first AI workspace for people and teams who need chat, models,
 tools, memory, knowledge, and local execution in one controlled desktop app.**
 
-AX Studio is a native [Tauri 2](https://tauri.app/) desktop application with a
-Rust backend and React frontend. It brings cloud providers, OpenAI-compatible
-endpoints, bundled local inference, Apple MLX through AX Engine, MCP tools,
-research, persistent memory, artifacts, and a local API server into one
-workspace.
+AX Studio is a native [Electron](https://www.electronjs.org/) desktop
+application with a Node.js main process and React frontend. It brings cloud
+providers, OpenAI-compatible endpoints, bundled local inference, Apple MLX
+through AX Engine, persistent memory, artifacts, and a local API server into
+one workspace.
 
 - **Start quickly** with the desktop app, connect a provider, and chat in
   minutes
@@ -139,22 +139,15 @@ gate used by release CI:
 .\scripts\release\verify-windows-authenticode.ps1 -Path .\AX.Studio_*_x64-setup.exe
 ```
 
-Windows signing policy, certificate pins, and cert renewal are documented in
-[`docs/release/windows-signing.md`](docs/release/windows-signing.md).
-
-**winget:** a package id of `DEFAI.AXStudio` is reserved in-repo for future
-publication to the winget community repository. Do not run `winget install`
-for AX Studio until that package is published and linked here. See
-[`packaging/winget/README.md`](packaging/winget/README.md).
+Windows signing policy for the electron-builder NSIS installer is documented
+in [`docs/release/release.md`](docs/release/release.md).
 
 #### Manual download
 
 All release assets are published on the
-[AX Studio releases page](https://github.com/defai-digital/ax-studio/releases).
-Every stable release asset includes a detached `.minisig` signature. The
-verification key and command are documented in
-[`docs/release/ax-minisign.pub`](docs/release/ax-minisign.pub) and
-[`docs/release/release.md`](docs/release/release.md).
+[AX Studio releases page](https://github.com/defai-digital/ax-studio/releases);
+see [`docs/release/release.md`](docs/release/release.md) for the packaging
+pipeline (electron-builder) and the electron-updater feed.
 
 The `curl -fsSL` command above is only Homebrew's official bootstrap command;
 it is not an AX Studio download or integrity check. Do not install AX Studio
@@ -343,9 +336,9 @@ plane.
 - **More approachable than a local-model stack.** The app gives users model
   download/import, runtime status, settings, logs, and local API access in one
   place.
-- **More extensible than a static desktop app.** MCP, TypeScript extensions,
-  Tauri plugins, and the local API let advanced users connect tools and
-  workflows without replacing the workspace.
+- **More extensible than a static desktop app.** Bundled TypeScript extensions
+  and the local API let advanced users connect tools and workflows without
+  replacing the workspace.
 - **More private by default.** Conversations, app data, memory, and local
   knowledge live on the user's machine unless the selected provider or tool
   sends data elsewhere.
@@ -359,7 +352,7 @@ plane.
 | Local runtime visibility | Hidden subprocesses and scattered logs | Engine settings, hardware telemetry, downloads, local API logs, app logs |
 | Knowledge and memory | External RAG tools or prompt notes | Local knowledge, persistent memory, thread/project state |
 | MCP tools | Config exists but tool execution can feel opaque | MCP server management plus visible tool calls and results |
-| Extensibility | Mostly plugin-specific | Core SDK, bundled extensions, Tauri plugins, MCP, local API |
+| Extensibility | Mostly plugin-specific | Core SDK, bundled extensions, local API |
 
 ## Runtime Architecture
 
@@ -370,8 +363,8 @@ Source: [docs/architecture/ax-studio-runtime.mmd](docs/architecture/ax-studio-ru
 The important distinction is that AX Studio has a native control layer around
 the chat experience:
 
-- **Desktop shell** - Tauri 2 host with native filesystem, process, update,
-  logging, MCP, downloads, and local server capabilities.
+- **Desktop shell** - Electron host with native filesystem, process, update,
+  logging, downloads, and local server capabilities.
 - **Workspace UI** - React 19 app for chat, threads, projects, models,
   providers, settings, research, artifacts, and logs.
 - **Provider plane** - hosted APIs, custom OpenAI-compatible endpoints, MLX,
@@ -380,8 +373,9 @@ the chat experience:
   child-process integration.
 - **Knowledge plane** - persistent memory, attachments, local knowledge, and
   research sources.
-- **Extension plane** - bundled TypeScript extensions and native Tauri plugins
-  for downloads, local inference, hardware telemetry, and assistant behavior.
+- **Extension plane** - bundled TypeScript extensions statically wired into
+  the desktop build for downloads, local inference, hardware telemetry, and
+  assistant behavior.
 
 ## The AutomatosX Ecosystem
 
@@ -526,9 +520,8 @@ Use this path when contributing to AX Studio or running the app from source.
 
 - Node.js 24+
 - Yarn 4.5.3
-- Rust 1.85.0+
-- Tauri CLI 2.x
-- macOS users building MLX support: Apple Silicon is required for the MLX provider
+- macOS users running MLX models: Apple Silicon is required; models run in the
+  AX Engine sidecar (install `ax-engine` via Homebrew or put it on `PATH`)
 - Desktop development is focused on macOS and Windows. Linux may compile from
   source, but it is not an official desktop support target.
 
@@ -554,9 +547,9 @@ Use the same prefix for Yarn commands in Corepack-free shells. For example,
 suite with the repo's required Yarn version even if the global `yarn` binary is
 Yarn 1.x.
 
-`make dev` installs dependencies when needed, builds `core/` and bundled
-extensions, downloads required binaries, copies Tauri assets, and launches the
-desktop app with hot reload.
+`make dev` installs dependencies when needed, builds `core/`, and launches the
+Electron desktop app against the Vite dev server with hot reload
+(`yarn dev:electron`).
 
 ### Local ports (dev)
 
@@ -565,7 +558,7 @@ desktop app with hot reload.
 | Port | Use |
 | --- | --- |
 | **31419** | Local OpenAI-compatible inference API (`/v1`, default) |
-| **31420** | Vite / Tauri frontend (`devUrl`) |
+| **31420** | Vite dev server (the Electron shell loads it in dev) |
 | **31430** | Vite HMR WebSocket (when an explicit host is set) |
 
 **AX BI stack** (defaults; see `web-app/src/lib/ax-bi/endpoints.ts`)
@@ -582,23 +575,24 @@ desktop app with hot reload.
 | `DATABASE_PORT` | **5432** | Postgres |
 | `REDIS_PORT` | **6379** | Redis |
 
-Studio frontend ports are fixed in `web-app/vite.config.ts`,
-`src-tauri/tauri.conf.json` (`build.devUrl`), and `Makefile` `DEV_PORT`.
-AX BI MCP/web defaults also appear in `src-tauri/src/core/mcp/constants.rs`.
-Production desktop builds do not open the Vite ports.
+Studio frontend ports are fixed in `web-app/vite.config.ts` and `Makefile`
+`DEV_PORT`. AX BI MCP/web defaults appear in
+`web-app/src/lib/ax-bi/endpoints.ts`. Production desktop builds do not open
+the Vite ports.
 
 ### Common Commands
 
 | Command | Purpose |
 | --- | --- |
-| `make dev` | Full Tauri desktop dev app |
+| `make dev` | Full Electron desktop dev app |
 | `make dev-web-app` | Frontend-only Vite app on port 31420 |
-| `make build` | Production build for the current platform |
-| `make test` | Lint, TypeScript tests, and Rust tests |
+| `make build` | Compile the web app and Electron main/preload |
+| `make dist` | Package the desktop app (electron-builder, unsigned local build) |
+| `make test` | Lint, web build, and Vitest suites |
+| `make smoke` | Electron shell smoke test (builds first, then runs `electron/smoke`) |
 | `yarn test` | Run Vitest suites |
 | `yarn lint` | Run workspace ESLint |
-| `cargo test --manifest-path src-tauri/Cargo.toml --no-default-features --features test-tauri -- --test-threads=1` | Tauri backend tests |
-| `make clean` | Remove build artifacts, caches, node_modules, and bundled resources |
+| `make clean` | Remove build artifacts, caches, and node_modules |
 
 ### Repository Layout
 
@@ -606,16 +600,14 @@ Production desktop builds do not open the Vite ports.
 | --- | --- |
 | `web-app/` | React frontend, routes, components, stores, services |
 | `core/` | Shared TypeScript SDK and extension-facing APIs |
+| `electron/` | Electron desktop shell: main/preload, IPC command handlers, packaging |
 | `extensions/` | Bundled assistant, conversation, download, and local-inference extensions |
-| `src-tauri/` | Rust Tauri host, IPC commands, MCP, downloads, local API, native capabilities |
-| `src-tauri/plugins/` | Native Rust plugins for hardware telemetry and local inference |
-| `scripts/` | Build, release, test, and quality-gate utilities |
+| `scripts/` | Build, dev, test, and quality-gate utilities |
 | `docs/` | Public docs: legal, release, architecture |
-| `pre-install/` | Generated extension bundles consumed by Tauri packaging (local/generated) |
-| `mlx.version` | Pinned MLX runtime version for prepare/release scripts |
+| `mlx.version` | Pinned MLX runtime version (reserved for the future ax-engine runtime download; see the migration matrix §5) |
 | `coverage/` / `report/` | Generated test coverage and module-audit output (gitignored; `make clean`) |
 
-Root keeps workspace entry points only (`package.json`, `yarn.lock`, `vitest.config.ts`, `Makefile`, `README.md`, license files). Package code stays under named top-level packages — not nested under `apps/` or `packages/` — so Tauri, Yarn workspaces, and CI paths stay stable.
+Root keeps workspace entry points only (`package.json`, `yarn.lock`, `vitest.config.ts`, `Makefile`, `README.md`, license files). Package code stays under named top-level packages — not nested under `apps/` or `packages/` — so Electron, Yarn workspaces, and CI paths stay stable.
 
 For contribution rules, start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -625,7 +617,6 @@ For contribution rules, start with [CONTRIBUTING.md](CONTRIBUTING.md).
 - [Contributing](CONTRIBUTING.md)
 - [Code conventions](docs/architecture/conventions.md)
 - [Release deployment](docs/release/release.md)
-- [Microsoft Store](docs/release/microsoft-store.md)
 - [Deep research](docs/architecture/deep-research.md)
 - [Privacy](docs/legal/privacy.md) · [Terms](docs/legal/terms.md)
 

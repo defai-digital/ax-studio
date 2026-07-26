@@ -1,24 +1,16 @@
-import {
-  createRootRoute,
-  Outlet,
-  useLocation,
-  useRouter,
-} from '@tanstack/react-router'
+import { createRootRoute, Outlet, useLocation } from '@tanstack/react-router'
 import { Fragment } from 'react/jsx-runtime'
-import { useCallback, useEffect, type MouseEvent, type ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 
-import { DialogAppUpdater } from '@/containers/dialogs/AppUpdater'
+import { ElectronUpdateBanner } from '@/containers/ElectronUpdateBanner'
 import { ThemeProvider } from '@/providers/ThemeProvider'
 import { InterfaceProvider } from '@/providers/InterfaceProvider'
 import { KeyboardShortcutsProvider } from '@/providers/KeyboardShortcuts'
 import { DataProvider } from '@/providers/DataProvider'
-import { route } from '@/constants/routes'
 import { ExtensionProvider } from '@/providers/ExtensionProvider'
 import { ToasterProvider } from '@/providers/ToasterProvider'
 import { useLeftPanel } from '@/hooks/ui/useLeftPanel'
-import { ToolApproval } from '@/containers/dialogs/mcp/ToolApproval'
-import { AttachmentIngestionDialog } from '@/containers/dialogs/AttachmentIngestionDialog'
 import { TranslationProvider } from '@/i18n/TranslationContext'
 import { OutOfContextPromiseModal } from '@/containers/dialogs/OutOfContextDialog'
 import { GlobalError } from '@/components/common/GlobalError'
@@ -27,7 +19,6 @@ import { GlobalEventHandler } from '@/providers/GlobalEventHandler'
 import { ServiceHubProvider } from '@/providers/ServiceHubProvider'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { LeftSidebar } from '@/components/left-sidebar'
-import { WindowControls } from '@/components/WindowControls'
 import {
   pageVariants,
   pageTransition,
@@ -35,14 +26,6 @@ import {
   reducedMotionVariants,
 } from '@/lib/utils/animations'
 import { hideInitialLoader } from '@/lib/bootstrap/app-startup'
-import {
-  startWindowDragFromMouseEvent,
-  toggleWindowMaximizeFromMouseEvent,
-} from '@/lib/window-drag'
-import { Button } from '@/components/ui/button'
-import { ArrowLeft } from 'lucide-react'
-
-const MACOS_WINDOW_CHROME_HEIGHT = 60
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -73,40 +56,10 @@ const PageTransition = ({ children }: { children: React.ReactNode }) => {
   )
 }
 
+// Native window frame (Electron `frame: true`) — no custom drag chrome.
 const MacWindowChrome = ({ children }: { children: ReactNode }) => {
-  const handleWindowChromeDrag = useCallback(
-    (event: MouseEvent<HTMLDivElement>) => {
-      if (!IS_MACOS) return
-
-      startWindowDragFromMouseEvent(event, {
-        topInset: MACOS_WINDOW_CHROME_HEIGHT,
-        logContext: 'MacWindowChrome',
-      })
-    },
-    []
-  )
-  const handleWindowChromeDoubleClick = useCallback(
-    (event: MouseEvent<HTMLDivElement>) => {
-      toggleWindowMaximizeFromMouseEvent(event, {
-        topInset: MACOS_WINDOW_CHROME_HEIGHT,
-        logContext: 'MacWindowChrome',
-      })
-    },
-    []
-  )
-
   return (
-    <div
-      className="bg-background size-full relative overflow-hidden"
-      onMouseDownCapture={handleWindowChromeDrag}
-      onDoubleClickCapture={handleWindowChromeDoubleClick}
-    >
-      {IS_MACOS && (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0 z-20 h-15 border-b border-border/60 bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/70"
-        />
-      )}
+    <div className="bg-background size-full relative overflow-hidden">
       {children}
     </div>
   )
@@ -129,8 +82,7 @@ const AppLayout = () => {
         onWidthChange={setLeftPanelWidth}
       >
         <KeyboardShortcutsProvider />
-        {!IS_MACOS && <WindowControls />}
-        <DialogAppUpdater />
+        <ElectronUpdateBanner />
         <LeftSidebar />
         <SidebarInset>
           <div className="bg-background w-full flex-1 min-h-0 overflow-hidden">
@@ -144,56 +96,7 @@ const AppLayout = () => {
   )
 }
 
-const LogsLayoutHeader = () => {
-  const router = useRouter()
-
-  const handleBack = useCallback(() => {
-    if (router.history.canGoBack()) {
-      router.history.back()
-    } else {
-      void router.navigate({ to: route.settings.general })
-    }
-  }, [router])
-
-  return (
-    <header className="flex h-11 shrink-0 items-center border-b border-border/60 bg-background px-2">
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={handleBack}
-        className="gap-1.5 text-muted-foreground hover:text-foreground"
-        aria-label="Back"
-      >
-        <ArrowLeft className="size-4" />
-        Back
-      </Button>
-    </header>
-  )
-}
-
-const LogsLayout = () => {
-  return (
-    <Fragment>
-      <main className="relative h-svh text-sm antialiased select-text bg-app">
-        <div className="flex h-full flex-col">
-          <LogsLayoutHeader />
-          {/* Main content panel */}
-          <div className="flex min-h-0 flex-1">
-            <div className="h-full flex w-full">
-              <div className="bg-background text-foreground border w-full overflow-hidden">
-                <Outlet />
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-    </Fragment>
-  )
-}
-
 function RootLayout() {
-  const location = useLocation()
-
   useEffect(() => {
     const hideLoader = () => {
       requestAnimationFrame(() => {
@@ -205,11 +108,6 @@ function RootLayout() {
 
     return () => clearTimeout(timer)
   }, [])
-
-  const isLogsRoute =
-    location.pathname === route.localApiServerlogs ||
-    location.pathname === route.systemMonitor ||
-    location.pathname === route.appLogs
 
   return (
     <Fragment>
@@ -224,12 +122,10 @@ function RootLayout() {
                 <DataProvider />
                 <GlobalEventHandler />
                 <ErrorBoundary name="app-shell">
-                  {isLogsRoute ? <LogsLayout /> : <AppLayout />}
+                  <AppLayout />
                 </ErrorBoundary>
               </ExtensionProvider>
             </ErrorBoundary>
-            <ToolApproval />
-            <AttachmentIngestionDialog />
             <OutOfContextPromiseModal />
           </TranslationProvider>
         </ServiceHubProvider>

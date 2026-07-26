@@ -13,26 +13,12 @@ import {
   MessageSquare,
   Search,
   Plus,
-  FolderPlus,
   Settings,
   Settings2,
   Plug,
-  Palette,
-  Server,
-  ServerCog,
-  Database,
-  Cpu,
   History,
   FolderOpen,
   Blocks,
-  Bot,
-  Lock,
-  ShieldCheck,
-  Paperclip,
-  Route as RouteIcon,
-  Keyboard,
-  Puzzle,
-  Network,
   Sparkles,
 } from 'lucide-react'
 import Fuse from 'fuse.js'
@@ -40,7 +26,6 @@ import { toast } from 'sonner'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { getModelDisplayName } from '@/lib/utils'
-import { useProjectDialog } from '@/hooks/ui/useProjectDialog'
 import { localStorageKey } from '@/constants/localStorage'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { cn } from '@/lib/utils'
@@ -177,7 +162,6 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
   const selectModelProvider = useModelProvider(
     (state) => state.selectModelProvider
   )
-  const { setOpen: setProjectDialogOpen } = useProjectDialog()
 
   const handleClose = useCallback(() => {
     setSearchQuery('')
@@ -186,8 +170,8 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
   }, [onOpenChange])
 
   // Commands list
-  const commands: CommandItem[] = useMemo(
-    () => [
+  const commands: CommandItem[] = useMemo(() => {
+    const items: CommandItem[] = [
       {
         id: 'new-chat',
         label: t('common:newChat'),
@@ -197,17 +181,6 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
         action: () => {
           handleClose()
           navigate({ to: '/' })
-        },
-      },
-      {
-        id: 'new-project',
-        label: t('projects.newProject', { defaultValue: 'New Project' }),
-        keywords: ['new', 'project', 'create', 'folder'],
-        icon: FolderPlus,
-        category: t('common:actions'),
-        action: () => {
-          handleClose()
-          setProjectDialogOpen(true)
         },
       },
       {
@@ -246,60 +219,6 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
         },
       },
       {
-        id: 'appearance',
-        label: t('settings:interface.title', {
-          defaultValue: 'Appearance',
-        }),
-        keywords: ['appearance', 'theme', 'dark', 'light', 'interface'],
-        icon: Palette,
-        category: t('common:settings'),
-        action: () => {
-          handleClose()
-          navigate({ to: route.settings.interface })
-        },
-      },
-      {
-        id: 'mcp',
-        label: t('settings:mcpServers.title', {
-          defaultValue: 'MCP Servers',
-        }),
-        keywords: ['mcp', 'servers', 'tools', 'plugins'],
-        icon: Server,
-        category: t('common:settings'),
-        action: () => {
-          handleClose()
-          navigate({ to: route.settings.mcp_servers })
-        },
-      },
-      {
-        id: 'hardware',
-        label: t('settings:hardware.title', { defaultValue: 'Hardware' }),
-        keywords: ['hardware', 'gpu', 'cpu', 'memory', 'system'],
-        icon: Cpu,
-        category: t('common:settings'),
-        action: () => {
-          handleClose()
-          navigate({ to: route.settings.hardware })
-        },
-      },
-      {
-        id: 'assistants',
-        label: t('common:assistants', { defaultValue: 'Assistants' }),
-        keywords: [
-          'assistant',
-          'assistants',
-          'persona',
-          'agent',
-          'system prompt',
-        ],
-        icon: Bot,
-        category: t('common:settings'),
-        action: () => {
-          handleClose()
-          navigate({ to: route.settings.assistant })
-        },
-      },
-      {
         id: 'general',
         label: t('settings:general.title', { defaultValue: 'General' }),
         keywords: ['general', 'language', 'data folder', 'reset', 'version'],
@@ -310,112 +229,9 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
           navigate({ to: route.settings.general })
         },
       },
-      {
-        id: 'privacy',
-        label: t('settings:privacy.title', { defaultValue: 'Privacy' }),
-        keywords: ['privacy', 'telemetry', 'analytics', 'data'],
-        icon: Lock,
-        category: t('common:settings'),
-        action: () => {
-          handleClose()
-          navigate({ to: route.settings.privacy })
-        },
-      },
-      {
-        id: 'guardrails',
-        label: t('settings:guardrails.title', { defaultValue: 'Guardrails' }),
-        keywords: ['guardrails', 'safety', 'confidence', 'moderation'],
-        icon: ShieldCheck,
-        category: t('common:settings'),
-        action: () => {
-          handleClose()
-          navigate({ to: route.settings.guardrails })
-        },
-      },
-      {
-        id: 'attachments',
-        label: t('settings:attachments.title', { defaultValue: 'Attachments' }),
-        keywords: ['attachments', 'files', 'documents', 'upload', 'rag'],
-        icon: Paperclip,
-        category: t('common:settings'),
-        action: () => {
-          handleClose()
-          navigate({ to: route.settings.attachments })
-        },
-      },
-      {
-        id: 'llm-router',
-        label: t('settings:llmRouter.title', { defaultValue: 'LLM Router' }),
-        keywords: ['router', 'routing', 'auto', 'model selection', 'llm'],
-        icon: RouteIcon,
-        category: t('common:settings'),
-        action: () => {
-          handleClose()
-          navigate({ to: route.settings.llm_router })
-        },
-      },
-      {
-        id: 'shortcuts',
-        label: t('settings:shortcuts.title', {
-          defaultValue: 'Keyboard Shortcuts',
-        }),
-        keywords: ['keyboard', 'shortcuts', 'hotkeys', 'keybindings'],
-        icon: Keyboard,
-        category: t('common:settings'),
-        action: () => {
-          handleClose()
-          navigate({ to: route.settings.shortcuts })
-        },
-      },
-      {
-        id: 'knowledge-base',
-        label: t('common:knowledgeBase', { defaultValue: 'Knowledge Base' }),
-        keywords: ['knowledge', 'rag', 'documents', 'folder', 'sync', 'akidb'],
-        icon: Database,
-        category: t('common:settings'),
-        action: () => {
-          handleClose()
-          navigate({ to: route.settings.knowledge_base })
-        },
-      },
-      {
-        id: 'local-api-server',
-        label: t('settings:localApiServer.title', {
-          defaultValue: 'Local API Server',
-        }),
-        keywords: ['api', 'server', 'local', 'openai compatible', 'endpoint'],
-        icon: ServerCog,
-        category: t('common:settings'),
-        action: () => {
-          handleClose()
-          navigate({ to: route.settings.local_api_server })
-        },
-      },
-      {
-        id: 'https-proxy',
-        label: t('settings:httpsProxy.title', { defaultValue: 'HTTPS Proxy' }),
-        keywords: ['proxy', 'https', 'network', 'vpn'],
-        icon: Network,
-        category: t('common:settings'),
-        action: () => {
-          handleClose()
-          navigate({ to: route.settings.https_proxy })
-        },
-      },
-      {
-        id: 'extensions',
-        label: t('settings:extensions.title', { defaultValue: 'Extensions' }),
-        keywords: ['extensions', 'plugins', 'addons'],
-        icon: Puzzle,
-        category: t('common:settings'),
-        action: () => {
-          handleClose()
-          navigate({ to: route.settings.extensions })
-        },
-      },
-    ],
-    [t, handleClose, navigate, setProjectDialogOpen]
-  )
+    ]
+    return items
+  }, [t, handleClose, navigate])
 
   // Dynamic commands: one per model of every active provider. These are only
   // surfaced via search (not the empty-state list), and selecting one switches

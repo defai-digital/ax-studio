@@ -15,7 +15,7 @@
   "scripts": {
     "test": "vitest run",
     "build": "rolldown -c rolldown.config.mjs",
-    "build:publish": "rimraf *.tgz --glob || true && yarn build && npm pack && mkdir -p ../../pre-install && cp *.tgz ../../pre-install/"
+    "build:publish": "rimraf *.tgz --glob || true && yarn build && npm pack"
   },
   "devDependencies": {
     "react": "19.0.1",
@@ -32,8 +32,7 @@
     "NOTICE"
   ],
   "dependencies": {
-    "@ax-studio/core": "../../core/package.tgz",
-    "@tauri-apps/api": "2.8.0"
+    "@ax-studio/core": "../../core/package.tgz"
   },
   "peerDependencies": {
     "react": "19.0.1"

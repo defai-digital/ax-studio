@@ -5,20 +5,11 @@ import {
   type LanguageModel,
   type UIMessageChunk,
   type Tool,
-  jsonSchema,
 } from 'ai'
 import { useServiceStore, getServiceHub } from '@/hooks/useServiceHub'
-import { useToolAvailable } from '@/hooks/tools/useToolAvailable'
-import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
 import { ModelFactory } from './model-factory'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useAssistant } from '@/hooks/chat/useAssistant'
-import { useThreads } from '@/hooks/threads/useThreads'
-import {
-  useFileRegistry,
-  threadCollectionId,
-  projectCollectionId,
-} from '@/lib/file-registry'
 import { useRouterSettings } from '@/hooks/settings/useRouterSettings'
 import { routeMessage, getAvailableModelsForRouter } from './llm-router'
 import { executeSingleAgentStream } from './transport/single-agent-transport'
@@ -32,8 +23,6 @@ import {
   LOCAL_PROVIDER_IDS,
 } from '@/constants/providers'
 import { extractErrorMessage } from '@/lib/utils/error'
-import { normalizeMcpResultForToolOutput } from './ax-bi/mcp-result'
-import { resolveApprovedAxBiFile } from './ax-bi/approved-file'
 
 // Use native fetch — same reason as model-factory.ts (Tauri plugin ReadableStream
 // incompatibility). Proxy accepts CORS from tauri:// origins on loopback.
@@ -359,192 +348,10 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
     this.onTokenUsage = callback
   }
 
-  private getThreadMetadata(): Record<string, unknown> | null {
-    if (!this.threadId) return null
-    try {
-      const thread = useThreads.getState().getThreadById(this.threadId)
-      return (thread?.metadata as Record<string, unknown>) ?? null
-    } catch {
-      return null
-    }
-  }
-
-  async updateRagToolsAvailability(
-    _hasDocuments: boolean,
-    _modelSupportsTools: boolean,
-    _ragFeatureAvailable: boolean
-  ) {
-    await this.refreshTools()
-  }
-
-  async refreshTools(_overrideModelSupportsTools?: boolean) {
-    const toolsRecord = Object.create(null) as Record<string, Tool>
-    const getDisabledToolsForThread =
-      useToolAvailable.getState().getDisabledToolsForThread
-    const disabledToolKeys = this.threadId
-      ? getDisabledToolsForThread(this.threadId)
-      : useToolAvailable.getState().getDefaultDisabledTools()
-    const isToolDisabled = (serverName: string, toolName: string): boolean =>
-      disabledToolKeys.includes(`${serverName}::${toolName}`)
-
-    if (this.serviceHub) {
-      // Always load tools regardless of model capability declaration
-      // This ensures custom tools like process_file_for_bi are always available
-      {
-        const localKnowledgeEnabled = this.threadId
-          ? useLocalKnowledge
-              .getState()
-              .isLocalKnowledgeEnabledForThread(this.threadId)
-          : useLocalKnowledge.getState().localKnowledgeEnabled
-
-        try {
-          const mcpTools = await this.serviceHub.mcp().getTools()
-          if (Array.isArray(mcpTools) && mcpTools.length > 0) {
-            mcpTools.forEach((tool) => {
-              const serverName =
-                (tool as { server?: string }).server || 'unknown'
-              if (!isToolDisabled(serverName, tool.name)) {
-                if (
-                  (serverName === 'ax-studio' || serverName === 'ax-fabric') &&
-                  !localKnowledgeEnabled
-                )
-                  return
-                toolsRecord[tool.name] = {
-                  description: tool.description,
-                  inputSchema: jsonSchema(
-                    tool.inputSchema as Record<string, unknown>
-                  ),
-                } as Tool
-              }
-            })
-          }
-        } catch (error) {
-          console.warn('Failed to load MCP tools:', error)
-        }
-
-        // Load RAG tools when thread has indexed documents
-        try {
-          if (this.threadId) {
-            const threadMeta = this.getThreadMetadata()
-            const hasThreadDocsFlag = threadMeta?.hasDocuments === true
-            const threadProjectId = (
-              threadMeta?.project as Record<string, unknown> | undefined
-            )?.id as string | undefined
-
-            let hasProjectDocs = false
-            if (threadProjectId) {
-              hasProjectDocs = useFileRegistry
-                .getState()
-                .hasFiles(projectCollectionId(threadProjectId))
-            }
-            const hasThreadFiles = useFileRegistry
-              .getState()
-              .hasFiles(threadCollectionId(this.threadId))
-
-            // Correct stale hasDocuments metadata from the old fake pipeline:
-            // if the flag is true but no files exist in the registry, clear it.
-            if (hasThreadDocsFlag && !hasThreadFiles) {
-              try {
-                useThreads.getState().updateThread(this.threadId, {
-                  metadata: { hasDocuments: false },
-                })
-              } catch {
-                /* best-effort correction */
-              }
-            }
-
-            if (hasThreadFiles || hasProjectDocs) {
-              const ragTools = await this.serviceHub.rag().getTools()
-              for (const tool of ragTools) {
-                const serverName =
-                  (tool as { server?: string }).server || 'unknown'
-                if (!isToolDisabled(serverName, tool.name)) {
-                  toolsRecord[tool.name] = {
-                    description: tool.description,
-                    inputSchema: jsonSchema(
-                      tool.inputSchema as Record<string, unknown>
-                    ),
-                  } as Tool
-                }
-              }
-            }
-          }
-        } catch (error) {
-          console.warn('Failed to load RAG tools:', error)
-        }
-
-        // Add custom AX BI file upload tool that reads files as base64
-        if (this.serviceHub) {
-          const serviceHub = this.serviceHub
-          toolsRecord['process_file_for_bi'] = {
-            description:
-              'LOCAL DATA PROCESSING: Read a file from the local filesystem and process it for business intelligence analysis. This tool reads the file content and sends it to the local AX BI analytics engine running on this machine (localhost). Use this when the user wants to analyze or visualize a file with AX BI.',
-            inputSchema: jsonSchema({
-              type: 'object',
-              properties: {
-                file_path: {
-                  type: 'string',
-                  description: 'The absolute path to the file to upload',
-                },
-                filename: {
-                  type: 'string',
-                  description: 'The name to use for the uploaded file',
-                },
-              },
-              required: ['file_path', 'filename'],
-            }),
-            execute: async ({
-              file_path,
-              filename,
-            }: {
-              file_path: string
-              filename: string
-            }) => {
-              try {
-                if (!this.threadId) {
-                  throw new Error('A thread is required to upload an attached file')
-                }
-                const approvedFile = resolveApprovedAxBiFile(
-                  this.threadId,
-                  file_path
-                )
-                if (!approvedFile) {
-                  throw new Error(
-                    'The requested file was not attached by the user or indexed for this thread'
-                  )
-                }
-                const { fs } = await import('@ax-studio/core')
-                const fileContent = await fs.readFileBase64(approvedFile.path)
-                const result = await serviceHub.mcp().callTool({
-                  serverName: 'ax-bi',
-                  toolName: 'upload_file',
-                  arguments: {
-                    request: {
-                      file_content: fileContent,
-                      filename: approvedFile.name || filename,
-                    },
-                  },
-                })
-                return normalizeMcpResultForToolOutput(
-                  result,
-                  'File uploaded successfully'
-                )
-              } catch (error) {
-                return {
-                  error: `Failed to upload file: ${error instanceof Error ? error.message : String(error)}`,
-                }
-              }
-            },
-          } as Tool
-        }
-      }
-    }
-
-    this.tools = toolsRecord
-  }
-
-  getTools(): Record<string, Tool> {
-    return this.tools
+  // MCP/RAG tools were removed with the generic MCP layer (migration
+  // matrix §2.2); chat streams run without external tools now.
+  async refreshTools() {
+    this.tools = {}
   }
 
   async sendMessages(
@@ -673,11 +480,9 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
         }
       )
 
-      // Always enable tools regardless of model capability declaration
-      const modelSupportsTools = true // Force tools to be passed to LLM
+      const modelSupportsTools = true
 
-      // Refresh tools AFTER routing so the correct model's capabilities are used
-      await this.refreshTools(modelSupportsTools)
+      await this.refreshTools()
 
       return executeSingleAgentStream({
         model: this.model,

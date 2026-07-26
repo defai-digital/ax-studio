@@ -160,7 +160,6 @@ describe('SetupScreen — Manual Test Protocol', () => {
     expect(screen.getByText('setup:modeDeveloperAgent')).toBeInTheDocument()
     expect(screen.getByText('common:newChat')).toBeInTheDocument()
     expect(screen.getByText('common:search')).toBeInTheDocument()
-    expect(screen.getByText('settings:shortcuts.newProject')).toBeInTheDocument()
     expect(
       screen.getByText('settings:shortcuts.toggleSidebar')
     ).toBeInTheDocument()

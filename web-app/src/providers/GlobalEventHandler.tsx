@@ -4,7 +4,6 @@ import { useNavigate } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
-import { useGlobalShortcut } from '@/hooks/settings/useGlobalShortcut'
 import { useDockFileDrop } from '@/hooks/chat/use-dock-file-drop'
 import { COMPOSER_FOCUS_EVENT, SystemEvent } from '@/types/events'
 import { isPlatformTauri } from '@/lib/platform/utils'
@@ -37,22 +36,6 @@ export function GlobalEventHandler() {
   const serviceHub = useServiceHub()
   const navigate = useNavigate()
   const { t } = useTranslation()
-
-  // ─── Global wake hotkey ───────────────────────────────────────────────────
-
-  // Register the persisted quick-launch combo once at startup. Registration
-  // state is tracked by the service (plugin isRegistered() is unreliable), so
-  // a failed registration here only logs — the settings page surfaces remap
-  // errors inline when the user picks a combo.
-  useEffect(() => {
-    const combo = useGlobalShortcut.getState().quickLaunchShortcut
-    serviceHub
-      .globalShortcut()
-      .remap(combo)
-      .catch((error) => {
-        console.error('[GlobalEventHandler] Failed to register global shortcut:', error)
-      })
-  }, [serviceHub])
 
   // Wake: navigate home and focus the composer. The focus dispatch is deferred
   // so a not-yet-mounted home composer can mount first (it also autofocuses on
@@ -511,15 +494,6 @@ export function GlobalEventHandler() {
         }),
         {
           duration: 8000,
-          action: {
-            label: t('settings:hardware.updateNow' as Parameters<typeof t>[0]),
-            onClick: () => {
-              // Navigate via TanStack Router — the app is path-based, so
-              // setting `window.location.hash` only added a URL fragment
-              // and did nothing to the visible route.
-              navigate({ to: route.settings.hardware })
-            },
-          },
         }
       )
     }
@@ -528,7 +502,7 @@ export function GlobalEventHandler() {
     return () => {
       events.off('onBackendUpdateAvailable', handleBackendUpdateAvailable)
     }
-  }, [t, navigate])
+  }, [t])
 
   return null
 }

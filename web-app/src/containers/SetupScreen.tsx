@@ -557,7 +557,6 @@ function StepReady({ selectedMode }: { selectedMode: WorkspaceModeId }) {
   const shortcuts = [
     { key: 'N', desc: t('common:newChat') },
     { key: 'K', desc: t('common:search') },
-    { key: 'P', desc: t('settings:shortcuts.newProject') },
     { key: 'B', desc: t('settings:shortcuts.toggleSidebar') },
   ]
 

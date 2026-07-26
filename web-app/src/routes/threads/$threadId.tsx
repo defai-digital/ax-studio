@@ -3,7 +3,6 @@ import { createFileRoute, useNavigate, useParams } from '@tanstack/react-router'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { useShallow } from 'zustand/react/shallow'
 import { useAssistant } from '@/hooks/chat/useAssistant'
-import { useTools } from '@/hooks/tools/useTools'
 import { useChat } from '@/hooks/chat/use-chat'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
@@ -30,22 +29,14 @@ const isValidThreadId = (id: string): boolean => {
 }
 
 import { extractContentPartsFromUIMessage } from '@/lib/messages'
-import {
-  CODE_EXECUTION_INSTRUCTION,
-  LOCAL_KNOWLEDGE_INSTRUCTION,
-  CITATION_FORMAT_INSTRUCTION,
-} from '@/lib/prompts/system-prompt'
+import { CODE_EXECUTION_INSTRUCTION } from '@/lib/prompts/system-prompt'
 import type { UIMessage } from '@ai-sdk/react'
 import type { ThreadMessage } from '@ax-studio/core'
-import { useLocalKnowledge } from '@/hooks/research/useLocalKnowledge'
-import { useThreadLocalKnowledge } from '@/hooks/threads/use-thread-local-knowledge'
 import { useThreadChat } from '@/hooks/threads/use-thread-chat'
-import { useThreadTools, type AddToolOutputFn } from '@/hooks/threads/use-thread-tools'
 import { useThreadSplit } from '@/hooks/threads/use-thread-split'
 import { useThreadConfig } from '@/hooks/threads/use-thread-config'
 import { useThreadEffects } from '@/hooks/threads/use-thread-effects'
 import { ThreadView } from '@/containers/threads/ThreadView'
-import { useGuardrails } from '@/hooks/settings/useGuardrails'
 import { resolveEffectiveSelectedModel } from '@/lib/chat/selected-model'
 import { toast } from 'sonner'
 
@@ -81,7 +72,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   const setCurrentAssistant = useAssistant((state) => state.setCurrentAssistant)
   const assistants = useAssistant((state) => state.assistants)
   const currentAssistant = useAssistant((state) => state.currentAssistant)
-  useTools()
 
   const thread = useThreads(useShallow((state) => state.threads[threadId]))
   const providers = useModelProvider((state) => state.providers)
@@ -97,12 +87,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   )
 
   // ─── Domain hooks ─────────────────────────────────────────────────────────
-  const localKnowledgeActive = useLocalKnowledge((state) =>
-    state.isLocalKnowledgeEnabledForThread(threadId)
-  )
-  const { prepareLocalKnowledge } = useThreadLocalKnowledge(threadId)
-  const alwaysCiteSources = useGuardrails((s) => s.alwaysCiteSources)
-  const projectId = thread?.metadata?.project?.id
   const selectedModel = useMemo(
     () =>
       resolveEffectiveSelectedModel({
@@ -121,12 +105,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     autoTuningEnabled,
     threadMessageCount,
   })
-  const {
-    followUpMessage,
-    onToolCall,
-    startToolExecution,
-    resetTurnState,
-  } = useThreadTools({ threadId, projectId })
   const {
     splitPaneOrder,
     splitThreadId,
@@ -149,7 +127,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
 
   const {
     messages: chatMessages, status, error, sendMessage, regenerate,
-    setMessages: setChatMessages, stop, addToolOutput, getLastRouterResult,
+    setMessages: setChatMessages, stop, getLastRouterResult,
   } = useChat({
     sessionId: threadId,
     sessionTitle: thread?.title,
@@ -158,9 +136,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
       (currentAssistant?.instructions && currentAssistant.id !== 'ax-studio'
         ? '\n\n' + currentAssistant.instructions
         : '') +
-      CODE_EXECUTION_INSTRUCTION +
-      (localKnowledgeActive ? LOCAL_KNOWLEDGE_INSTRUCTION : '') +
-      (localKnowledgeActive || alwaysCiteSources ? CITATION_FORMAT_INSTRUCTION : ''),
+      CODE_EXECUTION_INSTRUCTION,
     modelOverrideId: optimizedModelConfig.modelId,
     modelOverrideProviderId: selectedProviderId,
     inferenceParameters: {
@@ -207,12 +183,7 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
         const contentParts = extractContentPartsFromUIMessage(messageForPersistence)
         persistMessageOnFinishRef.current?.(messageForPersistence, contentParts)
       }
-      if (!isAbort) {
-        startToolExecution(addToolOutput as unknown as AddToolOutputFn)
-      }
     },
-    onToolCall,
-    sendAutomaticallyWhen: followUpMessage,
   })
 
   const {
@@ -230,8 +201,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
     sendMessage,
     regenerate,
     setChatMessages,
-    resetTurnState,
-    prepareLocalKnowledge,
   })
 
   persistMessageOnFinishRef.current = persistMessageOnFinish
@@ -259,7 +228,6 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
   // ─── Submit handler ───────────────────────────────────────────────────────
   const handleSubmit = useCallback(
     async (text: string) => {
-      resetTurnState() // Reset fabric_search dedup tracker for new user message
       try {
         await processAndSendMessage(text)
       } catch (error) {
@@ -270,21 +238,14 @@ function ThreadDetailInner({ threadId }: { threadId: string }) {
         })
       }
     },
-    [processAndSendMessage, resetTurnState]
+    [processAndSendMessage]
   )
 
   const threadModel = useMemo(() => thread?.model, [thread])
   const threadLogo = useMemo(() => {
-    const chatLogo =
-      typeof thread?.metadata?.chatLogo === 'string'
-        ? thread.metadata.chatLogo.trim()
-        : ''
-    if (chatLogo) return chatLogo
-    const projectLogo =
-      typeof thread?.metadata?.project?.logo === 'string'
-        ? thread.metadata.project.logo.trim()
-        : ''
-    return projectLogo || ''
+    return typeof thread?.metadata?.chatLogo === 'string'
+      ? thread.metadata.chatLogo.trim()
+      : ''
   }, [thread?.metadata])
 
   return (

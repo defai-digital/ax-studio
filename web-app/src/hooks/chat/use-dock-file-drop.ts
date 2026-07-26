@@ -91,7 +91,7 @@ export function useDockFileDrop() {
         const files: File[] = []
         for (const path of imagePaths) {
           try {
-            const { convertFileSrc } = await import('@tauri-apps/api/core')
+            const { convertFileSrc } = await import('@/lib/tauri-shim/api-core')
             const response = await fetch(convertFileSrc(path))
             if (!response.ok) {
               throw new Error(`Failed to fetch file: ${response.statusText}`)
