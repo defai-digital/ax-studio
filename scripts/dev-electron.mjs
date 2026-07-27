@@ -7,36 +7,23 @@ import { spawn } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import {
+  resolveElectronInvocation,
+  resolveYarnInvocation,
+} from './electron-runtime.mjs'
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const DEV_PORT = 31420
 const DEV_URL = `http://localhost:${DEV_PORT}`
 
-// Locate a runnable Yarn 4: prefer a repo-pinned release, then npm_execpath
-// (Yarn sets it when this script runs via `yarn dev:electron`; it may be an
-// extensionless shim, which is spawned directly).
-import fs from 'node:fs'
-
-function resolveYarn() {
-  const releasesDir = path.join(repoRoot, '.yarn', 'releases')
-  if (fs.existsSync(releasesDir)) {
-    const release = fs.readdirSync(releasesDir).find((f) => /^yarn-.*\.cjs$/.test(f))
-    if (release) {
-      const releasePath = path.join(releasesDir, release)
-      return { cmd: process.execPath, argsPrefix: [releasePath] }
-    }
-  }
-  const execPath = process.env.npm_execpath
-  if (execPath && /\.(js|cjs|mjs)$/.test(execPath)) {
-    return { cmd: process.execPath, argsPrefix: [execPath] }
-  }
-  if (execPath && fs.existsSync(execPath)) {
-    return { cmd: execPath, argsPrefix: [] }
-  }
-  console.error('[dev-electron] could not locate yarn; run via `yarn dev:electron`')
+let yarn
+try {
+  yarn = resolveYarnInvocation(repoRoot)
+} catch (error) {
+  console.error(`[dev-electron] ${error.message}`)
   process.exit(1)
 }
 
-const yarn = resolveYarn()
 const yarnArgs = (...args) => [...yarn.argsPrefix, ...args]
 
 const children = []
@@ -55,6 +42,21 @@ function shutdown(code) {
 process.on('SIGINT', () => shutdown(130))
 process.on('SIGTERM', () => shutdown(143))
 
+function waitForExit(child, label) {
+  return new Promise((resolve, reject) => {
+    child.once('error', (error) => {
+      reject(new Error(`${label} failed to start: ${error.message}`, { cause: error }))
+    })
+    child.once('exit', (code) => {
+      if (code === 0) {
+        resolve()
+      } else {
+        reject(new Error(`${label} exited with code ${code ?? 'unknown'}`))
+      }
+    })
+  })
+}
+
 async function waitForServer(url, timeoutMs = 90_000) {
   const deadline = Date.now() + timeoutMs
   for (;;) {
@@ -72,16 +74,25 @@ async function waitForServer(url, timeoutMs = 90_000) {
 }
 
 // 1. Build the Electron main/preload.
-await new Promise((resolve, reject) => {
-  run(yarn.cmd, yarnArgs('workspace', '@ax-studio/electron', 'build'))
-    .on('exit', (code) => (code === 0 ? resolve() : reject(new Error('electron build failed'))))
-})
+await waitForExit(
+  run(
+    yarn.cmd,
+    yarnArgs('workspace', '@ax-studio/electron', 'build'),
+    yarn.spawnOptions
+  ),
+  'electron build'
+)
 
 // 2. Start the Vite dev server.
 const vite = run(yarn.cmd, yarnArgs('workspace', '@ax-studio/web-app', 'dev'), {
+  ...yarn.spawnOptions,
   env: { ...process.env, IS_DEV: 'true' },
 })
 
+vite.on('error', (error) => {
+  console.error(`[dev-electron] vite failed to start: ${error.message}`)
+  shutdown(1)
+})
 vite.on('exit', (code) => {
   console.error(`[dev-electron] vite exited with code ${code}`)
   shutdown(code ?? 1)
@@ -89,14 +100,8 @@ vite.on('exit', (code) => {
 
 // 3. Wait for the dev server, then launch Electron.
 await waitForServer(DEV_URL)
-const electronBin = path.join(
-  repoRoot,
-  'electron',
-  'node_modules',
-  '.bin',
-  process.platform === 'win32' ? 'electron.cmd' : 'electron'
-)
-const electron = run(electronBin, ['.'], {
+const electronInvocation = resolveElectronInvocation(repoRoot)
+const electron = run(electronInvocation.cmd, [...electronInvocation.argsPrefix, '.'], {
   cwd: path.join(repoRoot, 'electron'),
   env: {
     ...process.env,
@@ -105,4 +110,8 @@ const electron = run(electronBin, ['.'], {
   },
 })
 
+electron.on('error', (error) => {
+  console.error(`[dev-electron] electron failed to start: ${error.message}`)
+  shutdown(1)
+})
 electron.on('exit', (code) => shutdown(code ?? 0))

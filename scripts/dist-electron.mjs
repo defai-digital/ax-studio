@@ -18,6 +18,8 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { resolveYarnInvocation } from './electron-runtime.mjs'
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const args = process.argv.slice(2)
 
@@ -27,7 +29,6 @@ if (typeof version !== 'string' || version.length === 0) {
   process.exit(1)
 }
 
-const yarnCli = path.join(root, '.yarn', 'releases', 'yarn-4.5.3.cjs')
 const run = (command, commandArgs, options = {}) => {
   console.log(`[dist-electron] $ ${command} ${commandArgs.join(' ')}`)
   const result = spawnSync(command, commandArgs, { stdio: 'inherit', cwd: root, ...options })
@@ -35,7 +36,14 @@ const run = (command, commandArgs, options = {}) => {
 }
 
 if (!args.includes('--skip-build')) {
-  run(process.execPath, [yarnCli, 'build:electron'])
+  let yarn
+  try {
+    yarn = resolveYarnInvocation(root)
+  } catch (error) {
+    console.error(`[dist-electron] ${error.message}`)
+    process.exit(1)
+  }
+  run(yarn.cmd, [...yarn.argsPrefix, 'build:electron'], yarn.spawnOptions)
 }
 
 const electronRequire = createRequire(path.join(root, 'electron', 'package.json'))
