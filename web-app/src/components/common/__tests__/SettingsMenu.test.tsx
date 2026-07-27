@@ -38,26 +38,27 @@ describe('SettingsMenu', () => {
     vi.mocked(useMatches).mockReturnValue(mockMatches)
   })
 
-  it('renders exactly two settings links', () => {
+  it('renders the four focused settings destinations', () => {
     render(<SettingsMenu />)
 
     const links = screen.getAllByRole('link')
-    expect(links).toHaveLength(2)
+    expect(links).toHaveLength(4)
   })
 
-  it('renders only the General and Model Providers entries', () => {
+  it('separates local products from cloud providers', () => {
     render(<SettingsMenu />)
 
     expect(screen.getByText('common:general')).toBeInTheDocument()
+    expect(screen.getByText('common:axEngine')).toBeInTheDocument()
     expect(screen.getByText('common:modelProviders')).toBeInTheDocument()
+    expect(screen.getByText('common:axBi')).toBeInTheDocument()
 
-    // Everything else was removed or merged into General.
+    // Legacy standalone preference pages remain removed or merged.
     expect(screen.queryByText('common:interface')).not.toBeInTheDocument()
     expect(screen.queryByText('common:privacy')).not.toBeInTheDocument()
     expect(screen.queryByText('common:hardware')).not.toBeInTheDocument()
     expect(screen.queryByText('common:extensions')).not.toBeInTheDocument()
     expect(screen.queryByText('common:mcp-servers')).not.toBeInTheDocument()
-    expect(screen.queryByText('common:engineSettings')).not.toBeInTheDocument()
   })
 
   it('links only the kept routes', () => {
@@ -67,7 +68,12 @@ describe('SettingsMenu', () => {
       .getAllByRole('link')
       .map((link) => link.getAttribute('href'))
 
-    expect(hrefs).toEqual(['/settings/general', '/settings/providers/'])
+    expect(hrefs).toEqual([
+      '/settings/general',
+      '/settings/ax-engine',
+      '/settings/providers/',
+      '/settings/ax-bi',
+    ])
   })
 
   it('uses a flat list without group headers', () => {
@@ -116,14 +122,33 @@ describe('SettingsMenu', () => {
     expect(generalLink?.className).not.toContain('bg-primary/10')
   })
 
+  it('highlights AX Engine instead of cloud providers for legacy detail URLs', () => {
+    vi.mocked(useMatches).mockReturnValue([
+      {
+        routeId: '/settings/providers/$providerName',
+        pathname: '/settings/providers/ax-engine',
+        params: { providerName: 'ax-engine' },
+      },
+    ])
+
+    render(<SettingsMenu />)
+
+    expect(
+      screen.getByText('common:axEngine').closest('a')?.className
+    ).toContain('bg-primary/10')
+    expect(
+      screen.getByText('common:modelProviders').closest('a')?.className
+    ).not.toContain('bg-primary/10')
+  })
+
   it('has no workspace-mode or advanced-toggle logic', () => {
     localStorage.setItem('workspace-mode', 'simple-chat')
     localStorage.setItem('settings-show-advanced', 'false')
 
     render(<SettingsMenu />)
 
-    // Still exactly two links regardless of legacy localStorage flags.
-    expect(screen.getAllByRole('link')).toHaveLength(2)
+    // The focused list is stable regardless of legacy localStorage flags.
+    expect(screen.getAllByRole('link')).toHaveLength(4)
     expect(
       screen.queryByText('common:showAdvancedSettings')
     ).not.toBeInTheDocument()

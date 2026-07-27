@@ -3,7 +3,7 @@ import { route } from '@/constants/routes'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { cn } from '@/lib/utils'
 
-import { Settings, Plug } from 'lucide-react'
+import { BarChart3, Cloud, Cpu, Settings } from 'lucide-react'
 
 type SettingsMenuItem = {
   title: string
@@ -11,8 +11,8 @@ type SettingsMenuItem = {
   icon: React.ReactNode
 }
 
-// Electron-only settings surface (migration matrix §1): General + Providers.
-// Flat list — group headers add noise when there are only two destinations.
+// Electron-only settings surface. Keep integrations here instead of mixing
+// connection setup into the primary workspace navigation.
 const menuSettings: SettingsMenuItem[] = [
   {
     title: 'common:general',
@@ -20,9 +20,19 @@ const menuSettings: SettingsMenuItem[] = [
     icon: <Settings className="size-3.5" />,
   },
   {
+    title: 'common:axEngine',
+    route: route.settings.axEngine,
+    icon: <Cpu className="size-3.5" />,
+  },
+  {
     title: 'common:modelProviders',
     route: route.settings.model_providers,
-    icon: <Plug className="size-3.5" />,
+    icon: <Cloud className="size-3.5" />,
+  },
+  {
+    title: 'common:axBi',
+    route: route.settings.axBi,
+    icon: <BarChart3 className="size-3.5" />,
   },
 ]
 
@@ -37,13 +47,29 @@ export function SettingsMenu() {
     >
       <div className="flex flex-col gap-0.5">
         {menuSettings.map((menu) => {
-          const isActive = matches.some(
-            (match) =>
-              match.pathname === menu.route ||
-              (menu.route === route.settings.model_providers &&
-                (match.routeId === '/settings/providers/' ||
-                  match.routeId === '/settings/providers/$providerName'))
-          )
+          const isActive = matches.some((match) => {
+            if (match.pathname === menu.route) return true
+
+            const providerName =
+              typeof match.params?.providerName === 'string'
+                ? match.params.providerName
+                : undefined
+            const isProviderDetail =
+              match.routeId === '/settings/providers/$providerName'
+            const isAxEngineProvider =
+              providerName === 'ax-engine' || providerName === 'mlx'
+
+            if (menu.route === route.settings.axEngine) {
+              return isProviderDetail && isAxEngineProvider
+            }
+            if (menu.route === route.settings.model_providers) {
+              return (
+                match.routeId === '/settings/providers/' ||
+                (isProviderDetail && !isAxEngineProvider)
+              )
+            }
+            return false
+          })
 
           return (
             <Link

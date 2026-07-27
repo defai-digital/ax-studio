@@ -26,6 +26,7 @@ export const localStorageKey = {
   lastUsedAssistant: 'last-used-assistant',
   favoriteModels: 'favorite-models',
   setupCompleted: 'setup-completed',
+  startupHintDismissed: 'startup-hint-dismissed',
   workspaceMode: 'workspace-mode',
   threadManagement: 'thread-management',
   chatOrganization: 'chat-organization',

@@ -25,8 +25,8 @@ const STATUS_PRESENTATION: Record<
 
 /**
  * Subtle inline AX BI status shown near the chat input (Electron only; the
- * caller gates on `isPlatformElectron()`). Clicking opens the `/ax-bi` page,
- * which carries the connect card when a key is missing.
+ * caller gates on `isPlatformElectron()`). Clicking opens AX BI Settings,
+ * which carries connection management when a key is missing.
  */
 export function AxBiStatusIndicator() {
   const navigate = useNavigate()

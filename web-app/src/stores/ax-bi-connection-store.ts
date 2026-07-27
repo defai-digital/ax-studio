@@ -4,7 +4,7 @@ import { create } from 'zustand'
  * Electron AX BI connection state (migration matrix §4). The Tauri build
  * tracks connectivity through the MCP server store instead; this store backs
  * the zero-config direct client: a tiny status indicator near the chat input
- * and the connect card on the slim `/ax-bi` page. Not persisted — the
+ * and the connect card in `/settings/ax-bi`. Not persisted — the
  * bootstrap probe re-derives it on every app start.
  */
 export type AxBiConnectionStatus =

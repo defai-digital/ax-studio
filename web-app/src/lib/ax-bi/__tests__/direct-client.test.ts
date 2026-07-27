@@ -4,6 +4,7 @@ import { useAxBiConnection } from '@/stores/ax-bi-connection-store'
 import {
   connectAxBiDirect,
   createDirectAxBiAuthoringClient,
+  disconnectAxBiDirect,
   getDirectAxBiClient,
   getElectronAxBiMcpUrl,
   probeAxBiDirectConnection,
@@ -158,6 +159,20 @@ describe('AX BI direct client (Electron path)', () => {
     const state = useAxBiConnection.getState()
     expect(state.status).toBe('needs-key')
     expect(state.message).toContain('Authentication failed')
+  })
+
+  it('disconnect clears the saved token and cached client', async () => {
+    storedToken = 'sst_smoke'
+    const client = await getDirectAxBiClient()
+    useAxBiConnection.getState().setStatus('connected')
+
+    await disconnectAxBiDirect()
+
+    expect(storedToken).toBeNull()
+    expect(useAxBiConnection.getState().status).toBe('needs-key')
+
+    storedToken = 'sst_smoke'
+    expect(await getDirectAxBiClient()).not.toBe(client)
   })
 
   it('marks unreachable on network failures', async () => {

@@ -42,7 +42,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import Fuse from 'fuse.js'
-import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
+import { useHuggingFaceConnection } from '@/hooks/models/useHuggingFaceConnection'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { DownloadButtonPlaceholder } from '@/containers/DownloadButton'
 import { useShallow } from 'zustand/shallow'
@@ -61,6 +61,7 @@ import {
   getVariantMemoryInfo,
   VARIANT_MEMORY_LABEL_CLASSES,
 } from '@/lib/models/variant-memory'
+import { HuggingFaceConnectionButton } from '@/containers/HuggingFaceConnectionDialog'
 
 type FilterTag = 'all' | 'downloaded' | 'mlx' | 'tools' | 'vision' | 'reasoning'
 
@@ -84,7 +85,7 @@ export const Route = createFileRoute(route.hub.index)({
 
 function HubContent() {
   const [isPending, startTransition] = useTransition()
-  const huggingfaceToken = useGeneralSetting((state) => state.huggingfaceToken)
+  const huggingfaceToken = useHuggingFaceConnection((state) => state.token)
   const serviceHub = useServiceHub()
   const providers = useModelProvider((state) => state.providers)
 
@@ -394,13 +395,14 @@ function HubContent() {
                   'Discover and download open-source AI models. Optimized for local inference.'}
               </p>
             </div>
-            <div className="flex items-center gap-4 text-[12px] text-muted-foreground shrink-0">
+            <div className="flex items-center gap-3 text-[12px] text-muted-foreground shrink-0">
               <div className="flex items-center gap-1.5">
                 <HardDrive className="size-3.5 text-indigo-500" />
                 <span>
                   {stats.downloaded}/{stats.total} downloaded
                 </span>
               </div>
+              <HuggingFaceConnectionButton />
             </div>
           </div>
 

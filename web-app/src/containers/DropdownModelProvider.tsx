@@ -713,6 +713,11 @@ export const DropdownModelProvider = memo(function DropdownModelProvider({
 
   const handleProviderSettings = useCallback(
     (providerName: string) => {
+      if (providerName === 'ax-engine' || providerName === 'mlx') {
+        navigate({ to: route.settings.axEngine })
+        setOpen(false)
+        return
+      }
       navigate({
         to: route.settings.providers,
         params: { providerName },

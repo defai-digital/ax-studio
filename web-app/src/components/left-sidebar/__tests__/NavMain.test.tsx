@@ -11,8 +11,7 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
       const map: Record<string, string> = {
         'common:newChat': 'New Chat',
         'common:search': 'Search',
-        'common:hub': 'Hub',
-        'common:axBi': 'AX BI',
+        'common:hub': 'AI Model Hub',
       }
       return map[key] ?? key
     },
@@ -29,7 +28,6 @@ vi.mock('@/hooks/ui/useSearchDialog', () => ({
 vi.mock('@/constants/routes', () => ({
   route: {
     home: '/',
-    axBi: '/ax-bi',
     hub: { index: '/hub' },
     settings: {
       assistant: '/settings/assistant',
@@ -101,15 +99,9 @@ describe('NavMain', () => {
     expect(screen.getByText('Search...')).toBeInTheDocument()
   })
 
-  it('renders Hub link', () => {
+  it('renders the descriptive AI Model Hub link', () => {
     render(<NavMain />)
-    expect(screen.getByText('Hub')).toBeInTheDocument()
-  })
-
-  it('renders AX BI link', () => {
-    render(<NavMain />)
-    const link = screen.getByText('AX BI').closest('a')
-    expect(link).toHaveAttribute('href', '/ax-bi')
+    expect(screen.getByText('AI Model Hub')).toBeInTheDocument()
   })
 
   it('opens search dialog when search button is clicked', async () => {
@@ -143,9 +135,8 @@ describe('NavMain', () => {
 
       expect(screen.queryByText('common:assistants')).not.toBeInTheDocument()
       expect(screen.queryByText('common:tools')).not.toBeInTheDocument()
-      // Kept entries stay.
-      expect(screen.getByText('Hub')).toBeInTheDocument()
-      expect(screen.getByText('AX BI')).toBeInTheDocument()
+      expect(screen.getByText('AI Model Hub')).toBeInTheDocument()
+      expect(screen.queryByText('AX BI')).not.toBeInTheDocument()
     } finally {
       delete (window as unknown as Record<string, unknown>).axElectron
     }

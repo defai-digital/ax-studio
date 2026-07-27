@@ -1,4 +1,4 @@
-import { ChartNoAxesCombined, Plus, Search } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 import { route } from '@/constants/routes'
 
 import {
@@ -6,7 +6,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { Badge } from '@/components/ui/badge'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { PlatformMetaKey } from '@/components/common/PlatformMetaKey'
 
@@ -97,7 +96,7 @@ export function NavMain() {
       {/* Collapsed divider — matches Figma: w-6 h-px my-2 between Search and Hub */}
       <div className="hidden group-data-[collapsible=icon]:block w-6 h-px my-2 mx-auto bg-sidebar-border" />
 
-      {/* Nav — workspace destinations (model hub, AX BI). */}
+      {/* Nav — primary workspace destinations. */}
       <div className="pb-2 group-data-[collapsible=icon]:pb-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center">
         <SidebarMenu>
           <SidebarMenuItem>
@@ -116,22 +115,6 @@ export function NavMain() {
                 <span className="group-data-[collapsible=icon]:hidden">
                   {t('common:hub')}
                 </span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip={t('common:axBi')}>
-              <Link to={route.axBi}>
-                <ChartNoAxesCombined className="text-foreground/70" size={16} />
-                <span className="group-data-[collapsible=icon]:hidden">
-                  {t('common:axBi')}
-                </span>
-                <Badge
-                  variant="amber"
-                  className="ml-auto px-1.5 py-0 text-[10px] group-data-[collapsible=icon]:hidden"
-                >
-                  Beta
-                </Badge>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

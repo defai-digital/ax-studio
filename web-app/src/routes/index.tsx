@@ -7,14 +7,12 @@ import {
   safeStorageRemoveItem,
   safeStorageSetItem,
   safeStorageSetJSON,
-  isStorageFlagEnabled,
 } from '@/lib/storage/storage'
 import { extractErrorMessage } from '@/lib/utils/error'
 
 import { useModelProvider } from '@/hooks/models/useModelProvider'
-import { SetupScreen } from '@/containers/SetupScreen'
+import { StartupHint } from '@/containers/StartupHint'
 import { route } from '@/constants/routes'
-import { localStorageKey } from '@/constants/localStorage'
 import { SESSION_STORAGE_KEY } from '@/constants/chat'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { z } from 'zod/v4'
@@ -61,11 +59,7 @@ export const Route = createFileRoute(route.home)({
 function Index() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const {
-    providers,
-    selectedModel: activeModel,
-    selectedProvider,
-  } = useModelProvider()
+  const { selectedModel: activeModel, selectedProvider } = useModelProvider()
   const search = useSearch({ from: route.home })
   const selectedModel = search.model
   const { setCurrentThreadId, createThread } = useThreads()
@@ -122,18 +116,6 @@ function Index() {
     [createThread, selectedModel, activeModel?.id, selectedProvider, navigate]
   )
 
-  const [setupCompleted, setSetupCompleted] = useState(() =>
-    isStorageFlagEnabled(
-      localStorage,
-      localStorageKey.setupCompleted,
-      'routes/index'
-    )
-  )
-
-  const hasValidProviders =
-    setupCompleted ||
-    providers.some((provider) => Boolean(provider.api_key?.length))
-
   useEffect(() => {
     setCurrentThreadId(undefined)
   }, [setCurrentThreadId])
@@ -155,10 +137,6 @@ function Index() {
       )
     }
   }, [threadPromptDraft])
-
-  if (!hasValidProviders) {
-    return <SetupScreen onComplete={() => setSetupCompleted(true)} />
-  }
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -246,6 +224,8 @@ function Index() {
                 {t('common:homeHeroSubtitle')}
               </motion.p>
             </div>
+
+            <StartupHint />
 
             {/* Thread prompt editor */}
             {showThreadPromptEditor && (

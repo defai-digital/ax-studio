@@ -15,8 +15,7 @@ import { DownloadEvent, DownloadState, events } from '@ax-studio/core'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslation } from '@/i18n/react-i18next-compat'
-import { useNavigate } from '@tanstack/react-router'
-import { route } from '@/constants/routes'
+import { useHuggingFaceConnection } from '@/hooks/models/useHuggingFaceConnection'
 
 type DownloadProgressRowProps = {
   name: string
@@ -72,7 +71,9 @@ function DownloadProgressRow({
 
 export function DownloadManagement() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const openHuggingFaceConnection = useHuggingFaceConnection(
+    (state) => state.setDialogOpen
+  )
   const { open: isLeftPanelOpen } = useLeftPanel()
   const [isPopoverOpen, setIsPopoverOpen] = useState(false)
   const serviceHub = useServiceHub()
@@ -111,10 +112,10 @@ export function DownloadManagement() {
         toast.error('Hugging Face token required', {
           id: 'download-failed',
           description:
-            'This model requires a Hugging Face access token. Add your token in Settings and retry.',
+            'This model requires a Hugging Face access token. Connect your Hub account and retry.',
           action: {
-            label: 'Open Settings',
-            onClick: () => navigate({ to: route.settings.general }),
+            label: 'Connect',
+            onClick: () => openHuggingFaceConnection(true),
           },
         })
         return
@@ -135,8 +136,8 @@ export function DownloadManagement() {
           description:
             'You have been rate-limited. Adding a token can increase rate limits. Please try again later.',
           action: {
-            label: 'Open Settings',
-            onClick: () => navigate({ to: route.settings.general }),
+            label: 'Connect',
+            onClick: () => openHuggingFaceConnection(true),
           },
         })
         return
@@ -149,7 +150,7 @@ export function DownloadManagement() {
         }),
       })
     },
-    [t, navigate, getDownloadId]
+    [t, openHuggingFaceConnection, getDownloadId]
   )
 
   const onModelValidationStarted = useCallback(

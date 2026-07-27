@@ -4,6 +4,8 @@ import { isPlatformTauri } from '@/lib/platform/utils'
 export const PROXY_PASSWORD_SECRET = 'proxy-password'
 /** AX BI MCP bearer token (OS keychain). Must match Rust secrets allow-list. */
 export const AX_BI_MCP_TOKEN_SECRET = 'ax-bi-mcp-token'
+/** Hugging Face Hub access token used for private/gated model downloads. */
+export const HUGGING_FACE_TOKEN_SECRET = 'hugging-face-token'
 
 export async function getSecureSecret(key: string): Promise<string | null> {
   if (!isPlatformTauri()) return null

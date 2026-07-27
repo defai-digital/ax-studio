@@ -219,7 +219,8 @@ working host: `examples/electron-host/` (smoke: `yarn smoke:embed`).
     `read_logs`, `take_pending_open_files` (macOS `open-file` +
     second-instance argv, buffered until drained), `open_external_url`
   - Secrets: `get_secret`, `set_secret`, `delete_secret` via `safeStorage`,
-    persisted as `userData/secrets.json`
+    persisted as `userData/secrets.json`. AX BI and Hugging Face credentials
+    use this bridge instead of localStorage.
   - Window (`window_*`): focus/minimize/maximize/toggle/close/hide/show/
     title/theme/create; `window_start_dragging` is a no-op (native frame in
     Phase 1)
@@ -362,13 +363,14 @@ working host: `examples/electron-host/` (smoke: `yarn smoke:embed`).
   authenticated OpenAI HTTP against the sidecar baseURL); ax-serving behavior
   under Tauri is unchanged.
 - Route pruning (migration matrix §1; finalized in Phase 4 slice 2b): the
-  router only registers `/`, `/threads/$threadId`, `/hub/*`, `/ax-bi`,
-  `/settings/general`, and `/settings/providers/*` — the removed route files
-  (logs, system-monitor, project, and 15 settings pages) are deleted, along
-  with the Phase 3 redirect guard. `/settings/interface` and
-  `/settings/privacy` render inline as sections of `/settings/general`. The
-  sidebar has no Projects/assistants/MCP tools entries, `SettingsMenu` is
-  General + Providers, and the search-dialog command list only contains kept
+  router registers `/`, `/threads/$threadId`, `/hub/*`, `/settings/general`,
+  `/settings/ax-engine`, `/settings/ax-bi`, and `/settings/providers/*`.
+  `/ax-bi` remains only as a compatibility redirect. The removed route files
+  (logs, system-monitor, project, and 15 settings pages) are deleted.
+  `/settings/interface` and `/settings/privacy` render inline as sections of
+  `/settings/general`. The sidebar has no Projects/assistants/MCP tools or
+  AX BI workspace entry. `SettingsMenu` separates General, AX Engine, Cloud
+  Model Providers, and AX BI, and the search dialog exposes those kept
   destinations. Because the shell loads the SPA from `file://`, the router
   uses hash history (browser history cannot represent app routes there) and
   is exposed as `window.__ax.router` for the smoke suite.

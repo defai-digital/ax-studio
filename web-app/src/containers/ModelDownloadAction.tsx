@@ -6,7 +6,7 @@ import {
   toDownloadProcesses,
   useDownloadStore,
 } from '@/hooks/models/useDownloadStore'
-import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
+import { useHuggingFaceConnection } from '@/hooks/models/useHuggingFaceConnection'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useTranslation } from '@/i18n'
@@ -34,7 +34,7 @@ export const ModelDownloadAction = ({
   const serviceHub = useServiceHub()
 
   const { t } = useTranslation()
-  const huggingfaceToken = useGeneralSetting((state) => state.huggingfaceToken)
+  const huggingfaceToken = useHuggingFaceConnection((state) => state.token)
   const providers = useModelProvider((state) => state.providers)
   const {
     downloads,

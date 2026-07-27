@@ -4,7 +4,7 @@ import {
   toDownloadProcesses,
   useDownloadStore,
 } from '@/hooks/models/useDownloadStore'
-import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
+import { useHuggingFaceConnection } from '@/hooks/models/useHuggingFaceConnection'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useTranslation } from '@/i18n'
@@ -53,7 +53,7 @@ export function DownloadButtonPlaceholder({
   const providers = useModelProvider((state) => state.providers)
 
   const serviceHub = useServiceHub()
-  const huggingfaceToken = useGeneralSetting((state) => state.huggingfaceToken)
+  const huggingfaceToken = useHuggingFaceConnection((state) => state.token)
   const [isDownloaded, setDownloaded] = useState<boolean>(false)
   const [isPaused, setIsPaused] = useState<boolean>(false)
   const [isStarting, setStarting] = useState<boolean>(false)

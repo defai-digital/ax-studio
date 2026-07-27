@@ -1,11 +1,9 @@
 import { useAxBiSessions } from '@/stores/ax-bi-session-store'
 
 /**
- * Chat-first run history (migration matrix §4): AX BI delegations that happen
- * in the main chat (and quick runs from the slim `/ax-bi` page) are recorded
- * into a single rolling session so the demoted `/ax-bi` history view has
- * something to show. Electron-only callers — the Tauri workspace records its
- * own per-session runs.
+ * Compatibility history for chat-first AX BI: delegations are kept in one
+ * bounded local session so activity recorded by older builds remains valid.
+ * There is no separate workspace route; the visible result stays in chat.
  */
 const CHAT_SESSION_TITLE = 'Chat analyses'
 

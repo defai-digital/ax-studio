@@ -4,22 +4,25 @@ import { render, screen } from '@testing-library/react'
 const mocks = vi.hoisted(() => ({
   location: { pathname: '/' },
   hideInitialLoader: vi.fn(),
+  redirectError: new Error('redirect'),
+  redirect: vi.fn(),
 }))
 
 vi.mock('@tanstack/react-router', () => ({
-  createFileRoute: () => (config: { component: React.ComponentType }) => config,
+  createFileRoute: () => (config: Record<string, unknown>) => config,
   createRootRoute: (config: {
     component: React.ComponentType
     errorComponent?: React.ComponentType<{ error: Error }>
   }) => config,
   Outlet: () => <main data-testid="outlet" />,
+  redirect: mocks.redirect,
   useLocation: () => mocks.location,
 }))
 
 vi.mock('@/constants/routes', () => ({
   route: {
-    axBi: '/ax-bi',
-    settings: { general: '/settings/general' },
+    legacyAxBi: '/ax-bi',
+    settings: { axBi: '/settings/ax-bi', general: '/settings/general' },
   },
 }))
 
@@ -34,10 +37,6 @@ vi.mock('motion/react', () => ({
 
 vi.mock('@/containers/ElectronUpdateBanner', () => ({
   ElectronUpdateBanner: () => <div data-testid="electron-update-banner" />,
-}))
-
-vi.mock('@/containers/AxBiHistory', () => ({
-  AxBiHistory: () => <section>ax-bi history</section>,
 }))
 
 vi.mock('@/providers/ThemeProvider', () => ({
@@ -74,6 +73,18 @@ vi.mock('@/i18n/TranslationContext', () => ({
 
 vi.mock('@/providers/GlobalEventHandler', () => ({
   GlobalEventHandler: () => <div data-testid="global-event-handler" />,
+}))
+
+vi.mock('@/providers/HuggingFaceConnectionProvider', () => ({
+  HuggingFaceConnectionProvider: () => (
+    <div data-testid="hugging-face-provider" />
+  ),
+}))
+
+vi.mock('@/containers/HuggingFaceConnectionDialog', () => ({
+  HuggingFaceConnectionDialog: () => (
+    <div data-testid="hugging-face-dialog" />
+  ),
 }))
 
 vi.mock('@/providers/ServiceHubProvider', () => ({
@@ -136,6 +147,7 @@ describe('root layout and ax-bi route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.location.pathname = '/'
+    mocks.redirect.mockReturnValue(mocks.redirectError)
   })
 
   it('renders the root app layout with providers, sidebar, and outlet', () => {
@@ -165,10 +177,10 @@ describe('root layout and ax-bi route', () => {
     expect(screen.getByText('route failed')).toBeInTheDocument()
   })
 
-  it('renders the ax-bi route as the run-history view', () => {
-    const Component = AxBiRoute.component as React.ComponentType
-    render(<Component />)
-
-    expect(screen.getByText('ax-bi history')).toBeInTheDocument()
+  it('redirects legacy AX BI bookmarks to its Settings page', () => {
+    expect(() => AxBiRoute.beforeLoad?.({} as never)).toThrow(
+      mocks.redirectError
+    )
+    expect(mocks.redirect).toHaveBeenCalledWith({ to: '/settings/ax-bi' })
   })
 })

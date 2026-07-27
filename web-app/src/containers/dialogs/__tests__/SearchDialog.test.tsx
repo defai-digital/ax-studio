@@ -126,6 +126,7 @@ vi.mock('lucide-react', () => {
     FolderPlus: Icon,
     Settings: Icon,
     Settings2: Icon,
+    BarChart3: Icon,
     Plug: Icon,
     Palette: Icon,
     Server: Icon,
@@ -165,11 +166,13 @@ const translations: Record<string, string> = {
   'common:search': 'Search',
   'common:searchThreads': 'Search threads',
   'common:settings': 'Settings',
+  'common:axBi': 'AX BI',
+  'common:axEngine': 'AX Engine',
   'common:toNavigate': 'to navigate',
   'common:toSelect': 'to select',
   'settings:hardware.title': 'Hardware',
   'settings:mcpServers.title': 'MCP Servers',
-  'settings:providers': 'Model Providers',
+  'settings:providers': 'Cloud Model Providers',
 }
 
 describe('SearchDialog', () => {

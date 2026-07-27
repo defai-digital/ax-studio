@@ -142,6 +142,8 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 vi.mock('@/constants/providers', () => ({
+  isAxEngineProvider: (providerId: string) =>
+    providerId === 'ax-engine' || providerId === 'mlx',
   predefinedProviders: [],
 }))
 

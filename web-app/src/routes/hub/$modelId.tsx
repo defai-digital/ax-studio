@@ -32,7 +32,7 @@ import { useServiceHub } from '@/hooks/useServiceHub'
 import type { CatalogModel } from '@/services/models/types'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
-import { useGeneralSetting } from '@/hooks/settings/useGeneralSetting'
+import { useHuggingFaceConnection } from '@/hooks/models/useHuggingFaceConnection'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { ModelInfoHoverCard } from '@/containers/ModelInfoHoverCard'
 import { DEFAULT_MODEL_QUANTIZATIONS } from '@/constants/models'
@@ -55,6 +55,7 @@ import {
   VARIANT_MEMORY_LABEL_CLASSES,
   type VariantMemoryLabel,
 } from '@/lib/models/variant-memory'
+import { HuggingFaceConnectionButton } from '@/containers/HuggingFaceConnectionDialog'
 
 type SearchParams = {
   repo: string
@@ -102,7 +103,7 @@ function HubModelDetailContent() {
   const { t } = useTranslation()
   const { modelId: rawModelId } = useParams({ from: Route.id })
   const navigate = useNavigate()
-  const { huggingfaceToken } = useGeneralSetting()
+  const huggingfaceToken = useHuggingFaceConnection((state) => state.token)
   const { sources, fetchSources } = useModelSources()
   const search = useSearch({ from: Route.id })
 
@@ -346,14 +347,17 @@ function HubModelDetailContent() {
     <div className="flex flex-col h-svh w-full">
       {/* Back Button */}
       <HeaderPage>
-        <button
-          onClick={() => navigate({ to: route.hub.index })}
-          className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-          style={{ fontSize: '13px' }}
-        >
-          <ArrowLeft size={16} />
-          Back to Hub
-        </button>
+        <div className="flex w-full items-center justify-between gap-3">
+          <button
+            onClick={() => navigate({ to: route.hub.index })}
+            className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+            style={{ fontSize: '13px' }}
+          >
+            <ArrowLeft size={16} />
+            Back to Hub
+          </button>
+          <HuggingFaceConnectionButton />
+        </div>
       </HeaderPage>
 
       {/* Content */}

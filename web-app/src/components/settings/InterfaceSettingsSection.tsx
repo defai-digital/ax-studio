@@ -4,8 +4,6 @@ import { ThemeSwitcher } from '@/containers/ThemeSwitcher'
 import {
   fontSizeOptions,
   useInterfaceSettings,
-  ACCENT_COLORS,
-  readableForeground,
   type FontSize,
 } from '@/hooks/settings/useInterfaceSettings'
 import { Button } from '@/components/ui/button'
@@ -55,54 +53,13 @@ function FontSizeSwitcher() {
   )
 }
 
-function AccentColorPicker() {
-  const { accentColor, setAccentColor } = useInterfaceSettings()
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      {ACCENT_COLORS.map((color) => {
-        const isSelected = color.value === accentColor
-        return (
-          <button
-            key={color.value}
-            type="button"
-            title={color.name}
-            aria-label={color.name}
-            aria-pressed={isSelected}
-            onClick={() => setAccentColor(color.value)}
-            className={cn(
-              'size-7 rounded-full border-2 transition-all duration-200 cursor-pointer hover:scale-110 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-              isSelected
-                ? 'ring-2 ring-offset-2 ring-primary border-transparent'
-                : 'border-border/50'
-            )}
-            style={{
-              backgroundColor:
-                color.thumb === '#3F3F46' ? 'var(--background)' : color.thumb,
-            }}
-          >
-            {isSelected && (
-              <Check
-                className="size-3 drop-shadow-sm"
-                style={{
-                  // White check fails WCAG AA on light accent swatches; the
-                  // gray swatch renders --background, so follow the theme
-                  // foreground there instead.
-                  color:
-                    color.thumb === '#3F3F46'
-                      ? 'var(--foreground)'
-                      : readableForeground(color.thumb),
-                }}
-              />
-            )}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
 /**
- * Appearance (theme/font size/accent) settings as a self-contained card.
+ * Appearance (theme/font size) settings as a self-contained card.
+ *
+ * The accent preference intentionally remains in the underlying store so
+ * existing installations keep their chosen colors. It is not exposed here:
+ * "accent" is design-system terminology, and the choice adds complexity
+ * without supporting a core Studio workflow.
  * Merged into /settings/general under Electron (migration matrix §1).
  */
 export function InterfaceSettingsSection() {
@@ -121,16 +78,6 @@ export function InterfaceSettingsSection() {
         title={t('settings:interface.fontSize')}
         description={t('settings:interface.fontSizeDesc')}
         actions={<FontSizeSwitcher />}
-      />
-      <CardItem
-        title={t('settings:interface.accent', {
-          defaultValue: 'Accent color',
-        })}
-        description={t('settings:interface.accentDesc', {
-          defaultValue: 'Customize the accent color of the application.',
-        })}
-        className="flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-y-2"
-        actions={<AccentColorPicker />}
       />
       <CardItem
         title={t('settings:interface.resetToDefault')}

@@ -36,6 +36,7 @@ export type AxBiAuthoringClient = {
   >
 }
 import {
+  clearStoredAxBiMcpToken,
   normalizeAxBiToken,
   readStoredAxBiMcpToken,
   storeAxBiMcpToken,
@@ -165,6 +166,13 @@ export async function connectAxBiDirect({
     }
     throw error
   }
+}
+
+/** Remove the saved AX BI credential and drop the cached MCP session. */
+export async function disconnectAxBiDirect(): Promise<void> {
+  await clearStoredAxBiMcpToken()
+  resetDirectAxBiClientCache()
+  useAxBiConnection.getState().setStatus('needs-key')
 }
 
 /**

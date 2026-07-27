@@ -15,6 +15,8 @@ import {
   Plus,
   Settings,
   Settings2,
+  BarChart3,
+  Cpu,
   Plug,
   History,
   FolderOpen,
@@ -208,14 +210,36 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
       {
         id: 'providers',
         label: t('settings:providers', {
-          defaultValue: 'Model Providers',
+          defaultValue: 'Cloud Model Providers',
         }),
-        keywords: ['providers', 'api', 'keys', 'openai', 'anthropic'],
+        keywords: ['cloud', 'providers', 'api', 'keys', 'openai', 'anthropic'],
         icon: Plug,
         category: t('common:settings'),
         action: () => {
           handleClose()
           navigate({ to: route.settings.model_providers })
+        },
+      },
+      {
+        id: 'ax-engine',
+        label: t('common:axEngine', { defaultValue: 'AX Engine' }),
+        keywords: ['ax engine', 'local model', 'mlx', 'runtime'],
+        icon: Cpu,
+        category: t('common:settings'),
+        action: () => {
+          handleClose()
+          navigate({ to: route.settings.axEngine })
+        },
+      },
+      {
+        id: 'ax-bi',
+        label: t('common:axBi', { defaultValue: 'AX BI' }),
+        keywords: ['ax bi', 'analytics', 'chart', 'dashboard', 'mcp'],
+        icon: BarChart3,
+        category: t('common:settings'),
+        action: () => {
+          handleClose()
+          navigate({ to: route.settings.axBi })
         },
       },
       {

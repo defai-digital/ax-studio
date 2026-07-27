@@ -20,7 +20,6 @@ import {
   MessageCircle,
   Settings,
 } from 'lucide-react'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { fallbackDefaultPrompt } from '@/lib/prompts/system-prompt'
 import { useGeneralSettingsPage } from '@/hooks/settings/useGeneralSettingsPage'
@@ -115,8 +114,6 @@ function General() {
   const {
     spellCheckChatInput,
     setSpellCheckChatInput,
-    huggingfaceToken,
-    setHuggingfaceToken,
     globalDefaultPrompt,
     setGlobalDefaultPrompt,
     autoTuningEnabled,
@@ -134,14 +131,12 @@ function General() {
     isDialogOpen,
     setIsDialogOpen,
     setSelectedNewPath,
-    isValidatingToken,
     isResetting,
     openFileTitle,
     copyToClipboard,
     handleDataFolderChange,
     confirmDataFolderChange,
     resetApp,
-    validateHuggingFaceToken,
     revealLogsFolder,
   } = useGeneralSettingsPage()
 
@@ -374,33 +369,6 @@ function General() {
                       >
                         <Folder size={12} className="text-muted-foreground" />
                         <span>{openFileTitle()}</span>
-                      </Button>
-                    </div>
-                  }
-                />
-                <CardItem
-                  title={t('settings:general.huggingfaceToken', {
-                    ns: 'settings',
-                  })}
-                  description={t('settings:general.huggingfaceTokenDesc', {
-                    ns: 'settings',
-                  })}
-                  actions={
-                    <div className="flex items-center gap-2">
-                      <Input
-                        id="hf-token"
-                        value={huggingfaceToken || ''}
-                        onChange={(e) => setHuggingfaceToken(e.target.value)}
-                        placeholder={'hf_xxx_xxx'}
-                        required
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={isValidatingToken}
-                        onClick={validateHuggingFaceToken}
-                      >
-                        {t('settings:general.verify')}
                       </Button>
                     </div>
                   }

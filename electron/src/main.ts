@@ -1592,6 +1592,11 @@ function buildSmokeScript(
         '/settings/general is registered and renders',
         await navAndWait('/settings/general', '/settings/general'),
         router.state.location.pathname)
+      check(
+        'product settings routes are registered',
+        registeredPaths.includes('/settings/ax-engine') &&
+          registeredPaths.includes('/settings/ax-bi'),
+        JSON.stringify(registeredPaths))
       const generalRendered = await waitFor(() => {
         const text = document.body.textContent || ''
         return text.indexOf('App Version') !== -1 && text.indexOf('Data & Storage') !== -1
@@ -1603,8 +1608,10 @@ function buildSmokeScript(
       check('sidebar has no Projects entries', !hasHref('#/project/'))
       check('sidebar has no MCP/assistants entries',
         !hasHref('#/settings/mcp-servers') && !hasHref('#/settings/assistant'))
-      check('settings menu pruned to general + providers',
-        hasHref('#/settings/providers') &&
+      check('settings menu separates local products and cloud providers',
+        hasHref('#/settings/ax-engine') &&
+          hasHref('#/settings/providers') &&
+          hasHref('#/settings/ax-bi') &&
           !hasHref('#/settings/hardware') &&
           !hasHref('#/settings/extensions') &&
           !hasHref('#/settings/voice'))

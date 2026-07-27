@@ -11,11 +11,9 @@ import {
 type GeneralSettingState = {
   spellCheckChatInput: boolean
   tokenCounterCompact: boolean
-  huggingfaceToken?: string
   globalDefaultPrompt: string
   autoTuningEnabled: boolean
   applyMode: ApplyMode
-  setHuggingfaceToken: (token: string) => void
   setSpellCheckChatInput: (value: boolean) => void
   setTokenCounterCompact: (value: boolean) => void
   setGlobalDefaultPrompt: (value: string) => void
@@ -23,7 +21,7 @@ type GeneralSettingState = {
   setApplyMode: (value: ApplyMode) => void
 }
 
-function sanitizePersistedGeneralSettings(value: unknown): unknown {
+function sanitizePersistedGeneralSettings<T>(value: T): T {
   if (!value || typeof value !== 'object') {
     return value
   }
@@ -41,11 +39,11 @@ function sanitizePersistedGeneralSettings(value: unknown): unknown {
   return {
     ...persistedValue,
     state,
-  }
+  } as T
 }
 
-// Sensitive tokens are intentionally kept in-memory only. They are omitted from
-// persisted localStorage state until the app has a real secure storage backend.
+// Keep stripping credentials written by older builds. The dedicated Hugging
+// Face connection migrates the untouched legacy payload to secure storage.
 const encryptedStorage = {
   getItem: (name: string) => {
     const item = safeStorageGetItem(localStorage, name, 'useGeneralSetting')
@@ -53,7 +51,7 @@ const encryptedStorage = {
 
     try {
       const parsed = JSON.parse(item)
-      return parsed
+      return sanitizePersistedGeneralSettings(parsed)
     } catch {
       return null
     }
@@ -80,7 +78,6 @@ export const useGeneralSetting = create<GeneralSettingState>()(
     (set) => ({
       spellCheckChatInput: true,
       tokenCounterCompact: true,
-      huggingfaceToken: undefined,
       globalDefaultPrompt: '',
       autoTuningEnabled: false,
       applyMode: 'all_chats',
@@ -89,7 +86,6 @@ export const useGeneralSetting = create<GeneralSettingState>()(
       setGlobalDefaultPrompt: (value) => set({ globalDefaultPrompt: value }),
       setAutoTuningEnabled: (value) => set({ autoTuningEnabled: value }),
       setApplyMode: (value) => set({ applyMode: value }),
-      setHuggingfaceToken: (token) => set({ huggingfaceToken: token }),
     }),
     {
       name: localStorageKey.settingGeneral,

@@ -26,6 +26,8 @@ import {
   reducedMotionVariants,
 } from '@/lib/utils/animations'
 import { hideInitialLoader } from '@/lib/bootstrap/app-startup'
+import { HuggingFaceConnectionProvider } from '@/providers/HuggingFaceConnectionProvider'
+import { HuggingFaceConnectionDialog } from '@/containers/HuggingFaceConnectionDialog'
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -121,6 +123,8 @@ function RootLayout() {
               <ExtensionProvider>
                 <DataProvider />
                 <GlobalEventHandler />
+                <HuggingFaceConnectionProvider />
+                <HuggingFaceConnectionDialog />
                 <ErrorBoundary name="app-shell">
                   <AppLayout />
                 </ErrorBoundary>

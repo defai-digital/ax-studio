@@ -192,8 +192,33 @@ describe('Providers Settings Route', () => {
       0
     )
     expect(
-      screen.getByText('Connect external APIs and local model engines.')
+      screen.getByText(
+        'Connect cloud model APIs and manage their credentials.'
+      )
     ).toBeInTheDocument()
+  })
+
+  it('does not list AX Engine among cloud providers', () => {
+    mockProviders = [
+      {
+        provider: 'ax-engine',
+        active: true,
+        models: [],
+        settings: [],
+      },
+      {
+        provider: 'openai',
+        active: true,
+        models: [],
+        settings: [],
+      },
+    ]
+
+    const Component = ProvidersRoute.component as React.ComponentType
+    render(<Component />)
+
+    expect(screen.queryByText('ax-engine Provider')).not.toBeInTheDocument()
+    expect(screen.getByText('openai Provider')).toBeInTheDocument()
   })
 
   it('should render empty state with no providers', () => {

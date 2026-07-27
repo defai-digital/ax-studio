@@ -58,8 +58,6 @@ vi.mock('@/hooks/settings/useGeneralSetting', () => ({
   useGeneralSetting: () => ({
     spellCheckChatInput: true,
     setSpellCheckChatInput: vi.fn(),
-    huggingfaceToken: 'test-token',
-    setHuggingfaceToken: vi.fn(),
     globalDefaultPrompt: '',
     setGlobalDefaultPrompt: vi.fn(),
     autoTuningEnabled: false,
@@ -462,15 +460,18 @@ describe('General Settings Route', () => {
     ).toBeInTheDocument()
   })
 
-  it('should render huggingface token input', async () => {
+  it('keeps Hub credentials and the internal accent choice out of General', async () => {
     const Component = GeneralRoute.component as React.ComponentType
     await act(async () => {
       render(<Component />)
     })
 
-    const input = screen.getByTestId('input')
-    expect(input).toBeInTheDocument()
-    expect(input).toHaveValue('test-token')
+    expect(
+      screen.queryByText('settings:general.huggingfaceToken')
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('settings:interface.accent')
+    ).not.toBeInTheDocument()
   })
 
   it('should handle spell check toggle', async () => {
@@ -487,22 +488,6 @@ describe('General Settings Route', () => {
       fireEvent.click(switches[0])
     })
     expect(switches[0]).toBeInTheDocument()
-  })
-
-  it('should handle huggingface token change', async () => {
-    const Component = GeneralRoute.component as React.ComponentType
-    await act(async () => {
-      render(<Component />)
-    })
-
-    const input = screen.getByTestId('input')
-    expect(input).toBeInTheDocument()
-
-    // Test that input is interactive
-    await act(async () => {
-      fireEvent.change(input, { target: { value: 'new-token' } })
-    })
-    expect(input).toBeInTheDocument()
   })
 
   it('should handle check for updates', async () => {

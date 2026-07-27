@@ -115,12 +115,8 @@ vi.mock('@/containers/HeaderPage', () => ({
   ),
 }))
 
-vi.mock('@/containers/SetupScreen', () => ({
-  SetupScreen: ({ onComplete }: { onComplete?: () => void }) => (
-    <div data-testid="setup-screen">
-      <button onClick={onComplete}>Complete Setup</button>
-    </div>
-  ),
+vi.mock('@/containers/StartupHint', () => ({
+  StartupHint: () => <div data-testid="startup-hint">Startup hint</div>,
 }))
 
 vi.mock('@/components/ui/button', () => ({
@@ -164,7 +160,7 @@ vi.mock('@/constants/routes', () => ({
 }))
 
 vi.mock('@/constants/localStorage', () => ({
-  localStorageKey: { setupCompleted: 'setup-completed' },
+  localStorageKey: {},
 }))
 
 vi.mock('@/constants/chat', () => ({
@@ -209,6 +205,13 @@ describe('Home Page (index.tsx) — Manual Test Protocol', () => {
         "Ask anything, build with AI, or explore what's possible."
       )
     ).toBeInTheDocument()
+  })
+
+  it('renders the non-blocking startup hint with the composer', () => {
+    renderIndex()
+
+    expect(screen.getByTestId('startup-hint')).toBeInTheDocument()
+    expect(screen.getByTestId('chat-input-container')).toBeInTheDocument()
   })
 
   // Protocol #8: Smart Start workflow selector

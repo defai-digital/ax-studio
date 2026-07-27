@@ -41,10 +41,14 @@ vi.mock('@/hooks/models/useModelSources', () => ({
   }),
 }))
 
-vi.mock('@/hooks/settings/useGeneralSetting', () => ({
-  useGeneralSetting: () => ({
-    huggingfaceToken: null,
-  }),
+vi.mock('@/hooks/models/useHuggingFaceConnection', () => ({
+  useHuggingFaceConnection: (
+    selector: (state: { token?: string }) => unknown
+  ) => selector({ token: undefined }),
+}))
+
+vi.mock('@/containers/HuggingFaceConnectionDialog', () => ({
+  HuggingFaceConnectionButton: () => <button>Hugging Face connection</button>,
 }))
 
 vi.mock('@/hooks/useServiceHub', () => ({

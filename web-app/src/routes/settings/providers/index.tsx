@@ -16,7 +16,10 @@ import { ProvidersAvatar } from '@/components/common/ProvidersAvatar'
 import { AddProviderDialog } from '@/containers/dialogs'
 import { Switch } from '@/components/ui/switch'
 import { useCallback } from 'react'
-import { openAIProviderSettings } from '@/constants/providers'
+import {
+  isAxEngineProvider,
+  openAIProviderSettings,
+} from '@/constants/providers'
 import { toast } from 'sonner'
 import { Plug, Plus, ChevronRight } from 'lucide-react'
 
@@ -28,6 +31,9 @@ function ModelProviders() {
   const { t } = useTranslation()
   const { providers, addProvider, updateProvider } = useModelProvider()
   const navigate = useNavigate()
+  const cloudProviders = providers.filter(
+    (provider) => !isAxEngineProvider(provider.provider)
+  )
 
   const createProvider = useCallback(
     (name: string) => {
@@ -104,7 +110,7 @@ function ModelProviders() {
                 >
                   {t('providers:connectDescription', {
                     defaultValue:
-                      'Connect external APIs and local model engines.',
+                      'Connect cloud model APIs and manage their credentials.',
                   })}
                 </p>
                 <div className="shrink-0">
@@ -122,7 +128,7 @@ function ModelProviders() {
 
               {/* Provider cards */}
               <div className="space-y-2">
-                {providers.map((provider) => {
+                {cloudProviders.map((provider) => {
                   const color = getProviderColor(provider.provider)
                   const desc = getProviderDescription(provider.provider)
 

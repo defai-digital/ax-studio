@@ -56,9 +56,9 @@ vi.mock('@/hooks/models/useDownloadStore', () => ({
   }),
 }))
 
-vi.mock('@/hooks/settings/useGeneralSetting', () => ({
-  useGeneralSetting: vi.fn((selector) =>
-    selector({ huggingfaceToken: 'hf-test-token' })
+vi.mock('@/hooks/models/useHuggingFaceConnection', () => ({
+  useHuggingFaceConnection: vi.fn((selector) =>
+    selector({ token: 'hf-test-token' })
   ),
 }))
 

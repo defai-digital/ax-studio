@@ -16,5 +16,25 @@
   "useModel": "Use this model",
   "downloadModel": "Download model",
   "tools": "Tools",
-  "searchPlaceholder": "Search for models on Hugging Face..."
+  "searchPlaceholder": "Search for models on Hugging Face...",
+  "huggingFace": {
+    "title": "Hugging Face Hub",
+    "connect": "Connect Hugging Face",
+    "connected": "Hugging Face connected",
+    "description": "Connect to browse and download private or gated Hub models. This does not configure a chat inference provider.",
+    "connectionActive": "Hub connection active",
+    "signedInAs": "Signed in as {{name}}",
+    "savedOnDevice": "Access token saved on this device",
+    "secureStorage": "The token is stored locally by AX Studio's secure credential service and is only sent to Hugging Face.",
+    "tokenLabel": "Access token",
+    "tokenHelp": "Use a fine-grained token with read access to the models you need.",
+    "createToken": "Create token",
+    "licenseNote": "Gated models also require you to accept their license on the model's Hugging Face page.",
+    "showToken": "Show token",
+    "hideToken": "Hide token",
+    "verifying": "Verifying...",
+    "connectAction": "Verify and connect",
+    "replaceToken": "Replace token",
+    "disconnect": "Disconnect"
+  }
 }

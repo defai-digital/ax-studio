@@ -70,6 +70,10 @@ vi.mock('@/containers/ModelDownloadAction', () => ({
   ModelDownloadAction: () => <button>Download</button>,
 }))
 
+vi.mock('@/containers/HuggingFaceConnectionDialog', () => ({
+  HuggingFaceConnectionButton: () => <button>Hugging Face connection</button>,
+}))
+
 vi.mock('@/containers/RenderMarkdown', () => ({
   RenderMarkdown: ({ content }: { content: string }) => <div>{content}</div>,
 }))
@@ -130,10 +134,9 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
   }),
 }))
 
-vi.mock('@/hooks/settings/useGeneralSetting', () => ({
-  useGeneralSetting: (
-    selector: (state: { huggingfaceToken: string }) => string
-  ) => selector({ huggingfaceToken: 'hf-token' }),
+vi.mock('@/hooks/models/useHuggingFaceConnection', () => ({
+  useHuggingFaceConnection: (selector: (state: { token: string }) => string) =>
+    selector({ token: 'hf-token' }),
 }))
 
 vi.mock('@/hooks/models/useModelProvider', () => ({

@@ -8,7 +8,12 @@ import {
   getProviderColor,
   getModelDisplayName,
 } from '@/lib/utils'
-import { createFileRoute, Link, useParams } from '@tanstack/react-router'
+import {
+  createFileRoute,
+  Link,
+  redirect,
+  useParams,
+} from '@tanstack/react-router'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { Capabilities } from '@/components/common/Capabilities'
 import { DynamicControllerSetting } from '@/containers/DynamicControllerSetting'
@@ -32,7 +37,10 @@ import {
 import { useFavoriteModel } from '@/hooks/models/useFavoriteModel'
 import { toast } from 'sonner'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { predefinedProviders } from '@/constants/providers'
+import {
+  isAxEngineProvider,
+  predefinedProviders,
+} from '@/constants/providers'
 import { DialogAddModel } from '@/containers/dialogs/model/AddModel'
 import { SelectModelGroups } from '@/containers/dialogs/model/SelectModelGroups'
 import { groupModelsByPrefix, type ModelGroup } from '@/lib/model-group-utils'
@@ -122,16 +130,29 @@ export const Route = createFileRoute('/settings/providers/$providerName')({
   component: ProviderDetail,
   validateSearch: (search: Record<string, unknown>): { step?: string } =>
     providerSearchSchema.parse(search),
+  beforeLoad: ({ params }) => {
+    if (isAxEngineProvider(params.providerName)) {
+      throw redirect({ to: route.settings.axEngine })
+    }
+  },
 })
 
 function ProviderDetail() {
+  const { providerName } = useParams({ from: Route.id })
+  return <ProviderSettingsPage providerName={providerName} />
+}
+
+export function ProviderSettingsPage({
+  providerName,
+}: {
+  providerName: string
+}) {
   const { t } = useTranslation()
   const serviceHub = useServiceHub()
   const [refreshingModels, setRefreshingModels] = useState(false)
   const [importingModel, setImportingModel] = useState<string | null>(null)
   const [modelSearch, setModelSearch] = useState('')
   const [pendingGroups, setPendingGroups] = useState<ModelGroup[] | null>(null)
-  const { providerName } = useParams({ from: Route.id })
   const { getProviderByName, updateProvider } = useModelProvider()
   const provider = getProviderByName(providerName)
   const canTestConnection = Boolean(
@@ -542,7 +563,9 @@ function ProviderDetail() {
                       style={{ fontSize: '13px' }}
                     >
                       {t('provider:configurationDesc', {
-                        defaultValue: 'API credentials and endpoint settings.',
+                        defaultValue: isAxEngineProvider(providerName)
+                          ? 'Local runtime connection and engine settings.'
+                          : 'API credentials and endpoint settings.',
                       })}
                     </p>
                   </div>

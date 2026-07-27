@@ -394,8 +394,8 @@ export function useThreadChat({
       })
 
       if (directAxBiResult.handled) {
-        // Electron: mirror the delegation into the slim `/ax-bi` run history
-        // (migration matrix §4). Tauri records runs from its workspace only.
+        // Keep a bounded local activity record for compatibility with data
+        // from builds that exposed a separate AX BI history view.
         if (isPlatformElectron()) {
           recordAxBiChatRun({
             prompt: normalizedText,
