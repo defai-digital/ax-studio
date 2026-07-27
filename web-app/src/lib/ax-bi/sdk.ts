@@ -35,6 +35,27 @@ export type AxBIConfig = {
   mcpUrl?: string
   auth?: AxBIAuthConfig
   timeout?: number
+  mcpTransport?: AxBIMcpTransport
+}
+
+export type AxBIMcpTransportResponse = {
+  ok: boolean
+  status: number
+  statusText: string
+  headers: { get: (name: string) => string | null }
+  text: () => Promise<string>
+  json: () => Promise<unknown>
+}
+
+export type AxBIMcpTransport = {
+  post: (
+    url: string,
+    options: {
+      headers: Record<string, string>
+      body: string
+      timeoutMs: number
+    }
+  ) => Promise<AxBIMcpTransportResponse>
 }
 
 export type MCPToolResult = {
@@ -167,6 +188,16 @@ class AxBIAuthProvider {
 /** Streamable HTTP requires both MIME types on every POST, including notifications. */
 const MCP_ACCEPT = 'application/json, text/event-stream'
 
+const browserMcpTransport: AxBIMcpTransport = {
+  post: (url, options) =>
+    fetch(url, {
+      method: 'POST',
+      headers: options.headers,
+      body: options.body,
+      signal: AbortSignal.timeout(options.timeoutMs),
+    }),
+}
+
 function sameJsonRpcId(actual: unknown, expected: string): boolean {
   // MCP allows id as string | number; coerce so SSE/JSON responses match.
   return String(actual) === expected
@@ -181,7 +212,8 @@ class MCPClient {
   constructor(
     private readonly mcpEndpoint: string,
     private readonly auth: AxBIAuthProvider,
-    private readonly timeout = 60_000
+    private readonly timeout = 60_000,
+    private readonly transport: AxBIMcpTransport = browserMcpTransport
   ) {}
 
   async initialize(): Promise<void> {
@@ -236,11 +268,10 @@ class MCPClient {
   ): Promise<T> {
     const id = String(++this.requestId)
 
-    const response = await fetch(this.mcpEndpoint, {
-      method: 'POST',
+    const response = await this.transport.post(this.mcpEndpoint, {
       headers: this.baseHeaders(),
       body: JSON.stringify({ jsonrpc: '2.0', id, ...request }),
-      signal: AbortSignal.timeout(this.timeout),
+      timeoutMs: this.timeout,
     })
 
     if (!response.ok) {
@@ -261,11 +292,10 @@ class MCPClient {
 
   private async sendNotification(method: string): Promise<void> {
     // FastMCP streamable-HTTP rejects POSTs without Accept (HTTP 406).
-    const response = await fetch(this.mcpEndpoint, {
-      method: 'POST',
+    const response = await this.transport.post(this.mcpEndpoint, {
       headers: this.baseHeaders(),
       body: JSON.stringify({ jsonrpc: '2.0', method }),
-      signal: AbortSignal.timeout(5_000),
+      timeoutMs: 5_000,
     })
     if (!response.ok) {
       const text = await response.text().catch(() => '')
@@ -493,7 +523,8 @@ export class AxBI {
       new MCPClient(
         mcpEndpoint,
         new AxBIAuthProvider(config.auth),
-        config.timeout ?? 60_000
+        config.timeout ?? 60_000,
+        config.mcpTransport
       )
     )
   }

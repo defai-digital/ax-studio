@@ -2,6 +2,7 @@
 // wires the `ax:invoke` / `ax:event-emit` channels from the preload bridge.
 import { ipcMain, BrowserWindow } from 'electron'
 import { createAppHandlers } from './app.js'
+import { createAxBiHandlers } from './ax-bi.js'
 import { createAxEngineHandlers } from './ax-engine.js'
 import { createDownloadHandlers } from './downloads.js'
 import { createFsHandlers } from './fs.js'
@@ -38,6 +39,7 @@ export function createCommandRegistry(context: CommandContext): Map<string, Comm
   }
   merge(createFsHandlers(context.getMainWindow))
   merge(createAppHandlers())
+  merge(createAxBiHandlers())
   merge(createSecretsHandlers())
   merge(createWindowHandlers(context.createChildWindow))
   merge(createStoreHandlers())

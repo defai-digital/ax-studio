@@ -9,7 +9,7 @@ import {
 import { getDirectAxBiClient } from '../direct-client'
 
 const tokenStorageMocks = vi.hoisted(() => ({
-  read: vi.fn(),
+  has: vi.fn(),
 }))
 
 vi.mock('../token-storage', async (importOriginal) => {
@@ -17,7 +17,7 @@ vi.mock('../token-storage', async (importOriginal) => {
     await importOriginal<typeof import('../token-storage')>()
   return {
     ...actual,
-    readStoredAxBiMcpToken: tokenStorageMocks.read,
+    hasStoredAxBiMcpToken: tokenStorageMocks.has,
   }
 })
 
@@ -40,7 +40,7 @@ function makeDirectClient(result: unknown) {
 describe('ax-bi datasets', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    tokenStorageMocks.read.mockResolvedValue('stored-ax-bi-token')
+    tokenStorageMocks.has.mockResolvedValue(true)
   })
 
   it('parses dataset records from nested MCP results', async () => {
@@ -186,7 +186,7 @@ describe('ax-bi datasets', () => {
 
   it('reports whether an AX BI token is stored locally', async () => {
     await expect(hasConfiguredAxBiMcpToken()).resolves.toBe(true)
-    tokenStorageMocks.read.mockResolvedValue(null)
+    tokenStorageMocks.has.mockResolvedValue(false)
     await expect(hasConfiguredAxBiMcpToken()).resolves.toBe(false)
   })
 

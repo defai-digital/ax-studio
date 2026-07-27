@@ -1,4 +1,4 @@
-import { readStoredAxBiMcpToken } from './token-storage'
+import { hasStoredAxBiMcpToken } from './token-storage'
 import { getDirectAxBiClient, getElectronAxBiMcpUrl } from './direct-client'
 import {
   getFirstMcpText,
@@ -20,8 +20,7 @@ export type AxBiDataset = {
 }
 
 export async function hasConfiguredAxBiMcpToken(): Promise<boolean> {
-  const token = await readStoredAxBiMcpToken()
-  return typeof token === 'string' && token.trim().length > 0
+  return hasStoredAxBiMcpToken()
 }
 
 export function getConfiguredAxBiMcpUrl(): string {
@@ -120,7 +119,7 @@ export async function listAxBiDatasets({
 }: {
   search?: string
 } = {}): Promise<AxBiDataset[]> {
-  // Direct SDK path over plain fetch — no MCP layer involved.
+  // Reuses the Electron main-process MCP transport.
   const client = await getDirectAxBiClient()
   const result = await client.ai.callTool(
     'list_datasets',

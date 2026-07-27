@@ -919,8 +919,8 @@ async function prepareSmokeAxEngineFixture(dataFolder: string): Promise<SmokeAxE
 // template string, so stick to string concatenation.
 // ─── Smoke AX BI MCP fixture ─────────────────────────────────────────────────
 // Streamable-HTTP MCP server standing in for the user's external AX BI stack
-// (migration matrix §4). The Electron renderer talks to it directly over
-// fetch via sdk.ts's MCPClient — there is no Rust MCP layer to activate.
+// (migration matrix §4). The renderer owns MCP protocol state; its HTTP
+// requests are brokered by the constrained Electron main-process command.
 
 interface SmokeAxBiMcpFixture {
   url: string
@@ -934,18 +934,6 @@ async function startSmokeAxBiMcpFixture(): Promise<SmokeAxBiMcpFixture> {
   const methods: string[] = []
   let authFailures = 0
   const server = http.createServer((req, res) => {
-    // Renderer fetch enforces CORS (Tauri's plugin-http did not).
-    res.setHeader('access-control-allow-origin', '*')
-    res.setHeader(
-      'access-control-allow-headers',
-      'authorization,content-type,mcp-session-id'
-    )
-    res.setHeader('access-control-expose-headers', 'mcp-session-id')
-    if (req.method === 'OPTIONS') {
-      res.writeHead(204)
-      res.end()
-      return
-    }
     if (req.url === '/stats') {
       res.writeHead(200, { 'content-type': 'application/json' })
       res.end(JSON.stringify({ methods, authFailures }))

@@ -158,6 +158,8 @@ export function classifyAxBiConnectionError(error: unknown): {
     lower.includes('failed to connect') ||
     lower.includes('connection refused') ||
     lower.includes('econnrefused') ||
+    lower.includes('failed to fetch') ||
+    lower.includes('fetch failed') ||
     lower.includes('network') ||
     lower.includes('unreachable') ||
     lower.includes('failed to resolve')

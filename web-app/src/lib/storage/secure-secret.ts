@@ -20,6 +20,16 @@ export async function getSecureSecret(key: string): Promise<string | null> {
   return value
 }
 
+export async function hasSecureSecret(key: string): Promise<boolean> {
+  if (!isPlatformTauri()) return false
+
+  const value = await invoke<unknown>('has_secret', { key })
+  if (typeof value !== 'boolean') {
+    throw new Error('Secure credential store returned an invalid presence value')
+  }
+  return value
+}
+
 export async function setSecureSecret(
   key: string,
   value: string

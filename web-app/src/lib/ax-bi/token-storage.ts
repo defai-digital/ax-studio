@@ -3,6 +3,7 @@ import { localStorageKey } from '@/constants/localStorage'
 import {
   deleteSecureSecret,
   getSecureSecret,
+  hasSecureSecret,
   setSecureSecret,
 } from '@/lib/storage/secure-secret'
 import {
@@ -10,7 +11,10 @@ import {
   safeStorageRemoveItem,
   safeStorageSetItem,
 } from '@/lib/storage/storage'
-import { isPlatformTauri } from '@/lib/platform/utils'
+import {
+  isPlatformElectron,
+  isPlatformTauri,
+} from '@/lib/platform/utils'
 
 const STORAGE_CONTEXT = 'AX BI MCP token'
 /** OS keychain key (must match Rust secrets allow-list). */
@@ -135,6 +139,34 @@ export async function readStoredAxBiMcpToken(): Promise<string | null> {
   }
 
   return readLegacyEncryptedToken()
+}
+
+/**
+ * Check for a configured token without copying it out of Electron's main
+ * process. Legacy browser storage is migrated once, then removed.
+ */
+export async function hasStoredAxBiMcpToken(): Promise<boolean> {
+  if (!isPlatformElectron()) {
+    const stored = await readStoredAxBiMcpToken()
+    return typeof stored === 'string' && stored.trim().length > 0
+  }
+
+  try {
+    if (await hasSecureSecret(AX_BI_MCP_TOKEN_SECRET)) return true
+  } catch (error) {
+    console.error('Unable to inspect the AX BI token in the OS keychain:', error)
+  }
+
+  const legacy = readLegacyEncryptedToken()
+  if (!legacy) return false
+  try {
+    await setSecureSecret(AX_BI_MCP_TOKEN_SECRET, legacy)
+    clearLegacyEncryptedToken()
+    return true
+  } catch (error) {
+    console.error('Unable to migrate the AX BI token to the OS keychain:', error)
+    return false
+  }
 }
 
 export async function clearStoredAxBiMcpToken(): Promise<void> {

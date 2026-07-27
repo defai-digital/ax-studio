@@ -3,16 +3,19 @@ import { localStorageKey } from '@/constants/localStorage'
 
 const secureSecretMocks = vi.hoisted(() => ({
   getSecureSecret: vi.fn(),
+  hasSecureSecret: vi.fn(),
   setSecureSecret: vi.fn(),
   deleteSecureSecret: vi.fn(),
 }))
 
 const platformMocks = vi.hoisted(() => ({
   isPlatformTauri: vi.fn(() => false),
+  isPlatformElectron: vi.fn(() => false),
 }))
 
 vi.mock('@/lib/storage/secure-secret', () => ({
   getSecureSecret: secureSecretMocks.getSecureSecret,
+  hasSecureSecret: secureSecretMocks.hasSecureSecret,
   setSecureSecret: secureSecretMocks.setSecureSecret,
   deleteSecureSecret: secureSecretMocks.deleteSecureSecret,
   PROXY_PASSWORD_SECRET: 'proxy-password',
@@ -21,10 +24,12 @@ vi.mock('@/lib/storage/secure-secret', () => ({
 
 vi.mock('@/lib/platform/utils', () => ({
   isPlatformTauri: platformMocks.isPlatformTauri,
+  isPlatformElectron: platformMocks.isPlatformElectron,
 }))
 
 import {
   clearStoredAxBiMcpToken,
+  hasStoredAxBiMcpToken,
   readStoredAxBiMcpToken,
   storeAxBiMcpToken,
 } from '../token-storage'
@@ -34,6 +39,7 @@ describe('AX BI token storage', () => {
     localStorage.clear()
     vi.clearAllMocks()
     platformMocks.isPlatformTauri.mockReturnValue(false)
+    platformMocks.isPlatformElectron.mockReturnValue(false)
   })
 
   describe('non-Tauri (legacy localStorage)', () => {
@@ -119,6 +125,24 @@ describe('AX BI token storage', () => {
       expect(secureSecretMocks.deleteSecureSecret).toHaveBeenCalledWith(
         'ax-bi-mcp-token'
       )
+    })
+  })
+
+  describe('Electron (main-process credential)', () => {
+    beforeEach(() => {
+      platformMocks.isPlatformTauri.mockReturnValue(true)
+      platformMocks.isPlatformElectron.mockReturnValue(true)
+      secureSecretMocks.hasSecureSecret.mockResolvedValue(true)
+      secureSecretMocks.setSecureSecret.mockResolvedValue(undefined)
+    })
+
+    it('checks presence without reading the credential into the renderer', async () => {
+      await expect(hasStoredAxBiMcpToken()).resolves.toBe(true)
+
+      expect(secureSecretMocks.hasSecureSecret).toHaveBeenCalledWith(
+        'ax-bi-mcp-token'
+      )
+      expect(secureSecretMocks.getSecureSecret).not.toHaveBeenCalled()
     })
   })
 })

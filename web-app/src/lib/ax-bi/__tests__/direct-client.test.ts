@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { localStorageKey } from '@/constants/localStorage'
+import { invoke } from '@/lib/tauri-shim/api-core'
 import { useAxBiConnection } from '@/stores/ax-bi-connection-store'
 import {
   connectAxBiDirect,
@@ -15,13 +16,19 @@ import { DEFAULT_AX_BI_MCP_URL } from '../endpoints'
 
 let storedToken: string | null = null
 
+vi.mock('@/lib/tauri-shim/api-core', () => ({
+  invoke: vi.fn(),
+}))
+
 vi.mock('../token-storage', async (importOriginal) => {
   // Keep the real normalizeAxBiToken (it lives in token-storage now); only
   // the persistence functions are stubbed.
   const actual = await importOriginal<typeof import('../token-storage')>()
   return {
     ...actual,
-    readStoredAxBiMcpToken: vi.fn(async () => storedToken),
+    hasStoredAxBiMcpToken: vi.fn(
+      async () => typeof storedToken === 'string' && storedToken.trim().length > 0
+    ),
     storeAxBiMcpToken: vi.fn(async (token: string) => {
       storedToken = token
     }),
@@ -31,14 +38,21 @@ vi.mock('../token-storage', async (importOriginal) => {
   }
 })
 
-function jsonRpcResponse(id: string, result: unknown, headers?: HeadersInit) {
-  return new Response(JSON.stringify({ jsonrpc: '2.0', id, result }), {
+const invokeMock = vi.mocked(invoke)
+
+function jsonRpcResponse(
+  id: string,
+  result: unknown,
+  options?: { sessionId?: string }
+) {
+  return {
+    ok: true,
     status: 200,
-    headers: {
-      'Content-Type': 'application/json',
-      ...headers,
-    },
-  })
+    statusText: 'OK',
+    contentType: 'application/json',
+    sessionId: options?.sessionId ?? null,
+    body: JSON.stringify({ jsonrpc: '2.0', id, result }),
+  }
 }
 
 const CAPABILITIES = {
@@ -49,29 +63,37 @@ const CAPABILITIES = {
 }
 
 /** initialize → notifications/initialized (202) → per-tool-call responses. */
-function handshakeThen(...toolResponses: Array<() => Response>) {
-  const queue: Array<() => Response> = [
+function handshakeThen(...toolResponses: Array<() => unknown>) {
+  const queue: Array<() => unknown> = [
     () =>
-      jsonRpcResponse(
-        '1',
-        { protocolVersion: '2025-03-26' },
-        { 'Mcp-Session-Id': 'session-1' }
-      ),
-    () => new Response(null, { status: 202 }),
+      jsonRpcResponse('1', { protocolVersion: '2025-03-26' }, {
+        sessionId: 'session-1',
+      }),
+    () => ({
+      ok: true,
+      status: 202,
+      statusText: 'Accepted',
+      contentType: null,
+      sessionId: null,
+      body: '',
+    }),
     ...toolResponses,
   ]
-  // Responses are single-read; build a fresh one per fetch call and keep
-  // answering with the last queued response once the queue drains.
-  return vi.fn().mockImplementation(async () => {
+  // Keep answering with the last queued response once the queue drains.
+  const implementation = vi.fn().mockImplementation(async (command: string) => {
+    expect(command).toBe('ax_bi_mcp_request')
     const next = queue.length > 1 ? queue.shift()! : queue[0]
     return next()
   })
+  invokeMock.mockImplementation(implementation)
+  return implementation
 }
 
 describe('AX BI direct client (Electron path)', () => {
   beforeEach(() => {
     storedToken = null
     localStorage.clear()
+    vi.clearAllMocks()
     useAxBiConnection.getState().setStatus('unknown')
   })
 
@@ -105,31 +127,30 @@ describe('AX BI direct client (Electron path)', () => {
     )
   })
 
-  it('connect stores the token, handshakes, and injects the Bearer header', async () => {
-    const fetchMock = handshakeThen(() =>
+  it('connect stores the token and brokers the handshake through Electron', async () => {
+    const requestMock = handshakeThen(() =>
       jsonRpcResponse('2', { structuredContent: CAPABILITIES })
     )
-    vi.stubGlobal('fetch', fetchMock)
 
     const url = await connectAxBiDirect({ token: 'Bearer sst_smoke' })
 
     expect(url).toBe(DEFAULT_AX_BI_MCP_URL)
-    // "Bearer "-prefixed input is normalized before storing/sending.
+    // "Bearer "-prefixed input is normalized before secure storage.
     expect(storedToken).toBe('sst_smoke')
     expect(useAxBiConnection.getState().status).toBe('connected')
 
-    expect(fetchMock).toHaveBeenCalledTimes(3)
-    for (const call of fetchMock.mock.calls) {
-      expect(call[0]).toBe(DEFAULT_AX_BI_MCP_URL)
-      expect(call[1]?.headers).toMatchObject({
-        Authorization: 'Bearer sst_smoke',
-        Accept: 'application/json, text/event-stream',
+    expect(requestMock).toHaveBeenCalledTimes(3)
+    for (const call of requestMock.mock.calls) {
+      expect(call[1]).toMatchObject({
+        url: DEFAULT_AX_BI_MCP_URL,
       })
+      expect(call[1]).not.toHaveProperty('token')
+      expect(call[1]).not.toHaveProperty('headers')
     }
-    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject(
+    expect(JSON.parse(String(requestMock.mock.calls[0]?.[1]?.body))).toMatchObject(
       { method: 'initialize' }
     )
-    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toEqual({
+    expect(JSON.parse(String(requestMock.mock.calls[2]?.[1]?.body))).toEqual({
       jsonrpc: '2.0',
       id: '2',
       method: 'tools/call',
@@ -138,22 +159,23 @@ describe('AX BI direct client (Electron path)', () => {
   })
 
   it('marks needs-key when no token is available', async () => {
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-
     await expect(connectAxBiDirect()).rejects.toThrow(
       'AX BI API key or JWT is required.'
     )
     expect(useAxBiConnection.getState().status).toBe('needs-key')
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(invokeMock).not.toHaveBeenCalled()
   })
 
   it('marks needs-key on authentication failures', async () => {
     storedToken = 'sst_bad'
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(new Response('nope', { status: 401 }))
-    )
+    invokeMock.mockResolvedValue({
+      ok: false,
+      status: 401,
+      statusText: 'Unauthorized',
+      contentType: 'text/plain',
+      sessionId: null,
+      body: 'nope',
+    })
 
     await expect(connectAxBiDirect()).rejects.toThrow('401')
     const state = useAxBiConnection.getState()
@@ -177,12 +199,9 @@ describe('AX BI direct client (Electron path)', () => {
 
   it('marks unreachable on network failures', async () => {
     storedToken = 'sst_smoke'
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockRejectedValue(new TypeError('fetch failed: ECONNREFUSED'))
-    )
+    invokeMock.mockRejectedValue(new TypeError('Failed to fetch'))
 
-    await expect(connectAxBiDirect()).rejects.toThrow('ECONNREFUSED')
+    await expect(connectAxBiDirect()).rejects.toThrow('Failed to fetch')
     expect(useAxBiConnection.getState().status).toBe('unreachable')
   })
 
@@ -193,7 +212,7 @@ describe('AX BI direct client (Electron path)', () => {
 
   it('authoring client reuses one MCP session across calls', async () => {
     storedToken = 'sst_smoke'
-    const fetchMock = handshakeThen(
+    const requestMock = handshakeThen(
       () => jsonRpcResponse('2', { structuredContent: CAPABILITIES }),
       () =>
         jsonRpcResponse('3', {
@@ -203,7 +222,6 @@ describe('AX BI direct client (Electron path)', () => {
           },
         })
     )
-    vi.stubGlobal('fetch', fetchMock)
 
     const client = createDirectAxBiAuthoringClient()
     await client.ai.getAuthoringCapabilities()
@@ -213,26 +231,28 @@ describe('AX BI direct client (Electron path)', () => {
 
     expect(result).toMatchObject({ status: 'completed' })
     // 1 initialize + 1 notification + 2 tool calls: the session is reused.
-    expect(fetchMock).toHaveBeenCalledTimes(4)
-    expect(JSON.parse(String(fetchMock.mock.calls[3]?.[1]?.body))).toMatchObject(
+    expect(requestMock).toHaveBeenCalledTimes(4)
+    expect(JSON.parse(String(requestMock.mock.calls[3]?.[1]?.body))).toMatchObject(
       {
         method: 'tools/call',
         params: { name: 'prompt_to_dashboard' },
       }
     )
     // Session header from the handshake is attached to subsequent calls.
-    expect(fetchMock.mock.calls[2]?.[1]?.headers).toMatchObject({
-      'Mcp-Session-Id': 'session-1',
+    expect(requestMock.mock.calls[2]?.[1]).toMatchObject({
+      sessionId: 'session-1',
     })
   })
 
-  it('rebuilds the client when the stored token changes', async () => {
+  it('rebuilds the client when connect replaces the stored token', async () => {
     storedToken = 'sst_one'
     const first = await getDirectAxBiClient()
-    storedToken = 'sst_two'
+    handshakeThen(() =>
+      jsonRpcResponse('2', { structuredContent: CAPABILITIES })
+    )
+    await connectAxBiDirect({ token: 'sst_two' })
     const second = await getDirectAxBiClient()
     expect(second).not.toBe(first)
-    storedToken = 'sst_two'
     expect(await getDirectAxBiClient()).toBe(second)
   })
 })

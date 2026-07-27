@@ -2,15 +2,16 @@
  * Electron AX BI runtime path (migration matrix §4).
  *
  * Under Electron there is no Rust MCP layer, so AX BI talks directly to the
- * user's external AX BI stack: `sdk.ts`'s pure-fetch streamable-HTTP
- * `MCPClient` against the configured MCP URL with the stored Bearer token —
- * no `serviceHub.mcp()`, no `activate_mcp_server`. The Tauri build never calls
- * into this module (callers gate on `isPlatformElectron()`).
+ * user's external AX BI stack. MCP protocol state remains in the renderer,
+ * while HTTP and Bearer authorization run through a constrained Electron
+ * main-process command. This avoids browser CORS and keeps saved credentials
+ * out of renderer memory.
  *
  * Zero-config: the MCP URL defaults to `http://127.0.0.1:31421/mcp` and is
  * hidden from the UI; a localStorage override exists only as a dev/smoke seam.
  */
 import { localStorageKey } from '@/constants/localStorage'
+import { invoke } from '@/lib/tauri-shim/api-core'
 import {
   safeStorageGetItem,
   safeStorageRemoveItem,
@@ -23,7 +24,11 @@ import {
   normalizeAxBiMcpUrl,
 } from './endpoints'
 import { classifyAxBiConnectionError } from './mcp-result'
-import { AxBI } from './sdk'
+import {
+  AxBI,
+  type AxBIMcpTransport,
+  type AxBIMcpTransportResponse,
+} from './sdk'
 
 export type AxBiAuthoringClient = {
   ai: Pick<
@@ -37,8 +42,8 @@ export type AxBiAuthoringClient = {
 }
 import {
   clearStoredAxBiMcpToken,
+  hasStoredAxBiMcpToken,
   normalizeAxBiToken,
-  readStoredAxBiMcpToken,
   storeAxBiMcpToken,
 } from './token-storage'
 
@@ -46,6 +51,45 @@ const STORAGE_CONTEXT = 'AX BI MCP URL override'
 const MISSING_TOKEN_ERROR = 'AX BI API key or JWT is required.'
 
 let cachedClient: { key: string; client: AxBI } | null = null
+
+type AxBiMcpIpcResponse = {
+  ok: boolean
+  status: number
+  statusText: string
+  contentType: string | null
+  sessionId: string | null
+  body: string
+}
+
+function ipcResponse(response: AxBiMcpIpcResponse): AxBIMcpTransportResponse {
+  return {
+    ok: response.ok,
+    status: response.status,
+    statusText: response.statusText,
+    headers: {
+      get: (name) => {
+        const normalized = name.toLowerCase()
+        if (normalized === 'content-type') return response.contentType
+        if (normalized === 'mcp-session-id') return response.sessionId
+        return null
+      },
+    },
+    text: async () => response.body,
+    json: async () => JSON.parse(response.body) as unknown,
+  }
+}
+
+const electronMcpTransport: AxBIMcpTransport = {
+  post: async (url, options) => {
+    const response = await invoke<AxBiMcpIpcResponse>('ax_bi_mcp_request', {
+      url,
+      body: options.body,
+      sessionId: options.headers['Mcp-Session-Id'],
+      timeoutMs: options.timeoutMs,
+    })
+    return ipcResponse(response)
+  },
+}
 
 /** Configured MCP URL: dev/smoke override when set, else the hidden default. */
 export function getElectronAxBiMcpUrl(): string {
@@ -83,23 +127,21 @@ export function setElectronAxBiMcpUrlOverride(url: string | null): void {
 }
 
 /**
- * Direct `AxBI` client built from the stored token + configured URL.
+ * Direct `AxBI` client built from the configured URL.
  * Cached so the MCP session (initialize handshake) is reused across calls;
- * rebuilt when the token or URL changes.
+ * credential retrieval and HTTP are delegated to Electron's main process.
  */
 export async function getDirectAxBiClient(): Promise<AxBI> {
-  const stored = await readStoredAxBiMcpToken()
-  if (!stored || !stored.trim()) throw new Error(MISSING_TOKEN_ERROR)
-  const token = normalizeAxBiToken(stored)
+  if (!(await hasStoredAxBiMcpToken())) throw new Error(MISSING_TOKEN_ERROR)
   const mcpUrl = getElectronAxBiMcpUrl()
-  const key = `${mcpUrl}\n${token}`
+  const key = mcpUrl
   if (!cachedClient || cachedClient.key !== key) {
     cachedClient = {
       key,
       client: new AxBI({
         baseUrl: DEFAULT_AX_BI_WEB_URL,
         mcpUrl,
-        auth: { type: 'token', accessToken: token },
+        mcpTransport: electronMcpTransport,
       }),
     }
   }
@@ -146,9 +188,9 @@ export async function connectAxBiDirect({
   try {
     if (token !== undefined && token.trim().length > 0) {
       await storeAxBiMcpToken(normalizeAxBiToken(token))
+      resetDirectAxBiClientCache()
     }
-    const stored = await readStoredAxBiMcpToken()
-    if (!stored || !stored.trim()) {
+    if (!(await hasStoredAxBiMcpToken())) {
       connection.setStatus('needs-key')
       throw new Error(MISSING_TOKEN_ERROR)
     }
@@ -181,8 +223,7 @@ export async function disconnectAxBiDirect(): Promise<void> {
  */
 export async function probeAxBiDirectConnection(): Promise<void> {
   try {
-    const stored = await readStoredAxBiMcpToken()
-    if (!stored || !stored.trim()) {
+    if (!(await hasStoredAxBiMcpToken())) {
       useAxBiConnection.getState().setStatus('needs-key')
       return
     }
