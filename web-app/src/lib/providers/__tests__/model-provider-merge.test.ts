@@ -139,6 +139,31 @@ describe('mergeProviders', () => {
     expect(result[0].base_url).toBe('http://127.0.0.1:31418/v1')
   })
 
+  it('preserves an explicit AX Engine attach mode across provider refreshes', () => {
+    const existing = [
+      makeProvider('ax-engine', [], {
+        connection_mode: 'attach',
+        base_url: 'http://127.0.0.1:32000/v1',
+        api_key: '',
+      }),
+    ]
+    const incoming = [
+      makeProvider('ax-engine', [], {
+        connection_mode: 'managed',
+        base_url: 'http://127.0.0.1:31418/v1',
+        api_key: 'local',
+      }),
+    ]
+
+    const result = mergeProviders(incoming, existing, [], '/')
+
+    expect(result[0]).toMatchObject({
+      connection_mode: 'attach',
+      base_url: 'http://127.0.0.1:32000/v1',
+      api_key: '',
+    })
+  })
+
   it('excludes models in deletedModels from merged list', () => {
     const existing = [makeProvider('openai', [{ id: 'gpt-3' }])]
     const incoming = [

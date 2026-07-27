@@ -10,6 +10,7 @@ import {
   stopAxEngine,
   type EnsureAxEngineOptions,
 } from '../ax-engine/server.js'
+import { probeAxEngineConnection } from '../ax-engine/connection.js'
 import type { AxEnginePosture } from '../ax-engine/types.js'
 
 type Args = Record<string, unknown>
@@ -74,6 +75,12 @@ export function createAxEngineHandlers(): Record<string, CommandHandler> {
     // Phase + baseURL + loaded models + binary resolution detail.
     ax_engine_status: (args) =>
       getAxEngineStatus(str(args?.binaryPath) ?? str(args?.binary_path)),
+    // Validate an existing local server without taking ownership of its process.
+    ax_engine_probe: (args) =>
+      probeAxEngineConnection({
+        baseURL: requiredStr(args, 'baseURL', 'base_url'),
+        apiKey: str(args?.apiKey) ?? str(args?.api_key),
+      }),
     // Binary present? Start (or reuse/reclaim) the server for a model+posture.
     ax_engine_ensure: (args) => ensureAxEngine(ensureOptions(args)),
     ax_engine_load_model: (args) =>

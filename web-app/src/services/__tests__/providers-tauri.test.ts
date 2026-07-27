@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EngineManager } from '@ax-studio/core'
 import { ExtensionManager } from '@/lib/extension'
 import { TauriProvidersService } from '../providers/tauri'
@@ -50,6 +50,10 @@ describe('TauriProvidersService', () => {
     globalThis.fetch = mocks.fetchNative as typeof fetch
     EngineManager.instance().engines.clear()
     window.core.extensionManager = new ExtensionManager()
+  })
+
+  afterEach(() => {
+    delete (window as unknown as Record<string, unknown>).axElectron
   })
 
   it('exposes the Tauri HTTP fetch implementation', () => {
@@ -127,6 +131,44 @@ describe('TauriProvidersService', () => {
       )
     ).rejects.toThrow('Metal toolchain is not fully available for MLX')
     expect(mocks.fetchTauri).not.toHaveBeenCalled()
+  })
+
+  it('validates and lists models from an attached AX Engine under Electron', async () => {
+    ;(window as unknown as Record<string, unknown>).axElectron = {}
+    mocks.invoke.mockImplementation(async (command: string) => {
+      if (command === 'get_secret') return 'attached-secret'
+      if (command === 'ax_engine_probe') {
+        return {
+          baseURL: 'http://127.0.0.1:32000/v1',
+          models: ['z-model', 'a-model'],
+          toolcall: true,
+        }
+      }
+      throw new Error(`unexpected invoke: ${command}`)
+    })
+
+    await expect(
+      service.fetchModelsFromProvider(
+        provider({
+          provider: 'ax-engine',
+          connection_mode: 'attach',
+          api_key: '',
+          base_url: 'http://127.0.0.1:32000',
+        })
+      )
+    ).resolves.toEqual(['a-model', 'z-model'])
+
+    expect(mocks.invoke.mock.calls).toEqual([
+      ['get_secret', { key: 'ax-engine-attach-api-key' }],
+      [
+        'ax_engine_probe',
+        {
+          baseURL: 'http://127.0.0.1:32000/v1',
+          apiKey: 'attached-secret',
+        },
+      ],
+    ])
+    expect(mocks.fetchNative).not.toHaveBeenCalled()
   })
 
   it('fetches OpenAI-style model responses with safe headers', async () => {

@@ -4,17 +4,23 @@ import type { HuggingFaceRepo, CatalogModel } from '../models/types'
 import { EngineManager, events, DownloadEvent, ContentType } from '@ax-studio/core'
 import bundledModelCatalog from '@/data/model-catalog.json'
 
-const { mockEvents, mockDownloadEvent, mockInvoke, mockIsPlatformElectron } =
-  vi.hoisted(() => ({
-    mockEvents: {
-      emit: vi.fn(),
-    },
-    mockDownloadEvent: {
-      onFileDownloadStopped: 'onFileDownloadStopped',
-    } as Record<string, string>,
-    mockInvoke: vi.fn(),
-    mockIsPlatformElectron: vi.fn(() => false),
-  }))
+const {
+  mockEvents,
+  mockDownloadEvent,
+  mockGetProviderByName,
+  mockInvoke,
+  mockIsPlatformElectron,
+} = vi.hoisted(() => ({
+  mockEvents: {
+    emit: vi.fn(),
+  },
+  mockDownloadEvent: {
+    onFileDownloadStopped: 'onFileDownloadStopped',
+  } as Record<string, string>,
+  mockGetProviderByName: vi.fn(),
+  mockInvoke: vi.fn(),
+  mockIsPlatformElectron: vi.fn(() => false),
+}))
 
 // Mock EngineManager and events
 vi.mock('@ax-studio/core', () => ({
@@ -36,6 +42,12 @@ vi.mock('@/lib/tauri-shim/api-core', () => ({
 vi.mock('@/lib/platform/utils', () => ({
   isPlatformElectron: () => mockIsPlatformElectron(),
   isPlatformTauri: () => false,
+}))
+
+vi.mock('@/hooks/models/useModelProvider', () => ({
+  useModelProvider: {
+    getState: () => ({ getProviderByName: mockGetProviderByName }),
+  },
 }))
 
 // Mock fetch
@@ -74,6 +86,7 @@ describe('DefaultModelsService', () => {
     mockEngineManager.get.mockReturnValue(mockEngine)
     ;(EngineManager.instance as any).mockReturnValue(mockEngineManager)
     mockEvents.emit.mockClear()
+    mockGetProviderByName.mockReset()
     mockInvoke.mockReset()
   })
 
@@ -389,50 +402,56 @@ describe('DefaultModelsService', () => {
     })
   })
 
-	  describe('stopModel', () => {
-	    it('should stop model successfully', async () => {
-	      const model = 'model1'
-	      const provider = 'openai'
+  describe('stopModel', () => {
+    it('should stop model successfully', async () => {
+      const model = 'model1'
+      const provider = 'openai'
 
       await modelsService.stopModel(model, provider)
-	
-	      expect(mockEngine.unload).toHaveBeenCalledWith(model)
-	    })
 
-	    it('should stop mlx models through the MLX SDK command', async () => {
-	      mockInvoke.mockResolvedValue(undefined)
+      expect(mockEngine.unload).toHaveBeenCalledWith(model)
+    })
 
-	      await expect(modelsService.stopModel('model1', 'ax-engine')).resolves.toEqual({
-	        success: true,
-	      })
+    it('should stop mlx models through the MLX SDK command', async () => {
+      mockInvoke.mockResolvedValue(undefined)
 
-	      expect(mockInvoke).toHaveBeenCalledWith('mlx_unload_model', { modelId: 'model1' })
-	      expect(mockEngine.unload).not.toHaveBeenCalled()
-	    })
-	  })
+      await expect(
+        modelsService.stopModel('model1', 'ax-engine')
+      ).resolves.toEqual({
+        success: true,
+      })
 
-	  describe('stopAllModels', () => {
-	    it('should stop all active models from all providers', async () => {
-	      const mockActiveModels = ['model1', 'model2']
-	      mockEngine.getLoadedModels.mockResolvedValue(mockActiveModels)
-	      mockInvoke
-	        .mockResolvedValueOnce(['mlx-model'])
-	        .mockResolvedValueOnce(undefined)
-	
-	      await modelsService.stopAllModels()
-	
-	      expect(mockEngine.unload).toHaveBeenCalledTimes(2)
-	      expect(mockEngine.unload).toHaveBeenCalledWith('model1')
-	      expect(mockEngine.unload).toHaveBeenCalledWith('model2')
-	      expect(mockInvoke).toHaveBeenCalledWith('mlx_list_loaded')
-	      expect(mockInvoke).toHaveBeenCalledWith('mlx_unload_model', { modelId: 'mlx-model' })
-	    })
-	
-	    it('should handle empty active models', async () => {
-	      mockEngine.getLoadedModels.mockResolvedValue(null)
-	      mockInvoke.mockResolvedValue([])
-	
-	      await modelsService.stopAllModels()
+      expect(mockInvoke).toHaveBeenCalledWith('mlx_unload_model', {
+        modelId: 'model1',
+      })
+      expect(mockEngine.unload).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('stopAllModels', () => {
+    it('should stop all active models from all providers', async () => {
+      const mockActiveModels = ['model1', 'model2']
+      mockEngine.getLoadedModels.mockResolvedValue(mockActiveModels)
+      mockInvoke
+        .mockResolvedValueOnce(['mlx-model'])
+        .mockResolvedValueOnce(undefined)
+
+      await modelsService.stopAllModels()
+
+      expect(mockEngine.unload).toHaveBeenCalledTimes(2)
+      expect(mockEngine.unload).toHaveBeenCalledWith('model1')
+      expect(mockEngine.unload).toHaveBeenCalledWith('model2')
+      expect(mockInvoke).toHaveBeenCalledWith('mlx_list_loaded')
+      expect(mockInvoke).toHaveBeenCalledWith('mlx_unload_model', {
+        modelId: 'mlx-model',
+      })
+    })
+
+    it('should handle empty active models', async () => {
+      mockEngine.getLoadedModels.mockResolvedValue(null)
+      mockInvoke.mockResolvedValue([])
+
+      await modelsService.stopAllModels()
 
       expect(mockEngine.unload).not.toHaveBeenCalled()
     })
@@ -653,6 +672,28 @@ describe('DefaultModelsService', () => {
         'mlx_load_model'
       )
       expect(mockEngine.load).not.toHaveBeenCalled()
+    })
+
+    it('does not manage model lifecycle for an attached AX Engine server', async () => {
+      const provider = {
+        provider: 'ax-engine',
+        connection_mode: 'attach',
+        models: [{ id: 'attached-model', settings: {} }],
+      } as any
+      mockGetProviderByName.mockReturnValue(provider)
+      mockIsPlatformElectron.mockReturnValue(true)
+
+      await expect(
+        modelsService.startModel(provider, 'attached-model')
+      ).resolves.toBeUndefined()
+      await expect(modelsService.getActiveModels('ax-engine')).resolves.toEqual(
+        []
+      )
+      await expect(
+        modelsService.stopModel('attached-model', 'ax-engine')
+      ).resolves.toEqual({ success: true })
+
+      expect(mockInvoke).not.toHaveBeenCalled()
     })
 
     it('should stop ax-engine models via sidecar unload on Electron', async () => {

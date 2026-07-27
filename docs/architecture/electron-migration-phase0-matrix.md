@@ -107,12 +107,12 @@
 
 ### ax-engine sidecar 已確認事實(2026-07-26 調查 ax-engine / ax-code 公開 repo)
 
-- **跨產品合約已存在**:ax-engine `docs/LOCAL-ENGINE-CLIENTS.md` 明定 `sidecar_http` 為 AX Studio 的未來路徑,lifecycle phases 字面值需與 AX Code 一致(`unavailable → missing_dependency → missing_model → starting → ready / degraded / error`)。
+- **跨產品合約已落地**:ax-engine `docs/LOCAL-ENGINE-CLIENTS.md` 明定 `sidecar_http` 為 AX Studio 與 AX Code 的預設路徑,lifecycle phases 字面值一致(`unavailable → missing_dependency → missing_model → starting → ready / degraded / error`)；兩個產品也都提供不接管程序生命週期的 attach 模式。
 - **執行期模型管理存在**:`POST /v1/model/load`(`model_id`, `model_path`, `load_mode:"add"`, `make_default`)/ `POST /v1/model/unload`,**換模型不必重啟**;注意是單數 `/v1/model/`,沒有 `DELETE /v1/models/{id}`。
 - **context 設定沒有 `--context-length`**:視窗 = `--total-blocks × --block-size-tokens`,預設 1024×16 = 16k,不給參數會把每個模型靜默鎖在 16k。
 - **效能指標**:chat SSE 裡**沒有** `ax_engine_metrics` 欄位;非串流 `usage.prompt_tokens_details.cached_tokens` 有 prefix-cache 資訊;詳細 timing 在 `/metrics`(Prometheus)與 stepwise endpoints。tok/s 需 client 端估算。`web-app` 的 `createAxEngineMetadataExtractor` 預期需調整。
 - **平台門檻**(AX Code platform.ts):macOS ≥ 26、Apple Silicon、記憶體建議 64GB+;binary 解析順序:config `binaryPath` → `AX_ENGINE_BIN` → PATH → 管理安裝目錄;版本下限 6.9.0。
-- **sidecar-backend.ts 的 port 要改**:檔案內預設 `18181` 與實際 `31418` 不符,啟用時需修正。
+- **sidecar port 已統一**:預設 `31418`,renderer 優先使用 Electron `ax_engine_status` 回報的 live URL。
 
 ### ax-engine 二進位分發(已確認方向)
 

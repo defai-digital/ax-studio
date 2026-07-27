@@ -5,7 +5,7 @@ const ANTHROPIC_BROWSER_ACCESS_HEADER =
 const ANTHROPIC_BROWSER_ACCESS_VALUE = 'true'
 
 /**
- * Product provider id for in-process AX Engine (Apple MLX via ax-engine-sdk).
+ * Product provider id for AX Engine (Apple MLX via managed/attached sidecar).
  * Formerly named `mlx` in settings/store — migrate with `normalizeProviderId`.
  */
 export const AX_ENGINE_PROVIDER_ID = 'ax-engine'
@@ -20,7 +20,7 @@ export const LOCAL_PROVIDER_IDS = new Set([
   LEGACY_MLX_PROVIDER_ID,
 ])
 
-/** True for the in-process AX Engine provider (including legacy `mlx` id). */
+/** True for the AX Engine provider (including legacy `mlx` id). */
 export function isAxEngineProvider(providerId: string | undefined | null): boolean {
   return (
     providerId === AX_ENGINE_PROVIDER_ID || providerId === LEGACY_MLX_PROVIDER_ID
@@ -371,36 +371,14 @@ export const predefinedProviders = [
   // they exist on disk.
   {
     active: true,
+    connection_mode: 'managed',
     api_key: AX_ENGINE_SIDECAR_DEFAULT_API_KEY,
     base_url: AX_ENGINE_SIDECAR_DEFAULT_BASE_URL,
     explore_models_url: 'https://huggingface.co/mlx-community',
     provider: AX_ENGINE_PROVIDER_ID,
-    settings: [
-      {
-        key: 'base-url',
-        title: 'Base URL',
-        description:
-          'OpenAI-compatible base for the managed ax-engine serve sidecar (default loopback :31418/v1). Chat prefers the live URL from the engine status when the server is running.',
-        controller_type: 'input',
-        controller_props: {
-          placeholder: AX_ENGINE_SIDECAR_DEFAULT_BASE_URL,
-          value: AX_ENGINE_SIDECAR_DEFAULT_BASE_URL,
-        },
-      },
-      {
-        key: 'api-key',
-        title: 'API Key',
-        description:
-          'Bearer token for the local sidecar (AX_ENGINE_API_KEY, default "local"). Stored only on this machine.',
-        controller_type: 'input',
-        controller_props: {
-          placeholder: AX_ENGINE_SIDECAR_DEFAULT_API_KEY,
-          value: AX_ENGINE_SIDECAR_DEFAULT_API_KEY,
-          type: 'password',
-          input_actions: ['unobscure', 'copy'],
-        },
-      },
-    ],
+    // Connection mode, endpoint, and credentials live on the dedicated AX
+    // Engine settings page. Managed mode deliberately exposes no URL/key fields.
+    settings: [],
     models: [],
   },
 ]

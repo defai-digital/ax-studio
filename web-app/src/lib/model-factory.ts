@@ -3,11 +3,11 @@
  *
  * All inference requests are routed through the AX Studio local proxy server
  * (default: http://127.0.0.1:31419/v1).  The proxy holds provider API keys in
- * the Rust backend, injects auth headers, and forwards to the correct upstream
+ * the desktop backend, injects auth headers, and forwards to the correct upstream
  * API (OpenAI, Anthropic, Gemini, Groq, Ollama, LM Studio, your FastAPI, etc.).
  *
  * This means the frontend NEVER touches raw API keys — they live only in the
- * Tauri AppState (provider_configs).  Adding a new provider or local endpoint
+ * desktop provider configuration. Adding a new provider or local endpoint
  * requires no TypeScript changes; just register it in provider_configs via the
  * Settings → Providers UI.
  *
@@ -44,6 +44,11 @@ import {
   AX_ENGINE_SIDECAR_DEFAULT_BASE_URL,
 } from './local-engine/sidecar-backend'
 import { toAxEngineOpenAIParams } from './ax-engine/request-params'
+import {
+  getAxEngineConnectionMode,
+  normalizeAxEngineAttachBaseURL,
+  readAxEngineAttachApiKey,
+} from './ax-engine/connection'
 
 // Re-export for tests that drive the shipped mapping entry point.
 export { toAxEngineOpenAIParams } from './ax-engine/request-params'
@@ -516,14 +521,25 @@ function createCustomFetch(
 }
 
 /**
- * Electron sidecar path: the ax-engine server is managed by the main process;
- * chat goes straight to its OpenAI-compatible HTTP endpoint with the local
- * Bearer key (no proxy hop, no in-process IPC).
+ * Resolve the AX Engine HTTP endpoint. Managed mode reads the live Electron
+ * sidecar record; attach mode uses the user-owned endpoint plus a key from the
+ * desktop secure credential service.
  */
-async function resolveAxEngineSidecarEndpoint(): Promise<{
+async function resolveAxEngineEndpoint(provider: ProviderObject): Promise<{
   baseURL: string
   apiKey: string
 }> {
+  if (getAxEngineConnectionMode(provider) === 'attach') {
+    return {
+      baseURL: normalizeAxEngineAttachBaseURL(
+        provider.base_url ?? AX_ENGINE_SIDECAR_DEFAULT_BASE_URL
+      ),
+      apiKey:
+        (await readAxEngineAttachApiKey()) ??
+        AX_ENGINE_SIDECAR_DEFAULT_API_KEY,
+    }
+  }
+
   const fallback = {
     baseURL: AX_ENGINE_SIDECAR_DEFAULT_BASE_URL,
     apiKey: AX_ENGINE_SIDECAR_DEFAULT_API_KEY,
@@ -534,7 +550,10 @@ async function resolveAxEngineSidecarEndpoint(): Promise<{
       apiKey?: string | null
     }
     if (status?.baseURL) {
-      return { baseURL: status.baseURL, apiKey: status.apiKey || fallback.apiKey }
+      return {
+        baseURL: status.baseURL,
+        apiKey: status.apiKey || fallback.apiKey,
+      }
     }
   } catch {
     // Sidecar not up yet — the ensure flow surfaces the lifecycle separately.
@@ -547,7 +566,7 @@ async function resolveAxEngineSidecarEndpoint(): Promise<{
  *
  * All providers (cloud and local) are routed through the AX Studio local proxy
  * (port 31419 by default).  The proxy handles:
- *   - API key injection from secure Rust backend storage
+ *   - API key injection from desktop-managed secure provider storage
  *   - Provider-specific header requirements (e.g. anthropic-version)
  *   - Routing based on model_id → registered provider_configs
  *   - Forwarding to the correct upstream URL (cloud or localhost)
@@ -607,7 +626,7 @@ export class ModelFactory {
     let modelBaseURL = proxyUrl
     let modelHeaders = proxyHeaders
     if (useAxEngineSidecar) {
-      const sidecar = await resolveAxEngineSidecarEndpoint()
+      const sidecar = await resolveAxEngineEndpoint(provider)
       modelBaseURL = sidecar.baseURL
       // The sidecar enforces its own Bearer key (AX_ENGINE_API_KEY, default
       // "local"); the proxy's X-Ax-Provider routing does not apply.

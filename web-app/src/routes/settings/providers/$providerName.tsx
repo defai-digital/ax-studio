@@ -305,8 +305,9 @@ export function ProviderSettingsPage({
       setConnectionMessage('Provider is not available.')
       return
     }
-    // AX Engine is in-process (Tauri IPC) — no HTTP base URL is required.
-    // Remote/OpenAI-compatible providers still need a base URL.
+    // AX Engine normally redirects to its dedicated managed/attach page. Keep
+    // this compatibility path tolerant of a missing URL; managed Electron
+    // mode resolves the live sidecar endpoint from ax_engine_status.
     if (
       provider.provider !== 'ax-engine' &&
       provider.provider !== 'mlx' &&

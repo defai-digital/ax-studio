@@ -222,7 +222,7 @@ production builds.
 | Downloads (`download_files`) | Outbound HTTPS; private/internal URLs rejected by policy; writes confined to the data folder + HF cache. |
 | llamacpp (`plugin:llamacpp|*`) | Spawns `llama-server` from trusted roots only (`<data>/llamacpp/backends`, system bin dirs); models under `<data>/llamacpp/models`; `nvidia-smi`/`vulkaninfo` probed when present (missing probes degrade gracefully). |
 | Hardware (`plugin:hardware|*`) | None required; richer GPU data when `nvidia-smi` / `vulkaninfo` exist. |
-| ax-engine sidecar (`ax_engine_*`) | macOS arm64 only; macOS ≥ 26 and ≥ 64 GB RAM recommended (warnings, not hard gates); requires an `ax-engine` binary ≥ 6.9.0 (config override → `AX_ENGINE_BIN` → PATH → managed `<data>/ax-engine/`). |
+| ax-engine sidecar (`ax_engine_*`) | macOS arm64 only; macOS ≥ 26 and ≥ 64 GB RAM recommended (warnings, not hard gates); managed mode requires an `ax-engine` binary ≥ 6.9.0 (config override → `AX_ENGINE_BIN` → PATH → managed `<data>/ax-engine/`); attach mode validates an existing loopback `/v1` server and stores its bearer token through `safeStorage`. |
 | mlx HF-cache helpers (`mlx_*`) | Reads the Hugging Face cache (`HF_HUB_CACHE` or default); `mlx_generate_model_manifest` shells out to `ax-engine-bench`. |
 | Window (`window_*`) | None. |
 | Updater (`updater_*`) | Inert unless `enableUpdater: true` AND packaged production; then outbound HTTPS to the GitHub release feed. |

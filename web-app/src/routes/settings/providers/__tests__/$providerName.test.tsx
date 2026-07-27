@@ -370,7 +370,7 @@ describe('ProviderDetail', () => {
     expect(testButton).toBeDefined()
   })
 
-  it('allows an in-process AX Engine connection test without a base URL', async () => {
+  it('allows the legacy AX Engine detail route to test without a base URL', async () => {
     const ProviderDetail = ProviderDetailRoute.component
     mockGetProviderByName.mockReturnValue({
       ...mockProvider,
@@ -393,7 +393,7 @@ describe('ProviderDetail', () => {
     })
   })
 
-  it('refreshes in-process AX Engine models without a base URL', async () => {
+  it('refreshes AX Engine models from the legacy detail route without a base URL', async () => {
     const ProviderDetail = ProviderDetailRoute.component
     mockGetProviderByName.mockReturnValue({
       ...mockProvider,

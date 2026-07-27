@@ -410,7 +410,7 @@ AX Studio supports multiple local inference paths:
 | Runtime | Platform | Use it when |
 | --- | --- | --- |
 | `llama.cpp` | macOS Apple Silicon, Windows x64 | You want GGUF local inference through the bundled engine manager |
-| MLX provider | Apple Silicon macOS | You want in-process AX Engine SDK inference on Metal |
+| AX Engine | Apple Silicon macOS | You want managed local MLX inference, or to attach to an existing loopback AX Engine server |
 | AX Serving / OpenAI-compatible | Windows ARM64, iPad, or any reachable endpoint | You already run a local or remote OpenAI-compatible model server |
 | Ollama | Any reachable machine | You want AX Studio to use models served by Ollama through its API |
 

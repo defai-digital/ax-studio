@@ -51,6 +51,8 @@ type ProviderObject = {
   explore_models_url?: string
   api_key?: string
   base_url?: string
+  /** AX Engine process ownership. Other providers leave this undefined. */
+  connection_mode?: 'managed' | 'attach'
   settings: ProviderSetting[]
   models: Model[]
   persist?: boolean

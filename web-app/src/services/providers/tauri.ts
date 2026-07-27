@@ -29,6 +29,10 @@ import {
   cloneProviderSettings,
   toSettingComponentPropsList,
 } from './settings-mapper'
+import {
+  getAxEngineConnectionMode,
+  probeAxEngineConnection,
+} from '@/lib/ax-engine/connection'
 
 const PROVIDER_LIST_TIMEOUT_MS = 8_000
 const PROVIDER_SETTINGS_TIMEOUT_MS = 8_000
@@ -52,7 +56,7 @@ function normalizeBaseUrl(url: string | undefined): string {
   return (url ?? '').trim().replace(/\/+$/, '')
 }
 
-function isInProcessMlxProvider(provider: ModelProvider): boolean {
+function isAxEngineRuntimeProvider(provider: ModelProvider): boolean {
   if (isAxEngineProvider(provider.provider)) return true
   const url = normalizeBaseUrl(provider.base_url)
   return (
@@ -68,6 +72,13 @@ function isInProcessMlxProvider(provider: ModelProvider): boolean {
 async function fetchAxEngineSidecarModels(
   provider: ModelProvider
 ): Promise<string[]> {
+  if (getAxEngineConnectionMode(provider) === 'attach') {
+    const connection = await probeAxEngineConnection({
+      baseURL: provider.base_url,
+    })
+    return [...connection.models].sort((a, b) => a.localeCompare(b))
+  }
+
   const { invoke } = await import('@/lib/tauri-shim/api-core')
   // Host capability probe first (Metal / Apple Silicon).
   const probe = (await invoke('mlx_runtime_probe')) as {
@@ -594,7 +605,7 @@ export class TauriProvidersService implements ProvidersService {
   async fetchModelsFromProvider(provider: ModelProvider): Promise<string[]> {
     // Electron: managed ax-engine serve sidecar over OpenAI /v1.
     // Non-Electron legacy: in-process probe + HF cache listing.
-    if (isInProcessMlxProvider(provider)) {
+    if (isAxEngineRuntimeProvider(provider)) {
       if (isPlatformElectron()) {
         return fetchAxEngineSidecarModels(provider)
       }

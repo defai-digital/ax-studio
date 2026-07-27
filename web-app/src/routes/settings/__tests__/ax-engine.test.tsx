@@ -5,20 +5,14 @@ vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (config: Record<string, unknown>) => config,
 }))
 
-vi.mock('@/constants/providers', () => ({
-  AX_ENGINE_PROVIDER_ID: 'ax-engine',
-}))
-
 vi.mock('@/constants/routes', () => ({
   route: {
     settings: { axEngine: '/settings/ax-engine' },
   },
 }))
 
-vi.mock('@/routes/settings/providers/$providerName', () => ({
-  ProviderSettingsPage: ({ providerName }: { providerName: string }) => (
-    <div>Provider settings: {providerName}</div>
-  ),
+vi.mock('@/containers/AxEngineConnectionSettings', () => ({
+  AxEngineConnectionSettings: () => <div>AX Engine connection settings</div>,
 }))
 
 import { Route } from '../ax-engine'
@@ -28,6 +22,8 @@ describe('AX Engine Settings route', () => {
     const Component = Route.component as React.ComponentType
     render(<Component />)
 
-    expect(screen.getByText('Provider settings: ax-engine')).toBeInTheDocument()
+    expect(
+      screen.getByText('AX Engine connection settings')
+    ).toBeInTheDocument()
   })
 })

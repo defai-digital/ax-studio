@@ -104,6 +104,11 @@ export function mergeProviders(
       existingProvider?.base_url,
       provider.base_url
     )
+    const connectionMode = isAxEngineProvider(providerId)
+      ? (existingProvider?.connection_mode ??
+        provider.connection_mode ??
+        'managed')
+      : undefined
 
     return {
       ...provider,
@@ -138,8 +143,12 @@ export function mergeProviders(
           controller_props: controllerProps,
         }
       }),
-      api_key: existingProvider?.api_key || provider.api_key,
+      api_key:
+        connectionMode === 'attach'
+          ? ''
+          : existingProvider?.api_key || provider.api_key,
       base_url: baseUrl,
+      connection_mode: connectionMode,
       active: existingProvider ? existingProvider.active : true,
     }
   })

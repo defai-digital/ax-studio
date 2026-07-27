@@ -316,6 +316,11 @@ const normalizeProvider = (value: unknown): ModelProvider | null => {
   const baseUrl = normalizeOptionalString(value.base_url)
   if (baseUrl !== undefined) provider.base_url = baseUrl
 
+  if (isAxEngineProvider(provider.provider)) {
+    provider.connection_mode =
+      value.connection_mode === 'attach' ? 'attach' : 'managed'
+  }
+
   if (typeof value.persist === 'boolean') provider.persist = value.persist
 
   const customHeader = normalizeProviderHeaders(value.custom_header)
@@ -376,6 +381,14 @@ const normalizeProvider = (value: unknown): ModelProvider | null => {
       }
       return setting
     })
+  }
+
+  if (isAxEngineProvider(provider.provider)) {
+    // AX Engine connection fields now live on its dedicated settings page.
+    // Remove legacy generic inputs and any attached-server bearer token that
+    // older builds persisted in provider state.
+    provider.settings = []
+    if (provider.connection_mode === 'attach') provider.api_key = ''
   }
 
   return provider

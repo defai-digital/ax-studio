@@ -336,6 +336,36 @@ describe('ModelFactory', () => {
       )
     })
 
+    it('uses the secure attached endpoint without consulting managed sidecar status', async () => {
+      const { invoke } = await import('@/lib/tauri-shim/api-core')
+      vi.mocked(invoke).mockResolvedValueOnce('attached-secret' as never)
+      ;(window as unknown as Record<string, unknown>).axElectron = {}
+
+      const provider: ProviderObject = {
+        provider: 'ax-engine',
+        connection_mode: 'attach',
+        api_key: '',
+        base_url: 'http://localhost:32000',
+        models: [],
+        settings: [],
+        active: true,
+      }
+
+      await ModelFactory.createModel('attached-model', provider)
+
+      expect(invoke).toHaveBeenCalledTimes(1)
+      expect(invoke).toHaveBeenCalledWith('get_secret', {
+        key: 'ax-engine-attach-api-key',
+      })
+      expect(createOpenAICompatible).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'ax-engine',
+          baseURL: 'http://localhost:32000/v1',
+          headers: { Authorization: 'Bearer attached-secret' },
+        })
+      )
+    })
+
     it('maps ax-engine sampling fields and strips unsupported penalties', async () => {
       httpFetchMock.mockResolvedValueOnce(new Response('{}'))
       const provider: ProviderObject = {

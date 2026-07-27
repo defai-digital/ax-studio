@@ -751,12 +751,7 @@ describe('useModelProvider - ax-engine base URL persist migration', () => {
     expect(provider?.base_url).toBe('http://127.0.0.1:31418/v1')
     expect(provider?.base_url).not.toBe('http://127.0.0.1:0/v1')
     expect(provider?.api_key).toBe('local')
-    expect(provider?.settings?.[0]?.controller_props).toEqual(
-      expect.objectContaining({
-        value: 'http://127.0.0.1:31418/v1',
-        placeholder: 'http://127.0.0.1:31418/v1',
-      })
-    )
+    expect(provider?.settings).toEqual([])
   })
 
   it('rewrites retired port-0 placeholder to sidecar 31418/v1 via setProviders', () => {
@@ -790,5 +785,37 @@ describe('useModelProvider - ax-engine base URL persist migration', () => {
     expect(provider?.base_url).toBe('http://127.0.0.1:31418/v1')
     expect(provider?.base_url).not.toMatch(/:0(\/|$)/)
     expect(provider?.api_key).toBe('local')
+  })
+
+  it('removes legacy plaintext settings for an attached AX Engine', () => {
+    const { result } = renderHook(() => useModelProvider())
+
+    act(() => {
+      result.current.setProviders([
+        {
+          provider: 'ax-engine',
+          connection_mode: 'attach',
+          active: true,
+          api_key: 'legacy-plaintext-secret',
+          base_url: 'http://127.0.0.1:32000/v1',
+          models: [],
+          settings: [
+            {
+              key: 'api-key',
+              controller_props: { value: 'legacy-plaintext-secret' },
+            },
+          ],
+        } as ModelProvider,
+      ])
+    })
+
+    const provider = result.current.providers.find(
+      (item) => item.provider === 'ax-engine'
+    )
+    expect(provider).toMatchObject({
+      connection_mode: 'attach',
+      api_key: '',
+      settings: [],
+    })
   })
 })

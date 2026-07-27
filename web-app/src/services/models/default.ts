@@ -40,11 +40,18 @@ import {
   sessionFromAxEngineStatus,
   unloadAxEngineSidecarModel,
 } from '@/lib/ax-engine/sidecar-lifecycle'
+import { getAxEngineConnectionMode } from '@/lib/ax-engine/connection'
+import { useModelProvider } from '@/hooks/models/useModelProvider'
 
 // Default provider for local inference
 const defaultProvider = 'llamacpp'
 const storageEngineProviderFor = (provider?: string): string | undefined =>
   isAxEngineProvider(provider) ? 'llamacpp' : provider
+
+function axEngineUsesAttachedServer(): boolean {
+  const provider = useModelProvider.getState().getProviderByName('ax-engine')
+  return getAxEngineConnectionMode(provider) === 'attach'
+}
 
 export class DefaultModelsService implements ModelsService {
   private parseHuggingFaceModelPath(
@@ -413,7 +420,7 @@ export class DefaultModelsService implements ModelsService {
   }
 
   async getActiveModels(provider?: string): Promise<string[]> {
-    // No-arg callers need both engines: llamacpp sessions + in-process MLX.
+    // No-arg callers need both engines: llamacpp sessions + AX Engine.
     // Previously only llamacpp was queried, so MLX models never appeared
     // "running", stopModel skipped them, and startModel was called spuriously.
     if (provider == null || provider === '') {
@@ -425,6 +432,7 @@ export class DefaultModelsService implements ModelsService {
     }
 
     if (isAxEngineProvider(provider)) {
+      if (axEngineUsesAttachedServer()) return []
       // Electron: managed sidecar status is the source of truth for loaded models.
       if (isPlatformElectron()) {
         return listAxEngineSidecarModels()
@@ -442,6 +450,7 @@ export class DefaultModelsService implements ModelsService {
     provider?: string
   ): Promise<UnloadResult | undefined> {
     if (isAxEngineProvider(provider)) {
+      if (axEngineUsesAttachedServer()) return { success: true }
       if (isPlatformElectron()) {
         return unloadAxEngineSidecarModel(model)
       }
@@ -507,6 +516,9 @@ export class DefaultModelsService implements ModelsService {
     bypassAutoUnload: boolean = false
   ): Promise<SessionInfo | undefined> {
     if (isAxEngineProvider(provider.provider)) {
+      // The attached server owns model lifecycle. Validation happens when the
+      // connection is saved; chat can use its advertised model directly.
+      if (getAxEngineConnectionMode(provider) === 'attach') return undefined
       // Electron product path: managed `ax-engine serve` sidecar (OpenAI /v1).
       // Never call unimplemented in-process mlx_load_model under Electron.
       if (isPlatformElectron()) {
