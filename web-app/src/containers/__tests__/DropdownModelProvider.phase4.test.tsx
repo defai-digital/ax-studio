@@ -101,6 +101,9 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
         'common:favorites': 'Favorites',
         'common:noModelsFoundFor': 'No models found',
         'common:modelsCount': `${opts?.count ?? 0} models`,
+        'common:expandProviderModels': `Expand ${opts?.provider} models`,
+        'common:collapseProviderModels': `Collapse ${opts?.provider} models`,
+        'common:configureProvider': `Configure ${opts?.provider}`,
         'common:manageProviders': 'Manage providers →',
       }
       return map[key] || key
@@ -117,6 +120,8 @@ vi.mock('@/hooks/models/useFavoriteModel', () => ({
 
 vi.mock('@/constants/providers', () => ({
   predefinedProviders: [{ provider: 'openai' }, { provider: 'anthropic' }],
+  isAxEngineProvider: (providerId: string) =>
+    providerId === 'ax-engine' || providerId === 'mlx',
 }))
 
 vi.mock('@/lib/utils/getModelToStart', () => ({
@@ -160,6 +165,14 @@ vi.mock('@/components/common/Capabilities', () => ({
 import { DropdownModelProvider } from '../DropdownModelProvider'
 
 // ── Tests ───────────────────────────────────────────
+
+function expandProvider(providerName: string) {
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: `Expand ${providerName} models`,
+    })
+  )
+}
 
 describe('DropdownModelProvider — Phase 4 Manual Test Protocol', () => {
   beforeEach(() => {
@@ -219,6 +232,9 @@ describe('DropdownModelProvider — Phase 4 Manual Test Protocol', () => {
     const content = screen.getByTestId('popover-content')
     const searchInput = content.querySelector('input')!
 
+    expandProvider('OpenAI')
+    expandProvider('Anthropic')
+
     // Before search — all 3 models visible (gpt-4o, gpt-4o-mini, claude-3.5-sonnet)
     const allModelsBefore = content.querySelectorAll('div[title]')
     expect(allModelsBefore.length).toBeGreaterThanOrEqual(3)
@@ -251,6 +267,9 @@ describe('DropdownModelProvider — Phase 4 Manual Test Protocol', () => {
     render(<DropdownModelProvider />)
     const content = screen.getByTestId('popover-content')
     const searchInput = content.querySelector('input')!
+
+    expandProvider('OpenAI')
+    expandProvider('Anthropic')
 
     // Get initial model count
     const initialModels = content.querySelectorAll('div[title]')
@@ -293,6 +312,7 @@ describe('DropdownModelProvider — Phase 4 Manual Test Protocol', () => {
   it('passes correct model id and provider to updateCurrentThreadModel', () => {
     render(<DropdownModelProvider />)
     const content = screen.getByTestId('popover-content')
+    expandProvider('Anthropic')
 
     // Find the Claude model button by title
     const claudeButton = content.querySelector('div[title="claude-3.5-sonnet"]')
@@ -327,6 +347,7 @@ describe('DropdownModelProvider — Phase 4 Manual Test Protocol', () => {
   it('shows filled star icon next to favorited model, not on non-favorites', () => {
     render(<DropdownModelProvider />)
     const content = screen.getByTestId('popover-content')
+    expandProvider('Anthropic')
 
     // gpt-4o is in favorites — should have star SVG (lucide Star icon)
     const favButtons = content.querySelectorAll('div[title="gpt-4o"]')
@@ -346,6 +367,7 @@ describe('DropdownModelProvider — Phase 4 Manual Test Protocol', () => {
   it('clicking star toggle calls toggleFavorite with correct model', () => {
     render(<DropdownModelProvider />)
     const content = screen.getByTestId('popover-content')
+    expandProvider('Anthropic')
 
     // Find star toggle for claude-3.5-sonnet (not favorited)
     const starToggle = content.querySelector(
@@ -364,6 +386,7 @@ describe('DropdownModelProvider — Phase 4 Manual Test Protocol', () => {
   it('clicking star toggle does not select the model', () => {
     render(<DropdownModelProvider />)
     const content = screen.getByTestId('popover-content')
+    expandProvider('Anthropic')
 
     const starToggle = content.querySelector(
       '[data-testid="star-toggle-claude-3.5-sonnet"]'
@@ -383,6 +406,27 @@ describe('DropdownModelProvider — Phase 4 Manual Test Protocol', () => {
     // Provider names should be visible (CSS uppercase, but DOM text is title case)
     expect(content).toHaveTextContent('OpenAI')
     expect(content).toHaveTextContent('Anthropic')
+  })
+
+  it('collapses every provider by default and expands them independently', () => {
+    render(<DropdownModelProvider />)
+
+    expect(screen.queryByTitle('gpt-4o-mini')).not.toBeInTheDocument()
+    expect(screen.queryByTitle('claude-3.5-sonnet')).not.toBeInTheDocument()
+
+    expandProvider('OpenAI')
+
+    expect(screen.getByTitle('gpt-4o-mini')).toBeInTheDocument()
+    expect(screen.queryByTitle('claude-3.5-sonnet')).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Collapse OpenAI models' })
+    ).toHaveAttribute('aria-expanded', 'true')
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Collapse OpenAI models' })
+    )
+
+    expect(screen.queryByTitle('gpt-4o-mini')).not.toBeInTheDocument()
   })
 
   // Protocol #8: Provider color dots in group headers
@@ -492,6 +536,7 @@ describe('DropdownModelProvider — Phase 4 Manual Test Protocol', () => {
   it('reinitializes when thread model changes after a manual selection', async () => {
     const { rerender } = render(<DropdownModelProvider />)
 
+    expandProvider('Anthropic')
     fireEvent.click(screen.getByTitle('claude-3.5-sonnet'))
     expect(mockSelectModelProvider).toHaveBeenCalledWith(
       'anthropic',

@@ -8,9 +8,9 @@ import { useModelProvider } from '@/hooks/models/useModelProvider'
 import {
   cn,
   getProviderTitle,
-  getModelDisplayName,
   getProviderColor,
 } from '@/lib/utils'
+import { getProviderModelDisplayName } from '@/lib/models/provider-model-display-name'
 import { highlightMatch } from '@/lib/utils/highlight'
 import { Capabilities } from '@/components/common/Capabilities'
 import { useNavigate } from '@tanstack/react-router'
@@ -23,6 +23,7 @@ import { useFavoriteModel } from '@/hooks/models/useFavoriteModel'
 import { predefinedProviders } from '@/constants/providers'
 import {
   ChevronDown,
+  ChevronRight,
   Search,
   Check,
   Star,
@@ -74,11 +75,13 @@ type FlatRow =
       type: 'provider-header'
       providerKey: string
       providerInfo: ModelProvider
+      isExpanded: boolean
+      modelCount: number
     }
   | { type: 'model-item'; item: SearchableModel; keyPrefix?: string }
   | { type: 'empty-search'; searchValue: string }
 
-const ROW_HEIGHT_HEADER = 28
+const ROW_HEIGHT_HEADER = 32
 const ROW_HEIGHT_ITEM = 36
 const ROW_HEIGHT_DIVIDER = 12
 const ROW_HEIGHT_EMPTY = 100
@@ -179,7 +182,10 @@ const ModelItem = memo(function ModelItem({
           )}
           style={{ fontSize: '13px', fontWeight: isSelected ? 500 : 400 }}
         >
-          {getModelDisplayName(searchableModel.model)}
+          {getProviderModelDisplayName(
+            searchableModel.model,
+            searchableModel.provider.provider
+          )}
         </span>
         {contextWindow && (
           <span className="text-[11px] text-muted-foreground/40">
@@ -221,28 +227,69 @@ const ModelItem = memo(function ModelItem({
 type ProviderHeaderProps = {
   providerKey: string
   providerInfo: ModelProvider
+  isExpanded: boolean
+  modelCount: number
+  toggleLabel?: string
+  settingsLabel: string
+  onToggle?: (providerKey: string) => void
   onSettings: (providerName: string) => void
 }
 
 function ProviderHeader({
   providerKey,
   providerInfo,
+  isExpanded,
+  modelCount,
+  toggleLabel,
+  settingsLabel,
+  onToggle,
   onSettings,
 }: ProviderHeaderProps) {
+  const providerTitle = getProviderTitle(providerInfo.provider)
+  const headerContent = (
+    <>
+      {onToggle &&
+        (isExpanded ? (
+          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground/60" />
+        ) : (
+          <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/60" />
+        ))}
+      <div
+        className="size-3 rounded-sm shrink-0"
+        style={{ backgroundColor: getProviderColor(providerKey) }}
+      />
+      <span className="truncate text-[10px] tracking-widest uppercase text-muted-foreground/50 font-semibold">
+        {providerTitle}
+      </span>
+      <span className="ml-1 text-[10px] tabular-nums text-muted-foreground/30">
+        {modelCount}
+      </span>
+    </>
+  )
+
   return (
-    <div className="flex items-center justify-between px-3 pt-2 pb-1">
-      <div className="flex items-center gap-1.5">
-        <div
-          className="size-3 rounded-sm shrink-0"
-          style={{ backgroundColor: getProviderColor(providerKey) }}
-        />
-        <span className="text-[10px] tracking-widest uppercase text-muted-foreground/40 font-semibold">
-          {getProviderTitle(providerInfo.provider)}
-        </span>
-      </div>
+    <div className="flex h-8 items-center justify-between px-2">
+      {onToggle ? (
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1 py-1 text-left hover:bg-muted/50"
+          aria-expanded={isExpanded}
+          aria-label={toggleLabel}
+          title={toggleLabel}
+          onClick={() => onToggle(providerKey)}
+        >
+          {headerContent}
+        </button>
+      ) : (
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 px-1 py-1">
+          {headerContent}
+        </div>
+      )}
       <button
         type="button"
-        className="p-0.5 rounded hover:bg-muted text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors"
+        aria-label={settingsLabel}
+        title={settingsLabel}
+        className="p-1 rounded hover:bg-muted text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors"
         onClick={(event) => {
           event.stopPropagation()
           onSettings(providerInfo.provider)
@@ -461,6 +508,9 @@ export const DropdownModelProvider = memo(function DropdownModelProvider({
   // Search state
   const [open, setOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')
+  const [expandedProviders, setExpandedProviders] = useState<Set<string>>(
+    () => new Set()
+  )
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   // O(1) favorite lookup instead of O(n) per item
@@ -538,7 +588,9 @@ export const DropdownModelProvider = memo(function DropdownModelProvider({
     if (isAutoActive) {
       setDisplayModel('Auto')
     } else if (selectedProvider && selectedModel) {
-      setDisplayModel(getModelDisplayName(selectedModel))
+      setDisplayModel(
+        getProviderModelDisplayName(selectedModel, selectedProvider)
+      )
     } else {
       setDisplayModel(t('common:selectAModel'))
     }
@@ -548,7 +600,10 @@ export const DropdownModelProvider = memo(function DropdownModelProvider({
   const onOpenChange = useCallback((open: boolean) => {
     setOpen(open)
     if (!open) {
-      requestAnimationFrame(() => setSearchValue(''))
+      requestAnimationFrame(() => {
+        setSearchValue('')
+        setExpandedProviders(new Set())
+      })
     } else {
       // Focus search input after Radix Popover finishes opening
       requestAnimationFrame(() => {
@@ -561,6 +616,18 @@ export const DropdownModelProvider = memo(function DropdownModelProvider({
   const onClearSearch = useCallback(() => {
     setSearchValue('')
     searchInputRef.current?.focus()
+  }, [])
+
+  const handleProviderToggle = useCallback((providerKey: string) => {
+    setExpandedProviders((current) => {
+      const next = new Set(current)
+      if (next.has(providerKey)) {
+        next.delete(providerKey)
+      } else {
+        next.add(providerKey)
+      }
+      return next
+    })
   }, [])
 
   // Create searchable items from all models
@@ -695,14 +762,30 @@ export const DropdownModelProvider = memo(function DropdownModelProvider({
     for (const [providerKey, models] of Object.entries(groupedItems)) {
       const providerInfo = providerByKey.get(providerKey)
       if (!providerInfo) continue
-      rows.push({ type: 'provider-header', providerKey, providerInfo })
-      for (const item of models) {
-        rows.push({ type: 'model-item', item })
+      const isExpanded =
+        searchValue.length > 0 || expandedProviders.has(providerKey)
+      rows.push({
+        type: 'provider-header',
+        providerKey,
+        providerInfo,
+        isExpanded,
+        modelCount: models.length,
+      })
+      if (isExpanded) {
+        for (const item of models) {
+          rows.push({ type: 'model-item', item })
+        }
       }
     }
 
     return rows
-  }, [groupedItems, favoriteItems, searchValue, providerByKey])
+  }, [
+    groupedItems,
+    favoriteItems,
+    searchValue,
+    providerByKey,
+    expandedProviders,
+  ])
 
   const handleAutoToggle = useCallback(() => {
     if (activeThreadId) {
@@ -738,7 +821,12 @@ export const DropdownModelProvider = memo(function DropdownModelProvider({
       }
 
       // Immediately update display to prevent double-click issues
-      setDisplayModel(getModelDisplayName(searchableModel.model))
+      setDisplayModel(
+        getProviderModelDisplayName(
+          searchableModel.model,
+          searchableModel.provider.provider
+        )
+      )
       setSearchValue('')
       setOpen(false)
 
@@ -782,13 +870,32 @@ export const DropdownModelProvider = memo(function DropdownModelProvider({
           return <div className="h-px bg-border/50 mx-3 my-1.5" />
 
         case 'provider-header':
-          return (
-            <ProviderHeader
-              providerKey={row.providerKey}
-              providerInfo={row.providerInfo}
-              onSettings={handleProviderSettings}
-            />
-          )
+          {
+            const providerTitle = getProviderTitle(row.providerInfo.provider)
+            const toggleLabel = row.isExpanded
+              ? t('common:collapseProviderModels', {
+                  provider: providerTitle,
+                })
+              : t('common:expandProviderModels', {
+                  provider: providerTitle,
+                })
+            const canToggle = !searchValue && row.modelCount > 0
+
+            return (
+              <ProviderHeader
+                providerKey={row.providerKey}
+                providerInfo={row.providerInfo}
+                isExpanded={row.isExpanded}
+                modelCount={row.modelCount}
+                toggleLabel={canToggle ? toggleLabel : undefined}
+                settingsLabel={t('common:configureProvider', {
+                  provider: providerTitle,
+                })}
+                onToggle={canToggle ? handleProviderToggle : undefined}
+                onSettings={handleProviderSettings}
+              />
+            )
+          }
 
         case 'model-item':
           return (
@@ -822,6 +929,8 @@ export const DropdownModelProvider = memo(function DropdownModelProvider({
       favoriteIdSet,
       handleSelect,
       toggleFavorite,
+      searchValue,
+      handleProviderToggle,
       handleProviderSettings,
       t,
     ]

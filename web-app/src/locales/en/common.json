@@ -525,6 +525,9 @@
     "chunksCount": "{{count}} chunks"
   },
   "modelsCount": "{{count}} models",
+  "expandProviderModels": "Expand {{provider}} models",
+  "collapseProviderModels": "Collapse {{provider}} models",
+  "configureProvider": "Configure {{provider}}",
   "manageProviders": "Manage providers →",
   "time": {
     "justNow": "Just now",
