@@ -1,11 +1,13 @@
 import {
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -15,6 +17,7 @@ import {
 } from '../electron-runtime.mjs'
 
 const tempDirs = []
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
 function createTempRepo() {
   const directory = mkdtempSync(path.join(os.tmpdir(), 'ax-studio-electron-runtime-'))
@@ -105,5 +108,24 @@ describe('Electron runtime process resolution', () => {
       cmd: 'node.exe',
       argsPrefix: [electronCli],
     })
+  })
+})
+
+describe('Electron build scripts', () => {
+  it('keeps renderer staging out of development startup', () => {
+    const electronPackage = JSON.parse(
+      readFileSync(path.join(repoRoot, 'electron', 'package.json'), 'utf8')
+    )
+    const devLauncher = readFileSync(
+      path.join(repoRoot, 'scripts', 'dev-electron.mjs'),
+      'utf8'
+    )
+
+    expect(electronPackage.scripts['build:dev']).toBe('yarn build:runtime')
+    expect(electronPackage.scripts.build).toContain('copy-renderer.mjs')
+    expect(electronPackage.scripts['build:dev']).not.toContain('copy-renderer.mjs')
+    expect(devLauncher).toContain(
+      "yarnArgs('workspace', '@ax-studio/electron', 'build:dev')"
+    )
   })
 })

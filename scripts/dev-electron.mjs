@@ -77,7 +77,7 @@ async function waitForServer(url, timeoutMs = 90_000) {
 await waitForExit(
   run(
     yarn.cmd,
-    yarnArgs('workspace', '@ax-studio/electron', 'build'),
+    yarnArgs('workspace', '@ax-studio/electron', 'build:dev'),
     yarn.spawnOptions
   ),
   'electron build'
