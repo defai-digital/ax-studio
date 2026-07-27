@@ -1067,6 +1067,67 @@ describe('DefaultModelsService', () => {
     })
   })
 
+  describe('fetchHuggingFaceAuthorModels', () => {
+    it('fetches and validates a bounded organization catalog', async () => {
+      const automatosRepo = {
+        id: 'AutomatosX/AX-Qwen',
+        modelId: 'AutomatosX/AX-Qwen',
+        sha: 'abc123',
+        downloads: 42,
+        likes: 7,
+        library_name: 'mlx',
+        tags: ['mlx', 'safetensors'],
+        createdAt: '2026-07-20T00:00:00.000Z',
+        private: false,
+        gated: false,
+        author: 'AutomatosX',
+        siblings: [{ rfilename: 'model.safetensors' }],
+      }
+      const unrelatedRepo = {
+        ...automatosRepo,
+        id: 'other/model',
+        modelId: 'other/model',
+        author: 'other',
+      }
+
+      ;(fetch as any).mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue([automatosRepo, unrelatedRepo]),
+      })
+
+      const result = await modelsService.fetchHuggingFaceAuthorModels(
+        'AutomatosX',
+        'hf-token'
+      )
+
+      expect(fetch).toHaveBeenCalledWith(
+        'https://huggingface.co/api/models?author=AutomatosX&limit=100&full=true',
+        {
+          headers: { Authorization: 'Bearer hf-token' },
+          signal: undefined,
+        }
+      )
+      expect(result).toEqual([{ ...automatosRepo, disabled: false }])
+    })
+
+    it('returns an empty list for invalid author responses', async () => {
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      ;(fetch as any).mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ models: [] }),
+      })
+
+      await expect(
+        modelsService.fetchHuggingFaceAuthorModels('AutomatosX')
+      ).resolves.toEqual([])
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'HuggingFace author API response did not match expected schema:',
+        expect.any(String)
+      )
+      consoleSpy.mockRestore()
+    })
+  })
+
   describe('pullModelWithMetadata', () => {
     it('should include model and mmproj metadata from Hugging Face siblings', async () => {
       const repoResponse: HuggingFaceRepo = {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   getCleanHuggingFaceRepoId,
+  getHuggingFaceApiAuthorModelsUrl,
   getHuggingFaceApiModelUrl,
   getHuggingFaceModelFileUrl,
   getHuggingFaceModelUrl,
@@ -32,6 +33,14 @@ describe('getHuggingFaceApiModelUrl', () => {
   it('preserves owner/model separators for the Hugging Face API route', () => {
     expect(getHuggingFaceApiModelUrl('mlx-community/Qwen3.5-9B-4bit')).toBe(
       'https://huggingface.co/api/models/mlx-community/Qwen3.5-9B-4bit?blobs=true&files_metadata=true'
+    )
+  })
+})
+
+describe('getHuggingFaceApiAuthorModelsUrl', () => {
+  it('builds a bounded full-catalog query for an organization', () => {
+    expect(getHuggingFaceApiAuthorModelsUrl(' AutomatosX ')).toBe(
+      'https://huggingface.co/api/models?author=AutomatosX&limit=100&full=true'
     )
   })
 })

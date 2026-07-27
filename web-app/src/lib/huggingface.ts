@@ -28,6 +28,15 @@ export function getHuggingFaceApiModelUrl(cleanRepoId: string): string {
   )}?blobs=true&files_metadata=true`
 }
 
+export function getHuggingFaceApiAuthorModelsUrl(author: string): string {
+  const params = new URLSearchParams({
+    author: author.trim(),
+    limit: '100',
+    full: 'true',
+  })
+  return `https://huggingface.co/api/models?${params.toString()}`
+}
+
 export function getCleanHuggingFaceRepoId(rawRepoId: string): string {
   return rawRepoId
     .replace(/^https?:\/\/huggingface\.co\//, '')

@@ -25,7 +25,7 @@ export const huggingFaceRepoSchema = z.object({
   createdAt: z.string(),
   last_modified: z.string().optional(),
   private: z.boolean(),
-  disabled: z.boolean(),
+  disabled: z.boolean().default(false),
   gated: z.union([z.boolean(), z.string()]),
   author: z.string(),
   cardData: z
@@ -39,3 +39,5 @@ export const huggingFaceRepoSchema = z.object({
   siblings: z.array(hfSiblingSchema).optional(),
   readme: z.string().optional(),
 })
+
+export const huggingFaceRepoListSchema = z.array(huggingFaceRepoSchema)

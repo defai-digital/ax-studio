@@ -103,6 +103,11 @@ export interface ModelsService {
     hfToken?: string,
     signal?: AbortSignal
   ): Promise<HuggingFaceRepo | null>
+  fetchHuggingFaceAuthorModels(
+    author: string,
+    hfToken?: string,
+    signal?: AbortSignal
+  ): Promise<HuggingFaceRepo[]>
   convertHfRepoToCatalogModel(repo: HuggingFaceRepo): CatalogModel
   updateModel(modelId: string, model: Partial<CoreModel>): Promise<void>
   pullModel(

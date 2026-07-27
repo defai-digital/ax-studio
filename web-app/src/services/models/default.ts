@@ -24,9 +24,13 @@ import type {
   ModelValidationResult,
 } from './types'
 import { getBundledModelCatalog } from './catalog'
-import { huggingFaceRepoSchema } from '@/schemas/models.schema'
+import {
+  huggingFaceRepoListSchema,
+  huggingFaceRepoSchema,
+} from '@/schemas/models.schema'
 import {
   getCleanHuggingFaceRepoId,
+  getHuggingFaceApiAuthorModelsUrl,
   getHuggingFaceApiModelUrl,
   getHuggingFaceModelFileUrl,
   getHuggingFaceModelUrl,
@@ -156,6 +160,54 @@ export class DefaultModelsService implements ModelsService {
       if (error instanceof Error && error.name === 'AbortError') throw error
       console.error('Error fetching HuggingFace repository:', error)
       return null
+    }
+  }
+
+  async fetchHuggingFaceAuthorModels(
+    author: string,
+    hfToken?: string,
+    signal?: AbortSignal
+  ): Promise<HuggingFaceRepo[]> {
+    const cleanAuthor = author.trim()
+    if (!cleanAuthor) return []
+
+    try {
+      const response = await fetch(
+        getHuggingFaceApiAuthorModelsUrl(cleanAuthor),
+        {
+          signal,
+          headers: hfToken
+            ? {
+                Authorization: `Bearer ${hfToken}`,
+              }
+            : {},
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error(
+          `Failed to fetch HuggingFace author models: ${response.status} ${response.statusText}`
+        )
+      }
+
+      const parsed = huggingFaceRepoListSchema.safeParse(await response.json())
+      if (!parsed.success) {
+        console.warn(
+          'HuggingFace author API response did not match expected schema:',
+          parsed.error.message
+        )
+        return []
+      }
+
+      const normalizedAuthor = cleanAuthor.toLowerCase()
+      return parsed.data.filter(
+        (repo) =>
+          !repo.disabled && repo.author.toLowerCase() === normalizedAuthor
+      )
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') throw error
+      console.error('Error fetching HuggingFace author models:', error)
+      return []
     }
   }
 

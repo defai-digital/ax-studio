@@ -2,12 +2,29 @@ import type { ReactNode } from 'react'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({
-  fetchHuggingFaceRepo: vi.fn(),
-  convertHfRepoToCatalogModel: vi.fn(),
-  fetchSources: vi.fn(),
-  navigate: vi.fn(),
-}))
+const mocks = vi.hoisted(() => {
+  const fetchHuggingFaceRepo = vi.fn()
+  const fetchHuggingFaceAuthorModels = vi.fn()
+  const convertHfRepoToCatalogModel = vi.fn()
+  const modelsService = {
+    fetchHuggingFaceRepo,
+    fetchHuggingFaceAuthorModels,
+    convertHfRepoToCatalogModel,
+    isModelSupported: vi.fn().mockResolvedValue('GREEN'),
+  }
+
+  return {
+    fetchHuggingFaceRepo,
+    fetchHuggingFaceAuthorModels,
+    convertHfRepoToCatalogModel,
+    fetchSources: vi.fn(),
+    navigate: vi.fn(),
+    sources: [] as Array<Record<string, unknown>>,
+    serviceHub: {
+      models: () => modelsService,
+    },
+  }
+})
 
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (config: unknown) => config,
@@ -101,6 +118,7 @@ vi.mock('lucide-react', () => {
   const Icon = () => <span />
   return {
     Atom: Icon,
+    BadgeCheck: Icon,
     CheckCircle2: Icon,
     ChevronsUpDown: Icon,
     Download: Icon,
@@ -121,6 +139,7 @@ vi.mock('@/i18n/react-i18next-compat', () => ({
     t: (key: string, options?: { defaultValue?: string }) => {
       const translations: Record<string, string> = {
         'hub:allModels': 'All Models',
+        'hub:automatosModels': 'AutomatosX',
         'hub:downloaded': 'Downloaded',
         'hub:searchPlaceholder': 'Search models, developers...',
         'hub:sortNewest': 'Newest',
@@ -147,26 +166,20 @@ vi.mock('@/hooks/models/useModelProvider', () => ({
 vi.mock('@/hooks/models/useModelSources', () => ({
   useModelSources: (
     selector: (state: {
-      sources: []
+      sources: Array<Record<string, unknown>>
       fetchSources: () => Promise<void>
       loading: boolean
     }) => unknown
   ) =>
     selector({
-      sources: [],
+      sources: mocks.sources,
       fetchSources: mocks.fetchSources,
       loading: false,
     }),
 }))
 
 vi.mock('@/hooks/useServiceHub', () => ({
-  useServiceHub: () => ({
-    models: () => ({
-      fetchHuggingFaceRepo: mocks.fetchHuggingFaceRepo,
-      convertHfRepoToCatalogModel: mocks.convertHfRepoToCatalogModel,
-      isModelSupported: vi.fn().mockResolvedValue('GREEN'),
-    }),
-  }),
+  useServiceHub: () => mocks.serviceHub,
 }))
 
 vi.mock('@/lib/models/downloaded', () => ({
@@ -200,7 +213,9 @@ describe('Hub index search', () => {
     vi.useFakeTimers()
     vi.clearAllMocks()
     mocks.fetchHuggingFaceRepo.mockResolvedValue(null)
+    mocks.fetchHuggingFaceAuthorModels.mockResolvedValue([])
     mocks.fetchSources.mockResolvedValue(undefined)
+    mocks.sources = []
   })
 
   afterEach(() => {
@@ -272,5 +287,41 @@ describe('Hub index search', () => {
     })
 
     expect(screen.getByText('second-model')).toBeInTheDocument()
+  })
+
+  it('shows only AutomatosX repositories when its filter is active', async () => {
+    mocks.sources = [
+      {
+        model_name: 'AutomatosX/AX-Qwen',
+        developer: 'AutomatosX',
+        description: 'Official AX model',
+        downloads: 10,
+        quants: [],
+      },
+      {
+        model_name: 'community/Other-Qwen',
+        developer: 'community',
+        description: 'Community model',
+        downloads: 20,
+        quants: [],
+      },
+    ]
+
+    const Component = Route.component as React.ComponentType
+    render(<Component />)
+
+    await act(async () => {
+      await Promise.resolve()
+      vi.advanceTimersByTime(200)
+    })
+
+    expect(screen.getByText('AutomatosX/AX-Qwen')).toBeInTheDocument()
+    expect(screen.getByText('community/Other-Qwen')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'AutomatosX' }))
+    act(() => vi.advanceTimersByTime(200))
+
+    expect(screen.getByText('AutomatosX/AX-Qwen')).toBeInTheDocument()
+    expect(screen.queryByText('community/Other-Qwen')).not.toBeInTheDocument()
   })
 })
