@@ -561,24 +561,8 @@ Electron desktop app against the Vite dev server with hot reload
 | **31420** | Vite dev server (the Electron shell loads it in dev) |
 | **31430** | Vite HMR WebSocket (when an explicit host is set) |
 
-**AX BI stack** (defaults; see `web-app/src/lib/ax-bi/endpoints.ts`)
-
-| Variable | Port | Service |
-| --- | ---: | --- |
-| `MCP_PORT` | **31421** | MCP (`http://127.0.0.1:31421/mcp`) |
-| `NODE_PORT` / `WEBPACK_DEVSERVER_PORT` | **31422** | Frontend dev |
-| `AXBI_PORT` | **31423** | Web app |
-| `AX_SERVICES_PORT` | **31424** | AX Services |
-| `WEBSOCKET_PORT` | **31425** | Async WS |
-| `WEBSOCKET_HTTP_PORT` | **31426** | WS HTTP |
-| `NGINX_PORT` | **31429** | Nginx host port |
-| `DATABASE_PORT` | **5432** | Postgres |
-| `REDIS_PORT` | **6379** | Redis |
-
 Studio frontend ports are fixed in `web-app/vite.config.ts` and `Makefile`
-`DEV_PORT`. AX BI MCP/web defaults appear in
-`web-app/src/lib/ax-bi/endpoints.ts`. Production desktop builds do not open
-the Vite ports.
+`DEV_PORT`. Production desktop builds do not open the Vite ports.
 
 ### Common Commands
 

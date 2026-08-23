@@ -9,23 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AxBiRouteImport } from './routes/ax-bi'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as HubIndexRouteImport } from './routes/hub/index'
 import { Route as ThreadsThreadIdRouteImport } from './routes/threads/$threadId'
 import { Route as SettingsGeneralRouteImport } from './routes/settings/general'
 import { Route as SettingsAxEngineRouteImport } from './routes/settings/ax-engine'
-import { Route as SettingsAxBiRouteImport } from './routes/settings/ax-bi'
 import { Route as HubModelIdRouteImport } from './routes/hub/$modelId'
 import { Route as SettingsProvidersIndexRouteImport } from './routes/settings/providers/index'
 import { Route as SettingsProvidersProviderNameRouteImport } from './routes/settings/providers/$providerName'
 
-const AxBiRoute = AxBiRouteImport.update({
-  id: '/ax-bi',
-  path: '/ax-bi',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -56,11 +49,6 @@ const SettingsAxEngineRoute = SettingsAxEngineRouteImport.update({
   path: '/settings/ax-engine',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SettingsAxBiRoute = SettingsAxBiRouteImport.update({
-  id: '/settings/ax-bi',
-  path: '/settings/ax-bi',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const HubModelIdRoute = HubModelIdRouteImport.update({
   id: '/hub/$modelId',
   path: '/hub/$modelId',
@@ -80,9 +68,7 @@ const SettingsProvidersProviderNameRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/ax-bi': typeof AxBiRoute
   '/hub/$modelId': typeof HubModelIdRoute
-  '/settings/ax-bi': typeof SettingsAxBiRoute
   '/settings/ax-engine': typeof SettingsAxEngineRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/threads/$threadId': typeof ThreadsThreadIdRoute
@@ -93,9 +79,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/ax-bi': typeof AxBiRoute
   '/hub/$modelId': typeof HubModelIdRoute
-  '/settings/ax-bi': typeof SettingsAxBiRoute
   '/settings/ax-engine': typeof SettingsAxEngineRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/threads/$threadId': typeof ThreadsThreadIdRoute
@@ -107,9 +91,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/ax-bi': typeof AxBiRoute
   '/hub/$modelId': typeof HubModelIdRoute
-  '/settings/ax-bi': typeof SettingsAxBiRoute
   '/settings/ax-engine': typeof SettingsAxEngineRoute
   '/settings/general': typeof SettingsGeneralRoute
   '/threads/$threadId': typeof ThreadsThreadIdRoute
@@ -122,9 +104,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/ax-bi'
     | '/hub/$modelId'
-    | '/settings/ax-bi'
     | '/settings/ax-engine'
     | '/settings/general'
     | '/threads/$threadId'
@@ -135,9 +115,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/ax-bi'
     | '/hub/$modelId'
-    | '/settings/ax-bi'
     | '/settings/ax-engine'
     | '/settings/general'
     | '/threads/$threadId'
@@ -148,9 +126,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/ax-bi'
     | '/hub/$modelId'
-    | '/settings/ax-bi'
     | '/settings/ax-engine'
     | '/settings/general'
     | '/threads/$threadId'
@@ -162,9 +138,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AxBiRoute: typeof AxBiRoute
   HubModelIdRoute: typeof HubModelIdRoute
-  SettingsAxBiRoute: typeof SettingsAxBiRoute
   SettingsAxEngineRoute: typeof SettingsAxEngineRoute
   SettingsGeneralRoute: typeof SettingsGeneralRoute
   ThreadsThreadIdRoute: typeof ThreadsThreadIdRoute
@@ -176,13 +150,6 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/ax-bi': {
-      id: '/ax-bi'
-      path: '/ax-bi'
-      fullPath: '/ax-bi'
-      preLoaderRoute: typeof AxBiRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -225,13 +192,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsAxEngineRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/settings/ax-bi': {
-      id: '/settings/ax-bi'
-      path: '/settings/ax-bi'
-      fullPath: '/settings/ax-bi'
-      preLoaderRoute: typeof SettingsAxBiRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/hub/$modelId': {
       id: '/hub/$modelId'
       path: '/hub/$modelId'
@@ -258,9 +218,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AxBiRoute: AxBiRoute,
   HubModelIdRoute: HubModelIdRoute,
-  SettingsAxBiRoute: SettingsAxBiRoute,
   SettingsAxEngineRoute: SettingsAxEngineRoute,
   SettingsGeneralRoute: SettingsGeneralRoute,
   ThreadsThreadIdRoute: ThreadsThreadIdRoute,

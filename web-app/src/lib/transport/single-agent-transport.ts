@@ -19,11 +19,7 @@ import { stripUnavailableToolParts } from './transport-types'
 const MCP_TOOL_USE_INSTRUCTION = `
 
 ## Tool use
-Use an available tool when the user asks for MCP, a named tool service, or a BI action. Do not replace a requested tool action with Python, SQL, scripts, or instructions. Report the actual tool error if the action cannot be completed, and do not claim an asset is missing before using the relevant discovery tool.
-
-AX BI means the local ax-bi MCP service, not matplotlib. AX BI tool arguments are wrapped in \`request\`. Discover named datasets before using them; upload only a user-attached file or one the user explicitly asked to import. Prefer \`prompt_to_dashboard({ request: { prompt } })\` for a complete dashboard and \`plan_dashboard\` only for a requested plan/dry run. Return a saved chart/dashboard URL once, followed by a concise result.
-
-For an attached file marked \`[Attached files: name at /path]\`, call \`process_file_for_bi({ file_path, filename })\`; it performs the local read and upload. Do not read the file with generated code, ask the user to paste it, or treat extraction errors as a reason to skip the tool.`
+Use an available tool when the user asks for MCP or a named tool service. Do not replace a requested tool action with Python, SQL, scripts, or instructions. Report the actual tool error if the action cannot be completed, and do not claim an asset is missing before using the relevant discovery tool.`
 
 export interface SingleAgentConfig {
   model: LanguageModel

@@ -4,6 +4,9 @@
 > 歷史狀態:草案 v1(2026-07-26);Phase 3 slice 4 更新:開機探針已全數 gate(Electron 開機零 `unimplemented_command`),全域快捷鍵/assistant 擴充/MCP tools 在 Electron 下停用,內建單一預設 assistant;HF cache `mlx_*` helper 已移植 Electron main。Phase 4 slice 1 更新:electron-builder 打包管線(`yarn dist:electron:mac|win`,產出 `electron/dist-installer/`)+ electron-updater 已接上(`electron/src/updater.ts`,IPC `updater_check`/`updater_download`/`updater_install` + 渲染層更新橫幅;僅 packaged prod 初始化,smoke 斷言零網路呼叫);Windows NSIS 配置僅 correct-by-construction,尚未實機驗證。
 > 目標:Ollama 式精簡 UX;macOS 使用 ax-engine(sidecar HTTP)+ llama.cpp;PC 僅 llama.cpp;
 > 停用 ax-serving;AX BI 保留並簡化為對話式入口。
+> **後續變更**:AX BI 整合已於 Phase 0–5 之後全數移除(路由、`lib/ax-bi/`、
+> 對話 delegation、連線狀態、smoke fixture、憑證)。以下 AX BI 相關條目僅為
+> 當時的歷史決策紀錄,不再反映現況。
 
 ## 1. 路由對照(web-app/src/constants/routes.ts)
 
@@ -12,7 +15,7 @@
 | `/`(新對話首頁) | 保留(簡化) | 開啟即對話框 + 模型選擇器 |
 | `/threads/$threadId` | 保留 | |
 | `/hub/`、`/hub/$modelId` | 保留 | 模型搜尋/下載/刪除,核心功能 |
-| `/ax-bi` | 保留(簡化) | 對話為主入口;工作區降為歷史/進階頁或整併 |
+| `/ax-bi` | ~~保留(簡化)~~ → **已移除** | 當時:對話為主入口;現已連同 `/settings/ax-bi` 一併刪除 |
 | `/settings/general` | 保留(瘦身) | 主題/語言/資料夾 |
 | `/settings/providers/`、`/settings/providers/$providerName` | 保留 | API key 管理 |
 | `/settings/interface` | 整併 | 併入 general |
@@ -60,7 +63,7 @@
 |---|---|---|
 | akidb(5) | `read_akidb_config` 等 | RAG 移除 |
 | 擴充系統(5) | `install_extension(s)`, `get_active_extensions`, `uninstall_extension`, `get_app_extensions_path` | llamacpp/download 邏輯內建進 main |
-| MCP(9) | `get_tools`, `call_tool`, `activate_mcp_server` 等 | AX BI 改用 `web-app/src/lib/ax-bi/sdk.ts` 純 fetch 直連 |
+| MCP(9) | `get_tools`, `call_tool`, `activate_mcp_server` 等 | 當時 AX BI 改用 `web-app/src/lib/ax-bi/sdk.ts` 純 fetch 直連;該模組現已移除 |
 | Voice(6) | `voice_*` | whisper 移除 |
 | Research(1) | `scrape_url` | |
 | 自研 updater(2) | `check_for_app_updates`, `get_install_channel` | 換 electron-updater |
@@ -88,7 +91,7 @@
 | assistants, projects, rag, voice, deeplink, globalShortcut | **刪除** |
 | chatOrganization | 檢討後刪除(threads 整理功能簡化) |
 
-## 4. AX BI 簡化規格
+## 4. AX BI 簡化規格(已作廢 — 整合已移除)
 
 - 連線零設定:MCP URL 預設 `http://127.0.0.1:31421/mcp` 隱藏;首次僅要求 API key,存 `safeStorage`。
 - 主對話為唯一主要入口:沿用 `authoring-workflow.ts` delegation 攔截,結果卡片化 + `shell.openExternal` 開啟 dashboard。

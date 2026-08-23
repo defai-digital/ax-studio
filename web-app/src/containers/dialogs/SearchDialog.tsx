@@ -15,7 +15,6 @@ import {
   Plus,
   Settings,
   Settings2,
-  BarChart3,
   Cpu,
   Plug,
   History,
@@ -229,17 +228,6 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
         action: () => {
           handleClose()
           navigate({ to: route.settings.axEngine })
-        },
-      },
-      {
-        id: 'ax-bi',
-        label: t('common:axBi', { defaultValue: 'AX BI' }),
-        keywords: ['ax bi', 'analytics', 'chart', 'dashboard', 'mcp'],
-        icon: BarChart3,
-        category: t('common:settings'),
-        action: () => {
-          handleClose()
-          navigate({ to: route.settings.axBi })
         },
       },
       {

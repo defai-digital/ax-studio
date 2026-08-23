@@ -57,20 +57,6 @@ export async function bootstrapProviders(
       console.error('[bootstrap-providers] Provider bootstrap failed:', error)
     })
 
-    if (isCancelled()) return { result: ok() }
-
-    // AX BI auto-reconnect — when a token exists, warm the direct client
-    // (handshake + capabilities) in the background and update the connection
-    // status store.
-    try {
-      const { probeAxBiDirectConnection } = await import(
-        '@/lib/ax-bi/direct-client'
-      )
-      if (!isCancelled()) void probeAxBiDirectConnection()
-    } catch (error) {
-      console.warn('[bootstrap-providers] AX BI direct probe failed:', error)
-    }
-
     return { result: ok() }
   } catch (error) {
     console.error('bootstrapProviders failed:', error)

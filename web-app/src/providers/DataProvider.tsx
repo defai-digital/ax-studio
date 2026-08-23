@@ -5,6 +5,7 @@ import { useThreads } from '@/hooks/threads/useThreads'
 import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 import { useAppState } from '@/hooks/settings/useAppState'
 import { bootstrapProviders } from '@/lib/bootstrap/bootstrap-providers'
+import { cleanupRemovedIntegrations } from '@/lib/bootstrap/removed-integration-cleanup'
 import { bootstrapThreads } from '@/lib/bootstrap/bootstrap-threads'
 import { bootstrapEvents } from '@/lib/bootstrap/bootstrap-events'
 import { bootstrapLocalApi } from '@/lib/bootstrap/bootstrap-local-api'
@@ -112,6 +113,8 @@ export function DataProvider() {
     }).catch((error) => {
       console.error('[DataProvider] bootstrapProviders failed:', error)
     })
+
+    void cleanupRemovedIntegrations()
 
     bootstrapThreads({
       serviceHub,

@@ -4,16 +4,11 @@ vi.mock('@/lib/providers/provider-sync', () => ({
   syncRemoteProviders: vi.fn().mockResolvedValue(undefined),
 }))
 
-vi.mock('@/lib/ax-bi/direct-client', () => ({
-  probeAxBiDirectConnection: vi.fn().mockResolvedValue(undefined),
-}))
-
 import {
   bootstrapProviders,
   type BootstrapProvidersInput,
 } from '../bootstrap-providers'
 import { syncRemoteProviders } from '@/lib/providers/provider-sync'
-import { probeAxBiDirectConnection } from '@/lib/ax-bi/direct-client'
 
 function makeServiceHub(overrides: Record<string, unknown> = {}) {
   return {
@@ -82,12 +77,6 @@ describe('bootstrapProviders', () => {
     expect(vi.mocked(syncRemoteProviders)).not.toHaveBeenCalled()
   })
 
-  it('warms the AX BI direct connection in the background', async () => {
-    await bootstrapProviders(makeInput())
-
-    expect(vi.mocked(probeAxBiDirectConnection)).toHaveBeenCalled()
-  })
-
   it('continues when providers fail to load', async () => {
     const hub = makeServiceHub({
       providers: {
@@ -131,7 +120,6 @@ describe('bootstrapProviders', () => {
     await work
 
     expect(setProviders).not.toHaveBeenCalled()
-    expect(vi.mocked(probeAxBiDirectConnection)).not.toHaveBeenCalled()
   })
 
   it('returns fail result when outer try/catch catches', async () => {

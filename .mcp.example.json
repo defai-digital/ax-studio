@@ -1,10 +1,5 @@
 {
   "mcpServers": {
-    "ax-bi": {
-      "type": "sse",
-      "url": "http://127.0.0.1:31421/mcp",
-      "active": true
-    },
     "exa": {
       "type": "http",
       "url": "https://mcp.exa.ai/mcp",

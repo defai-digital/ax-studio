@@ -2,8 +2,6 @@ import { invoke } from '@/lib/tauri-shim/api-core'
 import { isPlatformTauri } from '@/lib/platform/utils'
 
 export const PROXY_PASSWORD_SECRET = 'proxy-password'
-/** AX BI MCP bearer token stored through the desktop secure-secret bridge. */
-export const AX_BI_MCP_TOKEN_SECRET = 'ax-bi-mcp-token'
 /** Hugging Face Hub access token used for private/gated model downloads. */
 export const HUGGING_FACE_TOKEN_SECRET = 'hugging-face-token'
 /** Bearer token for an externally managed local AX Engine server. */

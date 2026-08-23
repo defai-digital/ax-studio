@@ -38,11 +38,11 @@ describe('SettingsMenu', () => {
     vi.mocked(useMatches).mockReturnValue(mockMatches)
   })
 
-  it('renders the four focused settings destinations', () => {
+  it('renders the three focused settings destinations', () => {
     render(<SettingsMenu />)
 
     const links = screen.getAllByRole('link')
-    expect(links).toHaveLength(4)
+    expect(links).toHaveLength(3)
   })
 
   it('separates local products from cloud providers', () => {
@@ -51,7 +51,6 @@ describe('SettingsMenu', () => {
     expect(screen.getByText('common:general')).toBeInTheDocument()
     expect(screen.getByText('common:axEngine')).toBeInTheDocument()
     expect(screen.getByText('common:modelProviders')).toBeInTheDocument()
-    expect(screen.getByText('common:axBi')).toBeInTheDocument()
 
     // Legacy standalone preference pages remain removed or merged.
     expect(screen.queryByText('common:interface')).not.toBeInTheDocument()
@@ -72,7 +71,6 @@ describe('SettingsMenu', () => {
       '/settings/general',
       '/settings/ax-engine',
       '/settings/providers/',
-      '/settings/ax-bi',
     ])
   })
 
@@ -148,7 +146,7 @@ describe('SettingsMenu', () => {
     render(<SettingsMenu />)
 
     // The focused list is stable regardless of legacy localStorage flags.
-    expect(screen.getAllByRole('link')).toHaveLength(4)
+    expect(screen.getAllByRole('link')).toHaveLength(3)
     expect(
       screen.queryByText('common:showAdvancedSettings')
     ).not.toBeInTheDocument()
