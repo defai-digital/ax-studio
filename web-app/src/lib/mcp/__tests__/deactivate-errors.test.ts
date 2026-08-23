@@ -4,7 +4,7 @@ import { isMissingRunningServerError } from '../deactivate-errors'
 describe('isMissingRunningServerError', () => {
   it('matches Server not found errors from the backend', () => {
     expect(
-      isMissingRunningServerError(new Error('Server ax-bi not found'))
+      isMissingRunningServerError(new Error('Server beta not found'))
     ).toBe(true)
     expect(isMissingRunningServerError('Server alpha not found')).toBe(true)
   })

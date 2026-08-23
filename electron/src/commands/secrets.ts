@@ -62,9 +62,6 @@ export function createSecretsHandlers(): Record<string, CommandHandler> {
     get_secret: (args) => {
       const key = str(args?.key)
       if (!key) throw new Error('get_secret error: Invalid argument')
-      if (key === 'ax-bi-mcp-token') {
-        throw new Error('get_secret error: AX BI credentials are main-process only')
-      }
       return getStoredSecret(key)
     },
 

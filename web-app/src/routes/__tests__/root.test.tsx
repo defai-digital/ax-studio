@@ -4,8 +4,6 @@ import { render, screen } from '@testing-library/react'
 const mocks = vi.hoisted(() => ({
   location: { pathname: '/' },
   hideInitialLoader: vi.fn(),
-  redirectError: new Error('redirect'),
-  redirect: vi.fn(),
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -15,14 +13,12 @@ vi.mock('@tanstack/react-router', () => ({
     errorComponent?: React.ComponentType<{ error: Error }>
   }) => config,
   Outlet: () => <main data-testid="outlet" />,
-  redirect: mocks.redirect,
   useLocation: () => mocks.location,
 }))
 
 vi.mock('@/constants/routes', () => ({
   route: {
-    legacyAxBi: '/ax-bi',
-    settings: { axBi: '/settings/ax-bi', general: '/settings/general' },
+    settings: { general: '/settings/general' },
   },
 }))
 
@@ -141,13 +137,11 @@ vi.mock('@/lib/bootstrap/app-startup', () => ({
 }))
 
 import { Route as RootRoute } from '../__root'
-import { Route as AxBiRoute } from '../ax-bi'
 
-describe('root layout and ax-bi route', () => {
+describe('root layout', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.location.pathname = '/'
-    mocks.redirect.mockReturnValue(mocks.redirectError)
   })
 
   it('renders the root app layout with providers, sidebar, and outlet', () => {
@@ -175,12 +169,5 @@ describe('root layout and ax-bi route', () => {
     render(<ErrorComponent error={new Error('route failed')} />)
 
     expect(screen.getByText('route failed')).toBeInTheDocument()
-  })
-
-  it('redirects legacy AX BI bookmarks to its Settings page', () => {
-    expect(() => AxBiRoute.beforeLoad?.({} as never)).toThrow(
-      mocks.redirectError
-    )
-    expect(mocks.redirect).toHaveBeenCalledWith({ to: '/settings/ax-bi' })
   })
 })

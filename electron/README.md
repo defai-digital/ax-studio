@@ -80,17 +80,9 @@ the suite asserts that the removed paths (logs, system-monitor, project, and
 the deleted settings pages) are absent from the registered route tree,
 `/settings/general` renders, and the sidebar/settings menu carry no links to
 removed routes (Projects, assistants, MCP servers, hardware, extensions,
-voice). The
-renderer checks also cover the Phase 3 AX BI conversational-ization
-(migration matrix §4): a node:http fixture plays the external AX BI
-streamable-HTTP MCP server (initialize handshake, `tools/list`,
-`tools/call`), and the suite drives the zero-config direct client through
-the `window.__ax.axBi` seam — token seeded via the safeStorage secrets
-bridge, connect → `connected`, `list_datasets` parsed, and a chat-style
-`prompt_to_dashboard` run formatted with its dashboard URL — while the
-fixture asserts every call carried the Bearer token and the renderer
-console shows no `activate_mcp_server` / `call_tool` / `get_tools`
-unimplemented-command errors (the Rust MCP bridge is never touched).
+voice, AX BI). The suite also asserts the renderer console shows no
+`activate_mcp_server` / `call_tool` / `get_tools` unimplemented-command
+errors (the Rust MCP bridge is never touched).
 The renderer checks also cover the Phase 3 slice 4 mlx HF-cache helpers
 (`electron/src/commands/mlx.ts`, ported from
 `src-tauri/src/core/mlx/commands.rs`): a fixture Hugging Face cache inside
@@ -219,8 +211,8 @@ working host: `examples/electron-host/` (smoke: `yarn smoke:embed`).
     `read_logs`, `take_pending_open_files` (macOS `open-file` +
     second-instance argv, buffered until drained), `open_external_url`
   - Secrets: `get_secret`, `set_secret`, `delete_secret` via `safeStorage`,
-    persisted as `userData/secrets.json`. AX BI and Hugging Face credentials
-    use this bridge instead of localStorage.
+    persisted as `userData/secrets.json`. Hugging Face and AX Engine
+    credentials use this bridge instead of localStorage.
   - Window (`window_*`): focus/minimize/maximize/toggle/close/hide/show/
     title/theme/create; `window_start_dragging` is a no-op (native frame in
     Phase 1)
@@ -364,14 +356,12 @@ working host: `examples/electron-host/` (smoke: `yarn smoke:embed`).
   under Tauri is unchanged.
 - Route pruning (migration matrix §1; finalized in Phase 4 slice 2b): the
   router registers `/`, `/threads/$threadId`, `/hub/*`, `/settings/general`,
-  `/settings/ax-engine`, `/settings/ax-bi`, and `/settings/providers/*`.
-  `/ax-bi` remains only as a compatibility redirect. The removed route files
-  (logs, system-monitor, project, and 15 settings pages) are deleted.
+  `/settings/ax-engine`, and `/settings/providers/*`. The removed route files
+  (logs, system-monitor, project, AX BI, and 15 settings pages) are deleted.
   `/settings/interface` and `/settings/privacy` render inline as sections of
-  `/settings/general`. The sidebar has no Projects/assistants/MCP tools or
-  AX BI workspace entry. `SettingsMenu` separates General, AX Engine, Cloud
-  Model Providers, and AX BI, and the search dialog exposes those kept
-  destinations. Because the shell loads the SPA from `file://`, the router
+  `/settings/general`. The sidebar has no Projects/assistants/MCP tools
+  entry. `SettingsMenu` separates General, AX Engine, and Cloud Model
+  Providers, and the search dialog exposes those kept destinations. Because the shell loads the SPA from `file://`, the router
   uses hash history (browser history cannot represent app routes there) and
   is exposed as `window.__ax.router` for the smoke suite.
 - Boot-path gating (Phase 3 slice 4; finalized in slice 2b): an Electron

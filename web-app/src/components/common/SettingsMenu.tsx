@@ -3,7 +3,7 @@ import { route } from '@/constants/routes'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { cn } from '@/lib/utils'
 
-import { BarChart3, Cloud, Cpu, Settings } from 'lucide-react'
+import { Cloud, Cpu, Settings } from 'lucide-react'
 
 type SettingsMenuItem = {
   title: string
@@ -28,11 +28,6 @@ const menuSettings: SettingsMenuItem[] = [
     title: 'common:modelProviders',
     route: route.settings.model_providers,
     icon: <Cloud className="size-3.5" />,
-  },
-  {
-    title: 'common:axBi',
-    route: route.settings.axBi,
-    icon: <BarChart3 className="size-3.5" />,
   },
 ]
 

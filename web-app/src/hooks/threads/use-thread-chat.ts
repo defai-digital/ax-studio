@@ -18,19 +18,13 @@ import {
   useChatAttachments,
   NEW_THREAD_ATTACHMENT_KEY,
 } from '@/hooks/chat/useChatAttachments'
-import {
-  newAssistantThreadContent,
-  newUserThreadContent,
-} from '@/lib/completion'
+import { newUserThreadContent } from '@/lib/completion'
 import { getModelContextLength } from '@/lib/models'
 import {
   convertThreadMessagesToUIMessages,
   extractContentPartsFromUIMessage,
 } from '@/lib/messages'
 import { getVersionMeta, selectVisibleMessages } from '@/lib/messages/versions'
-import { runAxBiAuthoringWorkflow } from '@/lib/ax-bi/authoring-workflow'
-import { recordAxBiChatRun } from '@/lib/ax-bi/run-history'
-import { isPlatformElectron } from '@/lib/platform/utils'
 import {
   ThreadMessage,
   MessageStatus,
@@ -388,57 +382,6 @@ export function useThreadChat({
       addMessage(userMessage)
       updateThreadTimestamp(threadId)
 
-      const directAxBiResult = await runAxBiAuthoringWorkflow({
-        prompt: normalizedText,
-        attachments: pendingAttachments,
-      })
-
-      if (directAxBiResult.handled) {
-        // Keep a bounded local activity record for compatibility with data
-        // from builds that exposed a separate AX BI history view.
-        if (isPlatformElectron()) {
-          recordAxBiChatRun({
-            prompt: normalizedText,
-            message: directAxBiResult.message,
-            status:
-              directAxBiResult.status === 'failed' ||
-              directAxBiResult.status === 'blocked'
-                ? 'error'
-                : 'ready',
-            url: directAxBiResult.artifactUrl,
-          })
-        }
-        const assistantMessage = newAssistantThreadContent(
-          threadId,
-          directAxBiResult.message,
-          {
-            axBi: {
-              delegated: directAxBiResult.delegated,
-              artifactType: directAxBiResult.artifactType,
-              dashboardUrl:
-                directAxBiResult.artifactType === 'dashboard'
-                  ? directAxBiResult.artifactUrl
-                  : undefined,
-              chartUrl:
-                directAxBiResult.artifactType === 'chart'
-                  ? directAxBiResult.artifactUrl
-                  : undefined,
-            },
-          },
-        )
-        addMessage(assistantMessage)
-        updateThreadTimestamp(threadId)
-        setChatMessages(
-          convertThreadMessagesToUIMessages(
-            selectVisibleMessages(useMessages.getState().getMessages(threadId))
-          )
-        )
-        if (pendingAttachments.length > 0) {
-          useChatAttachments.getState().clearAttachments(attachmentsKey)
-        }
-        return
-      }
-
       const requestParts: MessagePart[] = [
         {
           type: 'text',
@@ -460,7 +403,7 @@ export function useThreadChat({
         }
       }
 
-      // Preserve document attachment metadata so workflows (e.g. AX BI) can
+      // Preserve document attachment metadata so downstream consumers can
       // access the original file paths even though documents are inlined as
       // text rather than added as file parts.
       const messageMeta =
@@ -477,14 +420,7 @@ export function useThreadChat({
         useChatAttachments.getState().clearAttachments(attachmentsKey)
       }
     },
-    [
-      threadId,
-      addMessage,
-      updateThreadTimestamp,
-      renameThread,
-      sendMessage,
-      setChatMessages,
-    ]
+    [threadId, addMessage, updateThreadTimestamp, renameThread, sendMessage]
   )
 
   // ─── Message persistence (called from onFinish) ─────────────────────────────

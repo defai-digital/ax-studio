@@ -5,11 +5,7 @@ import { useThreads } from '@/hooks/threads/useThreads'
 import { useChatAttachments } from '@/hooks/chat/useChatAttachments'
 import { useChatSessions } from '@/stores/chat-session-store'
 import { useThreadChat, type ThreadChatParams } from '../use-thread-chat'
-import { runAxBiAuthoringWorkflow } from '@/lib/ax-bi/authoring-workflow'
 
-const axBiWorkflowMocks = vi.hoisted(() => ({
-  runAxBiAuthoringWorkflow: vi.fn(),
-}))
 const modelProviderMocks = vi.hoisted(() => ({
   getProviderByName: vi.fn(),
   updateProvider: vi.fn(),
@@ -57,8 +53,6 @@ vi.mock('@/lib/completion', () => ({
     })
   ),
 }))
-
-vi.mock('@/lib/ax-bi/authoring-workflow', () => axBiWorkflowMocks)
 
 // Mock messages conversion
 vi.mock('@/lib/messages', () => ({
@@ -165,7 +159,6 @@ describe('useThreadChat', () => {
     vi.mocked(useChatSessions.getState).mockReturnValue({
       sessions: {},
     } as never)
-    axBiWorkflowMocks.runAxBiAuthoringWorkflow.mockResolvedValue({ handled: false })
     modelProviderMocks.getProviderByName.mockReturnValue(undefined)
   })
 
@@ -404,7 +397,7 @@ describe('useThreadChat', () => {
       )
     })
 
-    it('passes failed document-processing attachments to the AX BI authoring workflow', async () => {
+    it('still sends to the model when document processing failed', async () => {
       const attachment = {
         name: 'sales.csv',
         type: 'document' as const,
@@ -418,27 +411,15 @@ describe('useThreadChat', () => {
           [threadId]: [attachment],
         },
       })
-      axBiWorkflowMocks.runAxBiAuthoringWorkflow.mockResolvedValueOnce({
-        handled: true,
-        delegated: true,
-        artifactType: 'dashboard',
-        status: 'completed',
-        message: 'Created AX BI dashboard',
-      })
 
       const { result } = renderHook(() => useThreadChat(defaultParams()))
 
       await act(async () => {
-        await result.current.processAndSendMessage('Create an AX BI dashboard from this file')
+        await result.current.processAndSendMessage('Chart the numbers in this file')
       })
 
-      expect(runAxBiAuthoringWorkflow).toHaveBeenCalledWith(
-        expect.objectContaining({
-          attachments: [attachment],
-        })
-      )
-      expect(mockSendMessage).not.toHaveBeenCalled()
-      expect(useMessages.getState().getMessages(threadId)).toHaveLength(2)
+      expect(mockSendMessage).toHaveBeenCalledOnce()
+      expect(useMessages.getState().getMessages(threadId)).toHaveLength(1)
     })
   })
 

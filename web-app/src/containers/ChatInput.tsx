@@ -28,7 +28,6 @@ import { X } from 'lucide-react'
 import { COMPOSER_FOCUS_EVENT } from '@/types/events'
 import { resolveEffectiveSelectedModel } from '@/lib/chat/selected-model'
 import { hasSendableAttachment } from '@/lib/attachments/sendable'
-import { AxBiStatusIndicator } from '@/containers/AxBiStatusIndicator'
 
 type ChatInputProps = {
   className?: string
@@ -389,9 +388,6 @@ const ChatInput = memo(function ChatInput({
           </div>
         </div>
       )}
-
-      {/* Inline AX BI connection status (migration matrix §4). */}
-      <AxBiStatusIndicator />
 
       {!tokenCounterCompact &&
         !initialMessage &&

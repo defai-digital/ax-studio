@@ -69,27 +69,9 @@ const bootstrap = async () => {
       // Expose the router for the Electron smoke suite (route-pruning checks)
       // and dev-console debugging. `__ax` is initialized at module scope above.
       const win = window as unknown as {
-        __ax: { router?: typeof router; axBi?: Record<string, unknown> }
+        __ax: { router?: typeof router }
       }
       win.__ax.router = router
-      // Smoke/dev seam for the AX BI direct path (migration matrix §4): lets
-      // the Electron smoke suite drive connect → list datasets → run flow
-      // against a fake MCP fixture without a settings page.
-      const [{ runAxBiAuthoringWorkflow }, datasets, direct, connectionStore] =
-        await Promise.all([
-          import('@/lib/ax-bi/authoring-workflow'),
-          import('@/lib/ax-bi/datasets'),
-          import('@/lib/ax-bi/direct-client'),
-          import('@/stores/ax-bi-connection-store'),
-        ])
-      win.__ax.axBi = {
-        connect: (token?: string) => direct.connectAxBiDirect({ token }),
-        status: () => connectionStore.useAxBiConnection.getState().status,
-        listDatasets: async (search?: string) =>
-          datasets.listAxBiDatasets({ search }),
-        runWorkflow: async (prompt: string) =>
-          runAxBiAuthoringWorkflow({ prompt }),
-      }
     }
     rootElement.innerHTML = ''
     const root = ReactDOM.createRoot(rootElement)

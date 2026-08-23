@@ -166,7 +166,6 @@ const translations: Record<string, string> = {
   'common:search': 'Search',
   'common:searchThreads': 'Search threads',
   'common:settings': 'Settings',
-  'common:axBi': 'AX BI',
   'common:axEngine': 'AX Engine',
   'common:toNavigate': 'to navigate',
   'common:toSelect': 'to select',

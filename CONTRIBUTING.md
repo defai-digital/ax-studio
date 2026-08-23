@@ -59,16 +59,10 @@ Local development ports:
 | --- | --- |
 | **31419** | AX Studio local inference API (`/v1`) |
 | **31420** | AX Studio Vite dev server (loaded by the Electron shell) |
-| **31421** | AX BI MCP (`MCP_PORT`, `…/mcp`) |
-| **31422** | AX BI frontend dev (`NODE_PORT`) |
-| **31423** | AX BI web app (`AXBI_PORT`) |
-| **31424**–**31426**, **31429** | AX BI services / WS / nginx |
 | **31430** | AX Studio Vite HMR (explicit host only) |
-| **5432** / **6379** | Postgres / Redis (AX BI) |
 
 Keep the Studio frontend port in sync if you change it:
-`web-app/vite.config.ts` (`server.port`) and `Makefile` `DEV_PORT`. AX BI port
-constants: `web-app/src/lib/ax-bi/endpoints.ts`.
+`web-app/vite.config.ts` (`server.port`) and `Makefile` `DEV_PORT`.
 
 Useful alternatives:
 

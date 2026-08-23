@@ -154,10 +154,9 @@ if (!gotSingleInstanceLock) {
       const fixture = await startSmokeDownloadFixture()
       const llamaFixture = prepareSmokeLlamacppFixture(getAppDataFolderPath())
       const axEngineFixture = await prepareSmokeAxEngineFixture(getAppDataFolderPath())
-      const axBiMcpFixture = await startSmokeAxBiMcpFixture()
       const mlxFixture = prepareSmokeMlxFixture(getAppDataFolderPath())
       mainWindow = createMainWindow()
-      await runSmokeTest(mainWindow, fixture, llamaFixture, axEngineFixture, axBiMcpFixture, mlxFixture)
+      await runSmokeTest(mainWindow, fixture, llamaFixture, axEngineFixture, mlxFixture)
       return
     }
 
@@ -205,7 +204,6 @@ async function runSmokeTest(
   fixture: SmokeDownloadFixture,
   llamaFixture: SmokeLlamacppFixture,
   axEngineFixture: SmokeAxEngineFixture,
-  axBiMcpFixture: SmokeAxBiMcpFixture,
   mlxFixture: SmokeMlxFixture,
 ): Promise<void> {
   // Collect renderer console output from the start so the Phase 3 checks can
@@ -233,9 +231,7 @@ async function runSmokeTest(
     for (const line of mlxFixture.mainLines) console.log(`[smoke] ${line}`)
     axEngineFixture.cleanup()
     mlxFixture.cleanup()
-    void fixture.close()
-      .finally(() => axBiMcpFixture.close())
-      .finally(() => app.exit(finalCode))
+    void fixture.close().finally(() => app.exit(finalCode))
   }
   const timeout = setTimeout(() => {
     console.error('[smoke] TIMEOUT waiting for renderer handshake')
@@ -244,7 +240,7 @@ async function runSmokeTest(
 
   win.webContents.once('did-finish-load', () => {
     win.webContents
-      .executeJavaScript(buildSmokeScript(fixture, llamaFixture, axEngineFixture, axBiMcpFixture, mlxFixture))
+      .executeJavaScript(buildSmokeScript(fixture, llamaFixture, axEngineFixture, mlxFixture))
       .then((result) => {
         for (const line of (result as { lines?: string[] })?.lines ?? []) {
           console.log(`[smoke] ${line}`)
@@ -263,8 +259,8 @@ async function runSmokeTest(
         } else {
           console.log('[smoke] PASS bootstrap avoids dynamic extension commands')
         }
-        // Main-side check: the AX BI flow must never hit the removed Rust MCP
-        // bridge commands (matrix §4 — direct sdk.ts fetch path only).
+        // Main-side check: the renderer must never hit the removed Rust MCP
+        // bridge commands.
         const rustMcpError = consoleMessages.find(
           (message) =>
             /unimplemented_command/.test(message) &&
@@ -272,10 +268,10 @@ async function runSmokeTest(
         )
         if (rustMcpError) {
           console.log(
-            `[smoke] FAIL ax-bi flow avoids Rust MCP bridge commands — ${rustMcpError.slice(0, 200)}`
+            `[smoke] FAIL renderer avoids Rust MCP bridge commands — ${rustMcpError.slice(0, 200)}`
           )
         } else {
-          console.log('[smoke] PASS ax-bi flow avoids Rust MCP bridge commands')
+          console.log('[smoke] PASS renderer avoids Rust MCP bridge commands')
         }
         const rendererOk =
           (result as { ok?: boolean })?.ok && !dynamicExtError && !rustMcpError && isUpdaterActive() === false
@@ -917,156 +913,10 @@ async function prepareSmokeAxEngineFixture(dataFolder: string): Promise<SmokeAxE
 // Runs inside the renderer against the full preload bridge.
 // NOTE: no template literals inside — the script is interpolated into a
 // template string, so stick to string concatenation.
-// ─── Smoke AX BI MCP fixture ─────────────────────────────────────────────────
-// Streamable-HTTP MCP server standing in for the user's external AX BI stack
-// (migration matrix §4). The renderer owns MCP protocol state; its HTTP
-// requests are brokered by the constrained Electron main-process command.
-
-interface SmokeAxBiMcpFixture {
-  url: string
-  statsUrl: string
-  close: () => Promise<void>
-}
-
-const SMOKE_AX_BI_TOKEN = 'smoke-token'
-
-async function startSmokeAxBiMcpFixture(): Promise<SmokeAxBiMcpFixture> {
-  const methods: string[] = []
-  let authFailures = 0
-  const server = http.createServer((req, res) => {
-    if (req.url === '/stats') {
-      res.writeHead(200, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ methods, authFailures }))
-      return
-    }
-    if (req.url !== '/mcp' || req.method !== 'POST') {
-      res.writeHead(404)
-      res.end()
-      return
-    }
-    let data = ''
-    req.on('data', (chunk) => (data += chunk))
-    req.on('end', () => {
-      if (req.headers.authorization !== `Bearer ${SMOKE_AX_BI_TOKEN}`) {
-        authFailures += 1
-      }
-      let rpc: { id?: string | number; method?: string; params?: { name?: string } }
-      try {
-        rpc = JSON.parse(data)
-      } catch {
-        res.writeHead(400)
-        res.end()
-        return
-      }
-      const method = String(rpc.method)
-      methods.push(
-        method === 'tools/call' ? `tools/call:${rpc.params?.name ?? '?'}` : method
-      )
-      const reply = (result: unknown, withSession = false): void => {
-        const headers: Record<string, string> = {
-          'content-type': 'application/json',
-        }
-        if (withSession) headers['mcp-session-id'] = 'smoke-session'
-        res.writeHead(200, headers)
-        res.end(JSON.stringify({ jsonrpc: '2.0', id: rpc.id ?? null, result }))
-      }
-      if (method === 'initialize') {
-        reply(
-          {
-            protocolVersion: '2025-03-26',
-            capabilities: {},
-            serverInfo: { name: 'smoke-ax-bi', version: '0.0.0' },
-          },
-          true
-        )
-        return
-      }
-      if (method === 'notifications/initialized') {
-        res.writeHead(202)
-        res.end()
-        return
-      }
-      if (method === 'tools/list') {
-        reply({
-          tools: [
-            { name: 'list_datasets' },
-            { name: 'get_authoring_capabilities' },
-            { name: 'prompt_to_dashboard' },
-          ],
-        })
-        return
-      }
-      if (method === 'tools/call') {
-        if (rpc.params?.name === 'get_authoring_capabilities') {
-          reply({
-            structuredContent: {
-              contract_version: '1.0',
-              operations: [
-                'prompt_to_dashboard',
-                'plan_dashboard',
-                'create_chart_from_intent',
-                'upload_and_plan',
-              ],
-              upload_formats: ['csv'],
-              limits: {
-                max_charts_per_dashboard: 6,
-                max_upload_bytes: 10485760,
-              },
-            },
-          })
-          return
-        }
-        if (rpc.params?.name === 'list_datasets') {
-          reply({
-            structuredContent: {
-              datasets: [
-                {
-                  id: 7,
-                  table_name: 'smoke_sales',
-                  schema: 'public',
-                  database_name: 'smokedb',
-                },
-              ],
-              count: 1,
-            },
-          })
-          return
-        }
-        if (rpc.params?.name === 'prompt_to_dashboard') {
-          reply({
-            structuredContent: {
-              status: 'completed',
-              dashboard_url: 'http://127.0.0.1:31423/ax-bi/dashboard/42/',
-              plan: { title: 'Smoke Revenue Dashboard', sections: [] },
-            },
-          })
-          return
-        }
-      }
-      res.writeHead(200, { 'content-type': 'application/json' })
-      res.end(
-        JSON.stringify({
-          jsonrpc: '2.0',
-          id: rpc.id ?? null,
-          error: { code: -32601, message: `unknown method ${method}` },
-        })
-      )
-    })
-  })
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
-  const port = (server.address() as nodeNet.AddressInfo).port
-  return {
-    url: `http://127.0.0.1:${port}/mcp`,
-    statsUrl: `http://127.0.0.1:${port}/stats`,
-    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
-  }
-}
-
 function buildSmokeScript(
   fixture: SmokeDownloadFixture,
   llamaFixture: SmokeLlamacppFixture,
   axEngineFixture: SmokeAxEngineFixture,
-  axBiMcpFixture: SmokeAxBiMcpFixture,
   mlxFixture: SmokeMlxFixture,
 ): string {
   const baseA = "'http://127.0.0.1:" + fixture.port + "/a'"
@@ -1571,7 +1421,7 @@ function buildSmokeScript(
         p.indexOf('knowledge-base') !== -1 || p.indexOf('attachments') !== -1 ||
         p.indexOf('shortcuts') !== -1 || p.indexOf('guardrails') !== -1 ||
         p.indexOf('https-proxy') !== -1 || p.indexOf('engine-settings') !== -1 ||
-        p.indexOf('llm-router') !== -1)
+        p.indexOf('llm-router') !== -1 || p.indexOf('ax-bi') !== -1)
       check(
         'removed routes are not registered',
         removedRegistered.length === 0,
@@ -1582,8 +1432,7 @@ function buildSmokeScript(
         router.state.location.pathname)
       check(
         'product settings routes are registered',
-        registeredPaths.includes('/settings/ax-engine') &&
-          registeredPaths.includes('/settings/ax-bi'),
+        registeredPaths.includes('/settings/ax-engine'),
         JSON.stringify(registeredPaths))
       const generalRendered = await waitFor(() => {
         const text = document.body.textContent || ''
@@ -1599,7 +1448,7 @@ function buildSmokeScript(
       check('settings menu separates local products and cloud providers',
         hasHref('#/settings/ax-engine') &&
           hasHref('#/settings/providers') &&
-          hasHref('#/settings/ax-bi') &&
+          !hasHref('#/settings/ax-bi') &&
           !hasHref('#/settings/hardware') &&
           !hasHref('#/settings/extensions') &&
           !hasHref('#/settings/voice'))
@@ -1712,50 +1561,6 @@ function buildSmokeScript(
   } catch (error) {
     failures += 1
     lines.push('FAIL mlx section threw: ' + errText(error))
-  }
-
-  // ── AX BI direct client (Phase 3 slice 3, migration matrix §4) ──
-  try {
-    // Point the zero-config direct client at the fake MCP fixture and seed
-    // the token through the safeStorage-backed secrets bridge — the same
-    // path the connect card uses.
-    localStorage.setItem('ax-bi-mcp-url-override', ${JSON.stringify(axBiMcpFixture.url)})
-    await invoke('set_secret', { key: 'ax-bi-mcp-token', value: ${JSON.stringify(SMOKE_AX_BI_TOKEN)} })
-
-    const axBiReady = await waitFor(() => !!(window.__ax && window.__ax.axBi), 30000)
-    check('ax-bi smoke seam exposed', axBiReady)
-    if (axBiReady) {
-      const axbi = window.__ax.axBi
-      await axbi.connect()
-      check('ax-bi zero-config connect reaches connected', axbi.status() === 'connected', String(axbi.status()))
-
-      const axBiDatasets = await axbi.listDatasets()
-      check('ax-bi direct client lists datasets',
-        Array.isArray(axBiDatasets) && axBiDatasets.some((d) => d.name === 'smoke_sales' && d.schema === 'public'),
-        JSON.stringify(axBiDatasets))
-
-      const axBiRun = await axbi.runWorkflow('Use AX BI to build a revenue dashboard')
-      check('ax-bi run flow formats dashboard result',
-        axBiRun && axBiRun.handled === true && axBiRun.status === 'completed' &&
-          axBiRun.message.indexOf('Smoke Revenue Dashboard') !== -1 &&
-          axBiRun.artifactUrl === 'http://127.0.0.1:31423/ax-bi/dashboard/42/',
-        JSON.stringify(axBiRun))
-
-      const axBiStats = await (await fetch(${JSON.stringify(axBiMcpFixture.statsUrl)})).json()
-      check('ax-bi fixture saw handshake + tool calls',
-        axBiStats.methods.indexOf('initialize') !== -1 &&
-          axBiStats.methods.indexOf('tools/call:list_datasets') !== -1 &&
-          axBiStats.methods.indexOf('tools/call:get_authoring_capabilities') !== -1 &&
-          axBiStats.methods.indexOf('tools/call:prompt_to_dashboard') !== -1,
-        JSON.stringify(axBiStats.methods))
-      check('ax-bi fixture received Bearer token on every call', axBiStats.authFailures === 0, JSON.stringify(axBiStats))
-    }
-  } catch (error) {
-    failures += 1
-    lines.push('FAIL ax-bi section threw: ' + errText(error))
-  } finally {
-    try { localStorage.removeItem('ax-bi-mcp-url-override') } catch { /* best effort */ }
-    try { await invoke('delete_secret', { key: 'ax-bi-mcp-token' }) } catch { /* best effort */ }
   }
 
   // ── updater (Phase 4): IPC surface exists but is inert outside packaged prod ──

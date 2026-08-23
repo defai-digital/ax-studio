@@ -44,20 +44,6 @@ The local OpenAI-compatible inference API defaults to
 **http://127.0.0.1:31419/v1** (`DEFAULT_SERVER_PORT` in
 `src/hooks/settings/useLocalApiServer.ts`).
 
-Local AX BI defaults (see `src/lib/ax-bi/endpoints.ts`):
-
-| Variable | Port | Service |
-| --- | ---: | --- |
-| `MCP_PORT` | 31421 | MCP |
-| `NODE_PORT` | 31422 | Frontend dev |
-| `AXBI_PORT` | 31423 | Web app |
-| `AX_SERVICES_PORT` | 31424 | AX Services |
-| `WEBSOCKET_PORT` | 31425 | Async WS |
-| `WEBSOCKET_HTTP_PORT` | 31426 | WS HTTP |
-| `NGINX_PORT` | 31429 | Nginx |
-| `DATABASE_PORT` | 5432 | Postgres |
-| `REDIS_PORT` | 6379 | Redis |
-
 Direct workspace commands:
 
 ```bash
