@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import { DropdownModelProvider } from '../DropdownModelProvider'
 import { getModelDisplayName } from '@/lib/utils'
@@ -9,6 +9,7 @@ import { useModelProvider } from '@/hooks/models/useModelProvider'
 type ModelProvider = {
   provider: string
   active: boolean
+  api_key?: string
   models: Array<{
     id: string
     displayName?: string
@@ -111,6 +112,14 @@ vi.mock('../ModelSetting', () => ({
 }))
 
 describe('DropdownModelProvider - Display Name Integration', () => {
+  const expandProvider = () => {
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'common:expandProviderModels',
+      })
+    )
+  }
+
   const mockProviders: ModelProvider[] = [
     {
       provider: 'test-provider',
@@ -167,6 +176,7 @@ describe('DropdownModelProvider - Display Name Integration', () => {
 
   it('should display custom model name in the trigger button', () => {
     render(<DropdownModelProvider />)
+    expandProvider()
 
     // Should show the display name in both trigger and dropdown
     expect(screen.getAllByText('Custom Model 1')).toHaveLength(2) // One in trigger, one in dropdown
@@ -190,12 +200,14 @@ describe('DropdownModelProvider - Display Name Integration', () => {
     } as MockHookReturn)
 
     render(<DropdownModelProvider />)
+    expandProvider()
 
     expect(screen.getAllByText('model3.gguf')).toHaveLength(2) // Trigger and dropdown
   })
 
   it('should show display names in the model list items', () => {
     render(<DropdownModelProvider />)
+    expandProvider()
 
     // Check if the display names are shown in the options
     expect(screen.getAllByText('Custom Model 1')).toHaveLength(2) // Selected: Trigger + dropdown
@@ -246,6 +258,7 @@ describe('DropdownModelProvider - Display Name Integration', () => {
     } as MockHookReturn)
 
     render(<DropdownModelProvider />)
+    expandProvider()
 
     // Verify that display name is shown in UI
     expect(screen.getAllByText('Custom Model 1')).toHaveLength(2) // Trigger + dropdown
@@ -273,6 +286,7 @@ describe('DropdownModelProvider - Display Name Integration', () => {
 
     // Render with model2 selected
     render(<DropdownModelProvider />)
+    expandProvider()
 
     // Check trigger shows Short Name
     const triggerButton = screen
@@ -285,5 +299,44 @@ describe('DropdownModelProvider - Display Name Integration', () => {
     expect(screen.getAllByText('Custom Model 1').length).toBeGreaterThanOrEqual(
       1
     )
+  })
+
+  it('hides repository owners for AX Engine models without changing the ID', () => {
+    const axEngineModel = {
+      id: 'AutomatosX/AX-Qwen3-Coder-Next-MLX-OptiQ-4bit',
+      capabilities: ['completion'],
+    }
+    const axEngineProvider: ModelProvider = {
+      provider: 'ax-engine',
+      active: true,
+      api_key: 'local',
+      models: [axEngineModel],
+      settings: [],
+    }
+
+    mockUseModelProviderState({
+      providers: [axEngineProvider],
+      selectedProvider: 'ax-engine',
+      selectedModel: axEngineModel,
+      getProviderByName: vi.fn(() => axEngineProvider),
+      selectModelProvider: vi.fn(),
+      getModelBy: vi.fn(() => axEngineModel),
+      updateProvider: vi.fn(),
+    } as MockHookReturn)
+
+    render(<DropdownModelProvider />)
+    expandProvider()
+
+    expect(
+      screen.getAllByText('AX-Qwen3-Coder-Next-MLX-OptiQ-4bit')
+    ).toHaveLength(2)
+    expect(
+      screen.queryByText('AutomatosX/AX-Qwen3-Coder-Next-MLX-OptiQ-4bit')
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByTitle(
+        'AutomatosX/AX-Qwen3-Coder-Next-MLX-OptiQ-4bit'
+      )
+    ).toBeInTheDocument()
   })
 })

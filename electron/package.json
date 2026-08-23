@@ -18,7 +18,9 @@
     "dist-renderer/"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && tsc -p tsconfig.preload.json && node scripts/write-preload-manifest.mjs && node scripts/copy-renderer.mjs",
+    "build": "yarn build:runtime && node scripts/copy-renderer.mjs",
+    "build:dev": "yarn build:runtime",
+    "build:runtime": "tsc -p tsconfig.json && tsc -p tsconfig.preload.json && node scripts/write-preload-manifest.mjs",
     "start": "electron .",
     "smoke": "electron . --smoke",
     "smoke:embed": "yarn workspace @ax-studio/electron-example-host smoke"

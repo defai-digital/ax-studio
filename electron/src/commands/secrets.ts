@@ -48,13 +48,27 @@ function decrypt(stored: string): string {
   return stored
 }
 
+export function getStoredSecret(key: string): string | null {
+  const stored = readSecrets()[key]
+  return stored === undefined ? null : decrypt(stored)
+}
+
+export function hasStoredSecret(key: string): boolean {
+  return readSecrets()[key] !== undefined
+}
+
 export function createSecretsHandlers(): Record<string, CommandHandler> {
   return {
     get_secret: (args) => {
       const key = str(args?.key)
       if (!key) throw new Error('get_secret error: Invalid argument')
-      const stored = readSecrets()[key]
-      return stored === undefined ? null : decrypt(stored)
+      return getStoredSecret(key)
+    },
+
+    has_secret: (args) => {
+      const key = str(args?.key)
+      if (!key) throw new Error('has_secret error: Invalid argument')
+      return hasStoredSecret(key)
     },
 
     set_secret: (args) => {

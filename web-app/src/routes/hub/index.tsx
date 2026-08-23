@@ -26,6 +26,7 @@ import type { CatalogModel } from '@/services/models/types'
 import { HeaderPage } from '@/containers/HeaderPage'
 import {
   Atom,
+  BadgeCheck,
   CheckCircle2,
   ChevronsUpDown,
   Download,
@@ -62,8 +63,20 @@ import {
   VARIANT_MEMORY_LABEL_CLASSES,
 } from '@/lib/models/variant-memory'
 import { HuggingFaceConnectionButton } from '@/containers/HuggingFaceConnectionDialog'
+import {
+  AUTOMATOSX_HUGGING_FACE_ORG,
+  isAutomatosXCatalogModel,
+  mergeCatalogModels,
+} from './-hubFilters'
 
-type FilterTag = 'all' | 'downloaded' | 'mlx' | 'tools' | 'vision' | 'reasoning'
+type FilterTag =
+  | 'all'
+  | 'automatosx'
+  | 'downloaded'
+  | 'mlx'
+  | 'tools'
+  | 'vision'
+  | 'reasoning'
 
 type SearchParams = {
   repo: string
@@ -87,6 +100,7 @@ function HubContent() {
   const [isPending, startTransition] = useTransition()
   const huggingfaceToken = useHuggingFaceConnection((state) => state.token)
   const serviceHub = useServiceHub()
+  const modelsService = useMemo(() => serviceHub.models(), [serviceHub])
   const providers = useModelProvider((state) => state.providers)
 
   const { t } = useTranslation()
@@ -121,6 +135,8 @@ function HubContent() {
   const [huggingFaceRepo, setHuggingFaceRepo] = useState<CatalogModel | null>(
     null
   )
+  const [automatosModels, setAutomatosModels] = useState<CatalogModel[]>([])
+  const [automatosModelsLoading, setAutomatosModelsLoading] = useState(true)
   const { modelSupportStatus, checkModelSupport } = useModelSupportStatus()
   const totalMemoryMB = useHardwareTotalMemory()
   const [isInitialLoad, setIsInitialLoad] = useState(true)
@@ -152,6 +168,11 @@ function HubContent() {
   }[] = [
     { id: 'all', label: t('hub:allModels') || 'All Models' },
     {
+      id: 'automatosx',
+      label: t('hub:automatosModels') || 'AutomatosX',
+      icon: <BadgeCheck className="size-3" />,
+    },
+    {
       id: 'downloaded',
       label: t('hub:downloaded') || 'Downloaded',
       icon: <HardDrive className="size-3" />,
@@ -181,9 +202,14 @@ function HubContent() {
     }))
   }, [])
 
+  const catalogModels = useMemo(
+    () => mergeCatalogModels(sources, automatosModels),
+    [sources, automatosModels]
+  )
+
   // Sorting functionality
   const sortedModels = useMemo(() => {
-    const sorted = [...sources]
+    const sorted = [...catalogModels]
     if (sortSelected === 'most-downloaded') {
       return sorted.sort((a, b) => (b.downloads || 0) - (a.downloads || 0))
     }
@@ -192,7 +218,7 @@ function HubContent() {
         new Date(b.created_at || 0).getTime() -
         new Date(a.created_at || 0).getTime()
     )
-  }, [sortSelected, sources])
+  }, [sortSelected, catalogModels])
 
   // Filtered models (debounced search)
   const [debouncedSearchValue, setDebouncedSearchValue] = useState(searchValue)
@@ -226,6 +252,8 @@ function HubContent() {
     // Apply filter tags
     if (activeFilter === 'downloaded') {
       filtered = filtered.filter((model) => isModelDownloaded(model))
+    } else if (activeFilter === 'automatosx') {
+      filtered = filtered.filter(isAutomatosXCatalogModel)
     } else if (activeFilter === 'mlx') {
       filtered = filtered.filter((model) => isMlxCatalogModel(model))
     } else if (activeFilter === 'tools') {
@@ -239,7 +267,11 @@ function HubContent() {
           model.model_name.toLowerCase().includes('-r1')
       )
     }
-    if (huggingFaceRepo) {
+    if (
+      huggingFaceRepo &&
+      (activeFilter !== 'automatosx' ||
+        isAutomatosXCatalogModel(huggingFaceRepo))
+    ) {
       filtered = [huggingFaceRepo, ...filtered]
     }
     return filtered
@@ -254,15 +286,42 @@ function HubContent() {
 
   // Stats
   const stats = useMemo(() => {
-    const downloaded = sources.filter((m) => isModelDownloaded(m)).length
-    return { total: sources.length, downloaded }
-  }, [sources, isModelDownloaded])
+    const downloaded = catalogModels.filter((m) => isModelDownloaded(m)).length
+    return { total: catalogModels.length, downloaded }
+  }, [catalogModels, isModelDownloaded])
 
   useEffect(() => {
     startTransition(() => {
       fetchSources()
     })
   }, [fetchSources])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    setAutomatosModelsLoading(true)
+
+    modelsService
+      .fetchHuggingFaceAuthorModels(
+        AUTOMATOSX_HUGGING_FACE_ORG,
+        huggingfaceToken,
+        controller.signal
+      )
+      .then((repos) => {
+        if (controller.signal.aborted) return
+        setAutomatosModels(
+          repos.map((repo) => modelsService.convertHfRepoToCatalogModel(repo))
+        )
+      })
+      .catch((error) => {
+        if (error instanceof Error && error.name === 'AbortError') return
+        console.error('Error loading AutomatosX models:', error)
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setAutomatosModelsLoading(false)
+      })
+
+    return () => controller.abort()
+  }, [huggingfaceToken, modelsService])
 
   // Reset initial load state after data loads or on filter change
   useEffect(() => {
@@ -291,19 +350,16 @@ function HubContent() {
         !controller.signal.aborted
 
       try {
-        const repoInfo = await serviceHub
-          .models()
-          .fetchHuggingFaceRepo(
-            searchValue,
-            huggingfaceToken,
-            controller.signal
-          )
+        const repoInfo = await modelsService.fetchHuggingFaceRepo(
+          searchValue,
+          huggingfaceToken,
+          controller.signal
+        )
         if (!isActiveLookup()) return
 
         if (repoInfo) {
-          const catalogModel = serviceHub
-            .models()
-            .convertHfRepoToCatalogModel(repoInfo)
+          const catalogModel =
+            modelsService.convertHfRepoToCatalogModel(repoInfo)
           if (!isActiveLookup()) return
 
           if (
@@ -380,10 +436,10 @@ function HubContent() {
       </HeaderPage>
 
       {/* Hub Header Section */}
-      <div className="px-6 py-6 border-b border-border/40 shrink-0">
+      <div className="px-4 sm:px-6 py-6 border-b border-border/40 shrink-0">
         <div className="max-w-5xl mx-auto">
-          <div className="flex items-start justify-between mb-5">
-            <div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-5">
+            <div className="min-w-0">
               <h1
                 className="text-foreground mb-1 tracking-tight"
                 style={{ fontSize: '22px', fontWeight: 700 }}
@@ -395,7 +451,7 @@ function HubContent() {
                   'Discover and download open-source AI models. Optimized for local inference.'}
               </p>
             </div>
-            <div className="flex items-center gap-3 text-[12px] text-muted-foreground shrink-0">
+            <div className="flex flex-wrap items-center gap-3 text-[12px] text-muted-foreground sm:shrink-0">
               <div className="flex items-center gap-1.5">
                 <HardDrive className="size-3.5 text-indigo-500" />
                 <span>
@@ -408,7 +464,7 @@ function HubContent() {
 
           {/* Search & Filters */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <div className="relative flex-1 max-w-sm">
+            <div className="relative w-full sm:flex-1 sm:max-w-sm">
               <div className="absolute left-3 top-1/2 -translate-y-1/2">
                 {isSearching ? (
                   <Loader className="size-3.5 animate-spin text-muted-foreground/60" />
@@ -437,7 +493,7 @@ function HubContent() {
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex w-full sm:w-auto items-center gap-1.5 flex-wrap">
               {filters.map((f) => (
                 <button
                   key={f.id}
@@ -502,11 +558,14 @@ function HubContent() {
 
       {/* Model Grid */}
       <div
-        className="flex-1 overflow-y-auto px-6 py-5 first-step-setup-local-provider"
+        className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 first-step-setup-local-provider"
         style={{ scrollbarWidth: 'thin' }}
       >
         <div className="max-w-5xl mx-auto">
-          {isInitialLoad || (loading && !filteredModels.length) ? (
+          {isInitialLoad ||
+          ((loading ||
+            (activeFilter === 'automatosx' && automatosModelsLoading)) &&
+            !filteredModels.length) ? (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 animate-pulse">
               {[...Array(6)].map((_, i) => (
                 <div
@@ -567,30 +626,6 @@ function HubContent() {
                 isPending ? 'opacity-70' : 'opacity-100'
               )}
             >
-              {/* Mobile filter */}
-              <div className="flex items-center gap-2 justify-end sm:hidden mb-3">
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={
-                      activeFilter === 'downloaded' || activeFilter === 'mlx'
-                    }
-                    onCheckedChange={(checked) => {
-                      setIsInitialLoad(true)
-                      setActiveFilter(checked ? 'downloaded' : 'all')
-                      if (checked) {
-                        setHuggingFaceRepo(null)
-                        cancelHuggingFaceModelFetch()
-                      } else {
-                        fetchHuggingFaceModel(searchValue)
-                      }
-                    }}
-                  />
-                  <span className="text-xs text-foreground font-medium whitespace-nowrap">
-                    {activeFilter === 'mlx' ? 'MLX' : t('hub:downloaded')}
-                  </span>
-                </div>
-              </div>
-
               <AnimatePresence mode="wait">
                 <motion.div
                   key="grid"

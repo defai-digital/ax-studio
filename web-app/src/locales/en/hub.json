@@ -2,6 +2,7 @@
   "title": "Model Hub",
   "subtitle": "Discover and download open-source AI models. Optimized for local inference.",
   "allModels": "All Models",
+  "automatosModels": "AutomatosX",
   "sortNewest": "Newest",
   "sortMostDownloaded": "Most downloaded",
   "newChat": "New chat",
