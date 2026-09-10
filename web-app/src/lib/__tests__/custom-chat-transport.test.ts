@@ -152,6 +152,50 @@ function makeTransport(
   )
 }
 
+describe('chat model selection validation', () => {
+  const request = {
+    chatId: 'selection-test',
+    messages: [],
+    abortSignal: undefined,
+    trigger: 'submit-message' as const,
+    messageId: undefined,
+  }
+
+  it('uses the selected model when a thread override is empty', async () => {
+    const transport = new CustomChatTransport(undefined, undefined, {}, '', '')
+    await transport.sendMessages(request)
+    expect(ModelFactory.createModel).toHaveBeenCalledWith(
+      'test-model',
+      expect.objectContaining({ provider: 'test-provider' }),
+      expect.any(Object),
+      expect.any(Object)
+    )
+  })
+
+  it('asks for model selection instead of reporting a service initialization failure', async () => {
+    mocks.selectedModel = { id: '', capabilities: [] }
+    mocks.selectedProvider = ''
+    await expect(makeTransport().sendMessages(request)).rejects.toThrow(
+      'Select a model and provider'
+    )
+    expect(ModelFactory.createModel).not.toHaveBeenCalled()
+  })
+
+  it('identifies a removed provider without silently switching providers', async () => {
+    const transport = new CustomChatTransport(
+      undefined,
+      undefined,
+      {},
+      'old-model',
+      'removed-provider'
+    )
+    await expect(transport.sendMessages(request)).rejects.toThrow(
+      'Provider "removed-provider" is no longer configured'
+    )
+    expect(ModelFactory.createModel).not.toHaveBeenCalled()
+  })
+})
+
 const makeUiMessage = (
   message: Pick<UIMessage, 'id' | 'role' | 'parts'> &
     Partial<Pick<UIMessage, 'metadata'>>
@@ -523,7 +567,9 @@ describe('CustomChatTransport — LLM Router integration', () => {
     expect(mocks.fetch).not.toHaveBeenCalled()
     expect(
       vi.mocked(prepareProviderForChat).mock.invocationCallOrder[0]
-    ).toBeLessThan(vi.mocked(ModelFactory.createModel).mock.invocationCallOrder[0])
+    ).toBeLessThan(
+      vi.mocked(ModelFactory.createModel).mock.invocationCallOrder[0]
+    )
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
       'llama-3.2-3b-local.gguf',
       expect.objectContaining({ provider: 'llamacpp' }),
@@ -598,7 +644,9 @@ describe('CustomChatTransport — LLM Router integration', () => {
     expect(mocks.fetch).not.toHaveBeenCalled()
     expect(
       vi.mocked(prepareProviderForChat).mock.invocationCallOrder[0]
-    ).toBeLessThan(vi.mocked(ModelFactory.createModel).mock.invocationCallOrder[0])
+    ).toBeLessThan(
+      vi.mocked(ModelFactory.createModel).mock.invocationCallOrder[0]
+    )
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
       'gemma-4-26b-a4b-it-4bit',
       expect.objectContaining({ provider: 'llamacpp' }),

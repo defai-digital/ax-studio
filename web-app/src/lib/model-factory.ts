@@ -263,27 +263,7 @@ function normalizeOpenAICompatiblePayload(
     }
   }
 
-  const content = payload.content
-  const hasVisibleContent = typeof content === 'string' && content.length > 0
-  const reasoningFallback =
-    typeof payload.reasoning_content === 'string' &&
-    payload.reasoning_content.length > 0
-      ? payload.reasoning_content
-      : typeof payload.reasoning === 'string' && payload.reasoning.length > 0
-        ? payload.reasoning
-        : undefined
-
-  if (!hasVisibleContent && reasoningFallback) {
-    payload.content = reasoningFallback
-    changed = true
-  }
-
-  for (const field of ['reasoning_content', 'reasoning'] as const) {
-    if (payload[field] != null) {
-      delete payload[field]
-      changed = true
-    }
-  }
+  // The SDK emits reasoning parts separately. Never relabel thinking as final text.
 
   if (
     'role' in payload &&
@@ -535,8 +515,7 @@ async function resolveAxEngineEndpoint(provider: ProviderObject): Promise<{
         provider.base_url ?? AX_ENGINE_SIDECAR_DEFAULT_BASE_URL
       ),
       apiKey:
-        (await readAxEngineAttachApiKey()) ??
-        AX_ENGINE_SIDECAR_DEFAULT_API_KEY,
+        (await readAxEngineAttachApiKey()) ?? AX_ENGINE_SIDECAR_DEFAULT_API_KEY,
     }
   }
 

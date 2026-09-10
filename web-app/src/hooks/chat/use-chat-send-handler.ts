@@ -30,6 +30,7 @@ type Input = {
   onSubmit?: (text: string) => void
   projectId?: string
   selectedModel?: { id: string }
+  selectedProvider?: string
   attachmentsKey?: string
   setMessage: (msg: string) => void
   setPrompt: (value: string) => void
@@ -42,12 +43,14 @@ type Result = {
 export function useChatSendHandler({
   onSubmit,
   selectedModel: resolvedSelectedModel,
+  selectedProvider: resolvedSelectedProvider,
   attachmentsKey,
   setMessage,
   setPrompt,
 }: Input): Result {
   const selectedModelFromStore = useModelProvider((s) => s.selectedModel)
-  const selectedProvider = useModelProvider((s) => s.selectedProvider)
+  const selectedProviderFromStore = useModelProvider((s) => s.selectedProvider)
+  const selectedProvider = resolvedSelectedProvider ?? selectedProviderFromStore
   const createThread = useThreads((s) => s.createThread)
   const temporaryChatEnabled = useTemporaryChat((s) => s.temporaryChatEnabled)
   const router = useRouter()
@@ -62,7 +65,7 @@ export function useChatSendHandler({
       const selectedModel = resolvedSelectedModel ?? selectedModelFromStore
       const selectedModelId =
         selectedModel?.id ?? defaultModel(selectedProvider)
-      if (!selectedModelId) {
+      if (!selectedModelId || !selectedProvider?.trim()) {
         setMessage('Please select a model to start chatting.')
         return
       }

@@ -1,12 +1,11 @@
+import fs from 'fs'
+import path from 'path'
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import viteConfig from '../../web-app/vite.config.ts'
 
-const ENV_KEYS = [
-  'IS_DEV',
-  'AUTO_UPDATER_DISABLED',
-  'UPDATE_CHECK_INTERVAL_MS',
-]
+const ENV_KEYS = ['IS_DEV', 'AUTO_UPDATER_DISABLED', 'UPDATE_CHECK_INTERVAL_MS']
 
 const originalEnv = new Map()
 
@@ -79,5 +78,46 @@ describe('web-app vite config defines', () => {
     const config = await resolveConfig()
 
     expect(config.define?.UPDATE_CHECK_INTERVAL_MS).toBe('120000')
+  })
+
+  it('injects extension build constants for POSIX-style module ids on Windows', async () => {
+    const config = await resolveConfig()
+    const plugin = config.plugins
+      ?.flat()
+      .find(
+        (p) =>
+          p &&
+          typeof p === 'object' &&
+          p.name === 'ax-studio-extension-build-constants'
+      )
+    expect(plugin).toBeDefined()
+    expect(typeof plugin.transform).toBe('function')
+
+    // Vite normalizes module ids to POSIX separators on every platform;
+    // the plugin's per-package dirs come from path.resolve and are
+    // backslash-separated on Windows.
+    const settingsJson = fs
+      .readFileSync(
+        path.resolve(
+          __dirname,
+          '../../extensions/llamacpp-extension/settings.json'
+        ),
+        'utf8'
+      )
+      .trim()
+    const moduleDir = path
+      .resolve(__dirname, '../../extensions/llamacpp-extension/src')
+      .split(path.sep)
+      .join('/')
+    const posixId = `${moduleDir}/index.ts`
+
+    const result = await plugin.transform(
+      'const rawSettings = SETTINGS',
+      posixId
+    )
+
+    expect(result).not.toBeNull()
+    expect(result.code).toContain(settingsJson)
+    expect(result.code).not.toMatch(/\bSETTINGS\b/)
   })
 })

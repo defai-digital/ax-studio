@@ -212,6 +212,7 @@ const ChatInput = memo(function ChatInput({
     projectId,
     selectedModel,
     attachmentsKey,
+    selectedProvider: model?.provider || selectedProvider,
     setMessage,
     setPrompt,
   })

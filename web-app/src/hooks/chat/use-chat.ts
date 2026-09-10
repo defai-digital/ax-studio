@@ -55,9 +55,11 @@ export function useChat(options?: CustomChatOptions) {
   const existingSessionTransport = sessionId
     ? useChatSessions.getState().sessions[sessionId]?.transport
     : undefined
+  const transportSessionIdRef = useRef(sessionId)
 
   // Create transport immediately; reuse existing session transport if present.
-  if (!transportRef.current) {
+  if (!transportRef.current || transportSessionIdRef.current !== sessionId) {
+    transportSessionIdRef.current = sessionId
     transportRef.current =
       existingSessionTransport ??
       createChatTransport({
@@ -73,24 +75,25 @@ export function useChat(options?: CustomChatOptions) {
   ) {
     transportRef.current = existingSessionTransport
   }
+  const activeTransport = transportRef.current
 
   useEffect(() => {
     if (transportRef.current) {
       transportRef.current.updateSystemMessage(systemMessage)
     }
-  }, [systemMessage])
+  }, [activeTransport, systemMessage])
 
   useEffect(() => {
     if (transportRef.current) {
       transportRef.current.updateInferenceParameters(inferenceParameters)
     }
-  }, [inferenceParameters])
+  }, [activeTransport, inferenceParameters])
 
   useEffect(() => {
     if (transportRef.current) {
       transportRef.current.updateModelOverrideId(modelOverrideId)
     }
-  }, [modelOverrideId])
+  }, [activeTransport, modelOverrideId])
 
   useEffect(() => {
     if (transportRef.current) {
@@ -98,7 +101,7 @@ export function useChat(options?: CustomChatOptions) {
         modelOverrideProviderId
       )
     }
-  }, [modelOverrideProviderId])
+  }, [activeTransport, modelOverrideProviderId])
 
   // Set up streaming token speed callback to update global state
   const resetTokenSpeed = useAppState((state) => state.resetTokenSpeed)
@@ -108,7 +111,7 @@ export function useChat(options?: CustomChatOptions) {
     if (transportRef.current) {
       transportRef.current.setOnTokenUsage(onTokenUsage)
     }
-  }, [onTokenUsage])
+  }, [activeTransport, onTokenUsage])
 
   // Keep chatInitOptions in a ref so the Chat factory always uses the latest
   // callbacks without making them useMemo dependencies (which would recreate
@@ -119,19 +122,19 @@ export function useChat(options?: CustomChatOptions) {
   // ensureSession is idempotent for existing sessions — calling it again with
   // a changed sessionTitle just updates the title without recreating the Chat.
   const chat = useMemo(() => {
-    if (!sessionId || !transportRef.current) return undefined
+    if (!sessionId || !activeTransport) return undefined
 
     return ensureSession(
       sessionId,
-      transportRef.current,
+      activeTransport,
       () =>
         new Chat({
           ...chatInitOptionsRef.current,
-          transport: transportRef.current,
+          transport: activeTransport,
         }),
       sessionTitle
     )
-  }, [sessionId, ensureSession, sessionTitle])
+  }, [sessionId, ensureSession, sessionTitle, activeTransport])
 
   useEffect(() => {
     if (sessionId && sessionTitle) {

@@ -12,6 +12,12 @@ import {
 } from '@/constants/providers'
 import { mergeProviders } from '@/lib/providers/model-provider-merge'
 import { createSafeJSONStorage } from '@/lib/storage/storage'
+import {
+  stripProviderCredentials,
+  persistProviderCredentials,
+  clearProviderCredential,
+} from '@/lib/storage/provider-credentials'
+import { toast } from 'sonner'
 
 const MAX_PERSISTED_PROVIDERS = 100
 const MAX_PERSISTED_MODELS_PER_PROVIDER = 2000
@@ -70,7 +76,9 @@ const normalizeOptionalString = (value: unknown): string | undefined => {
 }
 
 const isUnsafeObjectKey = (value: string): boolean => {
-  return value === '__proto__' || value === 'prototype' || value === 'constructor'
+  return (
+    value === '__proto__' || value === 'prototype' || value === 'constructor'
+  )
 }
 
 const normalizeStringList = (value: unknown, maxItems: number): string[] => {
@@ -330,7 +338,9 @@ const normalizeProvider = (value: unknown): ModelProvider | null => {
   // ax-engine serve sidecar default (31418/v1), never back to port-0.
   if (
     isAxEngineProvider(provider.provider) &&
-    LEGACY_MLX_BASE_URLS.has((provider.base_url ?? '').trim().replace(/\/+$/, ''))
+    LEGACY_MLX_BASE_URLS.has(
+      (provider.base_url ?? '').trim().replace(/\/+$/, '')
+    )
   ) {
     provider.provider = AX_ENGINE_PROVIDER_ID
     provider.base_url = AX_ENGINE_SIDECAR_DEFAULT_BASE_URL
@@ -361,8 +371,7 @@ const normalizeProvider = (value: unknown): ModelProvider | null => {
       }
       if (setting.key === 'api-key') {
         const props = { ...(setting.controller_props ?? {}) }
-        const keyVal =
-          typeof props.value === 'string' ? props.value.trim() : ''
+        const keyVal = typeof props.value === 'string' ? props.value.trim() : ''
         if (
           !keyVal ||
           keyVal === 'sk-local-ax-engine' ||
@@ -509,13 +518,25 @@ export const useModelProvider = create<ModelProviderState>()(
         const normalizedProviderName = normalizeNonEmptyString(providerName)
         if (!normalizedProviderName || !isPlainRecord(data)) return
 
+        // Only explicit credential edits may replace secure values. Background
+        // provider snapshots contain blank defaults while startup is hydrating.
+        stripProviderCredentials({
+          state: {
+            providers: [
+              { ...data, provider: normalizedProviderName } as ModelProvider,
+            ],
+          },
+        })
+
         set((state) => {
           const providers = state.providers.map((provider) => {
             if (provider.provider === normalizedProviderName) {
-              return normalizeProvider({
-                ...provider,
-                ...data,
-              }) ?? provider
+              return (
+                normalizeProvider({
+                  ...provider,
+                  ...data,
+                }) ?? provider
+              )
             }
             return provider
           })
@@ -605,6 +626,8 @@ export const useModelProvider = create<ModelProviderState>()(
         const normalizedProvider = normalizeProvider(provider)
         if (!normalizedProvider) return
 
+        stripProviderCredentials({ state: { providers: [normalizedProvider] } })
+
         set((state) => ({
           providers: [
             ...state.providers.filter(
@@ -617,6 +640,9 @@ export const useModelProvider = create<ModelProviderState>()(
       deleteProvider: (providerName: string) => {
         const normalizedProviderName = normalizeNonEmptyString(providerName)
         if (!normalizedProviderName) return
+        void clearProviderCredential(normalizedProviderName).catch(() =>
+          toast.error('Unable to clear the saved API key. Please retry.')
+        )
 
         set((state) => {
           const providers = state.providers.filter(
@@ -636,7 +662,41 @@ export const useModelProvider = create<ModelProviderState>()(
     }),
     {
       name: localStorageKey.modelProvider,
-      storage: createSafeJSONStorage(() => localStorage, 'useModelProvider'),
+      storage: createSafeJSONStorage(
+        () => ({
+          getItem: (name: string) => {
+            const raw = localStorage.getItem(name)
+            if (!raw) return raw
+            try {
+              const payload = JSON.parse(raw)
+              const sanitized = stripProviderCredentials(payload)
+              localStorage.setItem(name, JSON.stringify(sanitized))
+              void persistProviderCredentials().catch(() =>
+                toast.error(
+                  'Unable to migrate API keys to secure storage. Keep this window open and retry.'
+                )
+              )
+            } catch {
+              /* the normal parser handles malformed persisted state */
+            }
+            // Legacy credentials remain available in memory until secure hydration completes.
+            return raw
+          },
+          setItem: (name: string, raw: string) => {
+            localStorage.setItem(
+              name,
+              JSON.stringify(stripProviderCredentials(JSON.parse(raw), false))
+            )
+            void persistProviderCredentials().catch(() =>
+              toast.error(
+                'Unable to save API keys securely. Keep this window open and retry.'
+              )
+            )
+          },
+          removeItem: (name: string) => localStorage.removeItem(name),
+        }),
+        'useModelProvider'
+      ),
       merge: (persisted, current) => ({
         ...current,
         ...sanitizePersistedModelProvider(persisted),

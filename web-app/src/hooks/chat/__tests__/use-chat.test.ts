@@ -92,6 +92,24 @@ import { createChatTransport } from '@/lib/chat/chat-transport-factory'
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('useChat', () => {
+  it('creates a distinct transport when a mounted component changes session IDs', () => {
+    vi.mocked(createChatTransport).mockImplementation(
+      () => ({ ...mockTransport }) as ReturnType<typeof createChatTransport>
+    )
+    const { rerender } = renderHook(
+      (props: { sessionId: string }) => useChat(props),
+      {
+        initialProps: { sessionId: 'first' },
+      }
+    )
+    const first = mockEnsureSession.mock.calls[0][1]
+    rerender({ sessionId: 'second' })
+    expect(mockEnsureSession.mock.calls.at(-1)![1]).not.toBe(first)
+    expect(createChatTransport).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sessionId: 'second' })
+    )
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     sessionState.sessions = {}
