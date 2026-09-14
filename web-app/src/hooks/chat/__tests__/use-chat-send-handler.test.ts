@@ -95,6 +95,30 @@ function defaultInput() {
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('useChatSendHandler', () => {
+  it('holds the send guard until asynchronous handoff completes', async () => {
+    let finish!: () => void
+    const onSubmit = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve
+        })
+    )
+    const input = { ...defaultInput(), onSubmit }
+    const { result } = renderHook(() => useChatSendHandler(input))
+    let first!: Promise<void>
+    await act(async () => {
+      first = result.current.handleSendMessage('first')
+      await result.current.handleSendMessage('duplicate')
+    })
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+    expect(input.setPrompt).not.toHaveBeenCalled()
+    await act(async () => {
+      finish()
+      await first
+    })
+    expect(input.setPrompt).toHaveBeenCalledWith('')
+  })
+
   let consoleWarnSpy: ReturnType<typeof vi.spyOn>
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>
 

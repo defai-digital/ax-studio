@@ -5,11 +5,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
-import {
-  cn,
-  getProviderTitle,
-  getProviderColor,
-} from '@/lib/utils'
+import { cn, getProviderTitle, getProviderColor } from '@/lib/utils'
 import { getProviderModelDisplayName } from '@/lib/models/provider-model-display-name'
 import { highlightMatch } from '@/lib/utils/highlight'
 import { Capabilities } from '@/components/common/Capabilities'
@@ -17,6 +13,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { route } from '@/constants/routes'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { ModelSetting } from '@/containers/ModelSetting'
+import { useSearchHistory } from '@/hooks/ui/useSearchHistory'
 import Fuse, { type FuseResult } from 'fuse.js'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 import { useFavoriteModel } from '@/hooks/models/useFavoriteModel'
@@ -38,6 +35,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useRouterSettings } from '@/hooks/settings/useRouterSettings'
 
 type DropdownModelProviderProps = {
+  threadId?: string
   model?: ThreadModel
   useLastUsedModel?: boolean
 }
@@ -351,13 +349,19 @@ function SearchField({
   onClear,
   placeholder,
 }: SearchFieldProps) {
+  const history = useSearchHistory('models', value, onChange)
   return (
     <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border/50">
       <Search className="size-3.5 text-muted-foreground shrink-0" />
       <input
         ref={inputRef}
         value={value}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => history.change(event.target.value)}
+        onBlur={history.remember}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') history.remember()
+          history.onKeyDown(event)
+        }}
         placeholder={placeholder}
         className="flex-1 bg-transparent outline-none placeholder:text-muted-foreground/40"
         style={{ fontSize: '13px' }}
@@ -474,6 +478,7 @@ function PlainList({ flatRows, renderRow }: PlainListProps) {
 // ── Main component ────────────────────────────────────────────────────────
 export const DropdownModelProvider = memo(function DropdownModelProvider({
   model,
+  threadId,
   useLastUsedModel = false,
 }: DropdownModelProviderProps) {
   // Subscribe to the individual fields this component reads rather than
@@ -481,13 +486,20 @@ export const DropdownModelProvider = memo(function DropdownModelProvider({
   // forced a re-render on every unrelated mutation (e.g. `deletedModels`
   // updates), which was expensive given the virtualized model list.
   const providers = useModelProvider((s) => s.providers)
-  const selectedProvider = useModelProvider((s) => s.selectedProvider)
-  const selectedModel = useModelProvider((s) => s.selectedModel)
+  const globalProvider = useModelProvider((s) => s.selectedProvider)
+  const globalModel = useModelProvider((s) => s.selectedModel)
+  const selectedProvider = threadId && model ? model.provider : globalProvider
+  const selectedModel =
+    threadId && model
+      ? providers
+          .find((p) => p.provider === model.provider)
+          ?.models.find((m) => m.id === model.id)
+      : globalModel
   const getProviderByName = useModelProvider((s) => s.getProviderByName)
   const selectModelProvider = useModelProvider((s) => s.selectModelProvider)
-  const getModelBy = useModelProvider((s) => s.getModelBy)
   const [displayModel, setDisplayModel] = useState<string>('')
   const { updateCurrentThreadModel } = useThreads()
+  const updateThread = useThreads((s) => s.updateThread)
   const navigate = useNavigate()
   const { t } = useTranslation()
   const { favoriteModels, toggleFavorite } = useFavoriteModel()
@@ -497,7 +509,7 @@ export const DropdownModelProvider = memo(function DropdownModelProvider({
   const isAutoRouteEnabled = useRouterSettings((s) => s.isAutoRouteEnabled)
   const setThreadOverride = useRouterSettings((s) => s.setThreadOverride)
   const currentThreadId = useThreads((s) => s.currentThreadId)
-  const activeThreadId = model?.id ? undefined : currentThreadId
+  const activeThreadId = threadId ?? (model?.id ? undefined : currentThreadId)
   const isRouterConfigured =
     routerEnabled && !!routerModelId && !!routerProviderId
   const isAutoActive = isRouterConfigured && isAutoRouteEnabled(activeThreadId)
@@ -540,6 +552,9 @@ export const DropdownModelProvider = memo(function DropdownModelProvider({
 
   // Initialize model provider - avoid race conditions with manual selections
   useEffect(() => {
+    // A split pane owns its model. Merely rendering it must never change the
+    // global selection used by the other pane or the new-chat composer.
+    if (threadId) return
     const modelChanged = previousModelKeyRef.current !== modelKey
     previousModelKeyRef.current = modelKey
 
@@ -575,6 +590,7 @@ export const DropdownModelProvider = memo(function DropdownModelProvider({
     initializeModel()
   }, [
     checkModelExists,
+    threadId,
     modelId,
     modelKey,
     modelProvider,
@@ -830,14 +846,16 @@ export const DropdownModelProvider = memo(function DropdownModelProvider({
       setSearchValue('')
       setOpen(false)
 
-      selectModelProvider(
-        searchableModel.provider.provider,
-        searchableModel.model.id
-      )
-      updateCurrentThreadModel({
+      const selection = {
         id: searchableModel.model.id,
         provider: searchableModel.provider.provider,
-      })
+      }
+      if (threadId) {
+        updateThread(threadId, { model: selection })
+      } else {
+        selectModelProvider(selection.provider, selection.id)
+        updateCurrentThreadModel(selection)
+      }
 
       // Store the selected model as last used
       setLastUsedModel(
@@ -848,6 +866,8 @@ export const DropdownModelProvider = memo(function DropdownModelProvider({
     [
       selectModelProvider,
       updateCurrentThreadModel,
+      updateThread,
+      threadId,
       activeThreadId,
       isAutoActive,
       setThreadOverride,
@@ -869,33 +889,32 @@ export const DropdownModelProvider = memo(function DropdownModelProvider({
         case 'fav-divider':
           return <div className="h-px bg-border/50 mx-3 my-1.5" />
 
-        case 'provider-header':
-          {
-            const providerTitle = getProviderTitle(row.providerInfo.provider)
-            const toggleLabel = row.isExpanded
-              ? t('common:collapseProviderModels', {
-                  provider: providerTitle,
-                })
-              : t('common:expandProviderModels', {
-                  provider: providerTitle,
-                })
-            const canToggle = !searchValue && row.modelCount > 0
+        case 'provider-header': {
+          const providerTitle = getProviderTitle(row.providerInfo.provider)
+          const toggleLabel = row.isExpanded
+            ? t('common:collapseProviderModels', {
+                provider: providerTitle,
+              })
+            : t('common:expandProviderModels', {
+                provider: providerTitle,
+              })
+          const canToggle = !searchValue && row.modelCount > 0
 
-            return (
-              <ProviderHeader
-                providerKey={row.providerKey}
-                providerInfo={row.providerInfo}
-                isExpanded={row.isExpanded}
-                modelCount={row.modelCount}
-                toggleLabel={canToggle ? toggleLabel : undefined}
-                settingsLabel={t('common:configureProvider', {
-                  provider: providerTitle,
-                })}
-                onToggle={canToggle ? handleProviderToggle : undefined}
-                onSettings={handleProviderSettings}
-              />
-            )
-          }
+          return (
+            <ProviderHeader
+              providerKey={row.providerKey}
+              providerInfo={row.providerInfo}
+              isExpanded={row.isExpanded}
+              modelCount={row.modelCount}
+              toggleLabel={canToggle ? toggleLabel : undefined}
+              settingsLabel={t('common:configureProvider', {
+                provider: providerTitle,
+              })}
+              onToggle={canToggle ? handleProviderToggle : undefined}
+              onSettings={handleProviderSettings}
+            />
+          )
+        }
 
         case 'model-item':
           return (
@@ -936,9 +955,7 @@ export const DropdownModelProvider = memo(function DropdownModelProvider({
     ]
   )
 
-  const currentModel = selectedModel?.id
-    ? getModelBy(selectedModel?.id)
-    : undefined
+  const currentModel = selectedModel
 
   if (!providers.length) return null
 
@@ -948,8 +965,8 @@ export const DropdownModelProvider = memo(function DropdownModelProvider({
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>
-        <div className="relative z-30 flex min-w-0 max-w-full items-center gap-1">
+      <div className="relative z-30 flex min-w-0 max-w-full items-center gap-1">
+        <PopoverTrigger asChild>
           <button
             type="button"
             className="relative z-30 flex min-w-0 max-w-full items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted/60 transition-all group border border-transparent hover:border-border/50"
@@ -976,11 +993,11 @@ export const DropdownModelProvider = memo(function DropdownModelProvider({
             </span>
             <ChevronDown className="size-3.5 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
           </button>
-          {currentModel?.settings && provider && (
-            <ModelSetting model={currentModel as Model} provider={provider} />
-          )}
-        </div>
-      </PopoverTrigger>
+        </PopoverTrigger>
+        {currentModel?.settings && provider && (
+          <ModelSetting model={currentModel as Model} provider={provider} />
+        )}
+      </div>
 
       <PopoverContent
         className="w-[320px] p-0 rounded-xl overflow-hidden border-border/60 shadow-2xl"

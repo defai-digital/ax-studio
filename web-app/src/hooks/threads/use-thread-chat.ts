@@ -51,9 +51,8 @@ function threadMessagesFromUiMessages(
   threadId: string
 ): ThreadMessage[] {
   return uiMessages.map((message) => {
-    const rawCreatedAt = (
-      message as UIMessage & { createdAt?: Date | number }
-    ).createdAt
+    const rawCreatedAt = (message as UIMessage & { createdAt?: Date | number })
+      .createdAt
     const createdAt =
       rawCreatedAt instanceof Date
         ? rawCreatedAt.getTime()
@@ -94,9 +93,7 @@ function mergeThreadMessagesById(
       merged.push(message)
     }
   }
-  return merged.sort(
-    (a, b) => (a.created_at || 0) - (b.created_at || 0)
-  )
+  return merged.sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
 }
 
 // Message parts for chat messages (Vercel AI SDK format)
@@ -108,7 +105,7 @@ type SendMessageFn = (args: {
   parts: MessagePart[]
   id: string
   metadata: unknown
-}) => void
+}) => void | Promise<void>
 type RegenerateFn = (args?: { messageId?: string }) => void
 
 export type ThreadChatParams = {
@@ -149,7 +146,9 @@ export function useThreadChat({
   const deleteMessage = useMessages((state) => state.deleteMessage)
   const setMessages = useMessages((state) => state.setMessages)
   const renameThread = useThreads((state) => state.renameThread)
-  const updateThreadTimestamp = useThreads((state) => state.updateThreadTimestamp)
+  const updateThreadTimestamp = useThreads(
+    (state) => state.updateThreadTimestamp
+  )
   const selectedProvider = useModelProvider((state) => state.selectedProvider)
   const selectedModel = useModelProvider((state) => state.selectedModel)
   const getProviderByName = useModelProvider((state) => state.getProviderByName)
@@ -187,9 +186,9 @@ export function useThreadChat({
       return
     }
 
-    const existingSession = useChatSessions.getState().sessions[
-      threadId
-    ] as ChatSessionSnapshot | undefined
+    const existingSession = useChatSessions.getState().sessions[threadId] as
+      | ChatSessionSnapshot
+      | undefined
     // Live chat already owns this thread (messages or in-flight stream). Stamp
     // the message store from the live UI transcript so hand-off dedupe sees
     // the same user text the user already sees — never an empty placeholder.
@@ -208,16 +207,13 @@ export function useThreadChat({
     const hydrateFrom = (messagesToSet: ThreadMessage[]) => {
       // Re-check at completion time: the user may have started chatting while
       // history was still loading. Never clobber a live AI SDK transcript.
-      const liveSession = useChatSessions.getState().sessions[
-        threadId
-      ] as ChatSessionSnapshot | undefined
+      const liveSession = useChatSessions.getState().sessions[threadId] as
+        | ChatSessionSnapshot
+        | undefined
       if (sessionOwnsLiveChat(liveSession)) {
         const liveUiMessages = liveSession?.chat?.messages ?? []
         const fromLive = threadMessagesFromUiMessages(liveUiMessages, threadId)
-        setMessages(
-          threadId,
-          mergeThreadMessagesById(fromLive, messagesToSet)
-        )
+        setMessages(threadId, mergeThreadMessagesById(fromLive, messagesToSet))
         loadedThreadRef.current = threadId
         setMessagesLoaded(true)
         return
@@ -265,10 +261,7 @@ export function useThreadChat({
       })
       .catch((error) => {
         if (controller.signal.aborted) return
-        console.error(
-          `Failed to fetch messages for thread ${threadId}:`,
-          error
-        )
+        console.error(`Failed to fetch messages for thread ${threadId}:`, error)
         // Failure must still leave the thread "loaded". Otherwise launch
         // hand-off / initial-message gates wait forever on a missing store key.
         hydrateFrom(useMessages.getState().getMessages(threadId))
@@ -281,143 +274,162 @@ export function useThreadChat({
 
   // ─── Send message ───────────────────────────────────────────────────────────
 
+  const sendingRef = useRef(false)
+
   const processAndSendMessage = useCallback(
     async (text: string) => {
-      const normalizedText = text.trim()
-
-      // A fresh user turn always invalidates any pending regenerate-version
-      // tag (e.g. one left over from a regenerate that was stopped before
-      // persistMessageOnFinish ever fired).
-      pendingVersionTagRef.current = null
-
-      // Rename thread on first message if still using default title
-      const currentThread = useThreads.getState().threads[threadId]
-      const currentMessages = useMessages.getState().getMessages(threadId)
-      if (
-        normalizedText &&
-        currentMessages.length === 0 &&
-        (!currentThread?.title || currentThread.title === 'New Thread')
-      ) {
-        renameThread(threadId, normalizedText)
-      }
-
-      const messageId = generateId()
-
-      // Grab any pending attachments for this thread.
-      // If documents are still processing (async MCP calls in flight), wait
-      // for them to finish before sending so the model receives the content.
-      const attachmentsKey = threadId || NEW_THREAD_ATTACHMENT_KEY
-
-      const getAttachments = () =>
-        useChatAttachments.getState().getAttachments(attachmentsKey)
-
-      let pendingAttachments = getAttachments()
-
-      // Wait up to 30 seconds for in-flight document processing to complete
-      if (
-        pendingAttachments.some(
-          (a) =>
-            a.type === 'document' &&
-            (a.processing || (!a.processed && !a.error))
+      const session = useChatSessions.getState().sessions[threadId]
+      if (sendingRef.current || session?.isStreaming) {
+        throw new Error(
+          'Wait for this conversation to finish before sending another message.'
         )
-      ) {
-        const maxWaitMs = 30_000
-        const pollMs = 300
-        const start = Date.now()
-        while (Date.now() - start < maxWaitMs) {
-          // Bail out if the user navigated away mid-poll, otherwise we'd
-          // send this message to a thread they can no longer see.
-          if (unmountedRef.current) return
-          await new Promise((r) => setTimeout(r, pollMs))
-          if (unmountedRef.current) return
-          pendingAttachments = getAttachments()
-          const stillProcessing = pendingAttachments.some(
+      }
+      sendingRef.current = true
+      try {
+        const normalizedText = text.trim()
+
+        // A fresh user turn always invalidates any pending regenerate-version
+        // tag (e.g. one left over from a regenerate that was stopped before
+        // persistMessageOnFinish ever fired).
+        pendingVersionTagRef.current = null
+
+        // Rename thread on first message if still using default title
+        const currentThread = useThreads.getState().threads[threadId]
+        const currentMessages = useMessages.getState().getMessages(threadId)
+        if (
+          normalizedText &&
+          currentMessages.length === 0 &&
+          (!currentThread?.title || currentThread.title === 'New Thread')
+        ) {
+          renameThread(threadId, normalizedText)
+        }
+
+        const messageId = generateId()
+
+        // Grab any pending attachments for this thread.
+        // If documents are still processing (async MCP calls in flight), wait
+        // for them to finish before sending so the model receives the content.
+        const attachmentsKey = threadId || NEW_THREAD_ATTACHMENT_KEY
+
+        const getAttachments = () =>
+          useChatAttachments.getState().getAttachments(attachmentsKey)
+
+        let pendingAttachments = getAttachments()
+
+        // Wait up to 30 seconds for in-flight document processing to complete
+        if (
+          pendingAttachments.some(
             (a) =>
               a.type === 'document' &&
               (a.processing || (!a.processed && !a.error))
           )
-          if (!stillProcessing) break
+        ) {
+          const maxWaitMs = 30_000
+          const pollMs = 300
+          const start = Date.now()
+          while (Date.now() - start < maxWaitMs) {
+            // Bail out if the user navigated away mid-poll, otherwise we'd
+            // send this message to a thread they can no longer see.
+            if (unmountedRef.current) return
+            await new Promise((r) => setTimeout(r, pollMs))
+            if (unmountedRef.current) return
+            pendingAttachments = getAttachments()
+            const stillProcessing = pendingAttachments.some(
+              (a) =>
+                a.type === 'document' &&
+                (a.processing || (!a.processed && !a.error))
+            )
+            if (!stillProcessing) break
+          }
+          // Re-read after waiting
+          pendingAttachments = getAttachments()
         }
-        // Re-read after waiting
-        pendingAttachments = getAttachments()
-      }
 
-      // Only include fully processed attachments
-      const readyAttachments = pendingAttachments.filter((a) => {
-        if (a.type === 'image') return true
-        if (a.type === 'document') {
-          return a.processed === true && (a.inlineContent || a.id)
+        // Only include fully processed attachments
+        const readyAttachments = pendingAttachments.filter((a) => {
+          if (a.type === 'image') return true
+          if (a.type === 'document') {
+            return a.processed === true && (a.inlineContent || a.id)
+          }
+          return false
+        })
+        const attachments =
+          readyAttachments.length > 0 ? readyAttachments : undefined
+
+        // Add file path information for document attachments so the LLM can reference them
+        const docAttachments =
+          attachments?.filter((att) => att.type === 'document' && att.path) ??
+          []
+        const filePathInfo =
+          docAttachments.length > 0
+            ? `\n\n[Attached files: ${docAttachments.map((a) => `${a.name} at ${a.path}`).join(', ')}]`
+            : ''
+
+        const modelText = `${text}${filePathInfo}`
+
+        const userMessage = newUserThreadContent(
+          threadId,
+          text,
+          attachments,
+          messageId
+        )
+        if (docAttachments.length > 0) {
+          userMessage.metadata = {
+            ...(userMessage.metadata as Record<string, unknown> | undefined),
+            document_attachments: docAttachments.map((attachment) => ({
+              name: attachment.name,
+              path: attachment.path,
+              fileType: attachment.fileType,
+            })),
+          } as ThreadMessage['metadata']
         }
-        return false
-      })
-      const attachments =
-        readyAttachments.length > 0 ? readyAttachments : undefined
+        addMessage(userMessage)
+        updateThreadTimestamp(threadId)
 
-      // Add file path information for document attachments so the LLM can reference them
-      const docAttachments = attachments?.filter(
-        (att) => att.type === 'document' && att.path
-      ) ?? []
-      const filePathInfo = docAttachments.length > 0
-        ? `\n\n[Attached files: ${docAttachments.map((a) => `${a.name} at ${a.path}`).join(', ')}]`
-        : ''
-      
-      const modelText = `${text}${filePathInfo}`
+        const requestParts: MessagePart[] = [
+          {
+            type: 'text',
+            text: modelText,
+          },
+        ]
 
-      const userMessage = newUserThreadContent(
-        threadId,
-        text,
-        attachments,
-        messageId
-      )
-      if (docAttachments.length > 0) {
-        userMessage.metadata = {
-          ...(userMessage.metadata as Record<string, unknown> | undefined),
-          document_attachments: docAttachments.map((attachment) => ({
-            name: attachment.name,
-            path: attachment.path,
-            fileType: attachment.fileType,
-          })),
-        } as ThreadMessage['metadata']
-      }
-      addMessage(userMessage)
-      updateThreadTimestamp(threadId)
-
-      const requestParts: MessagePart[] = [
-        {
-          type: 'text',
-          text: modelText,
-        },
-      ]
-
-      // Add image attachments as file parts for vision models
-      if (attachments) {
-        for (const att of attachments) {
-          if (att.type === 'image' && att.base64 && att.mimeType) {
-            const filePart: MessagePart = {
-              type: 'file',
-              mediaType: att.mimeType,
-              url: `data:${att.mimeType};base64,${att.base64}`,
+        // Add image attachments as file parts for vision models
+        if (attachments) {
+          for (const att of attachments) {
+            if (att.type === 'image' && att.base64 && att.mimeType) {
+              const filePart: MessagePart = {
+                type: 'file',
+                mediaType: att.mimeType,
+                url: `data:${att.mimeType};base64,${att.base64}`,
+              }
+              requestParts.push(filePart)
             }
-            requestParts.push(filePart)
           }
         }
-      }
 
-      // Preserve document attachment metadata so downstream consumers can
-      // access the original file paths even though documents are inlined as
-      // text rather than added as file parts.
-      const messageMeta =
-        (userMessage.metadata as Record<string, unknown> | undefined) ?? {}
+        // Preserve document attachment metadata so downstream consumers can
+        // access the original file paths even though documents are inlined as
+        // text rather than added as file parts.
+        const messageMeta =
+          (userMessage.metadata as Record<string, unknown> | undefined) ?? {}
 
-      sendMessage({
-        parts: requestParts,
-        id: messageId,
-        metadata: messageMeta,
-      })
+        const request = sendMessage({
+          parts: requestParts,
+          id: messageId,
+          metadata: messageMeta,
+        })
+        // The SDK owns streaming/error state. Observe rejected sends as well so
+        // one pane cannot create an unhandled rejection in the desktop renderer.
+        void Promise.resolve(request).catch((error) =>
+          console.error('Chat request failed:', error)
+        )
 
-      // Clear attachments after sending
-      if (pendingAttachments.length > 0) {
-        useChatAttachments.getState().clearAttachments(attachmentsKey)
+        // Clear attachments after sending
+        if (pendingAttachments.length > 0) {
+          useChatAttachments.getState().clearAttachments(attachmentsKey)
+        }
+      } finally {
+        sendingRef.current = false
       }
     },
     [threadId, addMessage, updateThreadTimestamp, renameThread, sendMessage]
@@ -587,13 +599,15 @@ export function useThreadChat({
         const meta = getVersionMeta(msg)
         const shouldBeActive = meta.versionIndex === targetIndex
         return Boolean(meta.isActiveVersion) !== shouldBeActive
-          ? [{
-            ...msg,
-            metadata: {
-              ...(msg.metadata as Record<string, unknown> | undefined),
-              isActiveVersion: shouldBeActive,
-            },
-          }]
+          ? [
+              {
+                ...msg,
+                metadata: {
+                  ...(msg.metadata as Record<string, unknown> | undefined),
+                  isActiveVersion: shouldBeActive,
+                },
+              },
+            ]
           : []
       })
       updateMessages(changedMessages)
@@ -654,13 +668,7 @@ export function useThreadChat({
 
       regenerate({ messageId })
     },
-    [
-      threadId,
-      updateMessage,
-      deleteMessage,
-      setChatMessages,
-      regenerate,
-    ]
+    [threadId, updateMessage, deleteMessage, setChatMessages, regenerate]
   )
 
   // ─── Delete message ─────────────────────────────────────────────────────────
@@ -680,7 +688,9 @@ export function useThreadChat({
 
   // Keep a handle on the pending regenerate timer so navigation / unmount
   // cancels it instead of firing handleRegenerate() on an unmounted component.
-  const contextIncreaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const contextIncreaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  )
   const contextIncreaseAbortRef = useRef<AbortController | null>(null)
   useEffect(() => {
     return () => {
@@ -701,9 +711,7 @@ export function useThreadChat({
     const provider = getProviderByName(providerName)
     if (!provider) return
 
-    const modelIndex = provider.models.findIndex(
-      (m) => m.id === modelId
-    )
+    const modelIndex = provider.models.findIndex((m) => m.id === modelId)
     if (modelIndex === -1) return
 
     const model = provider.models[modelIndex]

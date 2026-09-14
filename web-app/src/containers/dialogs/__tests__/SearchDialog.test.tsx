@@ -478,6 +478,24 @@ describe('SearchDialog', () => {
     expect(mocks.ensureIndex).toHaveBeenCalledWith(mocks.threads)
   })
 
+  it('recalls query text without treating recent thread IDs as queries', () => {
+    localStorage.setItem('recent-searches', '["thread-alpha"]')
+    localStorage.setItem('search-query-history:chats', '["Beta","Alpha"]')
+    render(<SearchDialog open onOpenChange={mocks.onOpenChange} />)
+    const input = screen.getByRole('textbox', { name: 'Search' })
+    fireEvent.keyDown(input, { key: 'ArrowUp' })
+    expect(input).toHaveValue('Beta')
+    expect(
+      screen.getByRole('option', { name: 'Beta notes' })
+    ).toBeInTheDocument()
+    fireEvent.keyDown(input, { key: 'ArrowUp' })
+    expect(input).toHaveValue('Alpha')
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    expect(input).toHaveValue('')
+    expect(localStorage.getItem('recent-searches')).toBe('["thread-alpha"]')
+  })
+
   it('degrades to title-only results while no content is indexed', () => {
     const { container } = render(
       <SearchDialog open onOpenChange={mocks.onOpenChange} />

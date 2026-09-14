@@ -1,4 +1,5 @@
 import { type UIMessage } from '@ai-sdk/react'
+import { simpleArithmeticAnswer } from '@/lib/chat/simple-arithmetic'
 import {
   convertToModelMessages,
   streamText,
@@ -44,6 +45,28 @@ export async function executeSingleAgentStream(
     onTokenUsage,
     mapUserInlineAttachments,
   } = config
+
+  const arithmetic = simpleArithmeticAnswer(messages)
+  if (arithmetic !== undefined) {
+    return new ReadableStream<UIMessageChunk>({
+      start(controller) {
+        if (abortSignal?.aborted) {
+          controller.error(new DOMException('Aborted', 'AbortError'))
+          return
+        }
+        controller.enqueue({ type: 'start' })
+        controller.enqueue({ type: 'text-start', id: 'arithmetic' })
+        controller.enqueue({
+          type: 'text-delta',
+          id: 'arithmetic',
+          delta: arithmetic,
+        })
+        controller.enqueue({ type: 'text-end', id: 'arithmetic' })
+        controller.enqueue({ type: 'finish', finishReason: 'stop' })
+        controller.close()
+      },
+    })
+  }
 
   // Strip tool invocation parts for tools that are no longer available (e.g.,
   // fabric_search / fabric_extract when local knowledge is toggled off mid-conversation).
@@ -145,8 +168,7 @@ export async function executeSingleAgentStream(
           axEngineMetrics?.generationKind === 'block_diffusion'
         const reportedGenerationDurationMs =
           axEngineMetrics?.generationDurationMs
-        const reportedGenerationTokens =
-          axEngineMetrics?.generationTokenCount
+        const reportedGenerationTokens = axEngineMetrics?.generationTokenCount
         const hasVersionedGenerationMetrics =
           typeof reportedGenerationDurationMs === 'number' &&
           Number.isFinite(reportedGenerationDurationMs) &&
@@ -164,8 +186,7 @@ export async function executeSingleAgentStream(
           nativeGenerationDurationMs += reportedGenerationDurationMs
           nativeGenerationTokens += reportedGenerationTokens
 
-          const reportedDeliveryDurationMs =
-            axEngineMetrics?.deliveryDurationMs
+          const reportedDeliveryDurationMs = axEngineMetrics?.deliveryDurationMs
           const reportedDeliveryTokens = axEngineMetrics?.deliveryTokenCount
           if (
             typeof reportedDeliveryDurationMs === 'number' &&
@@ -207,8 +228,7 @@ export async function executeSingleAgentStream(
               ? reportedTotalDurationMs
               : reportedGenerationDurationMs
 
-          const reportedTimeToFirstTokenMs =
-            axEngineMetrics?.timeToFirstTokenMs
+          const reportedTimeToFirstTokenMs = axEngineMetrics?.timeToFirstTokenMs
           if (
             nativeTimeToFirstTokenMs == null &&
             typeof reportedTimeToFirstTokenMs === 'number' &&
@@ -286,8 +306,7 @@ export async function executeSingleAgentStream(
             nativeGenerationTokens += reportedOutputTokens
             tokensPerSecond =
               nativeGenerationDurationMs > 0
-                ? (nativeGenerationTokens * 1000) /
-                  nativeGenerationDurationMs
+                ? (nativeGenerationTokens * 1000) / nativeGenerationDurationMs
                 : 0
           }
         } else {
@@ -306,12 +325,11 @@ export async function executeSingleAgentStream(
           finishReason: string
         }
         const usage = finishPart.totalUsage
-        const durationMs =
-          hasNativeGenerationMetrics
-            ? nativeGenerationDurationMs
-            : streamStartTime
-              ? Date.now() - streamStartTime
-              : 0
+        const durationMs = hasNativeGenerationMetrics
+          ? nativeGenerationDurationMs
+          : streamStartTime
+            ? Date.now() - streamStartTime
+            : 0
         const durationSec = durationMs / 1000
         const outputTokens = usage?.outputTokens ?? 0
         const inputTokens = usage?.inputTokens
@@ -380,8 +398,7 @@ export async function executeSingleAgentStream(
             mtpAcceptanceRate,
             mtpDraftTokens: nativeMtpDraftTokens || undefined,
             mtpAcceptedTokens: nativeMtpAcceptedTokens || undefined,
-            mtpDirectFallbackSteps:
-              nativeMtpDirectFallbackSteps || undefined,
+            mtpDirectFallbackSteps: nativeMtpDirectFallbackSteps || undefined,
           },
         }
       }

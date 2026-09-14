@@ -86,6 +86,34 @@ describe('executeSingleAgentStream', () => {
     expect(stream).toBeInstanceOf(ReadableStream)
   })
 
+  it.each([
+    ['2+2', '4'],
+    ['9+8', '17'],
+    ['9-8', '1'],
+    ['14-7=', '7'],
+  ])(
+    'streams a plain, complete answer for %s without model/tool calls',
+    async (text, expected) => {
+      const { streamText, readUIMessageStream } = await import('ai')
+      const stream = await executeSingleAgentStream(
+        makeConfig({
+          messages: [
+            { id: 'user', role: 'user', parts: [{ type: 'text', text }] },
+          ],
+          tools: makeTools(['python']),
+        })
+      )
+      let final: UIMessage | undefined
+      for await (const message of readUIMessageStream({ stream }))
+        final = message
+      expect(final?.parts).toEqual([
+        { type: 'text', text: expected, state: 'done' },
+      ])
+      expect(streamText).not.toHaveBeenCalled()
+      expect(final?.metadata).toBeUndefined()
+    }
+  )
+
   it('passes system message to streamText', async () => {
     const { streamText } = await import('ai')
     await executeSingleAgentStream(
@@ -526,10 +554,7 @@ describe('stripUnavailableToolParts', () => {
       }),
     ]
 
-    const kept = stripUnavailableToolParts(
-      messages,
-      new Set(['fabric_search'])
-    )
+    const kept = stripUnavailableToolParts(messages, new Set(['fabric_search']))
     expect(kept[0].parts).toHaveLength(1)
     expect(kept[0].parts[0].type).toBe('tool-invocation')
 

@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useSearchHistory } from '@/hooks/ui/useSearchHistory'
 import { route } from '@/constants/routes'
 import { useModelSources } from '@/hooks/models/useModelSources'
 import { cn } from '@/lib/utils'
@@ -391,14 +392,20 @@ function HubContent() {
   }, [cancelHuggingFaceModelFetch])
 
   const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) => {
+    searchHistory.change(e.target.value)
+  }
+
+  const applySearch = (value: string) => {
     setIsSearching(false)
-    setSearchValue(e.target.value)
+    setSearchValue(value)
     setHuggingFaceRepo(null)
 
     if (activeFilter !== 'downloaded') {
-      fetchHuggingFaceModel(e.target.value)
+      fetchHuggingFaceModel(value)
     }
   }
+
+  const searchHistory = useSearchHistory('hub', searchValue, applySearch)
 
   const navigate = useNavigate()
 
@@ -478,6 +485,11 @@ function HubContent() {
                 }
                 value={searchValue}
                 onChange={handleSearchChange}
+                onBlur={searchHistory.remember}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') searchHistory.remember()
+                  searchHistory.onKeyDown(event)
+                }}
                 className="w-full pl-9 pr-9 py-2 rounded-xl bg-muted/40 border border-border/50 focus:border-primary/40 focus:ring-2 focus:ring-primary/10 outline-none transition-all text-[13px] placeholder:text-muted-foreground/50"
               />
               {searchValue && (
@@ -844,8 +856,7 @@ function HubContent() {
                                   }}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-[12px] font-medium shadow-sm transition-all hover:shadow-md"
                                   style={{
-                                    background:
-                                      'var(--brand-gradient)',
+                                    background: 'var(--brand-gradient)',
                                     boxShadow:
                                       '0 2px 6px rgba(99,102,241,0.25)',
                                   }}
@@ -908,64 +919,68 @@ function HubContent() {
                                   totalMemoryMB
                                 )
                                 return (
-                                <CardItem
-                                  key={variant.model_id}
-                                  title={
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="mr-2 text-[13px]">
-                                        {variant.model_id}
-                                      </span>
-                                      {(model.num_mmproj ?? 0) > 0 && (
-                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-violet-500/10 text-violet-600 dark:text-violet-400">
-                                          <Eye className="size-2.5" />
+                                  <CardItem
+                                    key={variant.model_id}
+                                    title={
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="mr-2 text-[13px]">
+                                          {variant.model_id}
                                         </span>
-                                      )}
-                                      {model.tools && (
-                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                                          <Wrench className="size-2.5" />
-                                        </span>
-                                      )}
-                                    </div>
-                                  }
-                                  actions={
-                                    <div className="flex items-center gap-2">
-                                      <div className="flex flex-col items-end">
-                                        <p className="text-muted-foreground font-medium text-[11px]">
-                                          {variant.file_size}
-                                        </p>
-                                        {variantMemoryInfo && (
-                                          <p className="text-[10px] text-muted-foreground/50">
-                                            {variantMemoryInfo.estimatedText}
-                                            {' · '}
-                                            <span
-                                              className={cn(
-                                                'font-medium',
-                                                VARIANT_MEMORY_LABEL_CLASSES[
-                                                  variantMemoryInfo.label
-                                                ]
-                                              )}
-                                            >
-                                              {variantMemoryInfo.label}
-                                            </span>
-                                          </p>
+                                        {(model.num_mmproj ?? 0) > 0 && (
+                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-violet-500/10 text-violet-600 dark:text-violet-400">
+                                            <Eye className="size-2.5" />
+                                          </span>
+                                        )}
+                                        {model.tools && (
+                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                            <Wrench className="size-2.5" />
+                                          </span>
                                         )}
                                       </div>
-                                      <ModelInfoHoverCard
-                                        model={model}
-                                        variant={variant}
-                                        defaultModelQuantizations={
-                                          DEFAULT_MODEL_QUANTIZATIONS
-                                        }
-                                        modelSupportStatus={modelSupportStatus}
-                                        onCheckModelSupport={checkModelSupport}
-                                      />
-                                      <ModelDownloadAction
-                                        variant={variant}
-                                        model={model}
-                                      />
-                                    </div>
-                                  }
-                                />
+                                    }
+                                    actions={
+                                      <div className="flex items-center gap-2">
+                                        <div className="flex flex-col items-end">
+                                          <p className="text-muted-foreground font-medium text-[11px]">
+                                            {variant.file_size}
+                                          </p>
+                                          {variantMemoryInfo && (
+                                            <p className="text-[10px] text-muted-foreground/50">
+                                              {variantMemoryInfo.estimatedText}
+                                              {' · '}
+                                              <span
+                                                className={cn(
+                                                  'font-medium',
+                                                  VARIANT_MEMORY_LABEL_CLASSES[
+                                                    variantMemoryInfo.label
+                                                  ]
+                                                )}
+                                              >
+                                                {variantMemoryInfo.label}
+                                              </span>
+                                            </p>
+                                          )}
+                                        </div>
+                                        <ModelInfoHoverCard
+                                          model={model}
+                                          variant={variant}
+                                          defaultModelQuantizations={
+                                            DEFAULT_MODEL_QUANTIZATIONS
+                                          }
+                                          modelSupportStatus={
+                                            modelSupportStatus
+                                          }
+                                          onCheckModelSupport={
+                                            checkModelSupport
+                                          }
+                                        />
+                                        <ModelDownloadAction
+                                          variant={variant}
+                                          model={model}
+                                        />
+                                      </div>
+                                    }
+                                  />
                                 )
                               })}
                             </div>

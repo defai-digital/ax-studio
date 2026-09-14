@@ -27,7 +27,7 @@ import { hasSendableAttachment } from '@/lib/attachments/sendable'
 const ATTACHMENT_ONLY_PROMPT = 'Please use the attached file.'
 
 type Input = {
-  onSubmit?: (text: string) => void
+  onSubmit?: (text: string) => void | Promise<void>
   projectId?: string
   selectedModel?: { id: string }
   selectedProvider?: string
@@ -88,7 +88,7 @@ export function useChatSendHandler({
 
         if (onSubmit) {
           // AI SDK path — caller owns thread management
-          onSubmit(messageText)
+          await onSubmit(messageText)
           setMessage('')
           setPrompt('')
           return

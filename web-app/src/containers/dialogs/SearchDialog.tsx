@@ -25,6 +25,7 @@ import {
 import Fuse from 'fuse.js'
 import { toast } from 'sonner'
 import { useThreads } from '@/hooks/threads/useThreads'
+import { useSearchHistory } from '@/hooks/ui/useSearchHistory'
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { getModelDisplayName } from '@/lib/utils'
 import { localStorageKey } from '@/constants/localStorage'
@@ -141,6 +142,8 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const [searchQuery, setSearchQuery] = useState('')
+  const searchHistory = useSearchHistory('chats', searchQuery, setSearchQuery)
+  const rememberSearch = searchHistory.remember
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [activeTab, setActiveTab] = useState<Tab>('all')
   const [recentThreadIds, setRecentThreadIds] = useState<string[]>([])
@@ -165,10 +168,11 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
   )
 
   const handleClose = useCallback(() => {
+    rememberSearch()
     setSearchQuery('')
     setActiveTab('all')
     onOpenChange(false)
-  }, [onOpenChange])
+  }, [onOpenChange, rememberSearch])
 
   // Commands list
   const commands: CommandItem[] = useMemo(() => {
@@ -538,7 +542,10 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
     }
   }, [allItems, handleSelectThread, selectedIndex])
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (searchHistory.onKeyDown(e, !searchQuery || allItems.length === 0))
+      return
+    if (e.nativeEvent.isComposing) return
     if (e.key === 'ArrowDown') {
       e.preventDefault()
       setSelectedIndex((prev) => Math.min(prev + 1, allItems.length - 1))
@@ -546,6 +553,7 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
       e.preventDefault()
       setSelectedIndex((prev) => Math.max(prev - 1, 0))
     } else if (e.key === 'Enter') {
+      searchHistory.remember()
       e.preventDefault()
       executeSelected()
     } else if (e.key === 'Tab') {
@@ -590,7 +598,13 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
   ]
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) searchHistory.remember()
+        onOpenChange(next)
+      }}
+    >
       <DialogContent
         className="sm:max-w-xl p-0 gap-0 overflow-hidden"
         showCloseButton={false}
@@ -609,7 +623,9 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
             placeholder={t('common:searchThreads')}
             className="flex-1 h-12 px-3 bg-transparent text-[14px] placeholder:text-muted-foreground outline-none focus-visible:ring-0"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => searchHistory.change(e.target.value)}
+            onBlur={searchHistory.remember}
+            title="Search history: Up/Down when empty; Alt+Up when browsing results"
             onKeyDown={handleKeyDown}
             aria-label={t('common:search')}
           />
