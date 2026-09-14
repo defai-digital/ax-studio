@@ -52,7 +52,7 @@
     "rimraf": "^6.0.1",
     "tar": "^7.5.22",
     "unzipper": "^0.12.3",
-    "vitest": "^3.2.6"
+    "vitest": "^5.0.0"
   },
   "version": "2.2.2",
   "installConfig": {
