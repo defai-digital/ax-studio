@@ -57,4 +57,8 @@ The first full Vitest 5 run exposed one non-constructible FileReader mock; that 
 - Isolated real Ollama qwen3:4b dialogue passed: 7 model requests, all four behavior checks, zero renderer errors; generation capped at 64 tokens per request.
 - Isolated credential smoke passed: legacy plaintext scrub, OS-encrypted disk value, secret preservation, and provider restoration after reload/startup refresh.
 
+## GitHub verification follow-up
+
+At 75f0c678, Windows/macOS/Ubuntu full tests, both desktop compatibility lanes, CodeQL analysis and the alert gate, labeling, workflow lint and secret scanning passed. The coverage job passed its head tests and module gates but failed when downloading the absent main-branch baseline artifact. The baseline job checks out old main code, so the head's source-import fix cannot repair that checkout. The workflow now builds baseline Electron runtime before baseline coverage and treats a missing baseline artifact as an explicit upload error rather than silently reporting success. This follow-up changes CI setup only; the previously validated application code is unchanged.
+
 No issue is closed by this work. No release is published, no updater signatures are bypassed, and PR #861 is not merged.

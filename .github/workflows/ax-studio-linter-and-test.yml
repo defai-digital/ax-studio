@@ -135,6 +135,9 @@ jobs:
         run: |
           make lint
 
+      - name: Build baseline Electron runtime
+        run: yarn workspace @ax-studio/electron build:runtime
+
       - name: Run test coverage
         continue-on-error: true
         run: |
@@ -144,6 +147,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ref-lcov.info
+          if-no-files-found: error
           retention-days: 14
           path: coverage/lcov.info
 
