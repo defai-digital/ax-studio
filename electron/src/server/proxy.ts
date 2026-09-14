@@ -15,7 +15,7 @@
 //  - Upstream response `content-encoding` is stripped when forwarding: Node's
 //    fetch transparently decompresses, so forwarding the header would make the
 //    client decode twice.
-import { createHash, timingSafeEqual } from 'node:crypto'
+import { timingSafeEqual } from 'node:crypto'
 import dns from 'node:dns/promises'
 import http from 'node:http'
 import net from 'node:net'
@@ -162,9 +162,10 @@ function clearAuthFailure(clientId: string): void {
 }
 
 function constantTimeSecretEq(candidate: string, expected: string): boolean {
-  const a = createHash('sha256').update(candidate, 'utf8').digest()
-  const b = createHash('sha256').update(expected, 'utf8').digest()
-  return timingSafeEqual(a, b)
+  // Compare credentials directly; these are not stored password hashes.
+  const a = Buffer.from(candidate, 'utf8')
+  const b = Buffer.from(expected, 'utf8')
+  return a.length === b.length && timingSafeEqual(a, b)
 }
 
 function extractBearerToken(authStr: string): string | null {

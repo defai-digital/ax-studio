@@ -12,16 +12,18 @@ function focusedWindow(): BrowserWindow {
   return win
 }
 
-function windowByLabel(label: string | undefined): BrowserWindow {
-  if (!label || label === 'main') return focusedWindow()
-  const win = BrowserWindow.getAllWindows().find((w) => w.title === label || String(w.id) === label)
-  if (!win) throw new Error(`window command: no window with label '${label}'`)
-  return win
-}
-
 export function createWindowHandlers(
-  createChildWindow: (label: string, options: Record<string, unknown>) => BrowserWindow
+  createChildWindow: (label: string, options: Record<string, unknown>) => BrowserWindow,
+  getMainWindow: () => BrowserWindow | null = () => null
 ): Record<string, CommandHandler> {
+  const children = new Map<string, BrowserWindow>()
+  function windowByLabel(label: string | undefined): BrowserWindow {
+    if (!label) return focusedWindow()
+    const win = label === 'main' ? getMainWindow() :
+      children.get(label) ?? BrowserWindow.getAllWindows().find((w) => String(w.id) === label)
+    if (!win || win.isDestroyed()) throw new Error(`window command: no window with label '${label}'`)
+    return win
+  }
   return {
     window_set_focus: (args) => windowByLabel(str(args?.label)).focus(),
     window_minimize: (args) => windowByLabel(str(args?.label)).minimize(),
@@ -57,12 +59,16 @@ export function createWindowHandlers(
     // calls for custom chrome.
     window_start_dragging: () => undefined,
     window_get_all: () =>
-      BrowserWindow.getAllWindows().map((win, index) => (index === 0 ? 'main' : String(win.id))),
+      BrowserWindow.getAllWindows().map((win) => win === getMainWindow() ? 'main' :
+        [...children].find(([, child]) => child === win)?.[0] ?? String(win.id)),
     window_create: (args) => {
       const label = str(args?.label)
       if (!label) throw new Error('window_create error: Invalid argument')
+      if (label === 'main' || children.has(label)) throw new Error('window_create: label already exists')
       const options = (args?.options ?? {}) as Record<string, unknown>
-      createChildWindow(label, options)
+      const child = createChildWindow(label, options)
+      children.set(label, child)
+      child.once('closed', () => children.delete(label))
       return label
     },
   }

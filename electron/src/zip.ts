@@ -17,7 +17,7 @@ export async function extractZip(
     const target = path.resolve(root, name)
     const relative = path.relative(root, target)
     if (
-      !relative ||
+      (!relative && !(entry.type === 'Directory' && /^\.(\/\.)*\/?$/.test(name))) ||
       relative === '..' ||
       relative.startsWith(`..${path.sep}`) ||
       path.isAbsolute(relative) ||
@@ -30,6 +30,9 @@ export async function extractZip(
     const unixMode =
       entry.versionMadeBy >>> 8 === 3 ? entry.externalFileAttributes >>> 16 : 0
     const kind = unixMode & 0o170000
+    if (!relative && kind !== 0 && kind !== 0o040000) {
+      throw new Error(`decompress: unsafe ZIP root entry: ${entry.path}`)
+    }
     if (kind !== 0 && kind !== 0o100000 && kind !== 0o040000) {
       throw new Error(`decompress: unsupported ZIP special file: ${entry.path}`)
     }
@@ -37,6 +40,7 @@ export async function extractZip(
   })
 
   for (const { entry, target, relative, unixMode } of entries) {
+    if (!relative) continue // A genuine ./ archive-root directory is a no-op.
     // Reject pre-existing symbolic links/junctions before writing or chmodding.
     let current = root
     for (const component of relative.split(path.sep)) {

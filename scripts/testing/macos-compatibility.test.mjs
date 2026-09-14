@@ -160,6 +160,22 @@ async function archiveFixture(entries) {
 }
 
 describe('ZIP backend permissions', () => {
+  it('accepts a genuine archive root directory and preserves its files', async () => {
+    const { archive, output } = await archiveFixture([
+      { name: './', mode: 0o040755, content: '' },
+      { name: 'backend/llama-server', content: 'fixture' },
+    ])
+    await extractZip(archive, output)
+    expect(await fsp.readFile(path.join(output, 'backend/llama-server'), 'utf8')).toBe('fixture')
+  })
+  it('rejects a regular file targeting the archive root', async () => {
+    const { archive, output } = await archiveFixture([{ name: '.', mode: 0o100644 }])
+    await expect(extractZip(archive, output)).rejects.toThrow('unsafe ZIP path')
+  })
+  it('rejects a directory-looking root with regular-file metadata', async () => {
+    const { archive, output } = await archiveFixture([{ name: './', mode: 0o100644 }])
+    await expect(extractZip(archive, output)).rejects.toThrow('unsafe ZIP')
+  })
   it('restores executable bits on macOS, strips special bits, and keeps data nonexecutable', async () => {
     const { archive, output } = await archiveFixture([
       { name: 'bin/llama-server', mode: 0o104755 },

@@ -8,7 +8,10 @@ const electronRequire = createRequire(
 export default defineConfig({
   resolve: {
     // Test files and Electron sources must share the same mock module identity.
-    alias: { electron: electronRequire.resolve('electron') },
+    alias: {
+      electron: electronRequire.resolve('electron'),
+      'electron-updater': electronRequire.resolve('electron-updater'),
+    },
   },
   test: {
     environment: 'node',

@@ -176,7 +176,17 @@ export function validateBinaryPath(
 
   const withinTrustedRoot = trustedRoots.some((root) => {
     const normalizedRoot = canonicalizeOrSelf(root)
-    return canonical === normalizedRoot || canonical.startsWith(normalizedRoot + path.sep)
+    if (canonical === normalizedRoot || canonical.startsWith(normalizedRoot + path.sep)) return true
+    // Homebrew links bin executables into its own Cellar. Trust only links
+    // reached through an explicitly trusted bin directory, within that prefix.
+    if (process.platform === 'darwin' &&
+        ['/opt/homebrew/bin', '/usr/local/bin'].includes(root) &&
+        path.dirname(path.resolve(resolved)) === root) {
+      const cellar = path.join(path.dirname(root), 'Cellar')
+      // Do not accept a Cellar symlink escaping the supported prefix.
+      return canonicalizeOrSelf(cellar) === cellar && canonical.startsWith(cellar + path.sep)
+    }
+    return false
   })
   if (!withinTrustedRoot) {
     throw new LlamacppError(

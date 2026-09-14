@@ -26,7 +26,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  YARN_CLI: .yarn/releases/yarn-4.5.3.cjs
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
 
 jobs:
   build-macos:
@@ -61,8 +61,10 @@ jobs:
 
       - name: Install dependencies
         run: |
-          node "$YARN_CLI" install --immutable
-          node "$YARN_CLI" build:core
+          corepack enable
+          corepack prepare yarn@4.5.3 --activate
+          yarn install --immutable
+          yarn build:core
 
       - name: Configure signing and notarization
         shell: bash
@@ -72,6 +74,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_API_KEY_B64: ${{ secrets.APPLE_API_KEY_B64 }}
+          RELEASE_PUBLISH: ${{ github.ref_type == 'tag' || inputs.publish == true }}
         run: |
           set -euo pipefail
           signed=0
@@ -105,6 +108,11 @@ jobs:
             echo "Building without notarization."
           fi
 
+          if [[ "$RELEASE_PUBLISH" == "true" && ( "$signed" -ne 1 || "$notary" -ne 1 ) ]]; then
+            echo "::error::Published macOS releases require signing and notarization credentials."
+            exit 1
+          fi
+
       - name: Build and package (macOS)
         run: |
           set -euo pipefail
@@ -126,6 +134,20 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+
+      - name: Verify published macOS application
+        if: github.ref_type == 'tag' || inputs.publish == true
+        shell: bash
+        run: |
+          set -euo pipefail
+          found=0
+          while IFS= read -r -d '' bundle; do
+            codesign --verify --deep --strict --verbose=2 "$bundle"
+            xcrun stapler validate "$bundle"
+            spctl --assess --type execute --verbose=2 "$bundle"
+            found=1
+          done < <(find electron/dist-installer -maxdepth 3 -name '*.app' -type d -print0)
+          [[ "$found" -eq 1 ]] || { echo "::error::No macOS app found for release verification"; exit 1; }
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v7
@@ -167,8 +189,10 @@ jobs:
 
       - name: Install dependencies
         run: |
-          node "$env:YARN_CLI" install --immutable
-          node "$env:YARN_CLI" build:core
+          corepack enable
+          corepack prepare yarn@4.5.3 --activate
+          yarn install --immutable
+          yarn build:core
 
       - name: Build and package (Windows)
         run: |

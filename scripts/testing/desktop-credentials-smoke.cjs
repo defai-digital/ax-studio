@@ -73,10 +73,10 @@ const deadline = setTimeout(() => app.exit(1), 90000)
   assert.equal(disk.includes(sentinel), false)
   assert.ok(JSON.parse(disk)['model-provider-credentials'].startsWith('enc:'))
   assert.equal(
-    await evaluate(
-      `(async () => JSON.parse(await window.axElectron.invoke('get_secret', {key:'model-provider-credentials'})).openai === ${JSON.stringify(sentinel)})()`
-    ),
-    true
+    JSON.parse(await evaluate(
+      `window.axElectron.invoke('get_secret', {key:'model-provider-credentials'})`
+    )).openai,
+    sentinel
   )
   await win.loadFile(path.join(bridge.getRendererPath(), 'index.html'))
   await sleep(10000)

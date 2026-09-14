@@ -661,20 +661,12 @@ describe('DropdownModelProvider — Phase 4 Manual Test Protocol', () => {
 
   // Edge: returns null when no providers
   it('returns null when providers array is empty', () => {
-    // Need to override the mock for this test
-    const originalModule = vi.importActual('@/hooks/models/useModelProvider')
-    vi.doMock('@/hooks/models/useModelProvider', () => ({
-      useModelProvider: () => ({
-        providers: [],
-        selectedProvider: '',
-        selectedModel: null,
-        getProviderByName: () => undefined,
-        selectModelProvider: vi.fn(),
-        getModelBy: () => undefined,
-      }),
-    }))
-    // Since vi.doMock doesn't affect already-imported modules,
-    // we test the guard clause is present
-    expect(mockProviders.length).toBeGreaterThan(0) // Pre-condition
+    const saved = mockProviders.splice(0)
+    try {
+      const { container } = render(<DropdownModelProvider />)
+      expect(container).toBeEmptyDOMElement()
+    } finally {
+      mockProviders.push(...saved)
+    }
   })
 })

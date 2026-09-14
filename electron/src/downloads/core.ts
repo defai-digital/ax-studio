@@ -278,23 +278,14 @@ async function cleanupPartialDownload(
   await fsp.rm(urlPath, { force: true }).catch(() => {})
 }
 
-async function commitDownloadFile(tmpPath: string, finalPath: string): Promise<void> {
+export async function commitDownloadFile(tmpPath: string, finalPath: string): Promise<void> {
   try {
     // POSIX rename atomically replaces an existing destination.
     await fsp.rename(tmpPath, finalPath)
   } catch (error) {
-    if (process.platform === 'win32') {
-      // Node/libuv rename cannot replace an existing file on Windows; the
-      // Rust side uses ReplaceFileW. rm+rename is not atomic — documented
-      // deviation; the old destination is lost if rename fails after rm.
-      try {
-        await fsp.rm(finalPath, { force: true })
-        await fsp.rename(tmpPath, finalPath)
-        return
-      } catch (retryError) {
-        throw new Error(errToString(retryError))
-      }
-    }
+    // Never unlink a valid destination to work around a failed rename.
+    // libuv replaces regular files on Windows too; locks/permissions must
+    // fail safely and preserve the prior model and resumable replacement.
     throw new Error(errToString(error))
   }
 }

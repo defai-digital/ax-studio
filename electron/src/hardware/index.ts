@@ -262,6 +262,8 @@ const VULKAN_DEVICE_TYPE_MAP: Record<string, string> = {
 }
 
 async function probeVulkanGpus(): Promise<GpuInfo[]> {
+  // macOS uses Metal/MLX; never load/probe optional Vulkan tooling there.
+  if (process.platform === 'darwin') return []
   const stdout = await runCommand('vulkaninfo', ['--summary'], 10_000)
   if (stdout === null) return []
 

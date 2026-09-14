@@ -185,7 +185,7 @@ for (const [index, id] of ids.entries()) {
   await load()
   await sleep(10000)
   await evaluate(
-    `sessionStorage.setItem('split-view-info',JSON.stringify({direction:'right',splitThreadId:${JSON.stringify(ids[1])}}));window.__ax.router.navigate({to:'/threads/$threadId',params:{threadId:${JSON.stringify(ids[0])}}})`
+    `sessionStorage.setItem('split-view-info',JSON.stringify({direction:'right',splitThreadId:'01M24NQ3C9408V6ZMBQAEPK7TJ'}));window.__ax.router.navigate({to:'/threads/$threadId',params:{threadId:'01M24NNK0GQ25PM89X134E60W9'}})`
   )
   await waitFor(
     `document.querySelectorAll('textarea[aria-label="Ask me anything..."]').length===2`
