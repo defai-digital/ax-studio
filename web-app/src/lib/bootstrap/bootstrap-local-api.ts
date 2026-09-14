@@ -77,6 +77,31 @@ async function startLocalApiServer(
   })
 }
 
+/**
+ * Ports owned by other AX Studio processes that the fallback must never claim:
+ * 31420 is the Electron/Vite dev server and 31421-31429 is the reserved aux
+ * band (web-app/vite.config.ts). Claiming 31420 silently squatted the dev
+ * server and produced the "Address already in use" collision.
+ */
+const RESERVED_LOCAL_API_PORTS = new Set<number>([
+  31420,
+  ...Array.from({ length: 9 }, (_, i) => 31421 + i),
+])
+
+/** Number of ports to try after the configured one. */
+const LOCAL_API_FALLBACK_ATTEMPTS = 10
+
+/** Preferred port first, then up to N free ports, skipping ports owned by
+ *  other AX Studio processes. */
+function localApiPortAttempts(preferred: number): number[] {
+  const attempts = [preferred]
+  for (let offset = 1; attempts.length <= LOCAL_API_FALLBACK_ATTEMPTS; offset++) {
+    const candidate = preferred + offset
+    if (!RESERVED_LOCAL_API_PORTS.has(candidate)) attempts.push(candidate)
+  }
+  return attempts
+}
+
 function isPortBindError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
   return (
@@ -91,10 +116,7 @@ async function startLocalApiServerWithPortFallback(
   config: LocalApiServerConfig,
   apiKey: string
 ): Promise<number> {
-  const attempts = [
-    config.port,
-    ...Array.from({ length: 10 }, (_, i) => config.port + i + 1),
-  ]
+  const attempts = localApiPortAttempts(config.port)
   let lastError: unknown
 
   for (const port of attempts) {
