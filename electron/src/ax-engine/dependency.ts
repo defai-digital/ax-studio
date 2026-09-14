@@ -1,7 +1,9 @@
 // ax-engine binary resolution + version floor, mirroring AX Code's
 // dependency.ts: config override → AX_ENGINE_BIN env → PATH (plus macOS
 // Homebrew directories when Finder omits them) → managed install
-// dir, with a >= 6.9.0 version check via `ax-engine --version`.
+// dir, with a >= 6.9.0 version check via `ax-engine --version`
+// (falling back to `ax-engine doctor --json`, since released ax-engine builds
+// implement no --version flag).
 //
 // TODO(phase-3): managed auto-download. The current GitHub release tarball is
 // not self-contained (missing MLX dylibs/metallib); the next ax-engine release
@@ -62,21 +64,53 @@ export function compareVersions(a: string, b: string): number {
   return 0
 }
 
-/** Run `<bin> --version`; null when the output carries no semver. */
-export async function queryAxEngineVersion(binaryPath: string): Promise<string | null> {
+async function runAxEngineProbe(
+  binaryPath: string,
+  args: string[]
+): Promise<{ stdout: string; stderr: string } | null> {
   try {
-    const { stdout, stderr } = await execFileAsync(binaryPath, ['--version'], {
+    const { stdout, stderr } = await execFileAsync(binaryPath, args, {
       timeout: 10_000,
       env: { ...process.env },
     })
-    return parseAxEngineVersion(`${stdout}\n${stderr}`)
+    return { stdout, stderr }
   } catch {
     return null
   }
 }
 
+/** Extract `install.version` from `ax-engine doctor --json`; null when absent. */
+export function parseAxEngineDoctorVersion(output: string): string | null {
+  try {
+    const install = (JSON.parse(output) as { install?: { version?: unknown } })
+      .install
+    return typeof install?.version === 'string'
+      ? parseAxEngineVersion(install.version)
+      : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Resolve the engine's semver. Released ax-engine builds (including the
+ * Developer ID signed Homebrew v7.3.1) implement no `--version` flag and reply
+ * "unknown command", so fall back to `doctor --json` -> `install.version`.
+ * Without this the >= 6.9.0 gate rejects a valid engine and the sidecar never
+ * starts.
+ */
+export async function queryAxEngineVersion(binaryPath: string): Promise<string | null> {
+  const versionProbe = await runAxEngineProbe(binaryPath, ['--version'])
+  const direct = versionProbe
+    ? parseAxEngineVersion(`${versionProbe.stdout}\n${versionProbe.stderr}`)
+    : null
+  if (direct) return direct
+  const doctorProbe = await runAxEngineProbe(binaryPath, ['doctor', '--json'])
+  return doctorProbe ? parseAxEngineDoctorVersion(doctorProbe.stdout) : null
+}
+
 export const MISSING_BINARY_DETAIL =
-  'ax-engine binary not found. Install it (e.g. `brew install ax-engine` or place it on PATH / set AX_ENGINE_BIN), ' +
+  'ax-engine binary not found. Install it (e.g. `brew install defai-digital/tap/ax-engine` or place it on PATH / set AX_ENGINE_BIN), ' +
   'or drop a self-contained build at <data>/ax-engine/ax-engine. Managed auto-download lands once ax-engine ships ' +
   'a self-contained release artifact (see electron-migration-phase0-matrix.md §5).'
 
@@ -98,7 +132,7 @@ export async function checkAxEngineDependency(override?: string): Promise<AxEngi
       binary,
       version: null,
       versionOk: false,
-      detail: `Could not determine ax-engine version from \`${binary.path} --version\`; need >= ${MIN_AX_ENGINE_VERSION}.`,
+      detail: `Could not determine ax-engine version from \`${binary.path}\` (--version / doctor --json); need >= ${MIN_AX_ENGINE_VERSION}.`,
     }
   }
   if (compareVersions(version, MIN_AX_ENGINE_VERSION) < 0) {
