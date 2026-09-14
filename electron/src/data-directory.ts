@@ -112,7 +112,17 @@ export async function resetManagedData(
     /* legacy folder */
   }
   // Only the legacy default directory or a verified migration target is owned.
-  if (!owned && path.relative(root, path.resolve(defaultDirectory)) !== '') {
+  // Compare fully-resolved paths: on macOS the temp/data roots commonly traverse
+  // the /var -> /private/var symlink, so a lexical resolve() of the default
+  // directory would differ from the realpath'd root and wrongly refuse a reset
+  // of the app's own data folder (skipping the symlink scan below).
+  let defaultRoot: string
+  try {
+    defaultRoot = await fs.realpath(defaultDirectory)
+  } catch {
+    defaultRoot = path.resolve(defaultDirectory)
+  }
+  if (!owned && path.relative(root, defaultRoot) !== '') {
     throw new Error(
       'Reset refused: this is not an AX Studio-owned data folder. Migrate to an empty dedicated folder first.'
     )

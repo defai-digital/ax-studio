@@ -31,11 +31,11 @@ describe('engine executable discovery', () => {
     vi.stubEnv('AX_ENGINE_BIN', '')
     vi.stubEnv('AX_ENGINE_BENCH_BIN', '')
   })
-  function installed(platform, paths) {
+  function installed(platform, paths, pathApi = path) {
     vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
-    const normalized = new Set(paths.map((p) => path.normalize(p)))
+    const normalized = new Set(paths.map((p) => pathApi.normalize(p)))
     vi.spyOn(fs, 'accessSync').mockImplementation((p) => {
-      if (!normalized.has(path.normalize(p))) throw new Error('ENOENT')
+      if (!normalized.has(pathApi.normalize(p))) throw new Error('ENOENT')
     })
     vi.spyOn(fs, 'statSync').mockReturnValue({ isFile: () => true })
   }
@@ -92,10 +92,11 @@ describe('engine executable discovery', () => {
     }
   )
   it('retains native Windows PATH lookup', () => {
-    installed('win32', ['C:/Tools/ax-engine'])
-    vi.stubEnv('PATH', ['C:/Missing', 'C:/Tools'].join(path.delimiter))
+    // Windows semantics must hold regardless of the host running the suite.
+    installed('win32', ['C:/Tools/ax-engine'], path.win32)
+    vi.stubEnv('PATH', ['C:/Missing', 'C:/Tools'].join(path.win32.delimiter))
     expect(resolveAxEngineBinary().path).toBe(
-      path.join('C:/Tools', 'ax-engine')
+      path.win32.join('C:/Tools', 'ax-engine')
     )
   })
 })
