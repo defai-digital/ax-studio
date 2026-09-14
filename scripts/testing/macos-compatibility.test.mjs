@@ -31,7 +31,9 @@ describe('engine executable discovery', () => {
     vi.stubEnv('AX_ENGINE_BIN', '')
     vi.stubEnv('AX_ENGINE_BENCH_BIN', '')
   })
-  function installed(platform, paths, pathApi = path) {
+  function installed(platform, paths) {
+    // Fixtures must follow the simulated OS, not the machine running Vitest.
+    const pathApi = platform === 'win32' ? path.win32 : path.posix
     vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
     const normalized = new Set(paths.map((p) => pathApi.normalize(p)))
     vi.spyOn(fs, 'accessSync').mockImplementation((p) => {
@@ -44,18 +46,18 @@ describe('engine executable discovery', () => {
     (dir) => {
       installed('darwin', [`${dir}/ax-engine`, `${dir}/ax-engine-bench`])
       expect(resolveAxEngineBinary()).toEqual({
-        path: path.join(dir, 'ax-engine'),
+        path: path.posix.join(dir, 'ax-engine'),
         source: 'path',
       })
       expect(resolveAxEngineBenchBinary()).toBe(
-        path.join(dir, 'ax-engine-bench')
+        path.posix.join(dir, 'ax-engine-bench')
       )
     }
   )
   it('finds a standalone Homebrew bench even without an engine binary', () => {
     installed('darwin', ['/opt/homebrew/bin/ax-engine-bench'])
     expect(resolveAxEngineBenchBinary()).toBe(
-      path.join('/opt/homebrew/bin', 'ax-engine-bench')
+      path.posix.join('/opt/homebrew/bin', 'ax-engine-bench')
     )
   })
   it('keeps PATH ahead of Homebrew and preserves explicit override precedence', () => {
@@ -66,7 +68,7 @@ describe('engine executable discovery', () => {
       '/env',
     ])
     expect(resolveAxEngineBinary().path).toBe(
-      path.join('/usr/bin', 'ax-engine')
+      path.posix.join('/usr/bin', 'ax-engine')
     )
     vi.stubEnv('AX_ENGINE_BIN', '/env')
     expect(resolveAxEngineBinary()).toEqual({ path: '/env', source: 'env' })
@@ -93,7 +95,7 @@ describe('engine executable discovery', () => {
   )
   it('retains native Windows PATH lookup', () => {
     // Windows semantics must hold regardless of the host running the suite.
-    installed('win32', ['C:/Tools/ax-engine'], path.win32)
+    installed('win32', ['C:/Tools/ax-engine'])
     vi.stubEnv('PATH', ['C:/Missing', 'C:/Tools'].join(path.win32.delimiter))
     expect(resolveAxEngineBinary().path).toBe(
       path.win32.join('C:/Tools', 'ax-engine')
