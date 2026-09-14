@@ -1,5 +1,6 @@
 // ax-engine binary resolution + version floor, mirroring AX Code's
-// dependency.ts: config override → AX_ENGINE_BIN env → PATH → managed install
+// dependency.ts: config override → AX_ENGINE_BIN env → PATH (plus macOS
+// Homebrew directories when Finder omits them) → managed install
 // dir, with a >= 6.9.0 version check via `ax-engine --version`.
 //
 // TODO(phase-3): managed auto-download. The current GitHub release tarball is
@@ -9,11 +10,10 @@
 // managed slot is install-it-yourself and absence surfaces as
 // `missing_dependency` with install guidance.
 import { execFile } from 'node:child_process'
-import fs from 'node:fs'
-import path from 'node:path'
 import { promisify } from 'node:util'
 import { managedBinaryPath } from './paths.js'
 import type { AxEngineBinarySource } from './types.js'
+import { findSystemExecutable, isExecutable } from '../executable-search.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -31,28 +31,9 @@ export interface AxEngineDependency {
   detail?: string
 }
 
-function isExecutable(filePath: string): boolean {
-  try {
-    fs.accessSync(filePath, fs.constants.X_OK)
-    return fs.statSync(filePath).isFile()
-  } catch {
-    return false
-  }
-}
-
-function findOnPath(name: string): string | null {
-  const pathEnv = process.env.PATH ?? ''
-  for (const dir of pathEnv.split(path.delimiter)) {
-    if (!dir) continue
-    const candidate = path.join(dir, name)
-    if (isExecutable(candidate)) return candidate
-  }
-  return null
-}
-
 /**
  * Resolution order (AX Code parity): explicit override (e.g. from settings) →
- * `AX_ENGINE_BIN` env (dev escape hatch) → `ax-engine` on PATH → managed
+ * `AX_ENGINE_BIN` env (dev escape hatch) → `ax-engine` on PATH / macOS Homebrew → managed
  * install dir. A configured override/env that is not executable is a hard
  * miss (never silently falls through); PATH and managed are best-effort.
  */
@@ -60,7 +41,7 @@ export function resolveAxEngineBinary(override?: string): ResolvedAxEngineBinary
   if (override) return isExecutable(override) ? { path: override, source: 'override' } : null
   const envBin = process.env.AX_ENGINE_BIN
   if (envBin) return isExecutable(envBin) ? { path: envBin, source: 'env' } : null
-  const onPath = findOnPath('ax-engine')
+  const onPath = findSystemExecutable('ax-engine')
   if (onPath) return { path: onPath, source: 'path' }
   const managed = managedBinaryPath()
   if (isExecutable(managed)) return { path: managed, source: 'managed' }

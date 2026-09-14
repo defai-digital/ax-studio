@@ -21,6 +21,15 @@ export interface AppConfiguration {
 const approvedPaths = new Set<string>()
 
 let pendingOpenFiles: string[] = []
+let openFileReceiverReady = false
+
+export function resetOpenFileReceiver(): void {
+  openFileReceiverReady = false
+}
+
+export function isOpenFileReceiverReady(): boolean {
+  return openFileReceiverReady
+}
 
 export function userDataPath(...parts: string[]): string {
   return path.join(app.getPath('userData'), ...parts)
@@ -163,6 +172,8 @@ export function bufferOpenFiles(paths: string[]): void {
 }
 
 export function takePendingOpenFiles(): string[] {
+  // The renderer installs its dock-file-drop listener before draining.
+  openFileReceiverReady = true
   const drained = pendingOpenFiles
   pendingOpenFiles = []
   return drained

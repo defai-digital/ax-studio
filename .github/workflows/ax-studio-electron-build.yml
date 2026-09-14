@@ -92,6 +92,8 @@ jobs:
           if [[ "$signed" -eq 0 ]]; then
             echo "No Apple signing secrets — building unsigned (CSC_IDENTITY_AUTO_DISCOVERY=false)."
             echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
+          else
+            echo "SIGNING_ARGS=-c.forceCodeSigning=true" >> "$GITHUB_ENV"
           fi
 
           # electron-builder.yml ships notarize: false; only override it when
@@ -107,15 +109,18 @@ jobs:
         run: |
           set -euo pipefail
           extra_args=()
+          if [[ -n "${SIGNING_ARGS:-}" ]]; then
+            extra_args+=("$SIGNING_ARGS")
+          fi
           if [[ -n "${NOTARIZE_ARGS:-}" ]]; then
             extra_args+=("$NOTARIZE_ARGS")
           fi
           node scripts/dist-electron.mjs --mac "${extra_args[@]}"
         env:
           NODE_OPTIONS: '--max-old-space-size=4196'
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          CSC_NAME: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
