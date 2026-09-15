@@ -39,7 +39,7 @@ export function createCommandRegistry(context: CommandContext): Map<string, Comm
   merge(createFsHandlers(context.getMainWindow))
   merge(createAppHandlers())
   merge(createSecretsHandlers())
-  merge(createWindowHandlers(context.createChildWindow))
+  merge(createWindowHandlers(context.createChildWindow, context.getMainWindow))
   merge(createStoreHandlers())
   merge(createThreadsHandlers())
   merge(createServerHandlers())
@@ -66,6 +66,13 @@ export function registerIpcHandlers(context: CommandContext): () => void {
     const handler = registry.get(cmd)
     if (!handler) throw new UnimplementedCommandError(cmd)
     try {
+      if (cmd === 'take_pending_open_files') {
+        const main = context.getMainWindow()
+        if (!main || main.isDestroyed() || _event.sender !== main.webContents ||
+            _event.senderFrame !== main.webContents.mainFrame) {
+          throw new Error('Only the main renderer may receive pending open files')
+        }
+      }
       return await handler(args)
     } catch (error) {
       // Structured errors survive IPC as { code, cmd, message } JSON in the

@@ -2,6 +2,8 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   test: {
+    // Match the Windows CI lane and avoid Node 24 fork-pool teardown failures.
+    pool: process.platform === 'win32' ? 'threads' : 'forks',
     projects: [
       // Core package - use its own vitest config
       './core',

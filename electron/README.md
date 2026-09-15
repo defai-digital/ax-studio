@@ -157,6 +157,21 @@ is minimal — the Tauri Bun/MLX keys are not mirrored (no bundled Bun, MLX
 runs in the ax-engine sidecar); only the Chromium/V8 keys every
 hardened-runtime Electron app needs are kept.
 
+The Apple certificate secrets are mapped to electron-builder's `CSC_LINK`,
+`CSC_KEY_PASSWORD`, and `CSC_NAME`. A certificate must be an electron-builder
+supported certificate file/URL/base64 value; an identity alone requires that
+identity and its private key to already exist in the build machine's keychain.
+When signing is configured, `forceCodeSigning` prevents silently publishing an
+unsigned build if the certificate is unavailable.
+
+On macOS, AX Engine and its manifest CLI also search `/opt/homebrew/bin` and
+`/usr/local/bin` after `PATH`, so launching from Finder does not require shell
+environment setup. Explicit binary overrides keep their existing precedence.
+ZIP backend imports restore Unix file permission bits on macOS/Linux and do
+not apply `chmod` on Windows. ZIP special files (including symlinks), unsafe
+paths, and paths through existing symlinks are rejected; `.tar.gz` imports
+continue to use the existing tar extraction path.
+
 ### Auto-updates (electron-updater)
 
 `electron/src/updater.ts` wraps electron-updater. It is initialized ONLY in

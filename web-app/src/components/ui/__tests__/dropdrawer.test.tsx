@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import '@testing-library/jest-dom'
 
@@ -34,6 +34,49 @@ vi.mock('framer-motion', () => ({
 }))
 
 describe('DropDrawer Utilities', () => {
+  it('opens mobile submenus, returns to the menu and dispatches enabled actions', async () => {
+    mockUseIsMobile.mockReturnValue(true)
+    const selected = vi.fn(), disabled = vi.fn()
+    render(
+      <DropDrawer open>
+        <DropDrawerTrigger>Actions</DropDrawerTrigger>
+        <DropDrawerContent>
+          <DropDrawerLabel>Options</DropDrawerLabel>
+          <DropDrawerGroup>
+            <DropDrawerItem disabled onSelect={disabled}>Disabled action</DropDrawerItem>
+            <DropDrawerSeparator />
+            <DropDrawerSub id="settings">
+              <DropDrawerSubTrigger>Settings submenu</DropDrawerSubTrigger>
+              <DropDrawerSubContent>
+                <DropDrawerItem onSelect={selected}>Choose setting</DropDrawerItem>
+              </DropDrawerSubContent>
+            </DropDrawerSub>
+          </DropDrawerGroup>
+          <DropDrawerFooter>Footer</DropDrawerFooter>
+        </DropDrawerContent>
+      </DropDrawer>
+    )
+    fireEvent.click(await screen.findByText('Disabled action'))
+    expect(disabled).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByText('Settings submenu'))
+    fireEvent.click(await screen.findByText('Choose setting'))
+    expect(selected).toHaveBeenCalledOnce()
+    const back = document.querySelector('[data-slot="drawer-header"] button')
+    expect(back).not.toBeNull()
+    fireEvent.click(back!)
+    await waitFor(() => expect(screen.getByText('Disabled action')).toBeInTheDocument())
+  })
+  it('renders an open desktop menu and selects its action', async () => {
+    mockUseIsMobile.mockReturnValue(false)
+    const selected = vi.fn()
+    render(<DropDrawer open><DropDrawerTrigger>Actions</DropDrawerTrigger><DropDrawerContent>
+      <DropDrawerLabel>Desktop options</DropDrawerLabel>
+      <DropDrawerItem icon={<span>icon</span>} onSelect={selected}>Select desktop</DropDrawerItem>
+      <DropDrawerSeparator /><DropDrawerFooter>Footer</DropDrawerFooter>
+    </DropDrawerContent></DropDrawer>)
+    fireEvent.click(await screen.findByText('Select desktop'))
+    expect(selected).toHaveBeenCalledOnce()
+  })
   it('renders without crashing', () => {
     expect(() => {
       render(

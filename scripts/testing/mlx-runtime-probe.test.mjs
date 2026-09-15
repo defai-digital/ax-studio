@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createMlxHandlers, probeMlxRuntime } from '../../electron/dist/commands/mlx.js'
+import { createMlxHandlers, probeMlxRuntime } from '../../electron/src/commands/mlx.ts'
 
 describe('mlx_runtime_probe Electron bridge', () => {
   it('registers mlx_runtime_probe on the command map', () => {

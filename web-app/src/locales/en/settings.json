@@ -142,7 +142,7 @@
   "dialogs": {
     "changeDataFolder": {
       "title": "Change Data Folder Location",
-      "description": "Are you sure you want to change the data folder location? This will move all your data to the new location and restart the application.",
+      "description": "Choose an empty folder. Your data will be copied and verified before the application restarts. The original folder is kept as a recovery copy and will continue to use disk space.",
       "currentLocation": "Current Location:",
       "newLocation": "New Location:",
       "cancel": "Cancel",

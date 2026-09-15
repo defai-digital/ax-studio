@@ -10,8 +10,8 @@ import { createAxEngineMetadataExtractor } from '../ax-engine-metadata'
 // delegating data: URL reads to the real implementation.
 const httpFetchMock = vi.hoisted(() => {
   const realFetch = globalThis.fetch.bind(globalThis)
-  const mock = vi.fn(
-    (...args: Parameters<typeof fetch>) => realFetch(...args)
+  const mock = vi.fn((...args: Parameters<typeof fetch>) =>
+    realFetch(...args)
   ) as unknown as typeof fetch
   globalThis.fetch = mock
   return vi.mocked(mock)
@@ -110,7 +110,7 @@ describe('ModelFactory', () => {
         output.choices as Array<{ delta: Record<string, unknown> }>
       )[0]
       expect(choice.delta.content).toBe('Hello')
-      expect(choice.delta.reasoning_content).toBeUndefined()
+      expect(choice.delta.reasoning_content).toBe('Thinking')
       expect(choice.delta.role).toBe('1')
     })
 
@@ -186,12 +186,12 @@ describe('ModelFactory', () => {
         }>
       )[0]
       expect(choice.delta.content).toBe('hello')
-      expect(choice.delta.reasoning_content).toBeUndefined()
+      expect(choice.delta.reasoning_content).toBe('thinking')
       expect(choice.delta.role).toBe('assistant')
       expect(choice.finish_reason).toBe('stop')
     })
 
-    it('uses reasoning text as visible content when a stream chunk has no content', async () => {
+    it('preserves reasoning separately when a stream chunk has no final content', async () => {
       const input = JSON.stringify({
         choices: [
           {
@@ -208,8 +208,8 @@ describe('ModelFactory', () => {
       const choice = (
         output.choices as Array<{ delta: Record<string, unknown> }>
       )[0]
-      expect(choice.delta.content).toBe('thinking-only text')
-      expect(choice.delta.reasoning_content).toBeUndefined()
+      expect(choice.delta.content).toBeUndefined()
+      expect(choice.delta.reasoning_content).toBe('thinking-only text')
     })
   })
 

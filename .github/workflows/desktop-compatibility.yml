@@ -1,0 +1,47 @@
+name: Desktop Compatibility
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, fix/issues-840-843-20260914]
+    paths:
+      - 'electron/**'
+      - 'scripts/testing/**'
+      - '.github/workflows/desktop-compatibility.yml'
+      - '.github/workflows/ax-studio-electron-build.yml'
+      - 'package.json'
+      - 'yarn.lock'
+  pull_request:
+    paths:
+      - 'electron/**'
+      - 'scripts/testing/**'
+      - '.github/workflows/desktop-compatibility.yml'
+      - '.github/workflows/ax-studio-electron-build.yml'
+      - 'package.json'
+      - 'yarn.lock'
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Install pinned Yarn and dependencies
+        run: |
+          corepack enable
+          corepack prepare yarn@4.5.3 --activate
+          yarn install --immutable
+      - name: Compile Electron main and preload
+        run: yarn workspace @ax-studio/electron build:runtime
+      - name: Test desktop compatibility
+        run: yarn vitest run --config scripts/testing/vitest.config.ts scripts/testing/macos-compatibility.test.mjs scripts/testing/desktop-open-files.test.mjs --pool=threads

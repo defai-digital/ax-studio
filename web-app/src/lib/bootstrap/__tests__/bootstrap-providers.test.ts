@@ -68,6 +68,18 @@ describe('bootstrapProviders', () => {
     )
   })
 
+  it('restores credentials before applying and registering providers', async () => {
+    const setProviders = vi.fn()
+    const prepared = [
+      { provider: 'openai', api_key: 'synthetic-restored-key' },
+    ] as ModelProvider[]
+    await bootstrapProviders(
+      makeInput({ setProviders, prepareProviders: () => prepared })
+    )
+    expect(setProviders).toHaveBeenCalledWith(prepared, '/')
+    expect(vi.mocked(syncRemoteProviders)).toHaveBeenCalledWith(prepared)
+  })
+
   it('does not sync a provider snapshot rejected by the caller', async () => {
     const setProviders = vi.fn().mockReturnValue(false)
 

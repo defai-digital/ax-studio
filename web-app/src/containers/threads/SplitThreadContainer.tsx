@@ -51,10 +51,11 @@ export function SplitThreadContainer({
   const thread = useThreads(useShallow((state) => state.threads[threadId]))
   const updateThread = useThreads((state) => state.updateThread)
   const currentAssistant = useAssistant((state) => state.currentAssistant)
-  const selectedModel = useModelProvider((state) => state.selectedModel) ?? undefined
+  const selectedModel =
+    useModelProvider((state) => state.selectedModel) ?? undefined
   const { globalDefaultPrompt, autoTuningEnabled } = useGeneralSetting()
   const threadMessageCount = useMessages(
-    (state) => state.messages[threadId]?.length ?? 0,
+    (state) => state.messages[threadId]?.length ?? 0
   )
   // ─── Domain hooks (same as $threadId.tsx) ─────────────────────────────────
   const { promptResolution, optimizedModelConfig } = useThreadConfig({
@@ -108,12 +109,12 @@ export function SplitThreadContainer({
         const routerResult = getLastRouterResult()
         const routingMeta = routerResult?.routed
           ? {
-            modelId: routerResult.modelId,
-            providerId: routerResult.providerId,
-            reason: routerResult.reason,
-            routed: true,
-            latencyMs: routerResult.latencyMs,
-          }
+              modelId: routerResult.modelId,
+              providerId: routerResult.providerId,
+              reason: routerResult.reason,
+              routed: true,
+              latencyMs: routerResult.latencyMs,
+            }
           : undefined
         const hasMetadataUpdate = isAbort || Boolean(routingMeta)
         const messageForPersistence = hasMetadataUpdate
@@ -131,14 +132,13 @@ export function SplitThreadContainer({
           const persistedMetadata = messageForPersistence.metadata
           setChatMessages((prev) =>
             prev.map((m) =>
-              m.id === message.id
-                ? { ...m, metadata: persistedMetadata }
-                : m
+              m.id === message.id ? { ...m, metadata: persistedMetadata } : m
             )
           )
         }
-        const contentParts =
-          extractContentPartsFromUIMessage(messageForPersistence)
+        const contentParts = extractContentPartsFromUIMessage(
+          messageForPersistence
+        )
         persistMessageOnFinishRef.current?.(messageForPersistence, contentParts)
       }
     },
@@ -154,6 +154,7 @@ export function SplitThreadContainer({
     handleContextSizeIncrease,
   } = useThreadChat({
     threadId,
+    threadModel: thread?.model,
     sendMessage,
     regenerate,
     setChatMessages,
@@ -167,7 +168,7 @@ export function SplitThreadContainer({
     setThreadPromptDraft(
       typeof thread?.metadata?.threadPrompt === 'string'
         ? thread.metadata.threadPrompt
-        : '',
+        : ''
     )
   }, [thread?.metadata?.threadPrompt])
 
@@ -186,7 +187,7 @@ export function SplitThreadContainer({
     async (text: string) => {
       await processAndSendMessage(text)
     },
-    [processAndSendMessage],
+    [processAndSendMessage]
   )
 
   // ─── Compare-mode wiring ──────────────────────────────────────────────────

@@ -17,6 +17,7 @@ import { str } from './args.js'
 import type { CommandHandler } from './registry.js'
 import { getAppDataFolderPath } from '../state.js'
 import { resolveAxEngineBinary } from '../ax-engine/dependency.js'
+import { findSystemExecutable, isExecutable } from '../executable-search.js'
 import {
   AX_NATIVE_MODEL_MANIFEST_FILE,
   dirContainsSafetensors,
@@ -65,19 +66,10 @@ function resolveDownloadedOrCachedModelDir(modelId: string): string | null {
   return null
 }
 
-function isExecutable(filePath: string): boolean {
-  try {
-    fs.accessSync(filePath, fs.constants.X_OK)
-    return fs.statSync(filePath).isFile()
-  } catch {
-    return false
-  }
-}
-
 /**
  * Locate the `ax-engine-bench` CLI (ships with ax-engine ≥ 6.x via Homebrew /
  * the release tarball): `AX_ENGINE_BENCH_BIN` env → sibling of the resolved
- * `ax-engine` binary → PATH. A configured env that is not executable is a hard
+ * `ax-engine` binary → PATH / macOS Homebrew. A configured env that is not executable is a hard
  * miss (same convention as AX_ENGINE_BIN).
  */
 export function resolveAxEngineBenchBinary(): string | null {
@@ -88,12 +80,7 @@ export function resolveAxEngineBenchBinary(): string | null {
     const sibling = path.join(path.dirname(axEngine.path), 'ax-engine-bench')
     if (isExecutable(sibling)) return sibling
   }
-  for (const dir of (process.env.PATH ?? '').split(path.delimiter)) {
-    if (!dir) continue
-    const candidate = path.join(dir, 'ax-engine-bench')
-    if (isExecutable(candidate)) return candidate
-  }
-  return null
+  return findSystemExecutable('ax-engine-bench')
 }
 
 /**

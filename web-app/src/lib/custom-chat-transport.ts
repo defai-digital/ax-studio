@@ -18,10 +18,7 @@ import type { ServiceHub } from '@/services'
 import { isLocalProvider, prepareProviderForChat } from './chat/model-session'
 import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 import { syncRemoteProviders } from './providers/provider-sync'
-import {
-  isAxEngineProvider,
-  LOCAL_PROVIDER_IDS,
-} from '@/constants/providers'
+import { isAxEngineProvider, LOCAL_PROVIDER_IDS } from '@/constants/providers'
 import { extractErrorMessage } from '@/lib/utils/error'
 
 // Use native fetch — same reason as model-factory.ts (Tauri plugin ReadableStream
@@ -89,7 +86,10 @@ function shouldAwaitLocalStartup(
   provider: ProviderObject,
   modelId: string
 ): boolean {
-  return isAxEngineProvider(provider.provider) || modelId.startsWith('mlx-community/')
+  return (
+    isAxEngineProvider(provider.provider) ||
+    modelId.startsWith('mlx-community/')
+  )
 }
 
 function usesMlxIpc(providerId: string): boolean {
@@ -367,9 +367,10 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
     const selectedModelId = useModelProvider.getState().selectedModel?.id
     const selectedProviderId = useModelProvider.getState().selectedProvider
 
-    const fallbackModelId = this.modelOverrideId ?? selectedModelId ?? ''
+    const fallbackModelId =
+      this.modelOverrideId?.trim() || selectedModelId || ''
     const fallbackProviderId =
-      this.modelOverrideProviderId ?? selectedProviderId
+      this.modelOverrideProviderId?.trim() || selectedProviderId
     let finalModelId = fallbackModelId
     let finalProviderId = fallbackProviderId
     let preparedForPreflightKey: string | null = null
@@ -425,10 +426,17 @@ export class CustomChatTransport implements ChatTransport<UIMessage> {
         (isLocalProviderId(providerId) && modelId
           ? createFallbackLocalProvider(providerId, modelId)
           : undefined)
-      const serviceHub = this.serviceHub ?? getServiceHub()
-      if (!serviceHub || !modelId || !provider) {
-        throw new Error('ServiceHub not initialized or model/provider missing.')
+      if (!modelId || !providerId) {
+        throw new Error(
+          'Select a model and provider in the chat model selector before sending a message.'
+        )
       }
+      if (!provider) {
+        throw new Error(
+          `Provider "${providerId}" is no longer configured. Select an available model or reconnect the provider in Settings > AI Providers.`
+        )
+      }
+      const serviceHub = this.serviceHub ?? getServiceHub()
 
       let preparation: ProviderPreparation | undefined
       if (preparedForPreflightKey !== modelProviderKey(modelId, providerId)) {

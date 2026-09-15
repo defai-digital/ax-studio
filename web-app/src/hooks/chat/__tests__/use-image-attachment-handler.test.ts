@@ -210,7 +210,9 @@ describe('useImageAttachmentHandler', () => {
         this.onload?.()
       }),
     })
-    globalThis.FileReader = vi.fn(mockReader) as unknown as typeof FileReader
+    globalThis.FileReader = vi.fn(function () {
+      return mockReader()
+    }) as unknown as typeof FileReader
 
     let stored: Array<{
       name: string

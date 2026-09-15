@@ -57,23 +57,24 @@ vi.mock('@/lib/completion', () => ({
 // Mock messages conversion
 vi.mock('@/lib/messages', () => ({
   convertThreadMessagesToUIMessages: vi.fn((msgs: unknown[]) =>
-    msgs.map((m: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+    msgs.map((m: any) => ({
+      // eslint-disable-line @typescript-eslint/no-explicit-any
       id: m.id,
       role: m.role,
       parts: [{ type: 'text', text: m.content?.[0]?.text?.value ?? '' }],
     }))
   ),
-  extractContentPartsFromUIMessage: vi.fn((message: {
-    parts?: Array<{ type?: string; text?: string }>
-  }) => {
-    const text = (message.parts ?? [])
-      .filter((part) => part.type === 'text')
-      .map((part) => part.text ?? '')
-      .join('')
-    return text
-      ? [{ type: 'text', text: { value: text, annotations: [] } }]
-      : []
-  }),
+  extractContentPartsFromUIMessage: vi.fn(
+    (message: { parts?: Array<{ type?: string; text?: string }> }) => {
+      const text = (message.parts ?? [])
+        .filter((part) => part.type === 'text')
+        .map((part) => part.text ?? '')
+        .join('')
+      return text
+        ? [{ type: 'text', text: { value: text, annotations: [] } }]
+        : []
+    }
+  ),
 }))
 
 // Mock chat session store
@@ -94,7 +95,11 @@ vi.mock('@/stores/chat-session-store', () => ({
 // Mock @ax-studio/core enums
 vi.mock('@ax-studio/core', () => ({
   ContentType: { Text: 'text', Image: 'image' },
-  ChatCompletionRole: { User: 'user', Assistant: 'assistant', System: 'system' },
+  ChatCompletionRole: {
+    User: 'user',
+    Assistant: 'assistant',
+    System: 'system',
+  },
   MessageStatus: { Ready: 'ready', InProgress: 'in_progress' },
 }))
 
@@ -176,6 +181,25 @@ describe('useThreadChat', () => {
     })
     expect(useMessages.getState().getMessages(threadId)).toEqual([])
     expect(mockSetChatMessages).toHaveBeenCalledWith([])
+  })
+
+  it('blocks a second send only in the busy pane before changing its history', async () => {
+    const { result } = renderHook(() => useThreadChat(defaultParams()))
+    vi.mocked(useChatSessions.getState).mockReturnValue({
+      sessions: { [threadId]: { isStreaming: true } },
+    } as never)
+    await expect(
+      result.current.processAndSendMessage('duplicate')
+    ).rejects.toThrow('Wait for this conversation')
+    expect(mockSendMessage).not.toHaveBeenCalled()
+    expect(useMessages.getState().getMessages(threadId)).toHaveLength(0)
+    vi.mocked(useChatSessions.getState).mockReturnValue({
+      sessions: { 'other-pane': { isStreaming: true } },
+    } as never)
+    await act(async () => {
+      await result.current.processAndSendMessage('independent')
+    })
+    expect(mockSendMessage).toHaveBeenCalledOnce()
   })
 
   it('marks the thread loaded when persisted fetch fails', async () => {
@@ -298,7 +322,9 @@ describe('useThreadChat', () => {
         id: 'disk-1',
         thread_id: threadId,
         role: 'user',
-        content: [{ type: 'text', text: { value: 'old history', annotations: [] } }],
+        content: [
+          { type: 'text', text: { value: 'old history', annotations: [] } },
+        ],
         created_at: 1,
       },
     ])
@@ -415,7 +441,9 @@ describe('useThreadChat', () => {
       const { result } = renderHook(() => useThreadChat(defaultParams()))
 
       await act(async () => {
-        await result.current.processAndSendMessage('Chart the numbers in this file')
+        await result.current.processAndSendMessage(
+          'Chart the numbers in this file'
+        )
       })
 
       expect(mockSendMessage).toHaveBeenCalledOnce()
@@ -443,7 +471,11 @@ describe('useThreadChat', () => {
 
       act(() => {
         result.current.persistMessageOnFinish(
-          { id: 'msg-1', role: 'assistant', parts: [{ type: 'text', text: 'Hi' }] } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+          {
+            id: 'msg-1',
+            role: 'assistant',
+            parts: [{ type: 'text', text: 'Hi' }],
+          } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
           [{ type: 'text', text: { value: 'Hi', annotations: [] } }] as any // eslint-disable-line @typescript-eslint/no-explicit-any
         )
       })
@@ -474,7 +506,9 @@ describe('useThreadChat', () => {
         )
       })
 
-      expect(useMessages.getState().getMessages(threadId)[0].metadata).toMatchObject({
+      expect(
+        useMessages.getState().getMessages(threadId)[0].metadata
+      ).toMatchObject({
         aborted: true,
       })
     })
@@ -498,7 +532,11 @@ describe('useThreadChat', () => {
 
       act(() => {
         result.current.persistMessageOnFinish(
-          { id: 'msg-1', role: 'assistant', parts: [{ type: 'text', text: 'new' }] } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+          {
+            id: 'msg-1',
+            role: 'assistant',
+            parts: [{ type: 'text', text: 'new' }],
+          } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
           [{ type: 'text', text: { value: 'new', annotations: [] } }] as any // eslint-disable-line @typescript-eslint/no-explicit-any
         )
       })
@@ -535,7 +573,12 @@ describe('useThreadChat', () => {
         messages: {
           [threadId]: [
             { id: 'user-1', thread_id: threadId, role: 'user', content: [] },
-            { id: 'assistant-1', thread_id: threadId, role: 'assistant', content: [] },
+            {
+              id: 'assistant-1',
+              thread_id: threadId,
+              role: 'assistant',
+              content: [],
+            },
           ] as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
         },
       })
@@ -564,7 +607,12 @@ describe('useThreadChat', () => {
         messages: {
           [threadId]: [
             { id: 'user-1', thread_id: threadId, role: 'user', content: [] },
-            { id: 'assistant-1', thread_id: threadId, role: 'assistant', content: [] },
+            {
+              id: 'assistant-1',
+              thread_id: threadId,
+              role: 'assistant',
+              content: [],
+            },
             { id: 'tool-1', thread_id: threadId, role: 'tool', content: [] },
           ] as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
         },
@@ -595,14 +643,22 @@ describe('useThreadChat', () => {
               thread_id: threadId,
               role: 'assistant',
               content: [],
-              metadata: { versionGroupId: 'user-1', versionIndex: 1, isActiveVersion: false },
+              metadata: {
+                versionGroupId: 'user-1',
+                versionIndex: 1,
+                isActiveVersion: false,
+              },
             },
             {
               id: 'assistant-2',
               thread_id: threadId,
               role: 'assistant',
               content: [],
-              metadata: { versionGroupId: 'user-1', versionIndex: 2, isActiveVersion: true },
+              metadata: {
+                versionGroupId: 'user-1',
+                versionIndex: 2,
+                isActiveVersion: true,
+              },
             },
           ] as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
         },
@@ -618,7 +674,10 @@ describe('useThreadChat', () => {
       const assistant1 = messages.find((m) => m.id === 'assistant-1')!
       const assistant2 = messages.find((m) => m.id === 'assistant-2')!
       // v1 (already superseded) is untouched
-      expect(assistant1.metadata).toMatchObject({ versionIndex: 1, isActiveVersion: false })
+      expect(assistant1.metadata).toMatchObject({
+        versionIndex: 1,
+        isActiveVersion: false,
+      })
       // v2 becomes inactive, ready to be replaced by the incoming v3
       expect(assistant2.metadata).toMatchObject({
         versionGroupId: 'user-1',
@@ -654,7 +713,12 @@ describe('useThreadChat', () => {
         messages: {
           [threadId]: [
             { id: 'user-1', thread_id: threadId, role: 'user', content: [] },
-            { id: 'assistant-1', thread_id: threadId, role: 'assistant', content: [] },
+            {
+              id: 'assistant-1',
+              thread_id: threadId,
+              role: 'assistant',
+              content: [],
+            },
           ] as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
         },
       })
@@ -666,8 +730,14 @@ describe('useThreadChat', () => {
       })
       act(() => {
         result.current.persistMessageOnFinish(
-          { id: 'assistant-2', role: 'assistant', parts: [{ type: 'text', text: 'new answer' }] } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-          [{ type: 'text', text: { value: 'new answer', annotations: [] } }] as any // eslint-disable-line @typescript-eslint/no-explicit-any
+          {
+            id: 'assistant-2',
+            role: 'assistant',
+            parts: [{ type: 'text', text: 'new answer' }],
+          } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+          [
+            { type: 'text', text: { value: 'new answer', annotations: [] } },
+          ] as any // eslint-disable-line @typescript-eslint/no-explicit-any
         )
       })
 
@@ -685,13 +755,19 @@ describe('useThreadChat', () => {
 
       act(() => {
         result.current.persistMessageOnFinish(
-          { id: 'msg-1', role: 'assistant', parts: [{ type: 'text', text: 'Hi' }] } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+          {
+            id: 'msg-1',
+            role: 'assistant',
+            parts: [{ type: 'text', text: 'Hi' }],
+          } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
           [{ type: 'text', text: { value: 'Hi', annotations: [] } }] as any // eslint-disable-line @typescript-eslint/no-explicit-any
         )
       })
 
       const messages = useMessages.getState().getMessages(threadId)
-      expect((messages[0].metadata as Record<string, unknown>).versionGroupId).toBeUndefined()
+      expect(
+        (messages[0].metadata as Record<string, unknown>).versionGroupId
+      ).toBeUndefined()
     })
 
     it('a regenerate stopped before finishing does not tag the next unrelated message', async () => {
@@ -699,7 +775,12 @@ describe('useThreadChat', () => {
         messages: {
           [threadId]: [
             { id: 'user-1', thread_id: threadId, role: 'user', content: [] },
-            { id: 'assistant-1', thread_id: threadId, role: 'assistant', content: [] },
+            {
+              id: 'assistant-1',
+              thread_id: threadId,
+              role: 'assistant',
+              content: [],
+            },
           ] as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
         },
       })
@@ -717,14 +798,20 @@ describe('useThreadChat', () => {
       })
       act(() => {
         result.current.persistMessageOnFinish(
-          { id: 'assistant-unrelated', role: 'assistant', parts: [{ type: 'text', text: 'reply' }] } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+          {
+            id: 'assistant-unrelated',
+            role: 'assistant',
+            parts: [{ type: 'text', text: 'reply' }],
+          } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
           [{ type: 'text', text: { value: 'reply', annotations: [] } }] as any // eslint-disable-line @typescript-eslint/no-explicit-any
         )
       })
 
       const messages = useMessages.getState().getMessages(threadId)
       const unrelated = messages.find((m) => m.id === 'assistant-unrelated')!
-      expect((unrelated.metadata as Record<string, unknown>).versionGroupId).toBeUndefined()
+      expect(
+        (unrelated.metadata as Record<string, unknown>).versionGroupId
+      ).toBeUndefined()
     })
   })
 
@@ -739,15 +826,33 @@ describe('useThreadChat', () => {
               id: 'assistant-v1',
               thread_id: threadId,
               role: 'assistant',
-              content: [{ type: 'text', text: { value: 'first answer', annotations: [] } }],
-              metadata: { versionGroupId: groupId, versionIndex: 1, isActiveVersion: false },
+              content: [
+                {
+                  type: 'text',
+                  text: { value: 'first answer', annotations: [] },
+                },
+              ],
+              metadata: {
+                versionGroupId: groupId,
+                versionIndex: 1,
+                isActiveVersion: false,
+              },
             },
             {
               id: 'assistant-v2',
               thread_id: threadId,
               role: 'assistant',
-              content: [{ type: 'text', text: { value: 'second answer', annotations: [] } }],
-              metadata: { versionGroupId: groupId, versionIndex: 2, isActiveVersion: true },
+              content: [
+                {
+                  type: 'text',
+                  text: { value: 'second answer', annotations: [] },
+                },
+              ],
+              metadata: {
+                versionGroupId: groupId,
+                versionIndex: 2,
+                isActiveVersion: true,
+              },
             },
           ] as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
         },
@@ -802,7 +907,12 @@ describe('useThreadChat', () => {
         messages: {
           [threadId]: [
             { id: 'msg-1', thread_id: threadId, role: 'user', content: [] },
-            { id: 'msg-2', thread_id: threadId, role: 'assistant', content: [] },
+            {
+              id: 'msg-2',
+              thread_id: threadId,
+              role: 'assistant',
+              content: [],
+            },
           ] as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
         },
       })
@@ -838,7 +948,9 @@ describe('useThreadChat', () => {
               id: 'msg-1',
               thread_id: threadId,
               role: 'user',
-              content: [{ type: 'text', text: { value: 'old text', annotations: [] } }],
+              content: [
+                { type: 'text', text: { value: 'old text', annotations: [] } },
+              ],
             },
           ] as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
         },
@@ -873,7 +985,9 @@ describe('useThreadChat', () => {
               id: 'msg-1',
               thread_id: threadId,
               role: 'assistant',
-              content: [{ type: 'text', text: { value: 'old', annotations: [] } }],
+              content: [
+                { type: 'text', text: { value: 'old', annotations: [] } },
+              ],
             },
           ] as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
         },
@@ -896,13 +1010,17 @@ describe('useThreadChat', () => {
               id: 'msg-1',
               thread_id: threadId,
               role: 'user',
-              content: [{ type: 'text', text: { value: 'old', annotations: [] } }],
+              content: [
+                { type: 'text', text: { value: 'old', annotations: [] } },
+              ],
             },
             {
               id: 'msg-2',
               thread_id: threadId,
               role: 'assistant',
-              content: [{ type: 'text', text: { value: 'response', annotations: [] } }],
+              content: [
+                { type: 'text', text: { value: 'response', annotations: [] } },
+              ],
             },
           ] as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
         },
@@ -934,7 +1052,9 @@ describe('useThreadChat', () => {
       const modelsSpy = vi.spyOn(hub, 'models').mockReturnValue({
         stopModel,
       } as ReturnType<typeof hub.models>)
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const consoleError = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {})
       modelProviderMocks.getProviderByName.mockReturnValue({
         provider: 'openai',
         models: [

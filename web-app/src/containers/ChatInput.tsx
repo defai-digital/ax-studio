@@ -212,6 +212,7 @@ const ChatInput = memo(function ChatInput({
     projectId,
     selectedModel,
     attachmentsKey,
+    selectedProvider: model?.provider || selectedProvider,
     setMessage,
     setPrompt,
   })
@@ -246,11 +247,12 @@ const ChatInput = memo(function ChatInput({
   const modelSelector = useMemo(
     () => (
       <DropdownModelProvider
+        threadId={threadId}
         model={model}
         useLastUsedModel={Boolean(initialMessage && !projectId)}
       />
     ),
-    [model, initialMessage, projectId]
+    [model, initialMessage, projectId, threadId]
   )
 
   return (

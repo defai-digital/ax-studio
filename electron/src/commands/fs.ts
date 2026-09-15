@@ -21,6 +21,7 @@ import {
 } from './args.js'
 import { approvePath, resolveDataPath } from '../state.js'
 import type { CommandHandler } from './registry.js'
+import { extractZip } from '../zip.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -223,13 +224,7 @@ export function createFsHandlers(getMainWindow: () => BrowserWindow | null): Rec
 
       const lower = resolvedArchive.toLowerCase()
       if (lower.endsWith('.zip')) {
-        const unzipper = await import('unzipper')
-        await new Promise<void>((resolvePromise, rejectPromise) => {
-          fs.createReadStream(resolvedArchive)
-            .pipe(unzipper.Extract({ path: resolvedOutput }))
-            .on('close', () => resolvePromise())
-            .on('error', rejectPromise)
-        })
+        await extractZip(resolvedArchive, resolvedOutput)
       } else if (lower.endsWith('.tar.gz') || lower.endsWith('.tgz') || lower.endsWith('.tar')) {
         await execFileAsync('tar', ['-xf', resolvedArchive, '-C', resolvedOutput])
       } else {

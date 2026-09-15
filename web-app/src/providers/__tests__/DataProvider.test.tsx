@@ -72,10 +72,13 @@ vi.mock('@/hooks/threads/useThreads', () => ({
 }))
 
 vi.mock('@/hooks/models/useModelProvider', () => ({
-  useModelProvider: vi.fn(() => ({
-    setProviders: mockSetProviders,
-    providers: [],
-  })),
+  useModelProvider: Object.assign(
+    vi.fn(() => ({
+      setProviders: mockSetProviders,
+      providers: [],
+    })),
+    { setState: vi.fn() }
+  ),
 }))
 
 vi.mock('@/hooks/chat/useAssistant', () => ({

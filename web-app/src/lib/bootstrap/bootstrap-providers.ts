@@ -27,11 +27,9 @@ function getProvidersOnce(serviceHub: ServiceHub): Promise<ModelProvider[]> {
 
 export type BootstrapProvidersInput = {
   serviceHub: ServiceHub
-  setProviders: (
-    providers: ModelProvider[],
-    pathSep: string
-  ) => boolean | void
+  setProviders: (providers: ModelProvider[], pathSep: string) => boolean | void
   isCancelled?: () => boolean
+  prepareProviders?: (providers: ModelProvider[]) => ModelProvider[]
 }
 
 export async function bootstrapProviders(
@@ -43,8 +41,10 @@ export async function bootstrapProviders(
 
   try {
     await withTimeout(
-      getProvidersOnce(serviceHub).then((providers) => {
+      getProvidersOnce(serviceHub).then((loadedProviders) => {
         if (isCancelled()) return
+        const providers =
+          input.prepareProviders?.(loadedProviders) ?? loadedProviders
         const applied = setProviders(providers, serviceHub.path().sep())
         if (applied === false) return
         return syncRemoteProviders(providers).catch((err) =>

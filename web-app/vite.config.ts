@@ -1,4 +1,4 @@
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, normalizePath, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import fs from 'fs'
@@ -12,18 +12,54 @@ import packageJson from './package.json'
 // See docs/architecture/electron-migration-phase0-matrix.md.
 const electronShimAliases: Record<string, string> = {
   // Exact subpath matches must precede the bare '@tauri-apps/api' entry.
-  '@tauri-apps/api/core': path.resolve(__dirname, './src/lib/tauri-shim/api-core.ts'),
-  '@tauri-apps/api/event': path.resolve(__dirname, './src/lib/tauri-shim/api-event.ts'),
-  '@tauri-apps/api/window': path.resolve(__dirname, './src/lib/tauri-shim/api-window.ts'),
-  '@tauri-apps/api/webviewWindow': path.resolve(__dirname, './src/lib/tauri-shim/api-webview-window.ts'),
-  '@tauri-apps/api/path': path.resolve(__dirname, './src/lib/tauri-shim/api-path.ts'),
-  '@tauri-apps/plugin-opener': path.resolve(__dirname, './src/lib/tauri-shim/plugin-opener.ts'),
-  '@tauri-apps/plugin-store': path.resolve(__dirname, './src/lib/tauri-shim/plugin-store.ts'),
-  '@tauri-apps/plugin-http': path.resolve(__dirname, './src/lib/tauri-shim/plugin-http.ts'),
-  '@tauri-apps/plugin-updater': path.resolve(__dirname, './src/lib/tauri-shim/plugin-updater.ts'),
-  '@tauri-apps/plugin-deep-link': path.resolve(__dirname, './src/lib/tauri-shim/plugin-deep-link.ts'),
-  '@tauri-apps/plugin-global-shortcut': path.resolve(__dirname, './src/lib/tauri-shim/plugin-global-shortcut.ts'),
-  '@tauri-apps/plugin-log': path.resolve(__dirname, './src/lib/tauri-shim/plugin-log.ts'),
+  '@tauri-apps/api/core': path.resolve(
+    __dirname,
+    './src/lib/tauri-shim/api-core.ts'
+  ),
+  '@tauri-apps/api/event': path.resolve(
+    __dirname,
+    './src/lib/tauri-shim/api-event.ts'
+  ),
+  '@tauri-apps/api/window': path.resolve(
+    __dirname,
+    './src/lib/tauri-shim/api-window.ts'
+  ),
+  '@tauri-apps/api/webviewWindow': path.resolve(
+    __dirname,
+    './src/lib/tauri-shim/api-webview-window.ts'
+  ),
+  '@tauri-apps/api/path': path.resolve(
+    __dirname,
+    './src/lib/tauri-shim/api-path.ts'
+  ),
+  '@tauri-apps/plugin-opener': path.resolve(
+    __dirname,
+    './src/lib/tauri-shim/plugin-opener.ts'
+  ),
+  '@tauri-apps/plugin-store': path.resolve(
+    __dirname,
+    './src/lib/tauri-shim/plugin-store.ts'
+  ),
+  '@tauri-apps/plugin-http': path.resolve(
+    __dirname,
+    './src/lib/tauri-shim/plugin-http.ts'
+  ),
+  '@tauri-apps/plugin-updater': path.resolve(
+    __dirname,
+    './src/lib/tauri-shim/plugin-updater.ts'
+  ),
+  '@tauri-apps/plugin-deep-link': path.resolve(
+    __dirname,
+    './src/lib/tauri-shim/plugin-deep-link.ts'
+  ),
+  '@tauri-apps/plugin-global-shortcut': path.resolve(
+    __dirname,
+    './src/lib/tauri-shim/plugin-global-shortcut.ts'
+  ),
+  '@tauri-apps/plugin-log': path.resolve(
+    __dirname,
+    './src/lib/tauri-shim/plugin-log.ts'
+  ),
   '@tauri-apps/api': path.resolve(__dirname, './src/lib/tauri-shim/api.ts'),
 }
 
@@ -36,32 +72,50 @@ const readBooleanEnv = (name: string): boolean => process.env[name] === 'true'
 // bare identifier `SETTINGS` but with different values, so the replacement is
 // applied per-module instead.
 const extensionBuildConstants = (): Plugin => {
-  const perPackage: Array<{ dir: string; constants: Record<string, string> }> = [
-    {
-      dir: path.resolve(__dirname, '../extensions/llamacpp-extension/src'),
-      constants: {
-        SETTINGS: fs.readFileSync(
-          path.resolve(__dirname, '../extensions/llamacpp-extension/settings.json'),
-          'utf8'
-        ).trim(),
-        ENGINE: JSON.stringify('llamacpp'),
+  const perPackage: Array<{ dir: string; constants: Record<string, string> }> =
+    [
+      {
+        dir: normalizePath(
+          path.resolve(__dirname, '../extensions/llamacpp-extension/src')
+        ),
+        constants: {
+          SETTINGS: fs
+            .readFileSync(
+              path.resolve(
+                __dirname,
+                '../extensions/llamacpp-extension/settings.json'
+              ),
+              'utf8'
+            )
+            .trim(),
+          ENGINE: JSON.stringify('llamacpp'),
+        },
       },
-    },
-    {
-      dir: path.resolve(__dirname, '../extensions/download-extension/src'),
-      constants: {
-        SETTINGS: fs.readFileSync(
-          path.resolve(__dirname, '../extensions/download-extension/settings.json'),
-          'utf8'
-        ).trim(),
+      {
+        dir: normalizePath(
+          path.resolve(__dirname, '../extensions/download-extension/src')
+        ),
+        constants: {
+          SETTINGS: fs
+            .readFileSync(
+              path.resolve(
+                __dirname,
+                '../extensions/download-extension/settings.json'
+              ),
+              'utf8'
+            )
+            .trim(),
+        },
       },
-    },
-  ]
+    ]
   return {
     name: 'ax-studio-extension-build-constants',
     enforce: 'pre',
     transform(code, id) {
-      const pkg = perPackage.find((entry) => id.startsWith(entry.dir + path.sep))
+      // Vite normalizes module ids to POSIX separators on every platform,
+      // so the dirs above must match that form (path.resolve alone yields
+      // backslashes on Windows and the prefix check silently never matches).
+      const pkg = perPackage.find((entry) => id.startsWith(entry.dir + '/'))
       if (!pkg) return null
       let transformed = code
       for (const [identifier, replacement] of Object.entries(pkg.constants)) {
@@ -75,10 +129,7 @@ const extensionBuildConstants = (): Plugin => {
   }
 }
 
-const readPositiveNumberEnv = (
-  name: string,
-  fallbackValue: number
-): number => {
+const readPositiveNumberEnv = (name: string, fallbackValue: number): number => {
   const value = Number(process.env[name])
   return Number.isFinite(value) && value > 0 ? value : fallbackValue
 }
@@ -105,13 +156,25 @@ export default defineConfig(() => {
         // token.js imports mime-types in the renderer. mime-types requires
         // Node's path.extname, which Vite otherwise externalizes to an empty
         // browser proxy and breaks URL-based image MIME detection.
-        path: 'path-browserify',
+        'path': 'path-browserify',
         '@': path.resolve(__dirname, './src'),
         '@ax-studio/core': path.resolve(__dirname, '../core/src/index.ts'),
-        '@ax-studio/conversational-extension': path.resolve(__dirname, '../extensions/conversational-extension/src/index.ts'),
-        '@ax-studio/download-extension': path.resolve(__dirname, '../extensions/download-extension/src/index.ts'),
-        '@ax-studio/llamacpp-extension': path.resolve(__dirname, '../extensions/llamacpp-extension/src/index.ts'),
-        '@ax-studio/tauri-plugin-llamacpp-api': path.resolve(__dirname, '../extensions/llamacpp-api/index.ts'),
+        '@ax-studio/conversational-extension': path.resolve(
+          __dirname,
+          '../extensions/conversational-extension/src/index.ts'
+        ),
+        '@ax-studio/download-extension': path.resolve(
+          __dirname,
+          '../extensions/download-extension/src/index.ts'
+        ),
+        '@ax-studio/llamacpp-extension': path.resolve(
+          __dirname,
+          '../extensions/llamacpp-extension/src/index.ts'
+        ),
+        '@ax-studio/tauri-plugin-llamacpp-api': path.resolve(
+          __dirname,
+          '../extensions/llamacpp-api/index.ts'
+        ),
       },
     },
     define: {

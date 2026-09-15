@@ -10,7 +10,13 @@ import os from 'node:os'
 import path from 'node:path'
 import { emitToAllWindows } from './commands/registry.js'
 import { registerAxStudioBridge, type AxStudioBridgeHandle } from './embed.js'
-import { approvePath, bufferOpenFiles, getAppDataFolderPath } from './state.js'
+import {
+  approvePath,
+  bufferOpenFiles,
+  getAppDataFolderPath,
+  isOpenFileReceiverReady,
+  resetOpenFileReceiver,
+} from './state.js'
 import { cleanupLlamaProcesses, hasActiveSessions } from './llamacpp/session.js'
 import { hasAxEngineServerRecord, stopAxEngineOnQuit } from './ax-engine/server.js'
 import { checkAxEngineDependency, resolveAxEngineBinary } from './ax-engine/dependency.js'
@@ -79,6 +85,7 @@ function loadRenderer(win: BrowserWindow, route?: string): void {
 }
 
 function createMainWindow(): BrowserWindow {
+  resetOpenFileReceiver()
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -102,8 +109,40 @@ function createMainWindow(): BrowserWindow {
     return { action: 'deny' }
   })
 
+  win.webContents.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
+    if (isMainFrame && !isInPlace) resetOpenFileReceiver()
+  })
+  win.on('closed', () => {
+    if (mainWindow === win) {
+      mainWindow = null
+      resetOpenFileReceiver()
+    }
+  })
   loadRenderer(win)
   return win
+}
+
+function focusMainWindow(): void {
+  // Early OS events are buffered until the bridge has finished initialization.
+  if (!bridge) return
+  if (!mainWindow || mainWindow.isDestroyed()) mainWindow = createMainWindow()
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+function receiveOpenFiles(files: string[]): void {
+  if (files.length === 0) return
+  if (mainWindow && !mainWindow.isDestroyed() && isOpenFileReceiverReady()) {
+    approveAll(files)
+    mainWindow.webContents.send('ax:event', {
+      kind: 'event',
+      name: 'dock-file-drop',
+      payload: files,
+    })
+  } else {
+    bufferOpenFiles(files)
+  }
 }
 
 function collectOpenFileArgv(argv: string[]): string[] {
@@ -117,25 +156,15 @@ if (!gotSingleInstanceLock) {
 } else {
   app.on('second-instance', (_event, argv) => {
     const files = collectOpenFileArgv(argv.slice(1))
-    if (files.length > 0) {
-      approveAll(files)
-      emitToAllWindows('dock-file-drop', files)
-    }
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      mainWindow.focus()
-    }
+    receiveOpenFiles(files)
+    focusMainWindow()
   })
 
   // macOS: files dropped on the Dock icon / opened via Finder.
   app.on('open-file', (event, filePath) => {
     event.preventDefault()
-    approvePath(filePath)
-    if (mainWindow) {
-      emitToAllWindows('dock-file-drop', [filePath])
-    } else {
-      bufferOpenFiles([filePath])
-    }
+    receiveOpenFiles([filePath])
+    focusMainWindow()
   })
 
   void app.whenReady().then(async () => {
@@ -163,9 +192,7 @@ if (!gotSingleInstanceLock) {
     mainWindow = createMainWindow()
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        mainWindow = createMainWindow()
-      }
+      focusMainWindow()
     })
   })
 

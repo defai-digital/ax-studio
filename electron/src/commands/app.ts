@@ -17,6 +17,7 @@ import {
   updateAppConfiguration,
 } from '../state.js'
 import type { CommandHandler } from './registry.js'
+import { migrateDataDirectory, resetManagedData } from '../data-directory.js'
 
 type Args = Record<string, unknown>
 
@@ -42,12 +43,13 @@ export function createAppHandlers(): Record<string, CommandHandler> {
       const resolved = canonicalizeLoose(newFolder)
       // Guard against pointing the data folder at a dangerous root.
       if (resolved === path.parse(resolved).root || resolved === os.homedir()) {
-        throw new Error('change_app_data_folder: refusing to use a filesystem root or home dir')
+        throw new Error(
+          'change_app_data_folder: refusing to use a filesystem root or home dir'
+        )
       }
-      await fsp.mkdir(resolved, { recursive: true })
-      updateAppConfiguration({ data_folder: resolved })
-      // Phase 1 note: the Rust version also migrates existing data and kills
-      // running engines; that orchestration lands with Phase 2.
+      await migrateDataDirectory(getAppDataFolderPath(), resolved, () =>
+        updateAppConfiguration({ data_folder: resolved })
+      )
     },
 
     relaunch: () => {
@@ -76,9 +78,14 @@ export function createAppHandlers(): Record<string, CommandHandler> {
     is_subdirectory: (args) => {
       const from = str(args?.from)
       const to = str(args?.to)
-      if (!from || !to) throw new Error('is_subdirectory error: Invalid argument')
+      if (!from || !to)
+        throw new Error('is_subdirectory error: Invalid argument')
       const relative = path.relative(path.resolve(from), path.resolve(to))
-      return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
+      return (
+        relative !== '' &&
+        !relative.startsWith('..') &&
+        !path.isAbsolute(relative)
+      )
     },
 
     log: (args) => {
@@ -104,12 +111,21 @@ export function createAppHandlers(): Record<string, CommandHandler> {
       const resolved = canonicalizeLoose(dataFolder)
       // Safety rails: never wipe a filesystem root, the home directory, or
       // anything suspiciously shallow.
-      const dangerous = [path.parse(resolved).root, os.homedir(), app.getPath('appData')]
-      if (dangerous.includes(resolved) || resolved.split(path.sep).filter(Boolean).length < 3) {
+      const dangerous = [
+        path.parse(resolved).root,
+        os.homedir(),
+        app.getPath('appData'),
+      ]
+      if (
+        dangerous.includes(resolved) ||
+        resolved.split(path.sep).filter(Boolean).length < 3
+      ) {
         throw new Error(`factory_reset: refusing to delete ${resolved}`)
       }
-      await fsp.rm(resolved, { recursive: true, force: true })
-      updateAppConfiguration({ data_folder: defaultDataFolderPath() })
+      await resetManagedData(resolved, defaultDataFolderPath())
+      // Keep the cleared directory active: the default path may contain the
+      // recovery copy retained by a previous migration.
+      updateAppConfiguration({ data_folder: resolved })
       app.relaunch()
       app.exit(0)
     },

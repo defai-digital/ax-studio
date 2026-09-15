@@ -79,6 +79,18 @@ describe('setActiveConversationId', () => {
 })
 
 describe('ensureSession', () => {
+  it('retains an active chat on title edits and reconnects status updates after transport replacement', () => {
+    const first = makeChat('ready'), second = makeChat('ready')
+    const transport = makeTransport()
+    useChatSessions.getState().ensureSession('pane', transport, createChat(first), 'Old')
+    first['~registerStatusCallback'].mock.calls[0][0]()
+    expect(useChatSessions.getState().ensureSession('pane', transport, createChat(), 'Renamed')).toBe(first)
+    expect(first.stop).not.toHaveBeenCalled()
+    expect(useChatSessions.getState().sessions.pane.title).toBe('Renamed')
+    useChatSessions.getState().ensureSession('pane', makeTransport(), createChat(second), 'Renamed')
+    second['~registerStatusCallback'].mock.calls[0][0]()
+    expect(useChatSessions.getState().sessions.pane.chat).toBe(second)
+  })
   it('creates a new session and sets it as active', () => {
     const chat = makeChat()
     useChatSessions

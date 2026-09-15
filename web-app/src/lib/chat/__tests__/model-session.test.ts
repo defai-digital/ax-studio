@@ -17,6 +17,36 @@ function makeProvider(
 }
 
 describe('model-session', () => {
+  it('connects Ollama through the proxy without starting a bundled engine', async () => {
+    const invoke = vi.fn().mockResolvedValue(undefined)
+    const startModel = vi.fn()
+    const serviceHub = {
+      core: () => ({ invoke }),
+      models: () => ({ startModel }),
+    } as unknown as import('@/services').ServiceHub
+
+    await prepareProviderForChat(serviceHub, makeProvider('ollama'), 'qwen3:4b')
+
+    expect(startModel).not.toHaveBeenCalled()
+    expect(invoke).toHaveBeenCalledWith('register_provider_config', {
+      provider: 'ollama',
+      base_url: 'http://127.0.0.1:11434/v1',
+      api_key: '',
+      custom_headers: [],
+      models: ['qwen3:4b'],
+    })
+  })
+
+  it('surfaces an Ollama registration failure before attempting chat', async () => {
+    const invoke = vi.fn().mockRejectedValue(new Error('Invalid base_url'))
+    const serviceHub = {
+      core: () => ({ invoke }),
+    } as unknown as import('@/services').ServiceHub
+    await expect(
+      prepareProviderForChat(serviceHub, makeProvider('ollama'), 'qwen3:4b')
+    ).rejects.toThrow('Invalid base_url')
+  })
+
   it('identifies local providers', () => {
     expect(isLocalProvider(makeProvider('llamacpp'))).toBe(true)
     expect(isLocalProvider(makeProvider('ax-engine'))).toBe(true)

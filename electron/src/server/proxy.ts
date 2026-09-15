@@ -15,7 +15,7 @@
 //  - Upstream response `content-encoding` is stripped when forwarding: Node's
 //    fetch transparently decompresses, so forwarding the header would make the
 //    client decode twice.
-import { createHash, timingSafeEqual } from 'node:crypto'
+import { timingSafeEqual } from 'node:crypto'
 import dns from 'node:dns/promises'
 import http from 'node:http'
 import net from 'node:net'
@@ -38,7 +38,14 @@ import {
 
 // ─── Constants (cors.rs / model_routes.rs) ──────────────────────────────────
 
-const CORS_ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH']
+const CORS_ALLOWED_METHODS = [
+  'GET',
+  'POST',
+  'PUT',
+  'DELETE',
+  'OPTIONS',
+  'PATCH',
+]
 const CORS_ALLOWED_METHODS_HEADER = 'GET, POST, PUT, DELETE, OPTIONS, PATCH'
 const CORS_RESPONSE_ALLOWED_HEADERS_HEADER =
   'Authorization, Content-Type, Host, Accept, Accept-Language, Cache-Control, Connection, DNT, If-Modified-Since, Keep-Alive, Origin, User-Agent, X-Requested-With, X-CSRF-Token, X-Forwarded-For, X-Forwarded-Proto, X-Forwarded-Host, authorization, content-type, x-api-key, x-ax-provider, x-ax-request-role'
@@ -118,10 +125,14 @@ function isRateLimited(clientId: string): boolean {
   purgeStaleAuthEntries()
   const entry = authFailures.get(clientId)
   if (!entry) return false
-  if (entry.count >= MAX_AUTH_FAILURES && Date.now() - entry.firstFailure < AUTH_LOCKOUT_MS) {
+  if (
+    entry.count >= MAX_AUTH_FAILURES &&
+    Date.now() - entry.firstFailure < AUTH_LOCKOUT_MS
+  ) {
     return true
   }
-  if (Date.now() - entry.firstFailure >= AUTH_LOCKOUT_MS) authFailures.delete(clientId)
+  if (Date.now() - entry.firstFailure >= AUTH_LOCKOUT_MS)
+    authFailures.delete(clientId)
   return false
 }
 
@@ -138,7 +149,10 @@ function recordAuthFailure(clientId: string): void {
     }
     if (oldestKey !== null) authFailures.delete(oldestKey)
   }
-  const entry = authFailures.get(clientId) ?? { count: 0, firstFailure: Date.now() }
+  const entry = authFailures.get(clientId) ?? {
+    count: 0,
+    firstFailure: Date.now(),
+  }
   entry.count += 1
   authFailures.set(clientId, entry)
 }
@@ -148,9 +162,10 @@ function clearAuthFailure(clientId: string): void {
 }
 
 function constantTimeSecretEq(candidate: string, expected: string): boolean {
-  const a = createHash('sha256').update(candidate, 'utf8').digest()
-  const b = createHash('sha256').update(expected, 'utf8').digest()
-  return timingSafeEqual(a, b)
+  // Compare credentials directly; these are not stored password hashes.
+  const a = Buffer.from(candidate, 'utf8')
+  const b = Buffer.from(expected, 'utf8')
+  return a.length === b.length && timingSafeEqual(a, b)
 }
 
 function extractBearerToken(authStr: string): string | null {
@@ -167,7 +182,11 @@ function firstHeader(value: string | string[] | undefined): string {
   return Array.isArray(value) ? (value[0] ?? '') : (value ?? '')
 }
 
-function trustedCorsOrigin(origin: string, host: string, trustedHosts: string[][]): string | null {
+function trustedCorsOrigin(
+  origin: string,
+  host: string,
+  trustedHosts: string[][]
+): string | null {
   if (origin.length === 0) return null
   // Electron packaged renderer loads via file:// and sends Origin: null; the
   // Tauri webview equivalent (tauri://localhost) was trusted by default.
@@ -183,7 +202,8 @@ function trustedCorsOrigin(origin: string, host: string, trustedHosts: string[][
 
   const originHost = parsed.hostname
   if (originHost.length === 0) return null
-  const originHostWithPort = parsed.port.length > 0 ? `${originHost}:${parsed.port}` : originHost
+  const originHostWithPort =
+    parsed.port.length > 0 ? `${originHost}:${parsed.port}` : originHost
 
   if (host.length > 0 && !isValidHost(host, trustedHosts)) return null
   if (!isValidHost(originHostWithPort, trustedHosts)) return null
@@ -215,7 +235,7 @@ function corsResponseHeaders(
   const headers: Record<string, string> = {
     'Access-Control-Allow-Methods': CORS_ALLOWED_METHODS_HEADER,
     'Access-Control-Allow-Headers': CORS_RESPONSE_ALLOWED_HEADERS_HEADER,
-    Vary: 'Origin',
+    'Vary': 'Origin',
   }
   const allowOrigin = trustedCorsOrigin(origin, host, config.trustedHosts)
   if (allowOrigin !== null) {
@@ -259,11 +279,15 @@ function handleCorsPreflight(
 
   const host = firstHeader(req.headers.host)
   const origin = firstHeader(req.headers.origin)
-  const requestedMethod = firstHeader(req.headers['access-control-request-method'])
+  const requestedMethod = firstHeader(
+    req.headers['access-control-request-method']
+  )
 
   const methodAllowed =
     requestedMethod.length === 0 ||
-    CORS_ALLOWED_METHODS.some((method) => method.toLowerCase() === requestedMethod.toLowerCase())
+    CORS_ALLOWED_METHODS.some(
+      (method) => method.toLowerCase() === requestedMethod.toLowerCase()
+    )
   if (!methodAllowed) {
     respond(res, 405, 'Method not allowed', host, origin, config)
     return true
@@ -280,7 +304,9 @@ function handleCorsPreflight(
     return true
   }
 
-  const requestedHeaders = firstHeader(req.headers['access-control-request-headers'])
+  const requestedHeaders = firstHeader(
+    req.headers['access-control-request-headers']
+  )
   const headersValid =
     requestedHeaders.length === 0 ||
     requestedHeaders
@@ -306,7 +332,8 @@ function handleCorsPreflight(
     'Access-Control-Allow-Methods': CORS_ALLOWED_METHODS_HEADER,
     'Access-Control-Allow-Headers': CORS_RESPONSE_ALLOWED_HEADERS_HEADER,
     'Access-Control-Max-Age': '86400',
-    Vary: 'Origin, Access-Control-Request-Method, Access-Control-Request-Headers',
+    'Vary':
+      'Origin, Access-Control-Request-Method, Access-Control-Request-Headers',
   }
   if (allowOrigin !== null) {
     headers['Access-Control-Allow-Origin'] = allowOrigin
@@ -333,7 +360,14 @@ function validateRequest(
   if (!isWhitelistedPath) {
     if (hostHeader.length > 0) {
       if (!isValidHost(hostHeader, config.trustedHosts)) {
-        respond(res, 403, 'Invalid host header', hostHeader, originHeader, config)
+        respond(
+          res,
+          403,
+          'Invalid host header',
+          hostHeader,
+          originHeader,
+          config
+        )
         return false
       }
     } else {
@@ -355,12 +389,15 @@ function validateRequest(
 
   if (!isWhitelistedPath && config.proxyApiKey.length > 0) {
     const authValid = (() => {
-      const token = extractBearerToken(firstHeader(headers.authorization) || ' ')
+      const token = extractBearerToken(
+        firstHeader(headers.authorization) || ' '
+      )
       return token !== null && constantTimeSecretEq(token, config.proxyApiKey)
     })()
     const apiKeyHeader = firstHeader(headers['x-api-key'])
     const apiKeyValid =
-      apiKeyHeader.length > 0 && constantTimeSecretEq(apiKeyHeader, config.proxyApiKey)
+      apiKeyHeader.length > 0 &&
+      constantTimeSecretEq(apiKeyHeader, config.proxyApiKey)
 
     if (authValid || apiKeyValid) {
       clearAuthFailure(clientId)
@@ -383,7 +420,11 @@ function validateRequest(
   // Empty proxy api key → loopback-only no-auth mode; start_server only allows
   // this when binding loopback with CORS disabled.
 
-  if (path === '/configs' || path.startsWith('/configs/') || path.startsWith('/configs?')) {
+  if (
+    path === '/configs' ||
+    path.startsWith('/configs/') ||
+    path.startsWith('/configs?')
+  ) {
     respond(res, 404, 'Not Found', hostHeader, originHeader, config)
     return false
   }
@@ -406,12 +447,25 @@ function handleModelsRoute(
         ? 'local'
         : 'remote'
     for (const modelId of providerConfig.models) {
-      models.push({ id: modelId, object: 'model', created: 1, owned_by: ownedBy })
+      models.push({
+        id: modelId,
+        object: 'model',
+        created: 1,
+        owned_by: ownedBy,
+      })
     }
   }
-  respond(res, 200, JSON.stringify({ object: 'list', data: models }), hostHeader, originHeader, config, {
-    'Content-Type': 'application/json',
-  })
+  respond(
+    res,
+    200,
+    JSON.stringify({ object: 'list', data: models }),
+    hostHeader,
+    originHeader,
+    config,
+    {
+      'Content-Type': 'application/json',
+    }
+  )
 }
 
 // ─── Request body normalization (model_routes.rs) ───────────────────────────
@@ -424,7 +478,10 @@ function messageHasToolState(msg: JsonRecord): boolean {
   return (
     Array.isArray(msg.content) &&
     (msg.content as JsonRecord[]).some(
-      (part) => part !== null && typeof part === 'object' && (part.type === 'tool_result' || part.type === 'tool_use')
+      (part) =>
+        part !== null &&
+        typeof part === 'object' &&
+        (part.type === 'tool_result' || part.type === 'tool_use')
     )
   )
 }
@@ -434,7 +491,10 @@ function requestHasToolState(jsonBody: JsonRecord): boolean {
   if (!Array.isArray(jsonBody.messages)) return false
   const messages = jsonBody.messages as JsonRecord[]
   const last = messages[messages.length - 1]
-  return (last !== undefined && last.role === 'assistant') || messages.some(messageHasToolState)
+  return (
+    (last !== undefined && last.role === 'assistant') ||
+    messages.some(messageHasToolState)
+  )
 }
 
 function requestHasLocalKnowledgeContext(jsonBody: JsonRecord): boolean {
@@ -446,15 +506,24 @@ function requestHasLocalKnowledgeContext(jsonBody: JsonRecord): boolean {
     return (
       Array.isArray(message.content) &&
       (message.content as JsonRecord[]).some(
-        (part) => typeof part?.text === 'string' && part.text.includes('Local Knowledge Base (ACTIVE)')
+        (part) =>
+          typeof part?.text === 'string' &&
+          part.text.includes('Local Knowledge Base (ACTIVE)')
       )
     )
   })
 }
 
 function disableThinkingForDeterministicAnswer(jsonBody: JsonRecord): boolean {
-  if (!requestHasToolState(jsonBody) && !requestHasLocalKnowledgeContext(jsonBody)) return false
-  if (jsonBody.chat_template_kwargs === null || typeof jsonBody.chat_template_kwargs !== 'object') {
+  if (
+    !requestHasToolState(jsonBody) &&
+    !requestHasLocalKnowledgeContext(jsonBody)
+  )
+    return false
+  if (
+    jsonBody.chat_template_kwargs === null ||
+    typeof jsonBody.chat_template_kwargs !== 'object'
+  ) {
     jsonBody.chat_template_kwargs = {}
   }
   ;(jsonBody.chat_template_kwargs as JsonRecord).enable_thinking = false
@@ -466,7 +535,10 @@ function disableThinkingForDeterministicAnswer(jsonBody: JsonRecord): boolean {
  * reasoning on assistant messages). chat_template_kwargs is only forwarded to
  * llama.cpp-style local routes; hosted providers reject it.
  */
-function normalizeRequestBody(body: Buffer, allowChatTemplateKwargs: boolean): Buffer {
+function normalizeRequestBody(
+  body: Buffer,
+  allowChatTemplateKwargs: boolean
+): Buffer {
   let jsonBody: JsonRecord
   try {
     jsonBody = JSON.parse(body.toString('utf8')) as JsonRecord
@@ -478,7 +550,8 @@ function normalizeRequestBody(body: Buffer, allowChatTemplateKwargs: boolean): B
   let modified = false
   if (Array.isArray(jsonBody.messages)) {
     for (const msg of jsonBody.messages as JsonRecord[]) {
-      if (msg === null || typeof msg !== 'object' || msg.role !== 'assistant') continue
+      if (msg === null || typeof msg !== 'object' || msg.role !== 'assistant')
+        continue
       if ('reasoning_content' in msg) {
         delete msg.reasoning_content
         modified = true
@@ -512,9 +585,16 @@ interface ResolvedProviderConfig {
 
 function stripProviderEndpointSuffix(baseUrl: string): string {
   const trimmed = baseUrl.replace(/\/+$/, '')
-  for (const suffix of ['/chat/completions', '/completions', '/messages', '/embeddings']) {
+  for (const suffix of [
+    '/chat/completions',
+    '/completions',
+    '/messages',
+    '/embeddings',
+  ]) {
     if (trimmed.endsWith(suffix)) {
-      return trimmed.slice(0, trimmed.length - suffix.length).replace(/\/+$/, '')
+      return trimmed
+        .slice(0, trimmed.length - suffix.length)
+        .replace(/\/+$/, '')
     }
   }
   return trimmed
@@ -524,7 +604,10 @@ function buildUpstreamUrl(baseUrl: string, destinationPath: string): string {
   return `${stripProviderEndpointSuffix(baseUrl)}${destinationPath}`
 }
 
-function findProviderName(modelId: string): { provider: string | null; error: string | null } {
+function findProviderName(modelId: string): {
+  provider: string | null
+  error: string | null
+} {
   const sepPos = modelId.indexOf('/')
   if (sepPos !== -1) {
     const potentialProvider = modelId.slice(0, sepPos)
@@ -534,7 +617,10 @@ function findProviderName(modelId: string): { provider: string | null; error: st
   }
   const indexed = providerModelIndex.get(modelId) ?? []
   if (indexed.length === 0) {
-    return { provider: providerConfigs.get(modelId)?.provider ?? null, error: null }
+    return {
+      provider: providerConfigs.get(modelId)?.provider ?? null,
+      error: null,
+    }
   }
   if (indexed.length === 1) return { provider: indexed[0], error: null }
   return {
@@ -553,7 +639,8 @@ function resolveProviderConfigFromMap(
   const config = providerConfigs.get(provider)
   if (!config) return { resolved: null, error: null }
   const baseUrl = config.base_url
-  if (baseUrl === null || baseUrl.length === 0) return { resolved: null, error: null }
+  if (baseUrl === null || baseUrl.length === 0)
+    return { resolved: null, error: null }
   return {
     resolved: {
       targetBaseUrl: buildUpstreamUrl(baseUrl, destinationPath),
@@ -570,17 +657,29 @@ function resolveModelRoute(
   destinationPath: string,
   body: Buffer,
   providerHint: string | null
-): { resolution: ResolvedProviderConfig & { bufferedBody: Buffer } } | { error: { status: number; message: string } } {
+):
+  | { resolution: ResolvedProviderConfig & { bufferedBody: Buffer } }
+  | { error: { status: number; message: string } } {
   let modelId: string
   try {
     const parsed = JSON.parse(body.toString('utf8')) as JsonRecord
     const model = parsed?.model
     if (typeof model !== 'string') {
-      return { error: { status: 400, message: "Request body must contain a 'model' field" } }
+      return {
+        error: {
+          status: 400,
+          message: "Request body must contain a 'model' field",
+        },
+      }
     }
     modelId = model
   } catch (error) {
-    return { error: { status: 400, message: `Invalid JSON body: ${(error as Error).message}` } }
+    return {
+      error: {
+        status: 400,
+        message: `Invalid JSON body: ${(error as Error).message}`,
+      },
+    }
   }
 
   let resolved: ResolvedProviderConfig | null = null
@@ -619,13 +718,19 @@ function resolveModelRoute(
   }
   if (resolved === null) {
     return {
-      error: { status: 404, message: `No remote provider configured for model '${modelId}'` },
+      error: {
+        status: 404,
+        message: `No remote provider configured for model '${modelId}'`,
+      },
     }
   }
   return {
     resolution: {
       ...resolved,
-      bufferedBody: normalizeRequestBody(body, resolved.allowChatTemplateKwargs),
+      bufferedBody: normalizeRequestBody(
+        body,
+        resolved.allowChatTemplateKwargs
+      ),
     },
   }
 }
@@ -679,11 +784,17 @@ function normalizeUpstreamApiKey(apiKey: string | null): string | null {
   if (trimmed.length === 0) return null
   const match = trimmed.match(/^(\S+)(?:\s+(.*))?$/)
   const key =
-    match && match[1].toLowerCase() === 'bearer' ? (match[2] ?? '').trim() : trimmed
+    match && match[1].toLowerCase() === 'bearer'
+      ? (match[2] ?? '').trim()
+      : trimmed
   return key.length > 0 ? key : null
 }
 
-function isTransientModelLoadingError(status: number, destinationPath: string, errorBody: string): boolean {
+function isTransientModelLoadingError(
+  status: number,
+  destinationPath: string,
+  errorBody: string
+): boolean {
   return (
     status === 404 &&
     destinationPath === '/chat/completions' &&
@@ -711,7 +822,10 @@ function upstreamIpIsForbidden(ip: string, allowInternal: boolean): boolean {
 }
 
 /** Per-request SSRF guard: re-resolve and reject private IPs (DNS rebinding defense). */
-async function checkUpstreamNotSsrf(rawUrl: string, allowInternal: boolean): Promise<string | null> {
+async function checkUpstreamNotSsrf(
+  rawUrl: string,
+  allowInternal: boolean
+): Promise<string | null> {
   let parsed: URL
   try {
     parsed = new URL(rawUrl)
@@ -741,7 +855,10 @@ async function checkUpstreamNotSsrf(rawUrl: string, allowInternal: boolean): Pro
     addresses = await Promise.race([
       dns.lookup(host, { all: true }),
       new Promise<never>((_resolve, reject) =>
-        setTimeout(() => reject(new Error('__timeout__')), UPSTREAM_DNS_LOOKUP_TIMEOUT_MS)
+        setTimeout(
+          () => reject(new Error('__timeout__')),
+          UPSTREAM_DNS_LOOKUP_TIMEOUT_MS
+        )
       ),
     ])
   } catch (error) {
@@ -759,67 +876,6 @@ async function checkUpstreamNotSsrf(rawUrl: string, allowInternal: boolean): Pro
   return null
 }
 
-/** SSE line patching (model_routes.rs patch_sse_line): fold private reasoning fields into visible content. */
-function patchSseLine(line: string): string {
-  const trimmed = line.trimStart()
-  if (!trimmed.startsWith('data:')) return line
-  const prefix = line.slice(0, line.length - trimmed.length)
-
-  const afterData = trimmed.slice(5)
-  let payloadStr: string
-  let trailingNewline: string
-  if (afterData.endsWith('\r\n')) {
-    payloadStr = afterData.slice(0, -2).trimStart()
-    trailingNewline = '\r\n'
-  } else if (afterData.endsWith('\n')) {
-    payloadStr = afterData.slice(0, -1).trimStart()
-    trailingNewline = '\n'
-  } else {
-    payloadStr = afterData.trimStart()
-    trailingNewline = ''
-  }
-  if (payloadStr === '[DONE]') return line
-
-  let value: JsonRecord
-  try {
-    value = JSON.parse(payloadStr) as JsonRecord
-  } catch {
-    return line
-  }
-  if (!Array.isArray(value?.choices)) return line
-
-  let changed = false
-  for (const choice of value.choices as JsonRecord[]) {
-    const delta = choice?.delta
-    if (delta === null || typeof delta !== 'object') continue
-    const deltaRecord = delta as JsonRecord
-    const hasVisibleContent = typeof deltaRecord.content === 'string' && deltaRecord.content.length > 0
-    if (!hasVisibleContent) {
-      const reasoningFallback =
-        (typeof deltaRecord.reasoning_content === 'string' && deltaRecord.reasoning_content.length > 0
-          ? deltaRecord.reasoning_content
-          : null) ??
-        (typeof deltaRecord.reasoning === 'string' && deltaRecord.reasoning.length > 0
-          ? deltaRecord.reasoning
-          : null)
-      if (reasoningFallback !== null) {
-        deltaRecord.content = reasoningFallback
-        changed = true
-      }
-    }
-    if ('reasoning_content' in deltaRecord) {
-      delete deltaRecord.reasoning_content
-      changed = true
-    }
-    if ('reasoning' in deltaRecord) {
-      delete deltaRecord.reasoning
-      changed = true
-    }
-  }
-  if (!changed) return line
-  return `${prefix}data: ${JSON.stringify(value)}${trailingNewline}`
-}
-
 interface ProviderResolution {
   targetBaseUrl: string
   sessionApiKey: string | null
@@ -835,7 +891,7 @@ async function dispatchToUpstream(
   hostHeader: string,
   originHeader: string,
   config: ProxyConfig,
-  connectTimeoutMs: number,
+  responseTimeoutMs: number,
   res: http.ServerResponse
 ): Promise<void> {
   const upstreamUrl = resolution.targetBaseUrl
@@ -862,9 +918,14 @@ async function dispatchToUpstream(
     cleanupStream()
   })
 
-  const ssrfError = await checkUpstreamNotSsrf(upstreamUrl, resolution.allowInternal)
+  const ssrfError = await checkUpstreamNotSsrf(
+    upstreamUrl,
+    resolution.allowInternal
+  )
   if (ssrfError !== null) {
-    console.warn(`[proxy] Per-request SSRF check blocked upstream: ${ssrfError}`)
+    console.warn(
+      `[proxy] Per-request SSRF check blocked upstream: ${ssrfError}`
+    )
     cleanupStream()
     respond(res, 403, ssrfError, hostHeader, originHeader, config)
     return
@@ -889,10 +950,13 @@ async function dispatchToUpstream(
 
   let modelLoadAttempts = 0
   for (;;) {
-    // Connect timeout only — streaming responses are long-lived, so the timer
-    // is cleared as soon as response headers arrive (mirrors reqwest's
-    // connect_timeout with no overall timeout).
-    const connectTimer = setTimeout(() => abortController.abort(), connectTimeoutMs)
+    // The configured deadline includes waiting for the first response headers.
+    // Once headers arrive, the streaming body is not subject to this timer.
+    let timedOut = false
+    const responseTimer = setTimeout(() => {
+      timedOut = true
+      abortController.abort()
+    }, responseTimeoutMs)
     let response: Response
     try {
       response = await fetch(upstreamUrl, {
@@ -903,30 +967,49 @@ async function dispatchToUpstream(
         signal: abortController.signal,
       })
     } catch (error) {
-      clearTimeout(connectTimer)
+      clearTimeout(responseTimer)
       cleanupStream()
       const aborted = abortController.signal.aborted
-      const message = aborted
-        ? 'Proxy request to model aborted'
-        : `Proxy request to model failed: ${(error as Error).message}`
+      const message = timedOut
+        ? 'Timed out waiting for the model response'
+        : aborted
+          ? 'Proxy request to model aborted'
+          : `Proxy request to model failed: ${(error as Error).message}`
       if (!aborted) console.error(`[proxy] ${message}`)
-      respond(res, aborted ? 499 : 502, message, hostHeader, originHeader, config)
+      respond(
+        res,
+        timedOut ? 504 : aborted ? 499 : 502,
+        message,
+        hostHeader,
+        originHeader,
+        config
+      )
       return
     }
-    clearTimeout(connectTimer)
+    clearTimeout(responseTimer)
 
     if (!response.ok) {
-      const errorBody = await response.text().catch((error) => `Failed to read error body: ${(error as Error).message}`)
+      const errorBody = await response
+        .text()
+        .catch(
+          (error) => `Failed to read error body: ${(error as Error).message}`
+        )
 
       if (
-        isTransientModelLoadingError(response.status, destinationPath, errorBody) &&
+        isTransientModelLoadingError(
+          response.status,
+          destinationPath,
+          errorBody
+        ) &&
         modelLoadAttempts < MODEL_LOAD_RETRY_ATTEMPTS
       ) {
         modelLoadAttempts += 1
         console.log(
           `[proxy] Upstream model is still loading for ${destinationPath}; retrying ${modelLoadAttempts}/${MODEL_LOAD_RETRY_ATTEMPTS}`
         )
-        await new Promise((resolve) => setTimeout(resolve, MODEL_LOAD_RETRY_DELAY_MS))
+        await new Promise((resolve) =>
+          setTimeout(resolve, MODEL_LOAD_RETRY_DELAY_MS)
+        )
         continue
       }
 
@@ -945,13 +1028,20 @@ async function dispatchToUpstream(
       // content-encoding is dropped: undici already decompressed the body, so
       // forwarding it would make the client decode twice. content-length no
       // longer matches the (possibly patched) body for the same reason.
-      if (isCorsHeader(lower) || lower === 'content-length' || lower === 'content-encoding') return
+      if (
+        isCorsHeader(lower) ||
+        lower === 'content-length' ||
+        lower === 'content-encoding'
+      )
+        return
       if (HOP_BY_HOP_HEADERS.has(lower)) return
       upstreamHeaders[name] = value
     })
 
     const contentType = response.headers.get('content-type') ?? '<unknown>'
-    console.log(`[proxy] Upstream response: status=${response.status} content-type=${contentType}`)
+    console.log(
+      `[proxy] Upstream response: status=${response.status} content-type=${contentType}`
+    )
 
     res.writeHead(response.status, {
       ...upstreamHeaders,
@@ -959,7 +1049,12 @@ async function dispatchToUpstream(
     })
 
     const isSse = contentType.includes('text/event-stream')
-    const bodyStream = response.body !== null ? Readable.fromWeb(response.body as import('node:stream/web').ReadableStream) : null
+    const bodyStream =
+      response.body !== null
+        ? Readable.fromWeb(
+            response.body as import('node:stream/web').ReadableStream
+          )
+        : null
 
     if (bodyStream === null) {
       cleanupStream()
@@ -981,7 +1076,9 @@ async function dispatchToUpstream(
         for await (const chunk of bodyStream) {
           lineBuffer += decoder.write(chunk as Buffer)
           if (lineBuffer.length > MAX_SSE_LINE_BUFFER) {
-            console.error(`[proxy] SSE line buffer exceeded ${MAX_SSE_LINE_BUFFER} bytes, aborting stream`)
+            console.error(
+              `[proxy] SSE line buffer exceeded ${MAX_SSE_LINE_BUFFER} bytes, aborting stream`
+            )
             bufferOverflow = true
             break
           }
@@ -989,14 +1086,14 @@ async function dispatchToUpstream(
           while ((newlineIndex = lineBuffer.indexOf('\n')) !== -1) {
             const line = lineBuffer.slice(0, newlineIndex + 1)
             lineBuffer = lineBuffer.slice(newlineIndex + 1)
-            if (!res.write(patchSseLine(line))) {
+            if (!res.write(line)) {
               await new Promise((resolve) => res.once('drain', resolve))
             }
           }
         }
         if (!bufferOverflow) {
           lineBuffer += decoder.end()
-          if (lineBuffer.length > 0) res.write(patchSseLine(lineBuffer))
+          if (lineBuffer.length > 0) res.write(lineBuffer)
         }
       }
     } catch (error) {
@@ -1020,7 +1117,10 @@ const MODEL_POST_ROUTES = new Set([
   '/messages/count_tokens',
 ])
 
-function readRequestBody(req: http.IncomingMessage, maxSize: number): Promise<Buffer> {
+function readRequestBody(
+  req: http.IncomingMessage,
+  maxSize: number
+): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
     let size = 0
@@ -1042,7 +1142,7 @@ async function handleRequest(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   config: ProxyConfig,
-  connectTimeoutMs: number
+  responseTimeoutMs: number
 ): Promise<void> {
   try {
     if (handleCorsPreflight(req, res, config)) return
@@ -1057,7 +1157,17 @@ async function handleRequest(
       console.log(`[proxy] Local API request: ${req.method} ${path}`)
     }
 
-    if (!validateRequest(path, hostHeader, originHeader, req.headers, config, clientId, res)) {
+    if (
+      !validateRequest(
+        path,
+        hostHeader,
+        originHeader,
+        req.headers,
+        config,
+        clientId,
+        res
+      )
+    ) {
       return
     }
 
@@ -1086,10 +1196,18 @@ async function handleRequest(
       }
 
       const providerHintHeader = firstHeader(req.headers['x-ax-provider'])
-      const providerHint = providerHintHeader.length > 0 ? providerHintHeader : null
+      const providerHint =
+        providerHintHeader.length > 0 ? providerHintHeader : null
       const outcome = resolveModelRoute(path, body, providerHint)
       if ('error' in outcome) {
-        respond(res, outcome.error.status, outcome.error.message, hostHeader, originHeader, config)
+        respond(
+          res,
+          outcome.error.status,
+          outcome.error.message,
+          hostHeader,
+          originHeader,
+          config
+        )
         return
       }
       await dispatchToUpstream(
@@ -1099,16 +1217,20 @@ async function handleRequest(
         hostHeader,
         originHeader,
         config,
-        connectTimeoutMs,
+        responseTimeoutMs,
         res
       )
       return
     }
 
-    console.warn(`[proxy] Unhandled method/path for dynamic routing: ${req.method} ${path}`)
+    console.warn(
+      `[proxy] Unhandled method/path for dynamic routing: ${req.method} ${path}`
+    )
     respond(res, 404, 'Not Found', hostHeader, originHeader, config)
   } catch (error) {
-    console.error(`[proxy] Unhandled request error: ${(error as Error).message}`)
+    console.error(
+      `[proxy] Unhandled request error: ${(error as Error).message}`
+    )
     respond(res, 500, 'Internal proxy error', '', '', config)
   }
 }
@@ -1135,22 +1257,27 @@ export function startProxyServer(
   if (runningServer !== null) {
     return Promise.reject(new Error('Server is already running'))
   }
-  const connectTimeoutMs = Math.min(proxyTimeoutSecs, 30) * 1000
+  const responseTimeoutMs = Math.max(1, proxyTimeoutSecs) * 1000
 
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
-      void handleRequest(req, res, config, connectTimeoutMs)
+      void handleRequest(req, res, config, responseTimeoutMs)
     })
     server.on('error', (error) => {
-      console.error(`[proxy] Failed to bind to ${host}:${port}: ${error.message}`)
+      console.error(
+        `[proxy] Failed to bind to ${host}:${port}: ${error.message}`
+      )
       runningServer = null
       reject(new Error(`Failed to bind to ${host}:${port}: ${error.message}`))
     })
     server.listen(port, host, () => {
       const address = server.address()
-      const actualPort = typeof address === 'object' && address !== null ? address.port : port
+      const actualPort =
+        typeof address === 'object' && address !== null ? address.port : port
       runningServer = { server, config }
-      console.log(`[proxy] AX Studio API server started on http://${host}:${actualPort}`)
+      console.log(
+        `[proxy] AX Studio API server started on http://${host}:${actualPort}`
+      )
       resolve(actualPort)
     })
   })
@@ -1163,7 +1290,9 @@ export async function stopProxyServer(): Promise<void> {
 
   await new Promise<void>((resolve) => {
     const forceTimer = setTimeout(() => {
-      console.warn('[proxy] Graceful server shutdown timed out, closing connections')
+      console.warn(
+        '[proxy] Graceful server shutdown timed out, closing connections'
+      )
       current.server.closeAllConnections()
     }, 2_000)
     current.server.close(() => {

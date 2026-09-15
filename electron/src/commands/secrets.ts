@@ -14,7 +14,10 @@ function secretsFilePath(): string {
 
 function readSecrets(): Record<string, string> {
   try {
-    return JSON.parse(fs.readFileSync(secretsFilePath(), 'utf8')) as Record<string, string>
+    return JSON.parse(fs.readFileSync(secretsFilePath(), 'utf8')) as Record<
+      string,
+      string
+    >
   } catch {
     return {}
   }
@@ -34,7 +37,9 @@ function encrypt(value: string): string {
   }
   // No OS keychain available (some Linux sessions). Stored obfuscated only —
   // same trade-off the Tauri keyring fallback makes; logged loudly.
-  console.warn('[electron] safeStorage encryption unavailable; storing secret obfuscated')
+  console.warn(
+    '[electron] safeStorage encryption unavailable; storing secret obfuscated'
+  )
   return `plain:${Buffer.from(value, 'utf8').toString('base64')}`
 }
 
@@ -76,6 +81,14 @@ export function createSecretsHandlers(): Record<string, CommandHandler> {
       const value = args?.value
       if (!key || typeof value !== 'string') {
         throw new Error('set_secret error: Invalid argument')
+      }
+      if (
+        key === 'model-provider-credentials' &&
+        !safeStorage.isEncryptionAvailable()
+      ) {
+        throw new Error(
+          'Operating-system credential encryption is unavailable; provider keys were not saved'
+        )
       }
       const secrets = readSecrets()
       secrets[key] = encrypt(value)

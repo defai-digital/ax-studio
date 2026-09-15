@@ -5,13 +5,11 @@ import { renderHook, act } from '@testing-library/react'
 
 // All mock variables used inside vi.mock must use vi.hoisted to avoid
 // "Cannot access before initialization" errors due to vi.mock hoisting.
-const { mockNavigate, mockCreateThread, mockUpdateThread } = vi.hoisted(
-  () => ({
-    mockNavigate: vi.fn(),
-    mockCreateThread: vi.fn(),
-    mockUpdateThread: vi.fn(),
-  })
-)
+const { mockNavigate, mockCreateThread, mockUpdateThread } = vi.hoisted(() => ({
+  mockNavigate: vi.fn(),
+  mockCreateThread: vi.fn(),
+  mockUpdateThread: vi.fn(),
+}))
 
 // Mutable state for model provider — cannot use vi.hoisted for these
 // because they need reassignment in tests. We use a shared object instead.
@@ -97,6 +95,30 @@ function defaultInput() {
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('useChatSendHandler', () => {
+  it('holds the send guard until asynchronous handoff completes', async () => {
+    let finish!: () => void
+    const onSubmit = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve
+        })
+    )
+    const input = { ...defaultInput(), onSubmit }
+    const { result } = renderHook(() => useChatSendHandler(input))
+    let first!: Promise<void>
+    await act(async () => {
+      first = result.current.handleSendMessage('first')
+      await result.current.handleSendMessage('duplicate')
+    })
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+    expect(input.setPrompt).not.toHaveBeenCalled()
+    await act(async () => {
+      finish()
+      await first
+    })
+    expect(input.setPrompt).toHaveBeenCalledWith('')
+  })
+
   let consoleWarnSpy: ReturnType<typeof vi.spyOn>
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>
 
@@ -120,6 +142,36 @@ describe('useChatSendHandler', () => {
   afterEach(() => {
     consoleWarnSpy.mockRestore()
     consoleErrorSpy.mockRestore()
+  })
+
+  it('does not create a default-model thread when no provider is selected', async () => {
+    modelState.selectedModel = null
+    modelState.selectedProvider = ''
+    const input = defaultInput()
+    const { result } = renderHook(() => useChatSendHandler(input))
+    await act(async () => {
+      await result.current.handleSendMessage('hello')
+    })
+    expect(mockCreateThread).not.toHaveBeenCalled()
+    expect(mockNavigate).not.toHaveBeenCalled()
+    expect(input.setPrompt).not.toHaveBeenCalled()
+    expect(input.setMessage).toHaveBeenCalledWith(
+      'Please select a model to start chatting.'
+    )
+  })
+
+  it('uses the thread provider when the global selection is empty', async () => {
+    modelState.selectedProvider = ''
+    const input = {
+      ...defaultInput(),
+      selectedProvider: 'ollama',
+      onSubmit: vi.fn(),
+    }
+    const { result } = renderHook(() => useChatSendHandler(input))
+    await act(async () => {
+      await result.current.handleSendMessage('hello')
+    })
+    expect(input.onSubmit).toHaveBeenCalledWith('hello')
   })
 
   // ── Phase 1: Guard branches ──────────────────────────────────────────────
@@ -257,7 +309,10 @@ describe('useChatSendHandler', () => {
   it('reuses the existing temporary thread instead of recreating it', async () => {
     useTemporaryChat.setState({ temporaryChatEnabled: true })
     threadsState.threads = {
-      'temporary-chat': { id: 'temporary-chat', metadata: { isTemporary: true } },
+      'temporary-chat': {
+        id: 'temporary-chat',
+        metadata: { isTemporary: true },
+      },
     }
     const input = defaultInput()
     const { result } = renderHook(() => useChatSendHandler(input))

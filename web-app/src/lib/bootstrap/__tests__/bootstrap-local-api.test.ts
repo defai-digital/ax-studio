@@ -150,6 +150,22 @@ describe('bootstrapLocalApi', () => {
     expect(input.setServerStatus).toHaveBeenLastCalledWith('running')
   })
 
+  it('skips ports reserved by other AX Studio processes when falling back', async () => {
+    ;(globalThis as any).window.core.api.startServer = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Address already in use (os error 48)'))
+      .mockResolvedValueOnce(31430)
+    const input = makeInput({ config: { ...defaultConfig, port: 31419 } })
+
+    const result = await bootstrapLocalApi(input)
+
+    expect(result).toEqual({ ok: true })
+    const calls = (globalThis as any).window.core.api.startServer.mock.calls
+    expect(calls[0][0].port).toBe(31419)
+    // 31420 (Vite dev server) and the 31421-31429 reserved band must be skipped.
+    expect(calls[1][0].port).toBe(31430)
+  })
+
   it('does not retry non-bind startup errors', async () => {
     ;(globalThis as any).window.core.api.startServer = vi
       .fn()

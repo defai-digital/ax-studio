@@ -22,6 +22,7 @@ test_results.html
 !docs/legal/**
 !docs/release/**
 !docs/architecture/**
+!docs/reports/**
 !examples/**/README.md
 
 # Helper tools

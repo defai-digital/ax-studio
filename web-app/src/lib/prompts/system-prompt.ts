@@ -150,8 +150,12 @@ export const CODE_EXECUTION_INSTRUCTION = `
 
 ## Computation and analytics authoring
 
+Answer simple arithmetic directly in plain text (for example, 2+2 = 4,
+9+8 = 17, and 14-7 = 7). Do not write a Python block or invoke tools for
+basic arithmetic unless the user explicitly asks for code or tool execution.
+
 Use Python when asked to:
-- Run a calculation, simulation, or algorithm → write Python
+- Run a complex calculation, simulation, or algorithm that requires code → write Python
 - Process or analyse data that requires computation → write Python
 - Create or display a table / DataFrame → write Python using pandas
 - Create a BI chart, visualization, report, or dashboard → use AX BI authoring tools

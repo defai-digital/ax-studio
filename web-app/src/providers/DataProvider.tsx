@@ -1,6 +1,10 @@
 import { useModelProvider } from '@/hooks/models/useModelProvider'
 import { useServiceHub } from '@/hooks/useServiceHub'
 import { useEffect, useRef } from 'react'
+import {
+  initializeProviderCredentials,
+  restoreProviderCredentials,
+} from '@/lib/storage/provider-credentials'
 import { useThreads } from '@/hooks/threads/useThreads'
 import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 import { useAppState } from '@/hooks/settings/useAppState'
@@ -95,24 +99,33 @@ export function DataProvider() {
       // Any applied startup snapshot has completed the initial registration.
       // This lets the reactive sync effect handle subsequent settings edits.
       bootstrapSyncDone.current = true
-      setProviders(providers, pathSep)
+      setProviders(restoreProviderCredentials(providers), pathSep)
       return true
     }
 
     const bootstrapProviderRequest = ++providerRequestSequence
-    bootstrapProviders({
-      serviceHub,
-      setProviders: (providers, pathSep) => {
-        return applyProviderSnapshot(
-          bootstrapProviderRequest,
-          providers,
-          pathSep
-        )
-      },
-      isCancelled: () => unmounted,
-    }).catch((error) => {
-      console.error('[DataProvider] bootstrapProviders failed:', error)
-    })
+    initializeProviderCredentials()
+      .then(() => {
+        if (unmounted) return
+        useModelProvider.setState((state) => ({
+          providers: restoreProviderCredentials(state.providers),
+        }))
+        return bootstrapProviders({
+          serviceHub,
+          prepareProviders: restoreProviderCredentials,
+          setProviders: (providers, pathSep) => {
+            return applyProviderSnapshot(
+              bootstrapProviderRequest,
+              providers,
+              pathSep
+            )
+          },
+          isCancelled: () => unmounted,
+        })
+      })
+      .catch((error) => {
+        console.error('[DataProvider] bootstrapProviders failed:', error)
+      })
 
     void cleanupRemovedIntegrations()
 
@@ -124,13 +137,22 @@ export function DataProvider() {
       console.error('[DataProvider] bootstrapThreads failed:', error)
     })
 
-    cleanupEvents = bootstrapEvents({ serviceHub, setProviders })
+    cleanupEvents = bootstrapEvents({
+      serviceHub,
+      setProviders: (providers, pathSep) => {
+        void initializeProviderCredentials()
+          .then(() => {
+            if (!unmounted)
+              setProviders(restoreProviderCredentials(providers), pathSep)
+          })
+          .catch(() => console.error('Unable to restore provider credentials'))
+      },
+    })
 
     const refreshStartupProviders = () => {
       const requestSequence = ++providerRequestSequence
-      serviceHub
-        .providers()
-        .getProviders()
+      initializeProviderCredentials()
+        .then(() => serviceHub.providers().getProviders())
         .then((providers) => {
           if (
             !applyProviderSnapshot(
@@ -147,17 +169,27 @@ export function DataProvider() {
           // bootstrap (e.g. the built-in `mlx` provider, or providers the user
           // edits in Settings) never get registered with the proxy and chat
           // requests for them fail with "No remote provider configured".
-          void syncRemoteProviders(providers).catch((error) => {
-            console.error('[DataProvider] startup remote provider sync failed:', error)
-          })
+          void syncRemoteProviders(restoreProviderCredentials(providers)).catch(
+            (error) => {
+              console.error(
+                '[DataProvider] startup remote provider sync failed:',
+                error
+              )
+            }
+          )
         })
         .catch((error) => {
-          console.error('[DataProvider] startup provider refresh failed:', error)
+          console.error(
+            '[DataProvider] startup provider refresh failed:',
+            error
+          )
         })
     }
 
     for (const delayMs of PROVIDER_STARTUP_REFRESH_DELAYS_MS) {
-      providerStartupRefreshTimers.push(setTimeout(refreshStartupProviders, delayMs))
+      providerStartupRefreshTimers.push(
+        setTimeout(refreshStartupProviders, delayMs)
+      )
     }
 
     bootstrapLocalApi({
