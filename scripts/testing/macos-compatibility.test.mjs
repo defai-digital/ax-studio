@@ -279,17 +279,26 @@ describe('release signing configuration', () => {
       'utf8'
     )
   )
-  it('passes Apple secrets through the electron-builder signing contract and requires signing when configured', () => {
+  it('prepares its own signing keychain and routes electron-builder through CSC_KEYCHAIN', () => {
     const steps = workflow.jobs['build-macos'].steps
     const build = steps.find(
       (step) => step.name === 'Build and package (macOS)'
     )
-    expect(build.env.CSC_LINK).toBe('${{ secrets.APPLE_CERTIFICATE }}')
-    expect(build.env.CSC_KEY_PASSWORD).toBe(
-      '${{ secrets.APPLE_CERTIFICATE_PASSWORD }}'
-    )
-    expect(build.env.CSC_NAME).toBe('${{ secrets.APPLE_SIGNING_IDENTITY }}')
+    // electron-builder's temp keychain fails on the macOS runner, so CSC_LINK
+    // is deliberately omitted and the keychain is managed by the workflow.
+    expect(build.env.CSC_LINK).toBeUndefined()
+    expect(build.env.CSC_KEY_PASSWORD).toBeUndefined()
+    expect(build.env.CSC_NAME).toBeUndefined()
     expect(build.run).toContain('extra_args+=("$SIGNING_ARGS")')
+    const keychain = steps.find(
+      (step) => step.name === 'Prepare signing keychain (macOS)'
+    )
+    expect(keychain).toBeTruthy()
+    expect(keychain.run).toContain('security create-keychain')
+    expect(keychain.run).toContain('security import')
+    expect(keychain.run).toContain('set-key-partition-list')
+    expect(keychain.run).toContain('CSC_KEYCHAIN=$KEYCHAIN_PATH')
+    expect(keychain.run).toContain('CSC_NAME=$APPLE_SIGNING_IDENTITY')
     const setup = steps.find(
       (step) => step.name === 'Configure signing and notarization'
     )
