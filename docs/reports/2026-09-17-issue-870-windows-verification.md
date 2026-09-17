@@ -47,9 +47,9 @@ stderr conversion. Existing chunk-size warnings are retained.
 ## Acceptance boundary
 
 Windows acceptance for #870 requires a new `publish=false` hosted run on the
-repaired revision, successful packaging and a downloadable artifact. Hosted
-verification follows the local-test/report commit and push and will be appended
-below. No release publication or issue closure is performed.
+repaired revision, successful packaging and a downloadable artifact. These
+conditions **passed** in the fresh run below. No release publication or issue
+closure is performed.
 
 This is packaging acceptance, not comprehensive Windows product certification.
 The local installer is unsigned; ARM64 runtime, elevated install/uninstall and
@@ -60,3 +60,33 @@ Pre-existing changes to `web-app/src/routeTree.gen.ts`, the untracked acceptance
 report and temporary directories were not staged. Raw local evidence lives in
 `tmp/issue870-*` and `tmp/windows-packaged-cdp.*`; generated installers remain
 outside Git.
+
+## Hosted verification after push
+
+Repair, regressions and the initial report were committed together in
+`04edfeb50e262e65b93308eb7b9d097be345cf46` and pushed to the requested branch.
+The remote branch SHA was verified. A fresh
+[publish=false run 35195756252](https://github.com/defai-digital/ax-studio/actions/runs/35195756252)
+ran on that exact SHA with Node 24 configured by the workflow.
+
+- [Windows job 105118474051](https://github.com/defai-digital/ax-studio/actions/runs/35195756252/job/105118474051):
+  **success**, including Build and package and Upload Windows artifacts.
+- [Windows artifact 10486155297](https://github.com/defai-digital/ax-studio/actions/runs/35195756252/artifacts/10486155297):
+  successfully downloaded and inspected, archive size 220,040,794 bytes.
+  Contains a 219,772,454-byte installer, 229,201-byte blockmap and 347-byte
+  `latest.yml`. Installer size and SHA-512 match the manifest. Hosted installer
+  SHA-256: `b08ab86a52e9f931fab8d04596790bf87d383746f930459340f9798d86cce0d4`.
+  This is a separate hosted build; its hash differs from the local artifact.
+- [macOS job 105118474384](https://github.com/defai-digital/ax-studio/actions/runs/35195756252/job/105118474384):
+  failed at `security set-key-partition-list` with
+  `SecKeychainUnlock: The user name or passphrase you entered is not correct.`
+  It passed the original Yarn discovery point. This evidence does not establish
+  the underlying cause of the signing-keychain failure.
+- Release job: skipped. No version was published.
+
+**Decision: #870's Windows packaging portion is fully resolved against its stated
+acceptance criteria. The complete cross-platform issue remains open because
+macOS packaging and artifact/signing acceptance have not passed.** The hosted
+archive was downloaded and hash-checked, not installed; local packaged x64 runtime
+checks are separately documented above. This follow-up report changes no tested
+workflow or application code.
