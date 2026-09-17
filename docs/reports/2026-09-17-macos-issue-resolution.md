@@ -6,7 +6,7 @@
 
 ## 结论摘要
 
-本分支收尾处理 5 项 `[macOS]` 缺陷 Issue（#847–#851），它们均由 2026-09-14 的 macOS 运行时排查（`docs/reports/2026-09-14-macos-runtime-issues.md`）归档而来。其中 4 项在 Tauri→Electron 迁移与先前的修复分支中已经在代码层解决；本次实际改动的是 #847（发布签名/公证配置），并补齐了对应的回归断言。5 项 Issue 的代码缺陷均已关闭。
+本分支收尾处理 5 项 `[macOS]` 缺陷 Issue（#847–#851），它们均由 2026-09-14 的 macOS 运行时排查（`docs/reports/2026-09-14-macos-runtime-issues.md`）归档而来。其中 4 项在 Tauri→Electron 迁移与先前的修复分支中已经在代码层解决；本次实际改动的是 #847（发布签名/公证配置），并补齐了对应的回归断言。合并后关闭 #847–#850；#851 按评审要求保留（其“真实签名发布升级 + 遗留 Tauri→Electron 迁移”的发布验收仍在发布流水线中跟进）。
 
 | Issue | 现象 | 处置 | 代码位置 |
 |---|---|---|---|
@@ -14,7 +14,7 @@
 | #848 | 多个实例抢占本地端口 31420，无跨构建单实例护栏 | 已修复（端口回退 + 单实例锁） | `web-app/src/lib/bootstrap/bootstrap-local-api.ts`、`electron/src/main.ts` |
 | #849 | 每次启动 Vulkan/MoltenVK dlopen 报错并泄露构建机路径 | 已修复（macOS 跳过 Vulkan 探测） | `electron/src/hardware/index.ts` |
 | #850 | 首启日志 ERROR：读不存在的 server 配置 | 已消除（Tauri 迁移代码已删除，Electron 无对应路径） | 无对应源码 |
-| #851 | 自动更新被拒：latest.json 未签名且未配置签名密钥 | 已消除（electron-updater 取代 Tauri 校验器） | `electron/src/updater.ts` |
+| #851 | 自动更新被拒：latest.json 未签名且未配置签名密钥 | 已消除（electron-updater 取代 Tauri 校验器），**Issue 保留** | `electron/src/updater.ts` |
 
 ## 本次改动明细
 
@@ -46,6 +46,8 @@
 ### #851 — 自动更新被拒
 
 `electron/src/updater.ts` 使用 electron-updater，凭 `electron-builder.yml` 的 `publish`（GitHub provider）拉取 `latest-mac.yml`/`latest.yml` 及其 blockmap 校验完整性，取代了被删除的 Tauri `custom_updater.rs` 的 `latest.json` 签名校验器。无 `AX_STUDIO_SIGNING_KEY` 依赖、无“无签名字段即拒绝”的告警路径。
+
+> **保留说明**：#851 代码层的 `latest.json` 签名校验器缺陷已随 Tauri 删除而消除，但“真实签名发布升级”与“遗留 Tauri 2.2.2 → Electron 的迁移升级”仍属发布流水线验收项（`docs/reports/2026-09-14-open-issue-repair.md` 中 #851 的 remaining acceptance 同此）。按评审要求本 Issue 保留待发布验收，不随本分支关闭。
 
 ## 验证
 
