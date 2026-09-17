@@ -4,7 +4,7 @@ vi.mock('electron', async () => {
   const { EventEmitter } = await import('node:events')
   const fakeApp = new EventEmitter()
   fakeApp.isPackaged = false
-  fakeApp.requestSingleInstanceLock = () => true
+  fakeApp.requestSingleInstanceLock = vi.fn(() => true)
   fakeApp.quit = vi.fn()
   fakeApp.exit = vi.fn()
   class FakeWindow extends EventEmitter {
@@ -38,13 +38,13 @@ vi.mock('electron', async () => {
 vi.mock('../../electron/src/embed.ts', async () => {
   const { app } = await vi.importMock('electron')
   return {
-    registerAxStudioBridge: async () => {
+    registerAxStudioBridge: vi.fn(async () => {
       await app.whenReady()
       return {
         getPreloadPath: () => '/preload',
         getRendererPath: () => '/renderer',
       }
-    },
+    }),
   }
 })
 vi.mock('../../electron/src/commands/registry.ts', () => ({
@@ -72,6 +72,7 @@ let ready, state
 beforeEach(async () => {
   vi.resetModules()
   vi.clearAllMocks()
+  app.requestSingleInstanceLock.mockReturnValue(true)
   app.removeAllListeners()
   BrowserWindow.windows = []
   const promise = new Promise((resolve) => {
@@ -92,6 +93,17 @@ function open(file = '/Users/test/example.pdf') {
 }
 
 describe('desktop OS file delivery through the actual main entry', () => {
+  it('quits a secondary process before registering any bridge services', async () => {
+    vi.resetModules()
+    app.removeAllListeners()
+    app.requestSingleInstanceLock.mockReturnValue(false)
+    const { registerAxStudioBridge } = await import('../../electron/src/embed.ts')
+    registerAxStudioBridge.mockClear()
+    await import('../../electron/src/main.ts')
+    expect(app.quit).toHaveBeenCalledOnce()
+    expect(registerAxStudioBridge).not.toHaveBeenCalled()
+    expect(BrowserWindow.getAllWindows()).toHaveLength(0)
+  })
   it('buffers cold-start Finder requests until the renderer subscribes', async () => {
     open()
     expect(BrowserWindow.getAllWindows()).toHaveLength(0)

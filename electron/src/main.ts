@@ -42,13 +42,16 @@ if (SMOKE_MODE) {
 
 let mainWindow: BrowserWindow | null = null
 let bridge: AxStudioBridgeHandle | null = null
+// A secondary process must not initialize services before handing off to
+// the existing shell. Acquire ownership before the bridge's pre-ready work.
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
 
 // The standalone shell consumes the same embed API hosts use (Phase 5): this
 // registers the ax-file scheme privileges + IPC bridge + ax-file:// protocol,
 // and (enableUpdater) initializes electron-updater in packaged prod builds.
 // The synchronous pre-ready section runs immediately; the returned promise
 // resolves once the app is ready and the bridge is fully wired.
-const bridgePromise = registerAxStudioBridge({
+const bridgePromise = gotSingleInstanceLock ? registerAxStudioBridge({
   enableUpdater: true,
   getMainWindow: () => mainWindow,
   createChildWindow: (label, options) => {
@@ -71,7 +74,7 @@ const bridgePromise = registerAxStudioBridge({
     loadRenderer(win, typeof options.url === 'string' ? options.url : undefined)
     return win
   },
-})
+}) : Promise.resolve(null)
 
 function loadRenderer(win: BrowserWindow, route?: string): void {
   // Dev when VITE_DEV_SERVER_URL is set (see the dev:electron script);
@@ -150,7 +153,6 @@ function collectOpenFileArgv(argv: string[]): string[] {
   return argv.filter((arg) => arg.startsWith('/') || /^[A-Za-z]:[\\/]/.test(arg))
 }
 
-const gotSingleInstanceLock = app.requestSingleInstanceLock()
 if (!gotSingleInstanceLock) {
   app.quit()
 } else {
