@@ -4,7 +4,7 @@ Branch: `fix/windows-issues-20260916`. Baseline: `b6d3ae3039f0b2c711192b91306476
 
 ## Result
 
-The Windows distribution command now completes locally and produces a combined x64/ARM64 NSIS installer, blockmap and update manifest. The actual packaged x64 application loads its renderer and passes an isolated preload/IPC/message-persistence check. The original CI entry-point failure is repaired for both Windows and macOS; hosted dual-platform acceptance is still required before #870 can be closed.
+The Windows distribution command now completes locally and in GitHub Actions, producing a combined x64/ARM64 NSIS installer, blockmap and update manifest. The actual locally packaged x64 application loads its renderer and passes an isolated preload/IPC/message-persistence check. Both hosted platforms passed the original Yarn entry-point failure; macOS subsequently failed while unlocking the signing keychain. #870 cannot yet be closed under its dual-platform acceptance criteria.
 
 ## Root cause and repair
 
@@ -64,7 +64,7 @@ The current open issues were read from GitHub during this task. Local packaging 
 
 | Issue | Current disposition |
 | --- | --- |
-| #870 | Local Windows build/package and packaged startup accepted. Keep open until a new `publish=false` run on the pushed repair succeeds for both platforms and exposes downloadable artifacts; verify the required macOS artifact/signing evidence. |
+| #870 | Local and hosted Windows packaging accepted; Windows artifact uploaded. The repaired macOS job passes Yarn discovery/build but fails at signing-keychain unlock. Keep open pending successful macOS packaging and artifact/signing acceptance. |
 | #847 | Requires the resulting macOS artifact and codesign/stapler/Gatekeeper acceptance. Local Windows output cannot certify this. |
 | #849 | Requires inspection of a new macOS artifact and startup logs for the original Vulkan/build-machine-path problem. |
 | #848 | Requires original legacy/current macOS simultaneous-start acceptance; this packaging change does not change cross-build locking. |
@@ -74,4 +74,28 @@ The current open issues were read from GitHub during this task. Local packaging 
 | #863 | Requires a successful fresh hosted Dependabot update on the final relevant main revision. |
 | #851 | Not modified or closed. The separately observed Electron feed 404 is not proof that the original Tauri signature issue is resolved. |
 
-No issue is closed by the local evidence in this report. Hosted follow-up should reference the pushed repair revision, job results and artifact IDs, and preserve failed/missing evidence explicitly.
+No issue is closed by this task. The existing issue scope requires evidence that the Windows repair alone does not supply.
+
+## Hosted validation after push
+
+Repair and initial report were committed together as `848a14af1d8ca424c35b8ce4495e7b07b8aaed7b` and pushed to `fix/windows-issues-20260916`. Remote branch SHA was verified. This section records the subsequent result; it does not change the tested workflow/source tree.
+
+Dispatched [Electron Build & Release run 35185429499](https://github.com/defai-digital/ax-studio/actions/runs/35185429499) on that exact repair SHA with `publish=false`:
+
+| Job | Result |
+| --- | --- |
+| [Windows 105086367233](https://github.com/defai-digital/ax-studio/actions/runs/35185429499/job/105086367233) | **Success**, including Build and package and Upload Windows artifacts. |
+| [macOS 105086367057](https://github.com/defai-digital/ax-studio/actions/runs/35185429499/job/105086367057) | **Failure** at signing-keychain setup after successful nested build and entry into electron-builder. No macOS artifact uploaded. |
+| Release | Skipped. No GitHub release was published. |
+
+Windows artifact: [`electron-dist-windows`, ID 10482411306](https://github.com/defai-digital/ax-studio/actions/runs/35185429499/artifacts/10482411306), archive size **220,040,849 bytes**. The artifact API confirms the upload; the hosted archive was not downloaded or installed locally. Local installer hash/size above describe the local build, not this separate hosted build.
+
+The macOS log confirms that signing and notarization credentials were detected and that `dist-electron` invoked both the nested Yarn build and electron-builder with `-c.forceCodeSigning=true -c.mac.notarize=true`. It then failed at `/usr/bin/security set-key-partition-list` on the temporary signing keychain:
+
+```text
+security: SecKeychainUnlock: The user name or passphrase you entered is not correct.
+```
+
+This establishes a later signing-keychain blocker, not a recurrence of Yarn discovery failure. The log alone does not establish whether the problem is credential material, generated keychain password handling or keychain state. Investigate the signing/keychain setup in a macOS environment and rerun without disabling required signing/notarization. No secrets or signing requirements were changed to make the build pass.
+
+Closure decision: **Windows packaging blocker resolved; #870 and the remaining issue log entries stay open.** The macOS job failure prevents full #870 closure, and the other issue-specific acceptance gaps listed above remain.
