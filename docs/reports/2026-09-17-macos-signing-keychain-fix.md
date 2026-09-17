@@ -38,5 +38,5 @@ electron-builder 26.15.7 的 `createKeychain`（`app-builder-lib/out/codeSign/ma
 
 ## 验证与边界
 
-- 修复后需在 `macos-latest` runner 上以 `workflow_dispatch publish=false` 重新验证，确认 “Build and package (macOS)” 能完成签名并产出可下载产物。
+- **CI 实测（`workflow_dispatch publish=false`，run 35200106547，head `c4138984`）**：`build-macos` 与 `build-windows` 均 **success**。macOS 的 “Prepare signing keychain (macOS)” → “Build and package (macOS)” → “Upload macOS artifacts” 三步全部 success，签名 + 打包 + 产物上传一次通过，`SecKeychainUnlock` 失败不再出现。
 - 无 Apple 凭据的仓库（或 `APPLE_CERTIFICATE`/`APPLE_SIGNING_IDENTITY` 均为空）会走原有未签名路径，不受影响；`APPLE_SIGNING_IDENTITY` 为空时 electron-builder 通过搜索列表自动发现 Developer ID 身份。
