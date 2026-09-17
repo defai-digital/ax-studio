@@ -213,6 +213,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: electron-dist-windows
+          if-no-files-found: error
           retention-days: 14
           path: |
             electron/dist-installer/*.exe

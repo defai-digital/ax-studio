@@ -312,6 +312,19 @@ describe('release signing configuration', () => {
     expect(build.env.CSC_LINK).toBe('${{ secrets.CSC_LINK }}')
     expect(build.env.CSC_KEY_PASSWORD).toBe('${{ secrets.CSC_KEY_PASSWORD }}')
     expect(build.run).toContain('yarn dist:electron:win')
+    expect(build.run).not.toContain('node scripts/dist-electron.mjs')
+    const rootPackage = JSON.parse(
+      fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
+    )
+    expect(rootPackage.scripts['dist:electron:win']).toBe(
+      'node scripts/dist-electron.mjs --win'
+    )
     expect(build.run).not.toContain('SIGNING_ARGS')
+    const upload = workflow.jobs['build-windows'].steps.find(
+      (step) => step.name === 'Upload Windows artifacts'
+    )
+    expect(upload.with['if-no-files-found']).toBe('error')
+    expect(upload.with.path).toContain('electron/dist-installer/*.exe')
+    expect(upload.with.path).toContain('electron/dist-installer/latest.yml')
   })
 })
