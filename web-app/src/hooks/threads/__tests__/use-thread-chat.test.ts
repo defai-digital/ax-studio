@@ -202,6 +202,65 @@ describe('useThreadChat', () => {
     expect(mockSendMessage).toHaveBeenCalledOnce()
   })
 
+  it('holds the send guard until settlement across two views of the same thread', async () => {
+    let rejectRequest!: (error: Error) => void
+    mockSendMessage.mockImplementationOnce(
+      () => new Promise<void>((_resolve, reject) => { rejectRequest = reject })
+    )
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const first = renderHook(() => useThreadChat(defaultParams()))
+    const second = renderHook(() => useThreadChat(defaultParams()))
+    try {
+      await act(async () => { await first.result.current.processAndSendMessage('first') })
+      await expect(first.result.current.processAndSendMessage('rapid repeat')).rejects.toThrow('Wait for this conversation')
+      await expect(second.result.current.processAndSendMessage('second view')).rejects.toThrow('Wait for this conversation')
+      expect(mockSendMessage).toHaveBeenCalledOnce()
+      expect(useMessages.getState().getMessages(threadId)).toHaveLength(1)
+    } finally {
+      await act(async () => { rejectRequest(new Error('backend disconnected')) })
+      logged.mockRestore()
+    }
+    await act(async () => { await second.result.current.processAndSendMessage('retry') })
+    expect(mockSendMessage).toHaveBeenCalledTimes(2)
+  })
+
+  it('allows a different pane while one request is pending and releases after success', async () => {
+    let finish!: () => void
+    mockSendMessage.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve }))
+    const first = renderHook(() => useThreadChat(defaultParams()))
+    const otherSend = vi.fn()
+    const other = renderHook(() => useThreadChat({ ...defaultParams(), threadId: 'independent-pane', sendMessage: otherSend }))
+    try {
+      await act(async () => { await first.result.current.processAndSendMessage('pending') })
+      await act(async () => { await other.result.current.processAndSendMessage('parallel') })
+      expect(otherSend).toHaveBeenCalledOnce()
+    } finally {
+      await act(async () => { finish() })
+    }
+    await act(async () => { await first.result.current.processAndSendMessage('next') })
+    expect(mockSendMessage).toHaveBeenCalledTimes(2)
+  })
+
+  it('cancels a pending attachment send when the pane switches threads', async () => {
+    const view = renderHook(({ id }) => useThreadChat({ ...defaultParams(), threadId: id }), { initialProps: { id: threadId } })
+    useChatAttachments.setState({ attachmentsByThread: { [threadId]: [{ id: 'doc', type: 'document', processing: true }] } } as never)
+    vi.useFakeTimers()
+    try {
+      let pending!: Promise<void>
+      act(() => { pending = view.result.current.processAndSendMessage('old thread') })
+      view.rerender({ id: 'replacement-thread' })
+      await act(async () => { await vi.advanceTimersByTimeAsync(300); await pending })
+      expect(mockSendMessage).not.toHaveBeenCalled()
+      expect(useMessages.getState().getMessages(threadId)).toHaveLength(0)
+      useChatAttachments.setState({ attachmentsByThread: {} })
+      view.rerender({ id: threadId })
+      await act(async () => { await view.result.current.processAndSendMessage('new send') })
+      expect(mockSendMessage).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('marks the thread loaded when persisted fetch fails', async () => {
     const { useServiceHub } = await import('@/hooks/useServiceHub')
     const hub = useServiceHub() as {

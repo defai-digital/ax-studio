@@ -32,6 +32,10 @@ import {
   ContentType,
 } from '@ax-studio/core'
 
+// A thread can be mounted in more than one pane. Reserve it synchronously,
+// before SDK status notifications, and hold it until the request settles.
+const pendingThreadSends = new Set<string>()
+
 type ChatSessionSnapshot = {
   chat?: { messages?: UIMessage[] }
   isStreaming?: boolean
@@ -173,10 +177,12 @@ export function useThreadChat({
   // attachment-processing poll) can bail out instead of blindly sending a
   // message to a thread the user has navigated away from.
   const unmountedRef = useRef(false)
+  const threadGenerationRef = useRef(0)
   useEffect(() => {
     unmountedRef.current = false
     return () => {
       unmountedRef.current = true
+      threadGenerationRef.current += 1
     }
   }, [threadId])
 
@@ -274,17 +280,17 @@ export function useThreadChat({
 
   // ─── Send message ───────────────────────────────────────────────────────────
 
-  const sendingRef = useRef(false)
-
   const processAndSendMessage = useCallback(
     async (text: string) => {
       const session = useChatSessions.getState().sessions[threadId]
-      if (sendingRef.current || session?.isStreaming) {
+      if (pendingThreadSends.has(threadId) || session?.isStreaming) {
         throw new Error(
           'Wait for this conversation to finish before sending another message.'
         )
       }
-      sendingRef.current = true
+      pendingThreadSends.add(threadId)
+      const threadGeneration = threadGenerationRef.current
+      let requestOwnsReservation = false
       try {
         const normalizedText = text.trim()
 
@@ -330,9 +336,9 @@ export function useThreadChat({
           while (Date.now() - start < maxWaitMs) {
             // Bail out if the user navigated away mid-poll, otherwise we'd
             // send this message to a thread they can no longer see.
-            if (unmountedRef.current) return
+            if (unmountedRef.current || threadGenerationRef.current !== threadGeneration) return
             await new Promise((r) => setTimeout(r, pollMs))
-            if (unmountedRef.current) return
+            if (unmountedRef.current || threadGenerationRef.current !== threadGeneration) return
             pendingAttachments = getAttachments()
             const stillProcessing = pendingAttachments.some(
               (a) =>
@@ -420,16 +426,17 @@ export function useThreadChat({
         })
         // The SDK owns streaming/error state. Observe rejected sends as well so
         // one pane cannot create an unhandled rejection in the desktop renderer.
-        void Promise.resolve(request).catch((error) =>
-          console.error('Chat request failed:', error)
-        )
+        requestOwnsReservation = true
+        void Promise.resolve(request)
+          .catch((error) => console.error('Chat request failed:', error))
+          .finally(() => pendingThreadSends.delete(threadId))
 
         // Clear attachments after sending
         if (pendingAttachments.length > 0) {
           useChatAttachments.getState().clearAttachments(attachmentsKey)
         }
       } finally {
-        sendingRef.current = false
+        if (!requestOwnsReservation) pendingThreadSends.delete(threadId)
       }
     },
     [threadId, addMessage, updateThreadTimestamp, renameThread, sendMessage]

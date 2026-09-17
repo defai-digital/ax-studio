@@ -9,6 +9,7 @@ const assert = require('node:assert/strict')
 const { pathToFileURL } = require('node:url')
 const { app, BrowserWindow } = require('electron')
 const realOllama = process.argv.includes('--real-ollama')
+const sequentialTurns = process.argv.includes('--stress') ? 50 : 5
 const modelId = (index) => (realOllama ? 'qwen3:4b' : `fixture-${index}`)
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'ax-four-issues-'))
 app.setPath('userData', profile)
@@ -203,7 +204,7 @@ for (const [index, id] of ids.entries()) {
     waitFor(
       `document.querySelectorAll('button[aria-label="Send message"]').length===2 && !document.body.innerText.includes('Error generating response')`
     )
-  for (let turn = 0; turn < 5; turn++) {
+  for (let turn = 0; turn < sequentialTurns; turn++) {
     await send(1, `right question ${turn}`)
     await sleep(700)
     await idle()
@@ -211,7 +212,7 @@ for (const [index, id] of ids.entries()) {
   await Promise.all([send(0, 'left question'), send(1, 'right parallel')])
   await sleep(700)
   await idle()
-  assert.equal(requests.length, 7)
+  assert.equal(requests.length, sequentialTurns + 2)
   const right = requests.filter(
     (request) =>
       request.messages.find((message) => message.role === 'user')?.content ===
@@ -222,7 +223,7 @@ for (const [index, id] of ids.entries()) {
       (request) =>
         request.messages.filter((message) => message.role === 'user').length
     ),
-    [1, 2, 3, 4, 5, 6]
+    Array.from({ length: sequentialTurns + 1 }, (_, index) => index + 1)
   )
   assert.equal(
     requests
@@ -235,7 +236,7 @@ for (const [index, id] of ids.entries()) {
     1
   )
   checks.push(
-    'split: five consecutive turns plus concurrent turns, isolated model/history'
+    `split: ${sequentialTurns} consecutive turns plus concurrent turns, isolated model/history`
   )
   for (const [prompt, answer] of [
     ['2+2', '4'],
@@ -266,7 +267,7 @@ for (const [index, id] of ids.entries()) {
       answer
     )
   }
-  assert.equal(requests.length, 7)
+  assert.equal(requests.length, sequentialTurns + 2)
   checks.push(
     'arithmetic: four reported prompts persisted correct plain answers without model requests'
   )
