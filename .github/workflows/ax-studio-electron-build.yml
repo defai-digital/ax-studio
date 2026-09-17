@@ -157,7 +157,9 @@ jobs:
 
           # Put our keychain first on the search list so codesign/find-identity
           # can reach it.
-          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
+          existing_keychains="$(security list-keychains -d user | tr -d '"')"
+          read -r -a existing_keychain_paths <<< "$existing_keychains"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" "${existing_keychain_paths[@]}"
 
           echo "CSC_KEYCHAIN=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
           if [[ -n "${APPLE_SIGNING_IDENTITY}" ]]; then
