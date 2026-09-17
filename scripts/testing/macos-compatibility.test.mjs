@@ -284,6 +284,7 @@ describe('release signing configuration', () => {
     )
     expect(build.env.CSC_NAME).toBe('${{ secrets.APPLE_SIGNING_IDENTITY }}')
     expect(build.run).toContain('extra_args+=("$SIGNING_ARGS")')
+    expect(build.run).toContain('yarn dist:electron:mac "${extra_args[@]}"')
     const setup = steps.find(
       (step) => step.name === 'Configure signing and notarization'
     )
@@ -297,7 +298,7 @@ describe('release signing configuration', () => {
     )
     expect(build.env.CSC_LINK).toBe('${{ secrets.CSC_LINK }}')
     expect(build.env.CSC_KEY_PASSWORD).toBe('${{ secrets.CSC_KEY_PASSWORD }}')
-    expect(build.run).toContain('node scripts/dist-electron.mjs --win')
+    expect(build.run).toContain('yarn dist:electron:win')
     expect(build.run).not.toContain('SIGNING_ARGS')
   })
 })
