@@ -99,13 +99,16 @@ jobs:
             echo "SIGNING_ARGS=-c.forceCodeSigning=true" >> "$GITHUB_ENV"
           fi
 
-          # electron-builder.yml ships notarize: false; only override it when
-          # the app will actually be signed AND notary credentials exist.
+          # electron-builder.yml ships notarize: true (release default); keep
+          # it enabled only when the app is actually signed AND notary
+          # credentials exist. Otherwise explicitly disable it so an unsigned
+          # (or signed-but-not-notarized) dry build never tries to notarize.
           if [[ "$signed" -eq 1 && "$notary" -eq 1 ]]; then
-            echo "Apple signing + notarization credentials present — enabling notarize."
+            echo "Apple signing + notarization credentials present — notarization enabled."
             echo "NOTARIZE_ARGS=-c.mac.notarize=true" >> "$GITHUB_ENV"
           else
-            echo "Building without notarization."
+            echo "Signing or notarization credentials missing — notarization disabled."
+            echo "NOTARIZE_ARGS=-c.mac.notarize=false" >> "$GITHUB_ENV"
           fi
 
           if [[ "$RELEASE_PUBLISH" == "true" && ( "$signed" -ne 1 || "$notary" -ne 1 ) ]]; then
