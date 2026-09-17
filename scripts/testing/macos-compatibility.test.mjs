@@ -273,6 +273,12 @@ describe('release signing configuration', () => {
       'utf8'
     )
   )
+  const builderConfig = parse(
+    fs.readFileSync(
+      new URL('../../electron/electron-builder.yml', import.meta.url),
+      'utf8'
+    )
+  )
   it('passes Apple secrets through the electron-builder signing contract and requires signing when configured', () => {
     const steps = workflow.jobs['build-macos'].steps
     const build = steps.find(
@@ -291,6 +297,13 @@ describe('release signing configuration', () => {
     expect(setup.run).toContain('SIGNING_ARGS=-c.forceCodeSigning=true')
     expect(setup.run).toContain('CSC_IDENTITY_AUTO_DISCOVERY=false')
     expect(setup.run).toContain('"$signed" -eq 1 && "$notary" -eq 1')
+    expect(setup.run).toContain('NOTARIZE_ARGS=-c.mac.notarize=true')
+    expect(setup.run).toContain('NOTARIZE_ARGS=-c.mac.notarize=false')
+  })
+  it('enables hardened runtime, Gatekeeper assessment and notarization in the electron-builder mac config', () => {
+    expect(builderConfig.mac.hardenedRuntime).toBe(true)
+    expect(builderConfig.mac.gatekeeperAssess).toBe(true)
+    expect(builderConfig.mac.notarize).toBe(true)
   })
   it('retains Windows Authenticode credentials and Windows package invocation', () => {
     const build = workflow.jobs['build-windows'].steps.find(

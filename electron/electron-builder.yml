@@ -49,10 +49,20 @@ mac:
   category: public.app-category.productivity
   minimumSystemVersion: '15.0'
   hardenedRuntime: true
-  gatekeeperAssess: false
+  # Let @electron/osx-sign validate the signed app (spctl --assess) as part of
+  # the build instead of shipping it unchecked. No-op for unsigned dev builds
+  # (signing is skipped when no identity is available).
+  gatekeeperAssess: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
-  notarize: false
+  # Notarization is on by default: electron-builder runs notarytool when the
+  # APPLE_ID/APPLE_APP_SPECIFIC_PASSWORD/APPLE_TEAM_ID (or APPLE_API_KEY*)
+  # environment variables are present and the app is Developer ID signed.
+  # Unsigned local builds skip notarization automatically (no credentials).
+  # The release workflow overrides this to false when signing/notarization
+  # credentials are absent so a dry build never tries to notarize an unsigned
+  # app.
+  notarize: true
   target:
     - target: dmg
       arch: [arm64]
