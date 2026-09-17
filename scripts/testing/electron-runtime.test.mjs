@@ -92,6 +92,62 @@ describe('Electron runtime process resolution', () => {
     })
   })
 
+  it('resolves a yarn shim from PATH for direct node invocation on POSIX', () => {
+    const repoRoot = createTempRepo()
+    const binDir = path.join(repoRoot, 'bin')
+    const yarnShim = path.join(binDir, 'yarn')
+    mkdirSync(binDir, { recursive: true })
+    writeFileSync(yarnShim, '#!/bin/sh\n')
+
+    expect(
+      resolveYarnInvocation(repoRoot, {
+        nodePath: 'node.exe',
+        npmExecPath: null,
+        corepackRoot: null,
+        platform: 'darwin',
+        pathEnv: binDir,
+      })
+    ).toEqual({
+      cmd: yarnShim,
+      argsPrefix: [],
+    })
+  })
+
+  it('resolves a yarn command shim from PATH on Windows', () => {
+    const repoRoot = createTempRepo()
+    const binDir = path.join(repoRoot, 'bin')
+    const yarnCmd = path.join(binDir, 'yarn.cmd')
+    mkdirSync(binDir, { recursive: true })
+    writeFileSync(yarnCmd, '@echo off\r\n')
+
+    expect(
+      resolveYarnInvocation(repoRoot, {
+        nodePath: 'node.exe',
+        npmExecPath: null,
+        corepackRoot: null,
+        platform: 'win32',
+        pathEnv: binDir,
+      })
+    ).toEqual({
+      cmd: yarnCmd,
+      argsPrefix: [],
+      spawnOptions: { shell: true },
+    })
+  })
+
+  it('still throws when no yarn is discoverable', () => {
+    const repoRoot = createTempRepo()
+    expect(() =>
+      resolveYarnInvocation(repoRoot, {
+        nodePath: 'node.exe',
+        npmExecPath: null,
+        corepackRoot: null,
+        platform: 'darwin',
+        pathEnv: '',
+      })
+    ).toThrow(/could not locate yarn/)
+  })
+
   it('runs the Electron JavaScript CLI through Node', () => {
     const repoRoot = createTempRepo()
     const electronCli = path.join(

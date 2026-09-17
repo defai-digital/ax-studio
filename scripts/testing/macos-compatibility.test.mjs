@@ -279,18 +279,27 @@ describe('release signing configuration', () => {
       'utf8'
     )
   )
-  it('passes Apple secrets through the electron-builder signing contract and requires signing when configured', () => {
+  it('prepares its own signing keychain and routes electron-builder through CSC_KEYCHAIN', () => {
     const steps = workflow.jobs['build-macos'].steps
     const build = steps.find(
       (step) => step.name === 'Build and package (macOS)'
     )
-    expect(build.env.CSC_LINK).toBe('${{ secrets.APPLE_CERTIFICATE }}')
-    expect(build.env.CSC_KEY_PASSWORD).toBe(
-      '${{ secrets.APPLE_CERTIFICATE_PASSWORD }}'
-    )
-    expect(build.env.CSC_NAME).toBe('${{ secrets.APPLE_SIGNING_IDENTITY }}')
+    // electron-builder's temp keychain fails on the macOS runner, so CSC_LINK
+    // is deliberately omitted and the keychain is managed by the workflow.
+    expect(build.env.CSC_LINK).toBeUndefined()
+    expect(build.env.CSC_KEY_PASSWORD).toBeUndefined()
+    expect(build.env.CSC_NAME).toBeUndefined()
     expect(build.run).toContain('extra_args+=("$SIGNING_ARGS")')
     expect(build.run).toContain('yarn dist:electron:mac "${extra_args[@]}"')
+    const keychain = steps.find(
+      (step) => step.name === 'Prepare signing keychain (macOS)'
+    )
+    expect(keychain).toBeTruthy()
+    expect(keychain.run).toContain('security create-keychain')
+    expect(keychain.run).toContain('security import')
+    expect(keychain.run).toContain('set-key-partition-list')
+    expect(keychain.run).toContain('CSC_KEYCHAIN=$KEYCHAIN_PATH')
+    expect(keychain.run).toContain('CSC_NAME=$APPLE_SIGNING_IDENTITY')
     const setup = steps.find(
       (step) => step.name === 'Configure signing and notarization'
     )
@@ -313,13 +322,13 @@ describe('release signing configuration', () => {
     expect(build.env.CSC_KEY_PASSWORD).toBe('${{ secrets.CSC_KEY_PASSWORD }}')
     expect(build.run).toContain('yarn dist:electron:win')
     expect(build.run).not.toContain('node scripts/dist-electron.mjs')
+    expect(build.run).not.toContain('SIGNING_ARGS')
     const rootPackage = JSON.parse(
       fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
     )
     expect(rootPackage.scripts['dist:electron:win']).toBe(
       'node scripts/dist-electron.mjs --win'
     )
-    expect(build.run).not.toContain('SIGNING_ARGS')
     const upload = workflow.jobs['build-windows'].steps.find(
       (step) => step.name === 'Upload Windows artifacts'
     )

@@ -116,6 +116,58 @@ jobs:
             exit 1
           fi
 
+      - name: Prepare signing keychain (macOS)
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          # Only manage a keychain when signing credentials are present; the
+          # unsigned path (CSC_IDENTITY_AUTO_DISCOVERY=false) needs none.
+          if [[ -z "${APPLE_CERTIFICATE}" && -z "${APPLE_SIGNING_IDENTITY}" ]]; then
+            echo "No signing credentials — skipping keychain setup."
+            exit 0
+          fi
+
+          KEYCHAIN_PATH="$RUNNER_TEMP/ax-studio-signing.keychain"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+          CERT_PATH="$RUNNER_TEMP/ax-studio-signing.p12"
+
+          # electron-builder's own temp keychain fails with "SecKeychainUnlock:
+          # The user name or passphrase you entered is not correct" on the
+          # macOS runner, so build the keychain here and hand it to
+          # electron-builder via CSC_KEYCHAIN instead of CSC_LINK.
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          if [[ -n "${APPLE_CERTIFICATE}" ]]; then
+            printf '%s' "${APPLE_CERTIFICATE}" | base64 --decode > "$CERT_PATH"
+            # -A lets codesign reach the key without the partition-list dance.
+            security import "$CERT_PATH" \
+              -P "${APPLE_CERTIFICATE_PASSWORD:-}" \
+              -A -t cert -f pkcs12 \
+              -k "$KEYCHAIN_PATH" \
+              -T /usr/bin/codesign -T /usr/bin/productbuild
+            security set-key-partition-list \
+              -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          fi
+
+          # Put our keychain first on the search list so codesign/find-identity
+          # can reach it.
+          existing_keychains="$(security list-keychains -d user | tr -d '"')"
+          read -r -a existing_keychain_paths <<< "$existing_keychains"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" "${existing_keychain_paths[@]}"
+
+          echo "CSC_KEYCHAIN=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          if [[ -n "${APPLE_SIGNING_IDENTITY}" ]]; then
+            echo "CSC_NAME=$APPLE_SIGNING_IDENTITY" >> "$GITHUB_ENV"
+          fi
+
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH" || true
+
       - name: Build and package (macOS)
         run: |
           set -euo pipefail
@@ -130,9 +182,10 @@ jobs:
           yarn dist:electron:mac "${extra_args[@]}"
         env:
           NODE_OPTIONS: '--max-old-space-size=4196'
-          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE }}
-          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          CSC_NAME: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # CSC_KEYCHAIN (and CSC_NAME, when configured) are exported by the
+          # "Prepare signing keychain" step. CSC_LINK / CSC_KEY_PASSWORD are
+          # intentionally omitted so electron-builder reuses that keychain
+          # instead of creating its own (which fails on the macOS runner).
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
