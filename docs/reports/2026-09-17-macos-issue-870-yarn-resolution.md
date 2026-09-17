@@ -43,8 +43,11 @@
 ## 验证与验收边界
 
 - 代码层 macOS 部分已修复：解析器现在会从 `PATH` 发现 `corepack enable` 安装的 `yarn` shim，`could not locate yarn` 的失败路径已消除（本地测试 + 全量 + 端到端冒烟均通过）。
-- **剩余发布验收**：#870 的完整验收要求在修复提交上以 `workflow_dispatch publish=false` 真实跑一次，确认 macOS（与 Windows）都能成功打包并产出可下载产物，并在此基础上对产物做签名/公证/Gatekeeper 与打包路径审计。该验证需在 CI 上执行（本报告未包含此 CI 运行结果；若后续触发运行，将以运行结果为准）。
-- Windows 部分与 macOS 共用同一解析器修复，但本报告仅对 macOS 部分作出验收；Windows 侧按 #870 的验收口径另做 `publish=false` 复核。
+- **CI 实测（`workflow_dispatch publish=false`，run 35194708605，head `1ab8e9a`）**：
+  - **Windows 打包成功**，直接验证了共享的 `PATH` 解析修复。
+  - **macOS 已越过 `could not locate yarn`**：日志 0 处该错误，`[dist-electron] $ …/node/24.20.0/arm64/bin/yarn build:electron` 命中 PATH 上的 yarn，`copy-renderer` 完成、electron-builder 启动并进入打包。**#870 的 macOS 部分（Yarn 解析）已完全修复。**
+  - macOS 随后在 **代码签名** 阶段失败（`SecKeychainUnlock: The user name or passphrase you entered is not correct`），根因是仓库 secret 配置：`CSC_LINK`（APPLE_CERTIFICATE）与 `CSC_KEY_PASSWORD`（APPLE_CERTIFICATE_PASSWORD）已设但密码与证书不匹配，且 `CSC_NAME`（APPLE_SIGNING_IDENTITY）为空。**该失败与 #870（Yarn 解析）无关，属独立的签名凭据问题**，需仓库拥有者修正 `APPLE_CERTIFICATE_PASSWORD` / `APPLE_SIGNING_IDENTITY` secret 后，macOS 打包才能产出可用产物。
+- Windows 部分与 macOS 共用同一解析器修复，本报告仅对 macOS 部分作出验收；Windows 侧按 #870 的验收口径另做 `publish=false` 复核（本次 run 已通过）。
 
 ## 提交范围
 
