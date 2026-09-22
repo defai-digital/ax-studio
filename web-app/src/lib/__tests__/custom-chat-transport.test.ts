@@ -585,7 +585,7 @@ describe('CustomChatTransport — LLM Router integration', () => {
     )
   })
 
-  it('routes MLX through IPC without proxy preflight when selected by the router', async () => {
+  it('starts the managed sidecar without proxy preflight when the router picks AX Engine', async () => {
     mocks.autoRouteEnabled = true
     mocks.routerModelId = 'router-model'
     mocks.routerProviderId = 'test-provider'
@@ -613,7 +613,11 @@ describe('CustomChatTransport — LLM Router integration', () => {
     })
 
     expect(mocks.fetch).not.toHaveBeenCalled()
-    expect(prepareProviderForChat).not.toHaveBeenCalled()
+    expect(prepareProviderForChat).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ provider: 'ax-engine' }),
+      'mlx-community/Qwen3.6-27B-4bit'
+    )
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
       'mlx-community/Qwen3.6-27B-4bit',
       expect.objectContaining({ provider: 'ax-engine' }),
@@ -732,7 +736,7 @@ describe('CustomChatTransport — LLM Router integration', () => {
     )
   })
 
-  it('uses MLX IPC without proxy preflight or extension startup', async () => {
+  it('starts the managed AX Engine sidecar without proxy preflight', async () => {
     mocks.selectedModel = {
       id: 'mlx-community/Qwen3.6-27B-4bit',
       capabilities: [],
@@ -755,13 +759,56 @@ describe('CustomChatTransport — LLM Router integration', () => {
     })
 
     expect(mocks.fetch).not.toHaveBeenCalled()
-    expect(prepareProviderForChat).not.toHaveBeenCalled()
+    expect(prepareProviderForChat).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ provider: 'ax-engine' }),
+      'mlx-community/Qwen3.6-27B-4bit'
+    )
     expect(ModelFactory.createModel).toHaveBeenCalledWith(
       'mlx-community/Qwen3.6-27B-4bit',
       expect.objectContaining({ provider: 'ax-engine' }),
       expect.objectContaining({ max_output_tokens: 4096 }),
       { requestRole: 'final' }
     )
+  })
+
+  it('keeps skipping sidecar startup for an attach-mode AX Engine provider', async () => {
+    const axEngineProvider = mocks.providers.find(
+      (provider) => provider.provider === 'ax-engine'
+    ) as (typeof mocks.providers)[number] & { connection_mode?: string }
+    axEngineProvider.connection_mode = 'attach'
+    try {
+      mocks.selectedModel = {
+        id: 'mlx-community/Qwen3.6-27B-4bit',
+        capabilities: [],
+      }
+      mocks.selectedProvider = 'ax-engine'
+
+      const transport = makeTransport({ threadId: 'thread-1' })
+      await transport.sendMessages({
+        chatId: 'chat-1',
+        messages: [
+          {
+            id: 'message-1',
+            role: 'user',
+            parts: [{ type: 'text', text: 'Use the attached engine' }],
+          } as UIMessage,
+        ],
+        abortSignal: undefined,
+        trigger: 'submit-message',
+        messageId: 'message-1',
+      })
+
+      expect(prepareProviderForChat).not.toHaveBeenCalled()
+      expect(ModelFactory.createModel).toHaveBeenCalledWith(
+        'mlx-community/Qwen3.6-27B-4bit',
+        expect.objectContaining({ provider: 'ax-engine' }),
+        expect.objectContaining({ max_output_tokens: 4096 }),
+        { requestRole: 'final' }
+      )
+    } finally {
+      delete axEngineProvider.connection_mode
+    }
   })
 
   it('uses a minimal local provider when provider bootstrap is late', async () => {
