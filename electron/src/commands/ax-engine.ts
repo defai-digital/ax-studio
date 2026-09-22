@@ -50,6 +50,7 @@ function postureArg(value: unknown): Partial<Omit<AxEnginePosture, 'modelId'>> |
     'maxBatchTokens',
     'disableNgramAcceleration',
     'maxConcurrentRequests',
+    'mlxMtpPolicy',
     'mlxMtpDisableNgramStacking',
     'blockSizeTokens',
   ] as const) {

@@ -219,6 +219,11 @@ export function buildServeArgs(modelPath: string, port: number, posture: AxEngin
   ]
   if (posture.disableNgramAcceleration) passthrough.push('--disable-ngram-acceleration')
   passthrough.push('--max-concurrent-requests', String(posture.maxConcurrentRequests))
+  // Always sent. Leaving this flag off while --disable-ngram-acceleration is
+  // present makes the engine demote its default `auto` policy to `disabled`
+  // (crates/ax-engine-server/src/args/session.rs), which silently turns model
+  // MTP off even though the posture asks for a speculation profile.
+  passthrough.push('--mlx-mtp-policy', posture.mlxMtpPolicy)
   if (posture.mlxMtpDisableNgramStacking) passthrough.push('--mlx-mtp-disable-ngram-stacking')
   passthrough.push('--block-size-tokens', String(posture.blockSizeTokens))
   passthrough.push('--total-blocks', String(totalBlocks))
