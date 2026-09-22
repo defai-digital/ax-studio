@@ -16,6 +16,7 @@ import { executeSingleAgentStream } from './transport/single-agent-transport'
 import type { TokenUsageCallback } from './transport/transport-types'
 import type { ServiceHub } from '@/services'
 import { isLocalProvider, prepareProviderForChat } from './chat/model-session'
+import { getAxEngineConnectionMode } from './ax-engine/connection'
 import { useLocalApiServer } from '@/hooks/settings/useLocalApiServer'
 import { syncRemoteProviders } from './providers/provider-sync'
 import { isAxEngineProvider, LOCAL_PROVIDER_IDS } from '@/constants/providers'
@@ -130,7 +131,16 @@ async function prepareProviderForFinalChat(
   provider: ProviderObject,
   modelId: string
 ): Promise<ProviderPreparation> {
-  if (usesMlxIpc(provider.provider)) {
+  // Attach mode talks to a user-owned engine that is already serving, so there
+  // is nothing to start here. Managed mode must go through
+  // prepareProviderForChat (models.startModel -> ax_engine_ensure) so the
+  // Electron sidecar is spawned before the first request; otherwise the chat
+  // fetch falls back to AX_ENGINE_SIDECAR_DEFAULT_BASE_URL and fails with
+  // "TypeError: Failed to fetch".
+  if (
+    isAxEngineProvider(provider.provider) &&
+    getAxEngineConnectionMode(provider) === 'attach'
+  ) {
     return { state: 'ready' }
   }
 
