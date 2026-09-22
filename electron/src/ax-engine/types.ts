@@ -13,6 +13,25 @@ export type AxEnginePhase =
 
 export const AX_ENGINE_BACKEND_KIND = 'sidecar_http' as const
 
+/**
+ * Native MTP admission policy, forwarded verbatim as
+ * `ax-engine serve --mlx-mtp-policy <value>`.
+ *
+ * The default is `required` because neither of the engine's other settings can
+ * turn MTP on for the packs this app serves locally:
+ *
+ *  - `auto` does not promote the unqualified linear-Qwen Tiel packs
+ *    (ax-engine docs/CLI.md: "The default `auto` policy does not promote these
+ *    unqualified linear-Qwen packs. serve with `--mlx-mtp-policy required`").
+ *  - this posture also sends `--disable-ngram-acceleration`, and the engine
+ *    demotes `auto` to `disabled` whenever that flag is present
+ *    (crates/ax-engine-server/src/args/session.rs).
+ *
+ * Callers serving a pack without an admitted drafter must pass `auto` or
+ * `disabled`: `required` rejects session creation outright.
+ */
+export type AxEngineMtpPolicy = 'auto' | 'disabled' | 'required'
+
 /** Launch posture: flags that require a full respawn when they change. */
 export interface AxEnginePosture {
   modelId: string
@@ -22,6 +41,7 @@ export interface AxEnginePosture {
   maxBatchTokens: number
   disableNgramAcceleration: boolean
   maxConcurrentRequests: number
+  mlxMtpPolicy: AxEngineMtpPolicy
   mlxMtpDisableNgramStacking: boolean
   blockSizeTokens: number
 }
@@ -32,6 +52,7 @@ export const DEFAULT_POSTURE: Omit<AxEnginePosture, 'modelId'> = {
   maxBatchTokens: 2048,
   disableNgramAcceleration: true,
   maxConcurrentRequests: 1,
+  mlxMtpPolicy: 'required',
   mlxMtpDisableNgramStacking: false,
   blockSizeTokens: 16,
 }
@@ -45,6 +66,7 @@ export function canonicalPosture(posture: AxEnginePosture): string {
     maxBatchTokens: posture.maxBatchTokens,
     disableNgramAcceleration: posture.disableNgramAcceleration,
     maxConcurrentRequests: posture.maxConcurrentRequests,
+    mlxMtpPolicy: posture.mlxMtpPolicy,
     mlxMtpDisableNgramStacking: posture.mlxMtpDisableNgramStacking,
     blockSizeTokens: posture.blockSizeTokens,
   })
